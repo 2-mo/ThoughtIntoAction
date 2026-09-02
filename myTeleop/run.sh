@@ -18,11 +18,17 @@ if [[ -n "${command_name}" ]]; then
 fi
 
 case "${command_name}" in
+    setup-quest-usb)
+        exec env -u LD_LIBRARY_PATH "${SCRIPT_DIR}/setup_quest_usb.sh" "$@"
+        ;;
     check-xr)
         exec "${PYTHON_BIN}" "${SCRIPT_DIR}/check_xr.py" "$@"
         ;;
     visualize-xr)
         exec "${PYTHON_BIN}" "${SCRIPT_DIR}/visualize_xr.py" "$@"
+        ;;
+    simulate-x5|simulate-r5)
+        exec "${PYTHON_BIN}" "${SCRIPT_DIR}/simulate_x5.py" "$@"
         ;;
     check-arm)
         if ! ip link show can0 >/dev/null 2>&1; then
@@ -31,15 +37,22 @@ case "${command_name}" in
         fi
         exec "${PYTHON_BIN}" "${SCRIPT_DIR}/check_arm.py" "$@"
         ;;
+    teleop-dry-run)
+        if ! ip link show can0 >/dev/null 2>&1; then
+            printf 'SocketCAN interface can0 does not exist or is unavailable.\n' >&2
+            exit 1
+        fi
+        exec "${PYTHON_BIN}" "${SCRIPT_DIR}/teleop_single_x5.py" --dry-run "$@"
+        ;;
     teleop)
         if ! ip link show can0 >/dev/null 2>&1; then
             printf 'SocketCAN interface can0 does not exist or is unavailable.\n' >&2
             exit 1
         fi
-        exec "${PYTHON_BIN}" "${SCRIPT_DIR}/teleop_single_r5.py" "$@"
+        exec "${PYTHON_BIN}" "${SCRIPT_DIR}/teleop_single_x5.py" "$@"
         ;;
     *)
-        printf 'Usage: %s {check-xr|visualize-xr|check-arm|teleop} [arguments...]\n' "$0" >&2
+        printf 'Usage: %s {setup-quest-usb|check-xr|visualize-xr|simulate-x5|check-arm|teleop-dry-run|teleop} [arguments...]\n' "$0" >&2
         exit 2
         ;;
 esac

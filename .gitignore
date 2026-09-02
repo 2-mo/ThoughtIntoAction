@@ -223,3 +223,4 @@ __marimo__/
 /arx5-sdk/
 /R5/
 /XRoboToolkit-Teleop-Sample-Python/
+/myTeleop/logs/*.csv

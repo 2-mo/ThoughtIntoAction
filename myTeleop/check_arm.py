@@ -22,7 +22,7 @@ def format_values(values: object) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Read ARX R5 joint feedback.")
+    parser = argparse.ArgumentParser(description="Read ARX X5 joint feedback.")
     parser.add_argument("--can-port", default="can0", help="SocketCAN interface name.")
     parser.add_argument("--samples", type=int, default=10, help="Number of feedback samples.")
     parser.add_argument("--interval", type=float, default=0.2, help="Sampling interval in seconds.")

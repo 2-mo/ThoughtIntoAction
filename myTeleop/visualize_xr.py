@@ -2,6 +2,8 @@
 """Read-only browser visualizer for the Quest right controller."""
 
 import argparse
+import errno
+import http.client
 import json
 import math
 import threading
@@ -53,7 +55,7 @@ class XRState:
             "stream_hz": 0.0,
             "age_ms": None,
         }
-        self.last_timestamp = 0illen
+        self.last_timestamp = 0
         self.last_change_time = 0.0
         self.stream_hz = 0.0
 
@@ -173,6 +175,20 @@ def make_handler(state: XRState, html: bytes):
     return Handler
 
 
+def visualizer_is_running(host: str, port: int) -> bool:
+    connect_host = "127.0.0.1" if host in {"", "0.0.0.0", "::"} else host
+    connection = http.client.HTTPConnection(connect_host, port, timeout=1.0)
+    try:
+        connection.request("GET", "/api/state")
+        response = connection.getresponse()
+        payload = json.loads(response.read())
+        return response.status == 200 and "timestamp_ns" in payload
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+    finally:
+        connection.close()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Read-only web visualizer for Quest controller data."
@@ -186,23 +202,45 @@ def main() -> int:
 
     html = HTML_PATH.read_bytes()
     state = XRState(sample_interval=1.0 / args.sample_rate)
-    xrt.init()
-    sampler = threading.Thread(target=state.sample_loop, name="xr-sampler")
-    sampler.start()
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(state, html))
-    print("XR read-only visualizer started (no CAN or robot commands).")
-    print(f"Open: http://{args.host}:{args.port}")
-    print("Press Ctrl+C to stop.")
     try:
+        server = ThreadingHTTPServer(
+            (args.host, args.port), make_handler(state, html)
+        )
+    except OSError as error:
+        if error.errno == errno.EADDRINUSE and visualizer_is_running(
+            args.host, args.port
+        ):
+            print(f"XR visualizer is already running: http://{args.host}:{args.port}")
+            return 0
+        if error.errno == errno.EADDRINUSE:
+            print(
+                f"Port {args.host}:{args.port} is already used by another process. "
+                f"Try --port {args.port + 1}."
+            )
+            return 1
+        raise
+
+    sampler = threading.Thread(
+        target=state.sample_loop, name="xr-sampler", daemon=True
+    )
+    sdk_initialized = False
+    try:
+        xrt.init()
+        sdk_initialized = True
+        sampler.start()
+        print("XR read-only visualizer started (no CAN or robot commands).")
+        print(f"Open: http://{args.host}:{args.port}")
+        print("Press Ctrl+C to stop.")
         server.serve_forever(poll_interval=0.1)
     except KeyboardInterrupt:
         print("\nStopping XR visualizer...")
     finally:
-        server.shutdown()
         server.server_close()
         state.stop_event.set()
-        sampler.join(timeout=2.0)
-        xrt.close()
+        if sampler.is_alive():
+            sampler.join(timeout=2.0)
+        if sdk_initialized:
+            xrt.close()
     return 0
 
 
