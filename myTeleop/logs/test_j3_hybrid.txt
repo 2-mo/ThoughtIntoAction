@@ -1,0 +1,74 @@
+The root link base_link has an inertia specified in the URDF, but KDL does not support a root link with an inertia.  As a workaround, you can add an extra dummy link to your URDF.Found dynamic library path: /home/r2/miniconda3/envs/xrobot312/lib/python3.12/site-packages/arx5_interface/python/arx5_interface.cpython-312-x86_64-linux-gnu.so
+Found root directory: /home/r2/miniconda3/envs/xrobot312/lib/python3.12/site-packages/arx5_interface
+URDF models directory: /home/r2/miniconda3/envs/xrobot312/lib/python3.12/site-packages/arx5_interface/models
+SocketCAN adapter created.
+Created CAN socket with descriptor 6.
+Found: can0 has interface index 18.
+Successfully bound socket to interface 18.
+Successfully started receiver thread with ID 1191179968.
+m_interface_ptr use count: 1
+Link link1 had 1 childrenLink link2 had 1 childrenLink link3 had 1 childrenLink link4 had 1 childrenLink link5 had 1 childrenLink link6 had 1 childrenLink eef_link had 0 childrenParsed 6 non-fixed joints and 7 segments. Base link: base_link. Using eef_link for kinematics and link6 for inverse dynamics.
+[03:56:54 X5_can0 info] Clearing motor controller states...
+[03:56:54 X5_can0 info] Background send_recv task is running at ID: 3954653
+Initial q=[-0.00591  0.02537 -0.00057 -0.03414  0.01125 -0.00782], gripper=0.00127 m
+Controller gains: kp=[80. 70. 70. 30. 30. 20.] kd=[2.  2.  2.  1.  1.  0.7]
+Testing J3: -0.00057 -> +0.00443 rad
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254 -0.0006 -0.0341  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254 -0.0005 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0050
+OUT: J3 actual=-0.00057 target=+0.00443 error=+0.00500 sdk_pos=-0.00515 actual_vel=-0.01319 sdk_vel=+0.00000 actual_tau=+4.9538 sdk_tau=+5.1748 ts=(0.2499,0.2506,0.2519)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254 -0.0006 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0005 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0050
+OUT: J3 actual=-0.00057 target=+0.00443 error=+0.00500 sdk_pos=+0.00025 actual_vel=-0.02198 sdk_vel=+0.00000 actual_tau=+5.0113 sdk_tau=+5.1747 ts=(0.4515,0.4521,0.4530)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254 -0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0015 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0046
+OUT: J3 actual=-0.00019 target=+0.00443 error=+0.00462 sdk_pos=+0.00128 actual_vel=-0.00440 sdk_vel=+0.00000 actual_tau=+5.2697 sdk_tau=+5.1743 ts=(0.6524,0.6530,0.6537)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254 -0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0025 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0046
+OUT: J3 actual=-0.00019 target=+0.00443 error=+0.00462 sdk_pos=+0.00228 actual_vel=-0.01319 sdk_vel=+0.00000 actual_tau=+5.2697 sdk_tau=+5.1743 ts=(0.8539,0.8545,0.8545)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0035 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00328 actual_vel=+0.00440 sdk_vel=+0.00000 actual_tau=+5.3272 sdk_tau=+5.1739 ts=(1.0538,1.0544,1.0555)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00428 actual_vel=-0.01319 sdk_vel=+0.00000 actual_tau=+5.7579 sdk_tau=+5.1739 ts=(1.2554,1.2560,1.2570)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=-0.00440 sdk_vel=+0.00000 actual_tau=+5.2985 sdk_tau=+5.1739 ts=(1.4567,1.4572,1.4584)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=+0.00440 sdk_vel=+0.00000 actual_tau=+5.4708 sdk_tau=+5.1739 ts=(1.6584,1.6590,1.6594)
+OFFICIAL BASELINE q_actual=[-0.0063  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=-0.02198 sdk_vel=+0.00000 actual_tau=+5.4421 sdk_tau=+5.1739 ts=(1.8599,1.8606,1.8608)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=+0.00440 sdk_vel=+0.00000 actual_tau=+5.1836 sdk_tau=+5.1739 ts=(2.0595,2.0601,2.0612)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=+0.01319 sdk_vel=+0.00000 actual_tau=+5.4133 sdk_tau=+5.1739 ts=(2.2607,2.2613,2.2625)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=+0.00440 sdk_vel=+0.00000 actual_tau=+5.4708 sdk_tau=+5.1739 ts=(2.4627,2.4633,2.4637)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=-0.01319 sdk_vel=+0.00000 actual_tau=+5.4708 sdk_tau=+5.1739 ts=(2.6638,2.6644,2.6648)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=-0.01319 sdk_vel=+0.00000 actual_tau=+5.4708 sdk_tau=+5.1739 ts=(2.8654,2.8640,2.8658)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=-0.02198 sdk_vel=+0.00000 actual_tau=+5.6144 sdk_tau=+5.1739 ts=(3.0664,3.0650,3.0667)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=+0.00440 sdk_vel=+0.00000 actual_tau=+5.4708 sdk_tau=+5.1739 ts=(3.2675,3.2681,3.2681)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=+0.02198 sdk_vel=+0.00000 actual_tau=+5.4133 sdk_tau=+5.1739 ts=(3.4688,3.4696,3.4697)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=+0.00440 sdk_vel=+0.00000 actual_tau=+5.2410 sdk_tau=+5.1739 ts=(3.6699,3.6705,3.6714)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=+0.00440 sdk_vel=+0.00000 actual_tau=+5.3846 sdk_tau=+5.1739 ts=(3.8708,3.8714,3.8729)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=+0.01319 sdk_vel=+0.00000 actual_tau=+5.4708 sdk_tau=+5.1739 ts=(4.0726,4.0732,4.0739)[03:56:59 X5_can0 info] Set to damping before exit
+[03:57:01 X5_can0 info] background send_recv task joined
+
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=-0.01319 sdk_vel=+0.00000 actual_tau=+5.5569 sdk_tau=+5.1739 ts=(4.2736,4.2742,4.2749)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=-0.01319 sdk_vel=+0.00000 actual_tau=+5.1836 sdk_tau=+5.1739 ts=(4.4741,4.4748,4.4761)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=+0.00440 sdk_vel=+0.00000 actual_tau=+5.7867 sdk_tau=+5.1739 ts=(4.6772,4.6758,4.6772)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=+0.02198 sdk_vel=+0.00000 actual_tau=+5.7579 sdk_tau=+5.1739 ts=(4.8766,4.8771,4.8781)
+OFFICIAL BASELINE q_actual=[-0.0059  0.0254  0.0002 -0.0334  0.0113 -0.0078] q_des=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] q_safe=[-0.0059  0.0254  0.0044 -0.0341  0.0113 -0.0078] peak_ik_step=0.0000 tracking_error=0.0042
+OUT: J3 actual=+0.00019 target=+0.00443 error=+0.00424 sdk_pos=+0.00443 actual_vel=+0.02198 sdk_vel=+0.00000 actual_tau=+5.4708 sdk_tau=+5.1739 ts=(5.0776,5.0782,5.0792)
+Outward target timed out; returning.
+BACK: J3 actual=+0.00019 target=-0.00057 error=-0.00076 sdk_pos=+0.00443 actual_vel=-0.02198 sdk_vel=+0.00000 actual_tau=+5.4995 sdk_tau=+5.1739 ts=(5.2577,5.2584,5.2599)
+Initial target reached.
+X5 is in damping mode.
+Waiting for receiver thread to terminate.
+Receiver thread terminated.
+CAN socket destroyed.

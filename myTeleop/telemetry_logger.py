@@ -13,9 +13,12 @@ VECTOR_FIELDS = {
     "xr": ("x", "y", "z", "qx", "qy", "qz", "qw"),
     "eef_actual": ("x", "y", "z", "qx", "qy", "qz", "qw"),
     "eef_ik": ("x", "y", "z", "qx", "qy", "qz", "qw"),
+    "xr_delta_world": ("x", "y", "z", "rx", "ry", "rz"),
     "q_actual": tuple(f"j{i}" for i in range(1, 7)),
     "q_ik": tuple(f"j{i}" for i in range(1, 7)),
     "q_command": tuple(f"j{i}" for i in range(1, 7)),
+    "q_command_velocity": tuple(f"j{i}" for i in range(1, 7)),
+    "q_command_torque": tuple(f"j{i}" for i in range(1, 7)),
 }
 
 FIELDS = [
@@ -30,7 +33,10 @@ FIELDS = [
     "right_trigger",
     "gripper_actual_m",
     "gripper_target_m",
+    "gripper_command_velocity",
+    "gripper_command_torque",
     "max_joint_error_rad",
+    "max_ik_step_rad",
 ]
 for prefix, names in VECTOR_FIELDS.items():
     FIELDS.extend(f"{prefix}_{name}" for name in names)

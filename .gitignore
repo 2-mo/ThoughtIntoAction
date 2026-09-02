@@ -222,5 +222,7 @@ __marimo__/
 /安装包/
 /arx5-sdk/
 /R5/
+/X5/
 /XRoboToolkit-Teleop-Sample-Python/
+/openpi/
 /myTeleop/logs/*.csv

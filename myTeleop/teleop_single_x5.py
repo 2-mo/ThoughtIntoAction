@@ -59,6 +59,12 @@ class ARX5Interface:
         )
         self.arm.set_log_level(arx5.LogLevel.INFO)
 
+        initial_state = self.arm.get_joint_state()
+        self._position_target = initial_state.pos().copy()
+        self._gripper_target = float(
+            np.clip(initial_state.gripper_pos, 0.0, self.robot_config.gripper_width)
+        )
+
         if actuate:
             gain = arx5.Gain(
                 self.controller_config.default_kp,
@@ -78,6 +84,9 @@ class ARX5Interface:
         state = self.arm.get_joint_state()
         return np.concatenate((state.vel().copy(), [state.gripper_vel]))
 
+    def get_position_target(self) -> np.ndarray:
+        return self._position_target.copy()
+
     def set_command(
         self,
         positions: Optional[np.ndarray] = None,
@@ -86,7 +95,6 @@ class ARX5Interface:
         if not self.actuate:
             return
 
-        command = self.arm.get_joint_cmd()
         if positions is not None:
             target = np.asarray(positions, dtype=float)
             expected_shape = (self.robot_config.joint_dof,)
@@ -94,12 +102,23 @@ class ARX5Interface:
                 raise ValueError(
                     f"Invalid ARX joint target {target}; expected {expected_shape}"
                 )
-            command.pos()[:] = target
+            self._position_target = target.copy()
 
         if gripper_position is not None:
-            command.gripper_pos = float(
+            self._gripper_target = float(
                 np.clip(gripper_position, 0.0, self.robot_config.gripper_width)
             )
+
+        # Never reuse get_joint_cmd() here. Its torque already contains the
+        # SDK's gravity compensation, so feeding it back would accumulate that
+        # torque on every Python control cycle.
+        command = arx5.JointState(self.robot_config.joint_dof)
+        command.pos()[:] = self._position_target
+        command.vel()[:] = 0.0
+        command.torque()[:] = 0.0
+        command.gripper_pos = self._gripper_target
+        command.gripper_vel = 0.0
+        command.gripper_torque = 0.0
 
         # The configured preview time makes timestamp=0 a future interpolated
         # waypoint instead of an immediate fixed target.
@@ -121,7 +140,8 @@ class SingleX5TeleopController(BaseARXTeleopController):
         gripper_width: float,
         preview_time_s: float,
         max_joint_speed_rad_s: float,
-        max_joint_error_rad: float,
+        max_ik_step_rad: float,
+        joint_soft_limit_margin_rad: float,
         xr_stale_timeout_s: float,
         xr_settle_samples: int,
         max_xr_step_m: float,
@@ -138,7 +158,8 @@ class SingleX5TeleopController(BaseARXTeleopController):
         self.gripper_width = gripper_width
         self.preview_time_s = preview_time_s
         self.max_joint_speed_rad_s = max_joint_speed_rad_s
-        self.max_joint_error_rad = max_joint_error_rad
+        self.max_ik_step_rad = max_ik_step_rad
+        self.joint_soft_limit_margin_rad = joint_soft_limit_margin_rad
         self.xr_stale_timeout_s = xr_stale_timeout_s
         self.xr_settle_samples = max(1, xr_settle_samples)
         self.max_xr_step_m = max_xr_step_m
@@ -160,6 +181,8 @@ class SingleX5TeleopController(BaseARXTeleopController):
         self._latest_grip: dict[str, float] = {}
         self._actual_eef_pose: dict[str, np.ndarray] = {}
         self._ik_eef_pose: dict[str, np.ndarray] = {}
+        self._xr_delta_world: dict[str, np.ndarray] = {}
+        self._last_accepted_ik_target: dict[str, np.ndarray] = {}
         self._telemetry_logger: Optional[TelemetryCSVLogger] = None
 
         super().__init__(*args, **kwargs)
@@ -327,6 +350,7 @@ class SingleX5TeleopController(BaseARXTeleopController):
         self._candidate_pose.pop(arm_name, None)
         self._candidate_samples.pop(arm_name, None)
         self._last_follow_pose.pop(arm_name, None)
+        self._xr_delta_world.pop(arm_name, None)
         if announce and was_latched:
             print(f"{arm_name}: clutch released.")
 
@@ -351,6 +375,10 @@ class SingleX5TeleopController(BaseARXTeleopController):
         self.active[arm_name] = True
         self._clutch_latched[arm_name] = True
         self._last_follow_pose[arm_name] = xr_pose.copy()
+        dof = self.arm_controllers[arm_name].robot_config.joint_dof
+        self._last_accepted_ik_target[arm_name] = self.arm_controllers[
+            arm_name
+        ].get_joint_positions()[:dof].copy()
         print(f"{arm_name}: clutch latched at the current robot pose.")
 
     def _update_ik(self) -> None:
@@ -408,17 +436,20 @@ class SingleX5TeleopController(BaseARXTeleopController):
                 self._last_follow_pose[arm_name] = xr_pose.copy()
 
                 delta_xyz, delta_rot = self._process_xr_pose(xr_pose, arm_name)
+                scaled_delta_rot = delta_rot * self.rotation_scale_factor
+                self._xr_delta_world[arm_name] = np.concatenate(
+                    (delta_xyz.copy(), scaled_delta_rot.copy())
+                )
                 if self.effector_control_mode[arm_name] == "position":
                     self.effector_task[arm_name].target_world = (
                         self.ref_ee_xyz[arm_name] + delta_xyz
                     )
                 else:
-                    delta_rot = delta_rot * self.rotation_scale_factor
                     target_xyz, target_quat = apply_delta_pose(
                         self.ref_ee_xyz[arm_name],
                         self.ref_ee_quat[arm_name],
                         delta_xyz,
-                        delta_rot,
+                        scaled_delta_rot,
                     )
                     target_pose = tf.quaternion_matrix(target_quat)
                     target_pose[:3, 3] = target_xyz
@@ -447,6 +478,7 @@ class SingleX5TeleopController(BaseARXTeleopController):
 
             for arm_name, controller in self.arm_controllers.items():
                 positions = None
+                submitted_positions = None
                 rejection_reason = ""
                 command_sent = False
                 joint_state = controller.get_joint_positions()
@@ -454,7 +486,13 @@ class SingleX5TeleopController(BaseARXTeleopController):
                 q_des = self.placo_robot.state.q[
                     self.placo_arm_joint_slice[arm_name]
                 ].copy()
-                max_error = float(np.max(np.abs(q_des - q_now)))
+                tracking_error = float(np.max(np.abs(q_des - q_now)))
+                previous_ik = self._last_accepted_ik_target.get(arm_name)
+                ik_step = (
+                    float(np.max(np.abs(q_des - previous_ik)))
+                    if previous_ik is not None
+                    else 0.0
+                )
                 active = self.active.get(arm_name, False)
 
                 if self.dry_run:
@@ -462,7 +500,8 @@ class SingleX5TeleopController(BaseARXTeleopController):
                     if now - self._last_diagnostic_time >= 0.2:
                         print(
                             f"DRY-RUN active={active} "
-                            f"max_error={max_error:.4f} q_now={np.round(q_now, 4)} "
+                            f"tracking_error={tracking_error:.4f} "
+                            f"ik_step={ik_step:.4f} q_now={np.round(q_now, 4)} "
                             f"q_ik={np.round(q_des, 4)}"
                         )
                         self._last_diagnostic_time = now
@@ -475,22 +514,29 @@ class SingleX5TeleopController(BaseARXTeleopController):
                     else:
                         q_min = np.asarray(controller.robot_config.joint_pos_min)
                         q_max = np.asarray(controller.robot_config.joint_pos_max)
-                        if np.any(q_des < q_min) or np.any(q_des > q_max):
-                            rejection_reason = "joint_limit"
-                        elif max_error > self.max_joint_error_rad:
+                        margin = self.joint_soft_limit_margin_rad
+                        q_soft_min = np.minimum(q_min + margin, (q_min + q_max) / 2.0)
+                        q_soft_max = np.maximum(q_max - margin, (q_min + q_max) / 2.0)
+                        q_des = np.clip(q_des, q_soft_min, q_soft_max)
+                        previous_ik = self._last_accepted_ik_target.get(arm_name)
+                        ik_step = (
+                            float(np.max(np.abs(q_des - previous_ik)))
+                            if previous_ik is not None
+                            else 0.0
+                        )
+                        if ik_step > self.max_ik_step_rad:
                             rejection_reason = "ik_jump"
 
-                    if rejection_reason == "joint_limit":
-                        self._warn_throttled(
-                            "joint_limit", "Rejecting IK target outside X5 joint limits."
-                        )
-                    elif rejection_reason == "ik_jump":
+                    if rejection_reason == "ik_jump":
                         self._warn_throttled(
                             "ik_jump",
-                            f"Rejecting IK jump: max |q_des-q_now|={max_error:.3f} rad",
+                            f"Rejecting IK target step: {ik_step:.3f} rad; "
+                            "release and press Grip again.",
                         )
+                        self._release_clutch(arm_name)
 
                     if not rejection_reason:
+                        self._last_accepted_ik_target[arm_name] = q_des.copy()
                         error = q_des - q_now
                         max_step = self.max_joint_speed_rad_s / self.control_rate_hz
                         positions = q_now + np.clip(error, -max_step, max_step)
@@ -508,6 +554,8 @@ class SingleX5TeleopController(BaseARXTeleopController):
                         positions=positions, gripper_position=gripper_position
                     )
                     command_sent = positions is not None or gripper_position is not None
+                    if command_sent:
+                        submitted_positions = controller.get_position_target()
 
                 self._write_telemetry(
                     arm_name=arm_name,
@@ -516,10 +564,15 @@ class SingleX5TeleopController(BaseARXTeleopController):
                     rejection_reason=rejection_reason,
                     q_actual=q_now,
                     q_ik=q_des,
-                    q_command=positions,
+                    q_command=submitted_positions,
+                    command_velocity=(
+                        np.zeros_like(q_now) if command_sent else None
+                    ),
+                    command_torque=(np.zeros_like(q_now) if command_sent else None),
                     gripper_actual=float(joint_state[-1]),
                     gripper_target=gripper_position,
-                    max_joint_error=max_error,
+                    max_joint_error=tracking_error,
+                    max_ik_step=ik_step,
                 )
 
     def _write_telemetry(
@@ -532,9 +585,12 @@ class SingleX5TeleopController(BaseARXTeleopController):
         q_actual: np.ndarray,
         q_ik: np.ndarray,
         q_command: Optional[np.ndarray],
+        command_velocity: Optional[np.ndarray],
+        command_torque: Optional[np.ndarray],
         gripper_actual: float,
         gripper_target: Optional[float],
         max_joint_error: float,
+        max_ik_step: float,
     ) -> None:
         if self._telemetry_logger is None:
             return
@@ -553,14 +609,20 @@ class SingleX5TeleopController(BaseARXTeleopController):
             ),
             "gripper_actual_m": gripper_actual,
             "gripper_target_m": "" if gripper_target is None else gripper_target,
+            "gripper_command_velocity": 0.0 if command_sent else "",
+            "gripper_command_torque": 0.0 if command_sent else "",
             "max_joint_error_rad": max_joint_error,
+            "max_ik_step_rad": max_ik_step,
         }
         add_vector(row, "xr", self._latest_xr_pose.get(arm_name))
         add_vector(row, "eef_actual", self._actual_eef_pose.get(arm_name))
         add_vector(row, "eef_ik", self._ik_eef_pose.get(arm_name))
+        add_vector(row, "xr_delta_world", self._xr_delta_world.get(arm_name))
         add_vector(row, "q_actual", q_actual)
         add_vector(row, "q_ik", q_ik)
         add_vector(row, "q_command", q_command)
+        add_vector(row, "q_command_velocity", command_velocity)
+        add_vector(row, "q_command_torque", command_torque)
         self._telemetry_logger.write(row)
 
     def _warn_throttled(
@@ -579,12 +641,13 @@ def main(
     gripper_open_readout: float = -3.4,
     gripper_width: float = 0.082,
     scale_factor: float = 0.1,
-    rotation_scale_factor: float = 0.0,
+    rotation_scale_factor: float = 0.5,
     control_mode: str = "pose",
     control_rate_hz: int = 50,
     preview_time_s: float = 0.05,
     max_joint_speed_rad_s: float = 0.5,
-    max_joint_error_rad: float = 0.5,
+    max_ik_step_rad: float = 0.35,
+    joint_soft_limit_margin_rad: float = 0.1,
     xr_stale_timeout_s: float = 0.25,
     xr_settle_samples: int = 3,
     max_xr_step_m: float = 0.08,
@@ -601,8 +664,10 @@ def main(
         raise ValueError("control_mode must be 'position' or 'pose'")
     if control_rate_hz <= 0 or preview_time_s <= 0.0:
         raise ValueError("control_rate_hz and preview_time_s must be positive")
-    if max_joint_speed_rad_s <= 0.0 or max_joint_error_rad <= 0.0:
-        raise ValueError("joint speed and error limits must be positive")
+    if max_joint_speed_rad_s <= 0.0 or max_ik_step_rad <= 0.0:
+        raise ValueError("joint speed and IK step limits must be positive")
+    if joint_soft_limit_margin_rad < 0.0:
+        raise ValueError("joint soft-limit margin cannot be negative")
     if not Path(robot_urdf_path).is_file():
         raise FileNotFoundError(f"Robot URDF does not exist: {robot_urdf_path}")
 
@@ -622,7 +687,11 @@ def main(
     print(
         f"Mode: {'DRY-RUN' if dry_run else 'HARDWARE'}, control={control_description}, "
         f"scale={scale_factor}, joint_speed={max_joint_speed_rad_s:.3f} rad/s, "
-        f"preview={preview_time_s:.3f} s"
+        f"rotation_scale={rotation_scale_factor}, preview={preview_time_s:.3f} s"
+    )
+    print(
+        "Quest mapping: forward/back -> robot X, left/right -> robot Y, "
+        "up/down -> robot Z."
     )
 
     controller = SingleX5TeleopController(
@@ -634,7 +703,8 @@ def main(
         gripper_width=gripper_width,
         preview_time_s=preview_time_s,
         max_joint_speed_rad_s=max_joint_speed_rad_s,
-        max_joint_error_rad=max_joint_error_rad,
+        max_ik_step_rad=max_ik_step_rad,
+        joint_soft_limit_margin_rad=joint_soft_limit_margin_rad,
         xr_stale_timeout_s=xr_stale_timeout_s,
         xr_settle_samples=xr_settle_samples,
         max_xr_step_m=max_xr_step_m,
