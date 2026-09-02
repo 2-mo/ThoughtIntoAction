@@ -65,6 +65,11 @@ class OfficialX5HardwareAdapter:
         control_rate_hz: int,
         max_joint_speed_rad_s: float,
         joint_soft_limit_margin_rad: float,
+        gripper_force_hold: bool,
+        gripper_contact_torque: float,
+        gripper_hold_torque: float,
+        gripper_contact_cycles: int,
+        gripper_release_margin_m: float,
         dynamics_urdf_path: str = DEFAULT_X5_URDF_PATH,
     ) -> None:
         self.actuate = actuate
@@ -77,15 +82,45 @@ class OfficialX5HardwareAdapter:
         self.robot_config.urdf_path = dynamics_urdf_path
         self.robot_config.gripper_open_readout = gripper_open_readout
         self.robot_config.gripper_width = gripper_width
+        if abs(gripper_open_readout) < 1e-6:
+            raise ValueError("gripper_open_readout must be non-zero")
+        if gripper_contact_cycles < 1:
+            raise ValueError("gripper_contact_cycles must be at least 1")
+        if gripper_release_margin_m < 0.0:
+            raise ValueError("gripper_release_margin_m cannot be negative")
+        if not 0.0 < gripper_hold_torque < gripper_contact_torque:
+            raise ValueError(
+                "gripper_hold_torque must be positive and below gripper_contact_torque"
+            )
+        if gripper_contact_torque >= self.robot_config.gripper_torque_max:
+            raise ValueError(
+                "gripper_contact_torque must stay below the SDK gripper torque limit "
+                f"({self.robot_config.gripper_torque_max:.3f})"
+            )
+
         self._max_step_rad = max_joint_speed_rad_s / control_rate_hz
         self._max_command_lead_rad = 0.05
         self._command_gap_reset_s = 3.0 / control_rate_hz
         self._soft_limit_margin_rad = joint_soft_limit_margin_rad
+
+        self._gripper_force_hold_enabled = gripper_force_hold
+        self._gripper_contact_torque = gripper_contact_torque
+        self._gripper_hold_torque = gripper_hold_torque
+        self._gripper_contact_cycles = gripper_contact_cycles
+        self._gripper_release_margin_m = gripper_release_margin_m
+        self._gripper_closing_torque_sign = -float(np.sign(gripper_open_readout))
+        self._gripper_mode = "position"
+        self._gripper_contact_count = 0
+        self._gripper_latched_position = 0.0
+
         config = arx5.ControllerConfigFactory.get_instance().get_config(
             "joint_controller", self.robot_config.joint_dof
         )
         config.background_send_recv = True
         config.default_preview_time = preview_time_s
+        self._position_gripper_kp = float(config.default_gripper_kp)
+        self._position_gripper_kd = float(config.default_gripper_kd)
+
         self.arm = arx5.Arx5JointController(self.robot_config, config, can_port)
         self.arm.set_log_level(arx5.LogLevel.INFO)
 
@@ -95,6 +130,8 @@ class OfficialX5HardwareAdapter:
         self._gripper_target = float(
             np.clip(state.gripper_pos, 0.0, self.robot_config.gripper_width)
         )
+        self._gripper_latched_position = self._gripper_target
+
         if actuate:
             # Arx5JointController starts in damping mode (kp == 0). In that
             # mode its internal loop deliberately replaces every position
@@ -116,8 +153,10 @@ class OfficialX5HardwareAdapter:
             self._gripper_target = float(
                 np.clip(state.gripper_pos, 0.0, self.robot_config.gripper_width)
             )
+            self._gripper_latched_position = self._gripper_target
         else:
             self.arm.set_to_damping()
+
         self._last_diagnostic_time = 0.0
         self._peak_ik_step = 0.0
         self._last_position_command_time = 0.0
@@ -131,7 +170,7 @@ class OfficialX5HardwareAdapter:
         state = self.arm.get_joint_state()
         return np.concatenate((state.vel().copy(), [state.gripper_vel]))
 
-    def get_runtime_diagnostics(self) -> dict[str, np.ndarray | float]:
+    def get_runtime_diagnostics(self) -> dict[str, np.ndarray | float | str]:
         """Snapshot feedback and the SDK's current output command safely.
 
         The numpy views returned by pybind are owned by their C++ objects, so
@@ -149,6 +188,10 @@ class OfficialX5HardwareAdapter:
             "sdk_cmd_torque": command.torque().copy(),
             "kp": gain.kp().copy(),
             "kd": gain.kd().copy(),
+            "gripper_actual_pos": float(state.gripper_pos),
+            "gripper_actual_vel": float(state.gripper_vel),
+            "gripper_actual_torque": float(state.gripper_torque),
+            "gripper_mode": self._gripper_mode,
             "feedback_timestamp": float(state.timestamp),
             "command_timestamp": float(command.timestamp),
             "controller_timestamp": float(self.arm.get_timestamp()),
@@ -212,13 +255,16 @@ class OfficialX5HardwareAdapter:
             np.asarray(self.robot_config.joint_pos_max),
         )
         if now - self._last_diagnostic_time >= 0.2:
+            ik_backlog = float(np.max(np.abs(q_limited - q_actual)))
+            command_tracking_error = float(np.max(np.abs(self._q_target - q_actual)))
             print(
                 "OFFICIAL BASELINE "
                 f"q_actual={np.round(q_actual, 4)} "
                 f"q_des={np.round(target, 4)} "
                 f"q_safe={np.round(self._q_target, 4)} "
                 f"peak_ik_step={self._peak_ik_step:.4f} "
-                f"tracking_error={np.max(np.abs(q_limited - q_actual)):.4f}"
+                f"ik_backlog={ik_backlog:.4f} "
+                f"command_tracking_error={command_tracking_error:.4f}"
             )
             self._last_diagnostic_time = now
             self._peak_ik_step = 0.0
@@ -227,10 +273,75 @@ class OfficialX5HardwareAdapter:
         # one SDK waypoint per 50 Hz control cycle.
         return True
 
-    def set_catch_pos(self, position: float) -> bool:
-        self._gripper_target = float(
-            np.clip(position, 0.0, self.robot_config.gripper_width)
+    def _set_gripper_force_hold(self, state: arx5.JointState) -> None:
+        if self._gripper_mode == "force_hold":
+            return
+        gain = self.arm.get_gain()
+        gain.gripper_kp = 0.0
+        gain.gripper_kd = 0.0
+        self.arm.set_gain(gain)
+        self._gripper_mode = "force_hold"
+        self._gripper_contact_count = 0
+        self._gripper_latched_position = float(
+            np.clip(state.gripper_pos, 0.0, self.robot_config.gripper_width)
         )
+        self._gripper_target = self._gripper_latched_position
+        print(
+            "GRIPPER POSITION -> FORCE_HOLD "
+            f"pos={self._gripper_latched_position:.4f} "
+            f"torque={float(state.gripper_torque):+.3f} "
+            f"hold={self._gripper_closing_torque_sign * self._gripper_hold_torque:+.3f}"
+        )
+
+    def _set_gripper_position_mode(self) -> None:
+        if self._gripper_mode == "position":
+            return
+        gain = self.arm.get_gain()
+        gain.gripper_kp = self._position_gripper_kp
+        gain.gripper_kd = self._position_gripper_kd
+        self.arm.set_gain(gain)
+        self._gripper_mode = "position"
+        self._gripper_contact_count = 0
+        print("GRIPPER FORCE_HOLD -> POSITION")
+
+    def set_catch_pos(self, position: float) -> bool:
+        requested = float(np.clip(position, 0.0, self.robot_config.gripper_width))
+
+        if not self.actuate or not self._gripper_force_hold_enabled:
+            self._gripper_target = requested
+            self._submit()
+            return True
+
+        state = self.arm.get_joint_state()
+        actual_pos = float(
+            np.clip(state.gripper_pos, 0.0, self.robot_config.gripper_width)
+        )
+
+        if self._gripper_mode == "force_hold":
+            # A trigger release moves the requested width back toward open.
+            # Once it exceeds the contact width by a small margin, restore
+            # position control and let the user's trigger open the gripper.
+            if requested > self._gripper_latched_position + self._gripper_release_margin_m:
+                self._set_gripper_position_mode()
+                self._gripper_target = requested
+            else:
+                # Position is ignored while gripper kp == 0, but keeping it at
+                # measured feedback makes the eventual mode transition smooth.
+                self._gripper_target = actual_pos
+        else:
+            self._gripper_target = requested
+            closing_intent = requested < actual_pos - 0.001
+            closing_torque = (
+                float(state.gripper_torque) * self._gripper_closing_torque_sign
+            )
+            if closing_intent and closing_torque >= self._gripper_contact_torque:
+                self._gripper_contact_count += 1
+            else:
+                self._gripper_contact_count = 0
+
+            if self._gripper_contact_count >= self._gripper_contact_cycles:
+                self._set_gripper_force_hold(state)
+
         self._submit()
         return True
 
@@ -243,7 +354,11 @@ class OfficialX5HardwareAdapter:
         command.torque()[:] = 0.0
         command.gripper_pos = self._gripper_target
         command.gripper_vel = 0.0
-        command.gripper_torque = 0.0
+        command.gripper_torque = (
+            self._gripper_closing_torque_sign * self._gripper_hold_torque
+            if self._gripper_mode == "force_hold"
+            else 0.0
+        )
         command.timestamp = 0.0
         self.arm.set_joint_cmd(command)
 
@@ -263,6 +378,11 @@ class OfficialSingleX5Controller(ARXR5TeleopController):
         gripper_width: float,
         max_joint_speed_rad_s: float,
         joint_soft_limit_margin_rad: float,
+        gripper_force_hold: bool,
+        gripper_contact_torque: float,
+        gripper_hold_torque: float,
+        gripper_contact_cycles: int,
+        gripper_release_margin_m: float,
         dynamics_urdf_path: str = DEFAULT_X5_URDF_PATH,
         **kwargs,
     ) -> None:
@@ -272,6 +392,11 @@ class OfficialSingleX5Controller(ARXR5TeleopController):
         self._x5_gripper_width = gripper_width
         self._x5_max_joint_speed_rad_s = max_joint_speed_rad_s
         self._x5_joint_soft_limit_margin_rad = joint_soft_limit_margin_rad
+        self._x5_gripper_force_hold = gripper_force_hold
+        self._x5_gripper_contact_torque = gripper_contact_torque
+        self._x5_gripper_hold_torque = gripper_hold_torque
+        self._x5_gripper_contact_cycles = gripper_contact_cycles
+        self._x5_gripper_release_margin_m = gripper_release_margin_m
         self._x5_dynamics_urdf_path = dynamics_urdf_path
         self._x5_control_rate_hz = int(kwargs["control_rate_hz"])
         super().__init__(*args, **kwargs)
@@ -289,6 +414,11 @@ class OfficialSingleX5Controller(ARXR5TeleopController):
                 control_rate_hz=self._x5_control_rate_hz,
                 max_joint_speed_rad_s=self._x5_max_joint_speed_rad_s,
                 joint_soft_limit_margin_rad=self._x5_joint_soft_limit_margin_rad,
+                gripper_force_hold=self._x5_gripper_force_hold,
+                gripper_contact_torque=self._x5_gripper_contact_torque,
+                gripper_hold_torque=self._x5_gripper_hold_torque,
+                gripper_contact_cycles=self._x5_gripper_contact_cycles,
+                gripper_release_margin_m=self._x5_gripper_release_margin_m,
                 dynamics_urdf_path=self._x5_dynamics_urdf_path,
             )
             for name, port in self.can_ports.items()
@@ -319,6 +449,11 @@ def main(
     preview_time_s: float = 0.05,
     gripper_open_readout: float = -3.4,
     gripper_width: float = 0.082,
+    gripper_force_hold: bool = True,
+    gripper_contact_torque: float = 0.60,
+    gripper_hold_torque: float = 0.30,
+    gripper_contact_cycles: int = 1,
+    gripper_release_margin_m: float = 0.004,
     max_joint_speed_rad_s: float = 0.2,
     joint_soft_limit_margin_rad: float = 0.05,
     actuate: bool = False,
@@ -357,6 +492,11 @@ def main(
         gripper_width=gripper_width,
         max_joint_speed_rad_s=max_joint_speed_rad_s,
         joint_soft_limit_margin_rad=joint_soft_limit_margin_rad,
+        gripper_force_hold=gripper_force_hold,
+        gripper_contact_torque=gripper_contact_torque,
+        gripper_hold_torque=gripper_hold_torque,
+        gripper_contact_cycles=gripper_contact_cycles,
+        gripper_release_margin_m=gripper_release_margin_m,
         dynamics_urdf_path=robot_urdf_path,
     )
     controller.run()
