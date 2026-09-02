@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quest Controller Monitor</title>
+  <style>
+    :root { color-scheme: dark; --bg:#090d12; --panel:#111821; --line:#253243; --muted:#8493a7; --text:#e9f0f8; --cyan:#43d9d0; --green:#66e38f; --red:#ff6b76; --orange:#ffb55e; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(circle at 50% -20%,#172332 0,var(--bg) 48%); color:var(--text); font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    main { width:min(1400px,calc(100% - 32px)); margin:20px auto; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; }
+    h1 { margin:0; font:600 22px/1.2 system-ui,sans-serif; letter-spacing:.02em; }
+    .subtitle { color:var(--muted); margin-top:5px; }
+    .status { display:flex; align-items:center; gap:9px; border:1px solid var(--line); background:rgba(17,24,33,.85); padding:9px 13px; border-radius:999px; }
+    .dot { width:10px; height:10px; border-radius:50%; background:var(--orange); box-shadow:0 0 12px currentColor; }
+    .status.live .dot { background:var(--green); }
+    .status.stale .dot { background:var(--red); }
+    .layout { display:grid; grid-template-columns:minmax(0,1fr) 310px; gap:14px; }
+    .card { border:1px solid var(--line); background:rgba(17,24,33,.88); border-radius:14px; overflow:hidden; box-shadow:0 18px 50px rgba(0,0,0,.22); }
+    .card-title { padding:12px 15px; border-bottom:1px solid var(--line); color:#b8c7d9; display:flex; justify-content:space-between; }
+    canvas { display:block; width:100%; height:660px; }
+    aside { display:grid; gap:14px; align-content:start; }
+    .metrics { padding:13px 15px; display:grid; gap:10px; }
+    .metric { display:flex; justify-content:space-between; gap:12px; }
+    .metric span:first-child { color:var(--muted); }
+    .metric span:last-child { text-align:right; overflow-wrap:anywhere; }
+    .value { color:var(--cyan); }
+    .bar-label { display:flex; justify-content:space-between; color:var(--muted); margin-bottom:6px; }
+    .bar { height:10px; background:#081018; border:1px solid var(--line); border-radius:99px; overflow:hidden; }
+    .fill { height:100%; width:0; background:linear-gradient(90deg,var(--cyan),var(--green)); transition:width 50ms linear; }
+    .buttons { display:grid; grid-template-columns:1fr 1fr; gap:9px; padding:13px 15px; }
+    button { appearance:none; border:1px solid #35465b; color:var(--text); background:#182331; padding:10px; border-radius:9px; cursor:pointer; font:inherit; }
+    button:hover { background:#203044; }
+    .note { padding:12px 15px; color:var(--muted); border-top:1px solid var(--line); font-size:12px; }
+    .safe { color:var(--green); }
+    @media (max-width:900px) { .layout{grid-template-columns:1fr} canvas{height:560px} aside{grid-template-columns:1fr 1fr} }
+    @media (max-width:600px) { main{width:min(100% - 16px,1400px);margin:8px auto} header{align-items:flex-start;flex-direction:column} aside{grid-template-columns:1fr} canvas{height:680px} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1>Quest 右手柄 · 只读监视器</h1><div class="subtitle">相对启动原点的位置、姿态与按钮输入</div></div>
+    <div id="status" class="status"><span class="dot"></span><span id="statusText">WAITING</span></div>
+  </header>
+  <div class="layout">
+    <section class="card">
+      <div class="card-title"><span>正交视图 / 轨迹</span><span id="rangeLabel">± 0.40 m</span></div>
+      <canvas id="view"></canvas>
+    </section>
+    <aside>
+      <section class="card">
+        <div class="card-title"><span>数据流</span><span id="hz" class="value">0.0 Hz</span></div>
+        <div class="metrics">
+          <div class="metric"><span>时间戳</span><span id="timestamp">0</span></div>
+          <div class="metric"><span>数据年龄</span><span id="age">--</span></div>
+          <div class="metric"><span>相对 XYZ</span><span id="position" class="value">0, 0, 0</span></div>
+          <div class="metric"><span>原始 XYZ</span><span id="rawPosition">0, 0, 0</span></div>
+          <div class="metric"><span>相对四元数</span><span id="quaternion">0, 0, 0, 1</span></div>
+        </div>
+      </section>
+      <section class="card">
+        <div class="card-title"><span>右手柄输入</span><span>0 → 1</span></div>
+        <div class="metrics">
+          <div><div class="bar-label"><span>Grip（跟随）</span><span id="gripValue">0.000</span></div><div class="bar"><div id="grip" class="fill"></div></div></div>
+          <div><div class="bar-label"><span>Trigger（夹爪）</span><span id="triggerValue">0.000</span></div><div class="bar"><div id="trigger" class="fill"></div></div></div>
+        </div>
+        <div class="buttons"><button id="reset">当前位置设为原点</button><button id="clear">清除轨迹</button></div>
+        <div class="note"><span class="safe">● 只读模式</span><br>此页面不加载机械臂 SDK，不访问 CAN，不发送运动命令。</div>
+      </section>
+    </aside>
+  </div>
+</main>
+<script>
+const canvas=document.querySelector('#view'),ctx=canvas.getContext('2d');
+const $=id=>document.getElementById(id); let latest=null,lastTimestamp=0,trail=[],range=.4;
+function fit(){const d=devicePixelRatio||1,r=canvas.getBoundingClientRect();canvas.width=Math.round(r.width*d);canvas.height=Math.round(r.height*d);ctx.setTransform(d,0,0,d,0,0)}
+function fmt(v,n=3){return Number(v).toFixed(n)}
+function qRotate(q,v){const [x,y,z,w]=q,[vx,vy,vz]=v;const tx=2*(y*vz-z*vy),ty=2*(z*vx-x*vz),tz=2*(x*vy-y*vx);return [vx+w*tx+(y*tz-z*ty),vy+w*ty+(z*tx-x*tz),vz+w*tz+(x*ty-y*tx)]}
+function panel(box,title,a,b,labels){const {x,y,w,h}=box,cx=x+w/2,cy=y+h/2,scale=Math.min(w,h)*.42/range;ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.fillStyle='#0b1118';ctx.fillRect(x,y,w,h);ctx.strokeStyle='#1d2a38';ctx.lineWidth=1;for(let m=-range;m<=range+.001;m+=.1){let px=cx+m*scale,py=cy-m*scale;ctx.beginPath();ctx.moveTo(px,y);ctx.lineTo(px,y+h);ctx.stroke();ctx.beginPath();ctx.moveTo(x,py);ctx.lineTo(x+w,py);ctx.stroke()}ctx.strokeStyle='#42546a';ctx.beginPath();ctx.moveTo(x,cy);ctx.lineTo(x+w,cy);ctx.moveTo(cx,y);ctx.lineTo(cx,y+h);ctx.stroke();ctx.fillStyle='#92a3b8';ctx.font='12px ui-monospace,monospace';ctx.fillText(title,x+12,y+20);ctx.fillText(labels[0],x+w-22,cy-7);ctx.fillText(labels[1],cx+7,y+14);
+ if(latest){const pts=trail.map(p=>[cx+p[a]*scale,cy-p[b]*scale]);if(pts.length>1){ctx.strokeStyle='rgba(67,217,208,.42)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(...pts[0]);for(const p of pts.slice(1))ctx.lineTo(...p);ctx.stroke()}const p=latest.relative_position,px=cx+p[a]*scale,py=cy-p[b]*scale;const axes=[[1,0,0],[0,1,0],[0,0,1]].map(v=>qRotate(latest.relative_quaternion,v)),colors=['#ff6b76','#66e38f','#55aaff'];axes.forEach((axis,i)=>{ctx.strokeStyle=colors[i];ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+axis[a]*32,py-axis[b]*32);ctx.stroke()});ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill()}
+ ctx.restore();ctx.strokeStyle='#253243';ctx.strokeRect(x+.5,y+.5,w-1,h-1)}
+function draw(){const d=devicePixelRatio||1,w=canvas.width/d,h=canvas.height/d;ctx.clearRect(0,0,w,h);const gap=12;if(w<650){const ph=(h-gap*2)/3;panel({x:0,y:0,w,h:ph},'TOP · X/Z',0,2,['X','Z']);panel({x:0,y:ph+gap,w,h:ph},'FRONT · X/Y',0,1,['X','Y']);panel({x:0,y:(ph+gap)*2,w,h:ph},'SIDE · Z/Y',2,1,['Z','Y'])}else{const topH=(h-gap)/2,leftW=(w-gap)/2;panel({x:0,y:0,w:leftW,h:topH},'TOP · X/Z',0,2,['X','Z']);panel({x:leftW+gap,y:0,w:leftW,h:topH},'FRONT · X/Y',0,1,['X','Y']);panel({x:0,y:topH+gap,w,h:topH},'SIDE · Z/Y',2,1,['Z','Y'])}}
+async function update(){try{const r=await fetch('/api/state',{cache:'no-store'}),s=await r.json();latest=s;if(s.timestamp_ns&&s.timestamp_ns!==lastTimestamp){lastTimestamp=s.timestamp_ns;trail.push(s.relative_position.slice());if(trail.length>700)trail.shift()}const state=$('status');state.className='status '+(s.fresh?'live':s.valid?'stale':'');$('statusText').textContent=s.fresh?'LIVE':s.valid?'STALE':'WAITING';$('hz').textContent=fmt(s.stream_hz,1)+' Hz';$('timestamp').textContent=String(s.timestamp_ns);$('age').textContent=s.age_ms==null?'--':fmt(s.age_ms,0)+' ms';$('position').textContent=s.relative_position.map(v=>fmt(v)).join(', ');$('rawPosition').textContent=s.pose.slice(0,3).map(v=>fmt(v)).join(', ');$('quaternion').textContent=s.relative_quaternion.map(v=>fmt(v)).join(', ');for(const k of ['grip','trigger']){const v=Math.max(0,Math.min(1,s[k]));$(k).style.width=(v*100)+'%';$(k+'Value').textContent=fmt(v)}}catch(e){$('status').className='status stale';$('statusText').textContent='SERVER LOST'}draw()}
+$('reset').onclick=async()=>{await fetch('/api/reset',{method:'POST'});trail=[]};$('clear').onclick=()=>trail=[];addEventListener('resize',()=>{fit();draw()});fit();setInterval(update,33);update();
+</script>
+</body>
+</html>

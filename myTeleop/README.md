@@ -47,6 +47,16 @@ Run from this directory:
 `check-xr` must show a non-zero, changing timestamp. `check-arm` only reads
 joint feedback and does not call a motion command.
 
+To inspect the Quest right controller in a read-only browser view without
+loading the arm SDK or accessing CAN, run:
+
+```bash
+./run.sh visualize-xr
+```
+
+Then open `http://127.0.0.1:8765`. The page shows three orthographic views,
+the controller trail, stream freshness, grip, and trigger values.
+
 ## Run teleoperation
 
 ```bash

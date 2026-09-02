@@ -21,6 +21,9 @@ case "${command_name}" in
     check-xr)
         exec "${PYTHON_BIN}" "${SCRIPT_DIR}/check_xr.py" "$@"
         ;;
+    visualize-xr)
+        exec "${PYTHON_BIN}" "${SCRIPT_DIR}/visualize_xr.py" "$@"
+        ;;
     check-arm)
         if ! ip link show can0 >/dev/null 2>&1; then
             printf 'SocketCAN interface can0 does not exist or is unavailable.\n' >&2
@@ -36,7 +39,7 @@ case "${command_name}" in
         exec "${PYTHON_BIN}" "${SCRIPT_DIR}/teleop_single_r5.py" "$@"
         ;;
     *)
-        printf 'Usage: %s {check-xr|check-arm|teleop} [arguments...]\n' "$0" >&2
+        printf 'Usage: %s {check-xr|visualize-xr|check-arm|teleop} [arguments...]\n' "$0" >&2
         exit 2
         ;;
 esac
