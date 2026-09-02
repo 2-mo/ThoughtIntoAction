@@ -75,6 +75,13 @@ case "${command_name}" in
         fi
         exec "${PYTHON_BIN}" "${SCRIPT_DIR}/teleop_official_x5.py" "$@"
         ;;
+    teleop-presets-x5)
+        if ! ip link show can0 >/dev/null 2>&1; then
+            printf 'SocketCAN interface can0 does not exist or is unavailable.\n' >&2
+            exit 1
+        fi
+        exec "${PYTHON_BIN}" "${SCRIPT_DIR}/teleop_official_x5_presets.py" "$@"
+        ;;
     teleop-x5-2025)
         if ! ip link show can0 >/dev/null 2>&1; then
             printf 'SocketCAN interface can0 does not exist or is unavailable.\n' >&2
@@ -90,7 +97,7 @@ case "${command_name}" in
         exec "${PYTHON_BIN}" "${SCRIPT_DIR}/teleop_single_x5.py" "$@"
         ;;
     *)
-        printf 'Usage: %s {setup-quest-usb|build-x5-2025-sdk|check-xr|visualize-xr|simulate-x5|simulate-official-x5|check-arm|test-joint|test-joint-2025|teleop-official-x5|teleop-x5-2025|teleop-dry-run|teleop} [arguments...]\n' "$0" >&2
+        printf 'Usage: %s {setup-quest-usb|build-x5-2025-sdk|check-xr|visualize-xr|simulate-x5|simulate-official-x5|check-arm|test-joint|test-joint-2025|teleop-official-x5|teleop-presets-x5|teleop-x5-2025|teleop-dry-run|teleop} [arguments...]\n' "$0" >&2
         exit 2
         ;;
 esac
