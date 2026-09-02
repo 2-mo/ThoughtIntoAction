@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+/pi05_base/
+/安装包/
+/arx5-sdk/
+/R5/
+/XRoboToolkit-Teleop-Sample-Python/

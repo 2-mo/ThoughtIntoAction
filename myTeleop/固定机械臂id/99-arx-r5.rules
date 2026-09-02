@@ -1,0 +1,2 @@
+# Stable names for the ARX R5 USB2CAN adapter used by this workstation.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="16d0", ATTRS{idProduct}=="117e", ATTRS{serial}=="0047002A4348571520323137", SYMLINK+="arxcan0 arx_r5", MODE="0660", GROUP="dialout"
