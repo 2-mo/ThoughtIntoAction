@@ -217,12 +217,15 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# External checkouts are pinned in dependencies.lock.toml.
+/third_party/*
+!/third_party/README.md
 
-/pi05_base/
-/安装包/
-/arx5-sdk/
-/R5/
-/X5/
-/XRoboToolkit-Teleop-Sample-Python/
-/openpi/
-/myTeleop/logs/*.csv
+# Machine configuration, generated output and locally installed dependencies.
+/configs/local.toml
+/outputs/
+/runtime/
+
+# Vendored browser modules are runtime assets, not generated project build output.
+!/src/robot_simulation/web/vendor/three/build/
+!/src/robot_simulation/web/vendor/three/build/*.js

@@ -1,0 +1,13 @@
+# Copy to local.toml; this file contains examples, not shared device identities.
+[paths]
+dataset_dir = "~/work/datasets/quest_x5"
+checkpoint_dir = "~/work/models/pi05_base"
+installer_dir = "~/work/installers/QuestArmTeleop"
+
+[robot]
+can_port = "can0"
+can_device = "/dev/arx_r5"
+
+[cameras.wrist_rgb]
+serial = "REPLACE_WITH_CAMERA_SERIAL"
+hand_eye_calibrated = false

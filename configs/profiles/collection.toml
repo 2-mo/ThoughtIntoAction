@@ -1,0 +1,7 @@
+command = "teleop-presets-x5"
+
+[arguments]
+control_mode = "pose"
+scale_factor = 1.0
+max_joint_speed_rad_s = 2.0
+enable_session = true

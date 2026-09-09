@@ -1,0 +1,22 @@
+{
+  "model": "X5-2025 hybrid",
+  "kinematics_source": {
+    "repository": "https://github.com/real-stanford/arx5-sdk",
+    "commit": "a8890c9bae94464abd1cb7c5e4da7c4a62104a3a"
+  },
+  "inertia_source": {
+    "repository": "https://github.com/ARXroboticsX/X5.git",
+    "commit": "9a255e38156e3f5a263f341df209ab028d49dad9"
+  },
+  "migration": "Copied byte-for-byte from the QuestArmTeleop working model; no parameter changes.",
+  "sha256": {
+    "X5_2025_hybrid.urdf": "323a4c27c7444a48f721e5583777a3338a32330ef4df4502c89f4d02b025b13a",
+    "meshes/X5/base_link.STL": "ce4a722664700af1dc76cf6174b885f97967a0930c5f67779562fbb3b7bb418a",
+    "meshes/X5/link1.STL": "5c4c74d459c2d2e49a4246208659ac41f5942d163394712039670aa3b8eee049",
+    "meshes/X5/link2.STL": "2824cb02a5a4e029894ba1fb7a620f7d643355171ca0bdfee4475932bfbbd0f8",
+    "meshes/X5/link3.STL": "dcd492ebdd522245cf0962d390d3665142a4425dcb3b727a99d3c9eb4953bac8",
+    "meshes/X5/link4.STL": "a1744299ccde9be510cb9415051dadf09677895e410acb062f275cb5ee4e7e33",
+    "meshes/X5/link5.STL": "3bb540bb30ff468653f384bb8387b37e195e0f1578d1e17f32a620101322a46e",
+    "meshes/X5/link6.STL": "1105bf55921cffce9bd189342ad2a59946484ef20aad02db0c0f5224d5892698"
+  }
+}

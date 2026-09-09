@@ -1,0 +1,68 @@
+# Portable defaults. Machine-specific overrides belong in local.toml.
+default_command = "teleop-presets-x5"
+
+[environment]
+teleop_python = ".venv/bin/python"
+
+[paths]
+log_dir = "outputs/logs"
+dataset_dir = "~/work/datasets/quest_x5"
+checkpoint_dir = "~/work/models/pi05_base"
+installer_dir = "~/work/installers/QuestArmTeleop"
+
+[robot]
+can_port = "can0"
+can_device = "/dev/arx_r5"
+urdf = "assets/robots/x5/X5_2025_hybrid.urdf"
+
+[cameras.wrist_rgb]
+enabled = true
+driver = "realsense"
+model = "D435i"
+serial = ""
+hand_eye_calibrated = false
+width = 640
+height = 480
+fps = 30
+# Raw calibration sessions live in outputs/calibration; episode recording is separate.
+
+[camera_service]
+socket = "outputs/runtime/camera.sock"
+
+[runtime]
+socket = "outputs/runtime/teleop.sock"
+
+[telemetry]
+# One-way robot state stream. Monitor processes may start/stop independently.
+endpoint = "tcp://127.0.0.1:5567"
+
+[arm_service]
+socket = "outputs/runtime/arm.sock"
+backend = "stanford"
+control_rate_hz = 50
+max_joint_speed_rad_s = 2.0
+joint_soft_limit_margin_rad = 0.05
+preview_time_s = 0.03
+gripper_width = 0.082
+# Command limit only; keep the SDK width/angle mapping unchanged.
+gripper_open_limit_m = 0.077
+gripper_open_readout = -3.4
+gripper_contact_torque = 0.60
+gripper_hold_torque = 0.30
+gripper_contact_cycles = 1
+gripper_release_margin_m = 0.004
+
+[recording]
+queue_size = 128
+min_free_bytes = 2147483648
+max_duration_s = 120
+min_duration_s = 2.0
+max_state_gap_s = 0.1
+max_frame_gap_s = 0.15
+max_sync_skew_s = 0.06
+
+[policy]
+host = "127.0.0.1"
+training_location = "H800"
+# This records the existing checkpoint format; no inference backend is installed.
+checkpoint_format = "lerobot"

@@ -1,0 +1,28 @@
+{
+  "three": {
+    "version": "0.180.0",
+    "source": "https://registry.npmjs.org/three/-/three-0.180.0.tgz",
+    "archive_sha256": "ad66d724565ee29a2467277fa84daa5ed0211d6b8d446e9ef29f6bae0cd14144",
+    "license": "MIT"
+  },
+  "textures": {
+    "source": "https://polyhaven.com/a/oak_veneer_01",
+    "author": "Jenelle van Heerden",
+    "license": "CC0-1.0",
+    "migration": "Copied texture assets from Desktop backup; no runtime dependency."
+  },
+  "sha256": {
+    "textures/oak_veneer_01/LICENSE.txt": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+    "textures/oak_veneer_01/SOURCE.txt": "9b66711bd36a621a8bfcaa8b910f0fcd84c7d76176cd2664cb5e16309a3ad2b2",
+    "textures/oak_veneer_01/oak_veneer_01_diff_2k.jpg": "0718c2e1a209afe6138ccb41d70e1a18cd825d1e73db33ad7cf80806fa9ce5a4",
+    "textures/oak_veneer_01/oak_veneer_01_nor_gl_2k.jpg": "e74a9d3ddcd86473a21815a28464f4dac4ceb8f86e7f170226dede8ed70d8eb9",
+    "textures/oak_veneer_01/oak_veneer_01_rough_2k.jpg": "5c81718ee172299c44e0754fadbe652758b6feed05a8fd88be6efff5aa70ca1e",
+    "vendor/three/LICENSE": "bfe119ea4fd413f5f7ca3fcd63adb0c4a073ed39daa2fe7d3e6b769e21272601",
+    "vendor/three/build/three.core.js": "eb077d2417f61d3e6d9264c317cabc4ea35769ed6b0ab533067292a550784c20",
+    "vendor/three/build/three.module.js": "c8211c69345d2e9949dc7a8ac969380497aa0600a5a8ac6a459c8cd02dd9cb8a",
+    "vendor/three/examples/jsm/controls/OrbitControls.js": "b97879c748170baadeb3fb84cea1ffdf4674e283dc06042f34e2acb95a76042c",
+    "vendor/three/examples/jsm/environments/RoomEnvironment.js": "c20f0b4677f6128a138d7152b85cbef9091f4f45cdfa05adca04d40c1697c7ae",
+    "vendor/three/examples/jsm/geometries/RoundedBoxGeometry.js": "c1b7c9bd2cddff2e3f3a0723f618a3d364a47450e3d25771d21faed88410bec8",
+    "vendor/three/examples/jsm/loaders/STLLoader.js": "023ed97f848b633d8bcd53d4db3b996d29d0c644088700691297c552257d480b"
+  }
+}

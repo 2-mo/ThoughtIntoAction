@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>X5</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/scene.css">
+  <script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}</script>
+</head>
+<body>
+  <main>
+    <section class="stage" aria-label="机械臂三维场景">
+      <canvas id="robot-canvas" aria-label="旋转、缩放和查看机械臂"></canvas>
+      <div class="stage-top"><span id="connection" role="status" data-state="waiting">等待场景</span><button id="reset-view" type="button">重置视角</button></div>
+      <div id="loading" role="status">正在加载 X5 模型与材质…</div>
+      <div class="stage-bottom"><span>拖动旋转 · 滚轮缩放 · 右键平移</span><span id="model-name"></span></div>
+    </section>
+    <section class="collection-panel" aria-label="采集监控" data-state="OFFLINE">
+      <div class="collection-heading"><strong id="collection-state" role="status">未连接</strong><span id="collection-task">等待采集会话</span></div>
+      <div class="collection-metrics">
+        <div><span>本轮已保存 · 条</span><strong id="collection-count">—</strong></div>
+        <div><span>当前时长</span><strong id="collection-duration">—</strong></div>
+        <div><span>RGB 帧数</span><strong id="collection-frames">—</strong></div>
+        <div><span>状态样本</span><strong id="collection-samples">—</strong></div>
+      </div>
+      <p id="collection-episode">当前 Episode：—</p>
+      <p id="collection-health">等待采集会话</p>
+      <p id="collection-last">上一条：—</p>
+      <p class="collection-controls"><span>A 预抓取后开始 · B 保存 / 长按回零</span><span>摇杆：左开始 · 右暂停 · 上作废上一条 · 按下长按 1 秒结束清零</span></p>
+    </section>
+    <aside>
+      <section class="camera-panel"><h2>D435i · RGB / 深度 <span>未标定</span></h2>
+        <div class="camera-pair"><div class="camera-frame"><img id="camera-image" alt="腕部相机实时 RGB 画面" hidden><span id="camera-empty">等待采集会话</span></div>
+        <div class="camera-frame"><img id="depth-image" alt="深度伪彩色预览" hidden><span id="depth-empty">等待深度</span><span class="depth-key" title="近端蓝色，远端红色；黑色为无效深度；范围外颜色饱和。未对齐 RGB。">0.2–2 m · 原生深度</span></div></div>
+        <p id="camera-status" role="status">等待相机数据</p>
+      </section>
+      <section class="input-panel"><h2>Quest 手柄 <span id="input-status">等待数据</span></h2>
+        <div class="hands"><div><h3>左 · X / Y</h3><div id="left-hand">—</div></div><div><h3>右 · A / B / R3</h3><div id="right-hand">—</div></div></div>
+        <p class="hint">位置 m / 四元数</p>
+      </section>
+      <section><h2>关节位置 <span>°</span></h2><div class="joint-head"><span>关节</span><span>实际</span><span>目标</span></div><div id="joints"></div></section>
+      <section><h2>末端位置 <span id="eef-name">link6 / m</span></h2><div id="eef-position" class="coordinates">—</div></section>
+      <section class="diagnostics-panel"><h2>控制误差 <span>rad</span></h2>
+        <div id="motion-diagnostics">—</div>
+        <span id="motion-joints" class="hint" tabindex="0">关节快照（悬停查看）</span>
+      </section>
+      <section class="display-panel"><div class="toggles">
+        <label><input id="show-target" type="checkbox" checked>目标姿态 <span class="swatch target"></span></label>
+        <label><input id="show-path" type="checkbox" checked>运动轨迹 <span class="swatch path"></span></label>
+        <label><input id="show-table" type="checkbox" checked>示意工作台</label>
+        <label><input id="show-axes" type="checkbox" checked>基座与末端坐标轴</label>
+        </div>
+      </section>
+      <section class="operation-note"><p id="state-source">等待机械臂状态</p>
+        <p class="timing-row"><span title="监看端向本机机械臂服务发出只读查询并收到应答的往返时间，不是 CAN 或电机动作延迟。">机械臂服务 RTT <b id="arm-latency">未测</b></span><span title="持续 ADB 通道到 USB 头显的回显往返时间，排除建连时间；不代表 XR 协议处理或动作延迟。">Quest USB RTT <b id="input-latency">未测</b></span></p><span id="model-id" hidden></span></section>
+    </aside>
+  </main>
+  <script type="module" src="/scene.js"></script>
+  <script type="module" src="/sensors.js"></script>
+</body>
+</html>

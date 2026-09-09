@@ -1,0 +1,274 @@
+// Display treatment adapted from arx5_test's scene; no desktop kinematics or controls.
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+const element = (id) => document.getElementById(id);
+const status = (message, state) => {
+  element('connection').textContent = message;
+  element('connection').dataset.state = state;
+};
+
+async function readJSON(url) {
+  const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(2000) });
+  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+  return response.json();
+}
+
+async function initialize() {
+  const canvas = element('robot-canvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x151a1e);
+  scene.fog = new THREE.FogExp2(0x151a1e, 0.17);
+  const environment = new RoomEnvironment();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const environmentTarget = pmrem.fromScene(environment, 0.04);
+  scene.environment = environmentTarget.texture;
+  scene.environmentIntensity = 0.72;
+  pmrem.dispose();
+  environment.dispose();
+
+  const camera = new THREE.PerspectiveCamera(39, 1, 0.01, 12);
+  camera.up.set(0, 0, 1);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 0.25;
+  controls.maxDistance = 4;
+  controls.maxPolarAngle = Math.PI * 0.93;
+  function resetView() {
+    camera.position.set(-0.85, -1.05, 0.85);
+    controls.target.set(0.16, 0, 0.23);
+    controls.update();
+  }
+  resetView();
+  element('reset-view').addEventListener('click', resetView);
+  const resize = new ResizeObserver(() => {
+    const { width, height } = canvas.parentElement.getBoundingClientRect();
+    if (!width || !height) return;
+    renderer.setSize(width, height, false);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  });
+  resize.observe(canvas.parentElement);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x171717, 2.9));
+  const key = new THREE.DirectionalLight(0xffffff, 3.4);
+  key.position.set(0.45, -0.55, 1.2);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  Object.assign(key.shadow.camera, { near: 0.05, far: 4, left: -1.5, right: 1.5, top: 1.5, bottom: -1.5 });
+  key.shadow.bias = -0.00025;
+  key.shadow.normalBias = 0.002;
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xa9b8b2, 1.05);
+  fill.position.set(-0.75, 0.45, 0.45);
+  scene.add(fill);
+
+  const ground = new THREE.GridHelper(4, 80, 0x506168, 0x303b42);
+  ground.rotation.x = Math.PI / 2;
+  ground.position.z = -0.043;
+  ground.material.transparent = true;
+  ground.material.opacity = 0.32;
+  scene.add(ground);
+  const axes = new THREE.Group();
+  const baseAxes = new THREE.AxesHelper(0.115);
+  baseAxes.position.z = 0.002;
+  const actualAxes = new THREE.AxesHelper(0.08);
+  actualAxes.matrixAutoUpdate = false;
+  axes.add(baseAxes, actualAxes);
+  scene.add(axes);
+
+  // A visual work surface only. No physical table transform or camera extrinsic is assumed.
+  const textureLoader = new THREE.TextureLoader();
+  const textures = await Promise.all(['diff', 'nor_gl', 'rough'].map(async (kind) => {
+    const texture = await textureLoader.loadAsync(`/textures/oak_veneer_01/oak_veneer_01_${kind}_2k.jpg`);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    texture.colorSpace = kind === 'diff' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    return texture;
+  }));
+  const table = new THREE.Mesh(new RoundedBoxGeometry(1.2, 0.9, 0.04, 3, 0.006),
+    new THREE.MeshPhysicalMaterial({ color: 0xffd4cf, map: textures[0], normalMap: textures[1],
+      normalScale: new THREE.Vector2(0.32, 0.32), roughnessMap: textures[2], roughness: 0.4,
+      metalness: 0, clearcoat: 0.28, clearcoatRoughness: 0.32 }));
+  table.position.set(0.42, 0, -0.02);
+  table.receiveShadow = true;
+  scene.add(table);
+
+  const manifest = await readJSON('/api/model');
+  if (manifest.matrix_order !== 'column-major') throw new Error('未知的模型变换格式');
+  element('model-name').textContent = manifest.model_file;
+  element('eef-name').textContent = `${manifest.robot.eef_frame} / m`;
+  element('model-id').textContent = `模型 SHA256 ${manifest.robot.urdf_sha256.slice(0, 12)}`;
+  const actualModel = new THREE.Group();
+  const targetModel = new THREE.Group();
+  actualModel.visible = targetModel.visible = false;
+  const loader = new STLLoader();
+  const actualMeshes = [], targetMeshes = [];
+  await Promise.all(manifest.meshes.map(async (spec, index) => {
+    const geometry = await loader.loadAsync(spec.url);
+    geometry.scale(...spec.scale);
+    geometry.computeVertexNormals();
+    // The Desktop scene uses black housings and a brushed-metal link3.
+    const metal = spec.link === 'link3';
+    const material = new THREE.MeshStandardMaterial({
+      color: metal ? 0xc8d0d5 : 0x171a1d, emissive: 0x070807, emissiveIntensity: 0.08,
+      metalness: metal ? 0.86 : 0.08, roughness: metal ? 0.25 : 0.68, side: THREE.DoubleSide,
+    });
+    const actual = new THREE.Mesh(geometry, material);
+    const target = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0xffb84c,
+      transparent: true, opacity: 0.23, depthWrite: false, side: THREE.DoubleSide }));
+    actual.name = target.name = spec.name;
+    actual.matrixAutoUpdate = target.matrixAutoUpdate = false;
+    actual.castShadow = actual.receiveShadow = true;
+    actualMeshes[index] = actual;
+    targetMeshes[index] = target;
+    actualModel.add(actual);
+    targetModel.add(target);
+  }));
+  scene.add(actualModel, targetModel);
+  const paths = new THREE.Group();
+  scene.add(paths);
+  const pathObjects = new Map();
+  const pathSignatures = new Map();
+  const rows = manifest.robot.joint_names.map((name) => {
+    const row = document.createElement('div');
+    row.className = 'joint-row';
+    const cells = [name, '—', '—'].map((text) => {
+      const span = document.createElement('span'); span.textContent = text; row.append(span); return span;
+    });
+    element('joints').append(row);
+    return cells;
+  });
+  let latest = null;
+  function displayOptions() {
+    // Coincident ghosts wash out the real materials; show only a distinct target.
+    targetModel.visible = Boolean(latest?.target_visible) && element('show-target').checked;
+    paths.visible = element('show-path').checked;
+    table.visible = element('show-table').checked;
+    axes.visible = element('show-axes').checked;
+  }
+  for (const id of ['show-target', 'show-path', 'show-table', 'show-axes']) {
+    element(id).addEventListener('change', displayOptions);
+  }
+  function applyState(state) {
+    latest = state;
+    // Pinocchio supplies world matrices including URDF visual origins. There is
+    // no hardcoded joint chain, Euler conversion or feedback smoothing in JS.
+    actualMeshes.forEach((mesh, index) => mesh.matrix.fromArray(state.actual.meshes[index]));
+    targetMeshes.forEach((mesh, index) => {
+      const matrix = state.target.meshes[index];
+      mesh.matrix.fromArray(matrix);
+      // Even with a distinct target, the base and upstream links can coincide.
+      // Suppress those ghosts too, avoiding tinted surfaces and z-fighting.
+      mesh.visible = matrix.some((value, entry) => Math.abs(value - state.actual.meshes[index][entry])
+        > (entry >= 12 && entry <= 14 ? 0.001 : 0.005));
+    });
+    actualAxes.matrix.fromArray(state.actual.eef);
+    actualModel.visible = true;
+    rows.forEach((cells, index) => {
+      cells[1].textContent = (state.actual.q[index] * 180 / Math.PI).toFixed(2);
+      cells[2].textContent = (state.target.q[index] * 180 / Math.PI).toFixed(2);
+    });
+    element('eef-position').textContent = state.actual.eef.slice(12, 15)
+      .map((value, index) => `${'XYZ'[index]} ${value.toFixed(4)}`).join('  ');
+    for (const [name, line] of pathObjects) {
+      if (!(name in state.paths)) {
+        paths.remove(line); line.geometry.dispose(); line.material.dispose();
+        pathObjects.delete(name); pathSignatures.delete(name);
+      }
+    }
+    for (const [name, path] of Object.entries(state.paths)) {
+      const signature = JSON.stringify(path);
+      if (pathSignatures.get(name) === signature) continue;
+      const old = pathObjects.get(name);
+      if (old) { paths.remove(old); old.geometry.dispose(); old.material.dispose(); pathObjects.delete(name); }
+      if (path.points.length > 1) {
+        const geometry = new THREE.BufferGeometry().setFromPoints(path.points.map((p) => new THREE.Vector3(...p)));
+        const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: path.color }));
+        paths.add(line);
+        pathObjects.set(name, line);
+      }
+      pathSignatures.set(name, signature);
+    }
+    displayOptions();
+    canvas.dataset.sequence = String(state.sequence);
+    document.body.dataset.ready = 'true';
+    element('loading').hidden = true;
+  }
+  let stopped = false;
+  let timer;
+  async function poll() {
+    try {
+      const state = await readJSON('/api/state');
+      if (stopped) return;
+      if (state.actual) applyState(state);
+      else applyState(manifest.reference);
+      const source = state.stream.source || {};
+      const kind = { hardware: '真机反馈', virtual: '虚拟机械臂', replay: '数据回放' }[source.kind] || '机械臂状态';
+      element('state-source').textContent = state.stream.stream_id
+        ? `${kind} · ${source.input || source.controller || '状态发布端'}${source.mode === 'damping' ? ' · 阻尼待机' : ''}` : '参考姿态 · 无机械臂反馈';
+      if (state.stream.status === 'live') status('实时状态', 'connected');
+      else if (state.stream.status === 'waiting') {
+        status('参考姿态 · 无机械臂反馈', 'waiting');
+        element('loading').hidden = true;
+        rows.forEach(cells => { cells[1].textContent = '—'; cells[2].textContent = '—'; });
+        element('eef-position').textContent = '—';
+      } else if (state.stream.status === 'stale') status('状态已过期 · 保留最后画面', 'stale');
+      else status(`状态不匹配：${state.stream.message}`, 'error');
+      document.body.dataset.monitorReady = 'true';
+    } catch {
+      if (!stopped) status('连接中断 · 保留最后画面', 'error');
+    }
+    if (!stopped) timer = setTimeout(poll, document.hidden ? 500 : 50);
+  }
+  renderer.setAnimationLoop(() => {
+    controls.update();
+    renderer.render(scene, camera);
+  });
+  canvas.addEventListener('webglcontextlost', (event) => {
+    event.preventDefault();
+    stopped = true;
+    clearTimeout(timer);
+    status('3D 显示已中断，请刷新页面', 'error');
+    renderer.setAnimationLoop(null);
+  });
+  window.addEventListener('pagehide', () => {
+    stopped = true;
+    clearTimeout(timer);
+    renderer.setAnimationLoop(null);
+    resize.disconnect();
+    controls.dispose();
+    environmentTarget.dispose();
+    const geometries = new Set(), materials = new Set();
+    scene.traverse((node) => {
+      if (node.geometry) geometries.add(node.geometry);
+      for (const material of (Array.isArray(node.material) ? node.material : [node.material])) {
+        if (material) materials.add(material);
+      }
+    });
+    geometries.forEach((geometry) => geometry.dispose());
+    materials.forEach((material) => material.dispose());
+    textures.forEach((texture) => texture.dispose());
+    renderer.dispose();
+  }, { once: true });
+  window.addEventListener('pageshow', (event) => { if (event.persisted) location.reload(); });
+  await poll();
+}
+
+initialize().catch((error) => {
+  console.error(error);
+  status('场景加载失败', 'error');
+  element('loading').textContent = `场景加载失败：${error.message}。请检查终端输出后刷新。`;
+});

@@ -1,0 +1,8 @@
+# Virtual control client; start arm-service --backend simulated separately.
+command = "control-arm"
+[arguments]
+input = "terminal"
+control_rate_hz = 50
+max_joint_speed_rad_s = 0.2
+joint_soft_limit_margin_rad = 0.05
+scale_factor = 0.5

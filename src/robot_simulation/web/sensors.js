@@ -1,0 +1,101 @@
+// Read-only session feed, independently polled so camera IPC never delays arm rendering.
+const byId = (id) => document.getElementById(id);
+let closed = false;
+window.addEventListener('pagehide', () => { closed = true; });
+function clearInput(message) {
+  byId('input-status').textContent = message;
+  for (const side of ['left', 'right']) byId(side + '-hand').textContent = '—';
+}
+function renderCollection(data = {}) {
+  const collection = data.collection;
+  const recording = data.recording;
+  const last = data.last_episode;
+  const error = collection?.error || recording?.error || data.runtime_error;
+  const state = error ? 'ERROR' : collection?.state || (recording ? 'RECORDING' : data.session_id ? 'DISABLED' : 'OFFLINE');
+  const labels = {PAUSED: '任务采集已暂停', IDLE: '任务采集未开启', POSITIONING: '前往预抓取位', READY: '准备就绪', RECORDING: '● 采集中', BUSY: '正在处理', HOME_WAIT: '等待松开 Grip', HOMING: '正在回零', ERROR: '采集异常', DISABLED: '按键采集未启用', OFFLINE: '未连接'};
+  document.querySelector('.collection-panel').dataset.state = state;
+  const put = (id, text) => { byId(id).textContent = text; byId(id).title = text; };
+  put('collection-state', labels[state] || state);
+  put('collection-count', String(data.collection_count ?? '—'));
+  byId('collection-count').title = '本轮任务，自上次重置以来完整保存且未丢弃的条数；不代表任务成功';
+  put('collection-task', recording?.task || collection?.task || '等待采集会话');
+  const seconds = recording?.duration_s;
+  put('collection-duration', Number.isFinite(seconds) ? Math.floor(seconds / 60).toString().padStart(2, '0') + ':' + Math.floor(seconds % 60).toString().padStart(2, '0') : '—');
+  put('collection-frames', String(recording?.counts?.frame ?? '—'));
+  put('collection-samples', String(recording?.counts?.state ?? '—'));
+  put('collection-episode', '当前 Episode：' + (recording?.id || '—'));
+  const drops = Object.values(recording?.dropped || {}).reduce((a, b) => a + b, 0);
+  put('collection-health', error || (recording ? `写入队列 ${recording.queue_size ?? 0} · 丢弃样本 ${drops}` : state === 'IDLE' ? 'A 前往预抓取位 · 左推摇杆开启任务采集' : state === 'PAUSED' ? '左推摇杆恢复任务 · A 仅前往预抓取位' : state === 'READY' ? '按 A 到预抓取位后开始下一条' : state === 'OFFLINE' ? '等待采集会话' : '等待采集操作完成'));
+  const result = last ? (last.lifecycle !== 'complete' ? '未完整保存' : last.outcome === 'discarded' ? '已丢弃' : '已保存') : '—';
+  put('collection-last', '上一条：' + result + (last ? ' · ' + last.id : ''));
+}
+async function refresh() {
+  try {
+    const response = await fetch('/api/sensors', { cache: 'no-store', signal: AbortSignal.timeout(1500) });
+    if (!response.ok) throw new Error('监看接口未连接');
+    const data = await response.json();
+    for (const [key, id] of [['arm', 'arm-latency'], ['quest_usb', 'input-latency']]) {
+      const value = data.connections?.[key]?.duration_ms;
+      byId(id).textContent = !Object.hasOwn(data, 'connections') ? '需重启监看' :
+        Number.isFinite(value) && value >= 0 ? value.toFixed(1) + ' ms' : '未测';
+    }
+    renderCollection(data);
+    const limit = data.joint_limit;
+    byId('motion-joints').textContent = limit?.age_s < .5 && limit.joints.length ?
+      '限位 J' + limit.joints.join('/J') + ' · 反向移动可恢复' : '关节快照（悬停查看）';
+    const diagnostic = data.motion_diagnostics;
+    const diagnosticLive = diagnostic && diagnostic.age_s != null && diagnostic.age_s < .5;
+    byId('motion-diagnostics').textContent = diagnosticLive ?
+      'IK 步长 ' + diagnostic.peak_ik_step.toFixed(4) + ' · 积压 ' + diagnostic.ik_backlog.toFixed(4) +
+      ' · 跟踪 ' + diagnostic.command_tracking_error.toFixed(4) : '—';
+    byId('motion-joints').title = diagnosticLive ?
+      ['q_actual', 'q_des', 'q_safe'].map(k => k + ': ' + diagnostic[k].map(v => v.toFixed(4)).join(' ')).join('\n') : '无新诊断数据';
+    const depth = data.depth_preview || {};
+    const depthLive = !data.camera?.error && depth.age_s != null && depth.age_s < .5 && depth.jpeg_base64;
+    byId('depth-image').hidden = !depthLive;
+    byId('depth-empty').hidden = !!depthLive;
+    if (depthLive) byId('depth-image').src = 'data:image/jpeg;base64,' + depth.jpeg_base64;
+    else byId('depth-image').removeAttribute('src');
+    const preview = data.preview || {};
+    const cameraLive = !data.camera?.error && preview.age_s != null && preview.age_s < .5 && preview.jpeg_base64;
+    byId('camera-image').hidden = !cameraLive;
+    byId('camera-empty').hidden = !!cameraLive;
+    if (cameraLive) byId('camera-image').src = 'data:image/jpeg;base64,' + preview.jpeg_base64;
+    else byId('camera-image').removeAttribute('src');
+    byId('camera-status').textContent = data.error || data.camera?.error ||
+      'RGB：' + (cameraLive ? '正常' : '暂无新画面') + ' · 深度：' + (depthLive ? '正常' : '暂无新画面');
+    byId('camera-status').title = byId('camera-status').textContent;
+    const input = data.input;
+    if (!input || input.error || data.input_age_s == null || data.input_age_s > .5) {
+      clearInput(data.input_error || (input?.error ? '读取异常' : input ? '数据已过期' : '等待手柄新帧'));
+    } else {
+      byId('input-status').textContent = '数据正常';
+      for (const side of ['left', 'right']) {
+        const hand = input.hands[side];
+        const line = document.createElement('p');
+        line.textContent = 'XYZ ' + hand.pose.slice(0, 3).map(v => v.toFixed(2)).join(' ') +
+          '\nq ' + hand.pose.slice(3).map(v => v.toFixed(2)).join(' ') +
+          '\n扳机 ' + hand.trigger.toFixed(2) + ' · 握持 ' + hand.grip.toFixed(2) +
+          '\n' + Object.entries(hand.buttons).map(([k, v]) => k + ' ' + (v ? '●' : '○')).join('  ');
+        byId(side + '-hand').replaceChildren(line);
+      }
+    }
+  } catch {
+    renderCollection();
+    byId('arm-latency').textContent = byId('input-latency').textContent = '未测';
+    byId('motion-joints').textContent = '关节快照（悬停查看）';
+    byId('depth-image').hidden = true;
+    byId('depth-image').removeAttribute('src');
+    byId('depth-empty').hidden = false;
+    byId('motion-diagnostics').textContent = '—';
+    byId('motion-joints').title = '无新诊断数据';
+    byId('camera-image').hidden = true;
+    byId('camera-image').removeAttribute('src');
+    byId('camera-empty').hidden = false;
+    byId('camera-status').textContent = '监看接口未连接';
+    clearInput('未连接');
+  } finally {
+    if (!closed) setTimeout(refresh, document.hidden ? 1000 : 200);
+  }
+}
+refresh();

@@ -1,0 +1,10 @@
+# Install into the Conda base in conda-linux-64.explicit.txt beside this file.
+# XR pybind and xrobotoolkit_teleop use pinned source. X5 does not need arx_r5_python.
+arx5-interface==0.1.3
+numpy==2.3.5
+placo==0.9.3
+pin==3.7.0
+meshcat==0.3.2
+tyro==1.0.16
+pyrealsense2==2.58.4.10922
+opencv-python==5.0.0.93

@@ -1,0 +1,58 @@
+# Exact local revisions captured before the layout migration.
+schema_version = 1
+
+[[repositories]]
+name = "arx5-sdk"
+path = "third_party/arx5-sdk"
+url = "https://github.com/real-stanford/arx5-sdk"
+commit = "a8890c9bae94464abd1cb7c5e4da7c4a62104a3a"
+group = "model-reference"
+required = false
+
+[[repositories]]
+name = "XRoboToolkit-Teleop-Sample-Python"
+path = "third_party/XRoboToolkit-Teleop-Sample-Python"
+url = "https://github.com/XR-Robotics/XRoboToolkit-Teleop-Sample-Python.git"
+commit = "79e5cb8a56e3455515ce1b476e993c764ec58739"
+group = "teleop"
+required = true
+
+[[repositories]]
+name = "X5"
+path = "third_party/X5"
+url = "https://github.com/ARXroboticsX/X5.git"
+commit = "9a255e38156e3f5a263f341df209ab028d49dad9"
+group = "experimental"
+required = false
+
+[[repositories]]
+name = "openpi"
+path = "third_party/openpi"
+url = "https://github.com/Physical-Intelligence/openpi"
+commit = "215abfb217dbac7d5f1273282331b9b1866c0479"
+group = "policy"
+required = false
+
+[[repositories]]
+name = "R5"
+path = "third_party/R5"
+url = "https://github.com/ARXroboticsX/R5.git"
+commit = "e87d09c11edb65f6ae672abc7a41fe2277a2f12f"
+group = "reference"
+required = false
+
+[[repositories]]
+name = "R5"
+path = "third_party/XRoboToolkit-Teleop-Sample-Python/dependencies/R5"
+url = "https://github.com/zhigenzhao/R5.git"
+commit = "98c61e7f54957294ce39f68c230fd827c826cb3f"
+group = "legacy-reference"
+required = false
+
+[[repositories]]
+name = "XRoboToolkit-PC-Service-Pybind"
+path = "third_party/XRoboToolkit-Teleop-Sample-Python/dependencies/XRoboToolkit-PC-Service-Pybind"
+url = "https://github.com/XR-Robotics/XRoboToolkit-PC-Service-Pybind.git"
+commit = "c64ccf6acd577a333e03b66fafe8efeeceb511b1"
+group = "teleop-build"
+required = true

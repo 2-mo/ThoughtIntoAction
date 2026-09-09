@@ -1,13 +1,5 @@
-./myTeleop/run.sh simulate-official-x5 \
-  --control-mode position \
-  --scale-factor 1.0 \
-  --max-joint-speed-rad-s 0.2 \
-  --initial-q 0 0 0.0025 0.3302 0.0185 0.0559
-
-
-  ./run.sh teleop-official-x5 \
-  --control-mode pose \
-  --scale-factor 0.5 \
-  --max-joint-speed-rad-s 0.5 \
-  --preview-time-s 0.05 \
-  --actuate
+#!/usr/bin/env bash
+set -Eeuo pipefail
+WEB_PORT=8081  # 固定地址 http://127.0.0.1:8081/，可用 --port 临时覆盖
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/." && pwd)"
+exec "$ROOT_DIR/run.sh" view-arm --camera --port "$WEB_PORT" "$@"
