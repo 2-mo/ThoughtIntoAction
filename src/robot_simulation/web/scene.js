@@ -212,6 +212,7 @@ async function initialize() {
   async function poll() {
     try {
       const state = await readJSON('/api/state');
+      window.dispatchEvent(new CustomEvent('arm-preview', { detail: state }));
       if (stopped) return;
       if (state.actual) applyState(state);
       else applyState(manifest.reference);
@@ -229,6 +230,7 @@ async function initialize() {
       else status(`状态不匹配：${state.stream.message}`, 'error');
       document.body.dataset.monitorReady = 'true';
     } catch {
+      window.dispatchEvent(new CustomEvent('arm-preview', { detail: null }));
       if (!stopped) status('连接中断 · 保留最后画面', 'error');
     }
     if (!stopped) timer = setTimeout(poll, document.hidden ? 500 : 50);

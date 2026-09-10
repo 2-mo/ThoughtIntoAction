@@ -11,15 +11,21 @@ import time
 from typing import Dict
 
 import numpy as np
+import meshcat.transformations as tf
 
 from xrobotoolkit_teleop.common.base_hardware_teleop_controller import HardwareTeleopController
-from xrobotoolkit_teleop.utils.geometry import R_HEADSET_TO_WORLD
+from xrobotoolkit_teleop.utils.geometry import R_HEADSET_TO_WORLD, apply_delta_pose
 from robot_core.plugins import Registry
 from robot_core.model import RobotModel
+from robot_core.loop_rate import LoopRate
+from robot_core.safety import TablePlane
+from .frames import (operator_yaw_rotation, tool_rotation_delta,
+                     aligned_rotation_basis, aligned_rotation_delta, aligned_position_basis)
+from .target_limits import CartesianTargetLimiter
 
 DEFAULT_X5_MANIPULATOR_CONFIG = {
     "right_arm": {
-        "link_name": "link6",
+        "link_name": "eef_link",
         "pose_source": "right_controller",
         "control_trigger": "right_grip",
         "gripper_config": {
@@ -43,6 +49,12 @@ class X5TeleopBase(HardwareTeleopController):
         can_ports: Dict[str, str],
         R_headset_world: np.ndarray = R_HEADSET_TO_WORLD,
         scale_factor: float = 1.0,
+        operator_yaw_deg: float = 0.0,
+        rotation_frame: str = "base",
+        max_eef_linear_speed_m_s: float = 0.25,
+        max_eef_angular_speed_rad_s: float = 0.0,
+        table_z_m: float | None = None,
+        table_clearance_m: float = 0.,
         telemetry: str = "none",
         input_plugin: str = "quest",
         control_rate_hz: int = 50,
@@ -83,9 +95,21 @@ class X5TeleopBase(HardwareTeleopController):
         self.robot_urdf_path = robot_urdf_path
         self.manipulator_config = deepcopy(manipulator_config)
         self.floating_base, self.q_init = False, None
-        self.R_headset_world, self.scale_factor = R_headset_world, scale_factor
+        self._table_plane = TablePlane(table_z_m, table_clearance_m)
+        self.operator_yaw_deg = float(operator_yaw_deg)
+        if rotation_frame not in {"base", "tool", "aligned", "calibrated"}:
+            raise ValueError("rotation_frame must be 'base', 'tool', 'aligned' or 'calibrated'")
+        self.rotation_frame = rotation_frame
+        # Fixed heading is used by base/tool modes. Aligned mode calibrates
+        # horizontal translation and rotation together at the reference posture.
+        self.R_headset_world = operator_yaw_rotation(self.operator_yaw_deg) @ R_headset_world
+        self.reset_rotation_alignment()
+        self.scale_factor = scale_factor
+        self._cartesian_limits = {name: CartesianTargetLimiter(max_eef_linear_speed_m_s, max_eef_angular_speed_rad_s)
+                                  for name in manipulator_config}
         self.dt = 1.0 / control_rate_hz
         self.control_rate_hz, self.log_freq = control_rate_hz, log_freq
+        self._ik_rate = LoopRate(control_rate_hz)
         self.enable_log_data, self.log_dir = enable_log_data, log_dir
         self.enable_camera, self.camera_fps = enable_camera, camera_fps
         self.camera_interface = None
@@ -133,6 +157,69 @@ class X5TeleopBase(HardwareTeleopController):
             self.close()
             raise
 
+    def reset_rotation_alignment(self):
+        """A new tracking session needs a fresh posture alignment."""
+        self._rotation_alignment = {name: None for name in self.manipulator_config}
+        self._position_alignment = {name: None for name in self.manipulator_config}
+
+    def _process_xr_pose(self, xr_pose, src_name):
+        reset = self.ref_controller_xyz[src_name] is None
+        if self.rotation_frame == "base":
+            position, rotation = super()._process_xr_pose(xr_pose, src_name)
+        else:
+            controller_xyz = np.asarray(xr_pose[:3])
+            if self.rotation_frame == "tool":
+                controller_xyz = self.R_headset_world @ controller_xyz
+            # Relative modes store raw Quest quaternions as their Grip anchors.
+            controller_quat = np.asarray(xr_pose)[[6, 3, 4, 5]]
+            if reset:
+                self.ref_controller_xyz[src_name] = controller_xyz
+                self.ref_controller_quat[src_name] = controller_quat
+                if self.rotation_frame == "aligned" and self._rotation_alignment[src_name] is None:
+                    basis = aligned_rotation_basis(controller_quat, self.ref_ee_quat[src_name])
+                    self._rotation_alignment[src_name] = basis.tolist()
+                    self._position_alignment[src_name] = aligned_position_basis(basis).tolist()
+                    print("位置与旋转参考已记录：前后／左右按校准朝向，上下保持竖直；拧动→侧倾，点头→翻转，摇头→自转。", flush=True)
+                position, rotation = np.zeros(3), np.zeros(3)
+            else:
+                position = (controller_xyz - self.ref_controller_xyz[src_name]) * self.scale_factor
+                if self.rotation_frame in {"aligned", "calibrated"}:
+                    if self._rotation_alignment[src_name] is None:
+                        raise RuntimeError("请先在遥操终端输入 c 完成方向标定")
+                    position = np.asarray(self._position_alignment[src_name]) @ position
+                    rotation = aligned_rotation_delta(self.ref_controller_quat[src_name], controller_quat,
+                                                      np.asarray(self._rotation_alignment[src_name]))
+                else:
+                    rotation = tool_rotation_delta(self.ref_controller_quat[src_name], controller_quat,
+                                                   self.ref_ee_quat[src_name])
+        plane = getattr(self, "_table_plane", None)
+        reference = self.ref_ee_xyz.get(src_name) if hasattr(self, "ref_ee_xyz") else None
+        if plane is not None and plane.minimum_z is not None and reference is not None:
+            position = self._clamp_tcp_target(src_name, reference, position, rotation, plane)
+        position, rotation = self._cartesian_limits[src_name].step(
+            position, rotation, now=time.monotonic(), period=self.dt, reset=reset)
+        if plane is not None and plane.minimum_z is not None and reference is not None:
+            position = self._clamp_tcp_target(src_name, reference, position, rotation, plane)
+        return position, rotation
+
+    def _clamp_tcp_target(self, name, reference, position, rotation, plane):
+        # The table always constrains the fingertips, even when teleop drives
+        # the old wrist frame. Obtain the fixed offset from the URDF.
+        offset = np.zeros(3)
+        link = self.manipulator_config[name]["link_name"]
+        if link != "eef_link":
+            wrist = self.placo_robot.get_T_world_frame(link)
+            tip = self.placo_robot.get_T_world_frame("eef_link")
+            local_offset = wrist[:3, :3].T @ (tip[:3, 3] - wrist[:3, 3])
+            _, quat = apply_delta_pose(np.asarray(reference), self.ref_ee_quat[name],
+                                      position, rotation)
+            offset = tf.quaternion_matrix(quat)[:3, :3] @ local_offset
+        target = np.asarray(reference) + position
+        return plane.clamp(target + offset) - offset - reference
+
+    def _control_gate_ready(self):
+        return True
+
     def _ik_thread(self, stop_event):
         try:
             while not stop_event.is_set():
@@ -145,12 +232,15 @@ class X5TeleopBase(HardwareTeleopController):
                         ready = self._resume_input_ready()
                     else:
                         ready = self._input_freshness is None or self._input_freshness.ready()
+                    if ready and not self._control_gate_ready():
+                        ready = False
                     if ready:
                         processing_started = time.monotonic_ns()
                         self._update_robot_state()
                         self._update_gripper_target()
                         self._pre_ik_update()
                         self._update_ik()
+                        self._ik_rate.tick()
                         processing_finished = time.monotonic_ns()
                         self._input_timing = {"sample_monotonic_ns": processing_finished,
                                               "duration_ms": (processing_finished - processing_started) / 1e6}
@@ -226,7 +316,7 @@ class X5TeleopBase(HardwareTeleopController):
         self.placo_arm_joint_slice: Dict[str, slice] = {}
         for arm_name, config in self.manipulator_config.items():
             ee_link_name = config["link_name"]
-            arm_prefix = ee_link_name.replace("link6", "")
+            arm_prefix = ee_link_name.removesuffix("eef_link") if ee_link_name.endswith("eef_link") else ee_link_name.removesuffix("link6")
             arm_joint_names = [f"{arm_prefix}joint{i}" for i in range(1, 7)]
             self.placo_arm_joint_slice[arm_name] = slice(
                 self.placo_robot.get_joint_offset(arm_joint_names[0]),

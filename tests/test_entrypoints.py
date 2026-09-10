@@ -33,14 +33,17 @@ if sys.argv[1:3] == ["quest-wake", "start"] and os.environ["TEST_WAKE_FAIL"] == 
                                         text=True, env={**os.environ, "TEST_WAKE_FAIL": str(int(fail))})
                 calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
                 control = ["--profile", "presets", "teleop-presets-x5", "--actuate", "--enable-session",
-                           "--collection-task", "X5 遥操采集", "--scale-factor", "1.0", "--max-joint-speed-rad-s", "2.0", *arguments]
+                           "--control-link", "link6", "--control-mode", "pose", "--collection-task", "X5 遥操采集", "--max-joint-acceleration-rad-s2", "6.0", "--max-joint-jerk-rad-s3", "30.0", "--home-jerk-rad-s3", "16.0", "--preset-jerk-rad-s3", "24.0", "--home-speed-rad-s", "0.6", "--home-acceleration-rad-s2", "2.0", "--preset-speed-rad-s", "0", "--preset-acceleration-rad-s2", "6.0", "--scale-factor", "0.5", "--operator-yaw-deg", "0", "--rotation-frame", "base", "--max-eef-linear-speed-m-s", "0",
+                           "--max-eef-angular-speed-rad-s", "0", "--max-joint-speed-rad-s", "0",
+                           "--max-command-lead-rad", "0", "--preview-time-s", "0.05", "--teleop-preview-time-s", "0.05",
+                           "--joint-soft-limit-margin-rad", "0.05", *arguments]
                 self.assertEqual(calls, [["quest-transport", "prepare"], ["quest-wake", "start"]] if fail else
                                  [control] if "--help" in arguments else [["quest-transport", "prepare"], ["quest-wake", "start"], ["quest-transport", "wait"], control])
                 self.assertEqual(result.returncode, int(fail), result.stderr)
 
     def test_public_commands_show_help_from_other_directories(self):
         for command in (
-            "teleop-official-x5", "teleop-presets-x5", "teleop",
+            "teleop-official-x5", "teleop-presets-x5", "teleop", "quest-calibrate",
             "control-arm", "view-arm", "arm-service", "plugins", "check-xr", "check-arm",
             "test-joint", "visualize-xr", "prepare-connections",
             "teleop-x5-2025", "test-joint-2025", "rebuild-xr-sdk",

@@ -63,12 +63,56 @@ class Scene:
             def do_GET(self):
                 self.respond(body=True)
 
+            def do_POST(self):
+                if urlsplit(self.path).path != "/api/replay":
+                    self.send_error(404); return
+                if self.headers.get("Origin") not in (None, owner.url.rstrip("/")):
+                    self.send_error(403); return
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if not 0 < length <= 4096: raise ValueError("Invalid request size")
+                    data = json.loads(self.rfile.read(length))
+                    if not isinstance(data, dict): raise ValueError("Expected object")
+                    action = data.get("action")
+                    if action not in ("load_last", "load", "play", "pause", "seek"):
+                        raise ValueError("Only web review controls are supported")
+                    from robot_core.project import load_config, resolve_path
+                    from robot_core.session_protocol import request
+                    command = "collection.replay_previous" if action == "load_last" else "collection.replay_episode" if action == "load" else "replay.control"
+                    request(resolve_path(load_config()["runtime"]["socket"]), command,
+                            action=action, position_s=data.get("position_s"), episode_id=data.get("episode_id"), timeout=5)
+                    content = json.dumps({"ok": True}).encode()
+                except (OSError, ValueError, RuntimeError, TypeError) as exc:
+                    content = json.dumps({"error": str(exc)}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(content)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                try: self.wfile.write(content)
+                except (BrokenPipeError, ConnectionResetError): pass
+
             def do_HEAD(self):
                 self.respond(body=False)
 
             def respond(self, body):
                 path = urlsplit(self.path).path
-                if path == "/api/sensors":
+                if path == "/api/replay":
+                    from robot_core.project import load_config, resolve_path
+                    from robot_core.session_protocol import request
+                    try:
+                        payload = request(resolve_path(load_config()["runtime"]["socket"]),
+                                          "replay.list" if urlsplit(self.path).query == "list=1" else "replay.frame", timeout=1)
+                        frame = payload.get("replay")
+                        if frame:
+                            if frame["model_hash"] != owner.robot.metadata()["urdf_sha256"]:
+                                raise ValueError("回放与网页模型不一致")
+                            with owner._lock: frame["pose"] = owner._pose(owner.robot.joints(frame["q"]))
+                    except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
+                        payload = {"error": str(exc)}
+                    content = json.dumps(payload, allow_nan=False).encode()
+                    mime = "application/json"
+                elif path == "/api/sensors":
                     from robot_core.project import load_config, resolve_path
                     from robot_core.session_protocol import request
                     try:

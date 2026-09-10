@@ -1,4 +1,4 @@
-"""URDF-driven X5 kinematics; SI units and link6 match the teleop EEF."""
+"""URDF-driven X5 kinematics; default wrist frame, optional fingertip TCP frame."""
 
 from pathlib import Path
 import hashlib

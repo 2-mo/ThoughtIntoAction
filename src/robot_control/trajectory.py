@@ -45,3 +45,10 @@ def trajectory(model, start, end, *, speed=0.15, acceleration=0.3, hz=50, margin
     u = times / times[-1]
     blend = 10 * u**3 - 15 * u**4 + 6 * u**5
     return times, start + blend[:, None] * (end - start)
+
+
+def validate_motion_limits(speed, lead, preview, margin):
+    for name, value in (("speed", speed), ("max_command_lead_rad", lead),
+                        ("preview_time_s", preview), ("joint_soft_limit_margin_rad", margin)):
+        if type(value) not in (int, float) or not np.isfinite(value) or value < 0:
+            raise ValueError(f"Invalid motion limit {name}: expected finite nonnegative value")

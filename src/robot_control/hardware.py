@@ -11,7 +11,7 @@ import numpy as np
 
 from robot_core.device_lease import DeviceLease
 from robot_core.project import X5_2025_URDF
-from .trajectory import bounded_joint_target
+from .trajectory import bounded_joint_target, validate_motion_limits
 
 DEFAULT_X5_URDF_PATH = str(X5_2025_URDF)
 
@@ -29,6 +29,7 @@ class OfficialX5HardwareAdapter:
         control_rate_hz: int,
         max_joint_speed_rad_s: float,
         joint_soft_limit_margin_rad: float,
+        max_command_lead_rad: float = 0.05,
         gripper_open_limit_m: float = 0.077,
         gripper_force_hold: bool = True,
         gripper_contact_torque: float = 0.60,
@@ -47,6 +48,9 @@ class OfficialX5HardwareAdapter:
         self.robot_config.urdf_path = dynamics_urdf_path
         self.robot_config.gripper_open_readout = gripper_open_readout
         self.robot_config.gripper_width = gripper_width
+        if getattr(arx5, "quest_gripper_turns_version", None) != 1:
+            raise RuntimeError("夹爪启动修复 SDK 未加载；请使用项目启动脚本，参见 docs/gripper-startup.md")
+        self.robot_config.gripper_startup_turns = True
         if not np.isfinite(gripper_open_limit_m) or not 0 < gripper_open_limit_m <= gripper_width:
             raise ValueError("gripper_open_limit_m must be positive and no greater than gripper_width")
         self._gripper_open_limit_m = gripper_open_limit_m
@@ -66,8 +70,12 @@ class OfficialX5HardwareAdapter:
                 f"({self.robot_config.gripper_torque_max:.3f})"
             )
 
-        self._max_step_rad = max_joint_speed_rad_s / control_rate_hz
-        self._max_command_lead_rad = 0.05
+        validate_motion_limits(max_joint_speed_rad_s, max_command_lead_rad, preview_time_s, joint_soft_limit_margin_rad)
+        self._preview_time_s = preview_time_s
+        self._max_command_lead_rad = max_command_lead_rad
+        hardware_speed = np.asarray(self.robot_config.joint_vel_max)
+        self._max_step_rad = (hardware_speed if max_joint_speed_rad_s == 0 else
+                              np.minimum(hardware_speed, max_joint_speed_rad_s)) / control_rate_hz
         self._command_gap_reset_s = 3.0 / control_rate_hz
         self._soft_limit_margin_rad = joint_soft_limit_margin_rad
         self._submission_sequence = 0
@@ -207,7 +215,20 @@ class OfficialX5HardwareAdapter:
                        "motion_diagnostics": getattr(self, "_motion_diagnostics", None)})
         return result
 
+    def set_planned_joint_state(self, positions, velocity):
+        """Consume the service trajectory without a second clipping/interpolation layer."""
+        q, dq = np.asarray(positions), np.asarray(velocity)
+        if q.shape != (6,) or dq.shape != (6,) or not np.isfinite([q, dq]).all():
+            raise ValueError("Invalid planned joint state")
+        if np.any(q < np.asarray(self.robot_config.joint_pos_min) - 1e-8) or np.any(q > np.asarray(self.robot_config.joint_pos_max) + 1e-8):
+            raise ValueError("Planned waypoint outside hard limits")
+        self._q_target = q.copy()
+        self._planned_velocity = dq.copy()
+        self._requested_joints = q.tolist()
+        self._requested_monotonic_ns = time.monotonic_ns()
+
     def set_joint_positions(self, positions: np.ndarray) -> bool:
+        self._planned_velocity = None
         target = np.asarray(positions, dtype=float)
         if target.shape != (self.robot_config.joint_dof,):
             raise ValueError(f"Expected six X5 joints, got {target.shape}")
@@ -238,11 +259,9 @@ class OfficialX5HardwareAdapter:
             max_step_rad=self._max_step_rad,
             soft_limit_margin_rad=self._soft_limit_margin_rad,
         )
-        self._q_target = np.clip(
-            self._q_target,
-            q_actual - self._max_command_lead_rad,
-            q_actual + self._max_command_lead_rad,
-        )
+        if self._max_command_lead_rad > 0:
+            self._q_target = np.clip(self._q_target, q_actual - self._max_command_lead_rad,
+                                     q_actual + self._max_command_lead_rad)
         self._q_target = np.clip(
             self._q_target,
             np.asarray(self.robot_config.joint_pos_min),
@@ -344,7 +363,7 @@ class OfficialX5HardwareAdapter:
             return
         command = arx5.JointState(self.robot_config.joint_dof)
         command.pos()[:] = self._q_target
-        command.vel()[:] = 0.0
+        command.vel()[:] = self._planned_velocity if getattr(self, "_planned_velocity", None) is not None else 0.0
         command.torque()[:] = 0.0
         command.gripper_pos = self._gripper_target
         command.gripper_vel = 0.0
@@ -353,7 +372,7 @@ class OfficialX5HardwareAdapter:
             if self._gripper_mode == "force_hold"
             else 0.0
         )
-        command.timestamp = 0.0
+        command.timestamp = float(self.arm.get_timestamp()) + self._preview_time_s
         self.arm.set_joint_cmd(command)
         self._submission_sequence += 1
         self._last_submission = {
@@ -361,10 +380,11 @@ class OfficialX5HardwareAdapter:
             "pos": command.pos().copy().tolist(), "vel": command.vel().copy().tolist(),
             "torque": command.torque().copy().tolist(), "gripper_pos": float(command.gripper_pos),
             "gripper_vel": float(command.gripper_vel), "gripper_torque": float(command.gripper_torque),
-            "timestamp_argument": 0.0, "gripper_mode": self._gripper_mode,
+            "timestamp_argument": float(command.timestamp), "gripper_mode": self._gripper_mode,
         }
 
     def set_to_damping(self) -> None:
+        self._planned_velocity = None
         self.actuate = False
         self.arm.set_to_damping()
 
@@ -374,6 +394,7 @@ class OfficialX5HardwareAdapter:
             self.set_to_damping()
             return
         state = self.arm.get_joint_state()
+        self._planned_velocity = None
         self._q_target = self._validated_position(state)
         self._previous_q_desired = self._q_target.copy()
         self._gripper_target = float(np.clip(state.gripper_pos, 0., self.robot_config.gripper_width))
@@ -387,8 +408,15 @@ class OfficialX5HardwareAdapter:
         self._submit()
         self.arm.set_gain(self._position_gain)
 
-    def set_motion_limit(self, speed: float) -> None:
-        self._max_step_rad = speed / self._control_rate_hz
+    def set_motion_limit(self, speed: float, *, max_command_lead_rad=None,
+                         preview_time_s=None, joint_soft_limit_margin_rad=None) -> None:
+        lead = self._max_command_lead_rad if max_command_lead_rad is None else max_command_lead_rad
+        preview = self._preview_time_s if preview_time_s is None else preview_time_s
+        margin = self._soft_limit_margin_rad if joint_soft_limit_margin_rad is None else joint_soft_limit_margin_rad
+        validate_motion_limits(speed, lead, preview, margin)
+        hardware_speed = np.asarray(self.robot_config.joint_vel_max)
+        self._max_step_rad = (hardware_speed if speed == 0 else np.minimum(hardware_speed, speed)) / self._control_rate_hz
+        self._max_command_lead_rad, self._preview_time_s, self._soft_limit_margin_rad = lead, preview, margin
 
 
     def close(self) -> None:

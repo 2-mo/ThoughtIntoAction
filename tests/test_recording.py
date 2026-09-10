@@ -92,6 +92,22 @@ class SessionTests(unittest.TestCase):
         self.addCleanup(self.stop_publisher)
         self.wait_for(lambda: self.session.latest_frame is not None)
 
+    def test_a_toggle_starts_task_saves_and_starts_next_without_pregrasp(self):
+        self.assertFalse(self.session.task_active)
+        first = self.session.dispatch({"command": "collection.toggle_episode", "task": "pick"})
+        run_id = self.session.task_run_id
+        self.assertTrue(self.session.task_active)
+        self.wait_for(lambda: self.session.recording.status()["counts"]["state"] >= 2)
+        saved = self.session.dispatch({"command": "collection.toggle_episode", "task": "pick"})
+        self.assertEqual(saved["id"], first["id"])
+        self.assertEqual(saved["lifecycle"], "complete")
+        self.assertIsNone(self.session.recording)
+        second = self.session.dispatch({"command": "collection.toggle_episode", "task": "pick"})
+        self.assertNotEqual(second["id"], first["id"])
+        self.assertEqual(self.session.task_run_id, run_id)
+        self.session.dispatch({"command": "collection.toggle_episode", "task": "pick"})
+        self.assertEqual(len(self.session.counted_episodes), 2)
+
     def publish(self):
         counter = 0
         while not self.stop.is_set():

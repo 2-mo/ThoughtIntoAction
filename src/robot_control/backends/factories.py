@@ -9,14 +9,16 @@ def service(*, settings, initial_q=None):
     return ArmClient(RobotModel(settings["dynamics_urdf_path"]),
                      path=settings.get("service_socket"), hardware=settings["hardware"],
                      actuate=settings["actuate"], input_name=settings["input_name"],
-                     speed=settings["max_joint_speed_rad_s"])
+                     speed=settings["max_joint_speed_rad_s"],
+                     motion={**{key: settings[key] for key in ("max_command_lead_rad", "preview_time_s", "joint_soft_limit_margin_rad")}, **settings.get("trajectory_settings", {})})
 
 
 def stanford(*, settings, initial_q=None):
     if initial_q is not None:
         raise ValueError("initial_q is a simulation setting, not a real-arm command")
     from robot_control.hardware import OfficialX5HardwareAdapter
-    return OfficialX5HardwareAdapter(**settings)
+    from robot_control.online_motion import DEFAULTS
+    return OfficialX5HardwareAdapter(**{k: v for k, v in settings.items() if k not in DEFAULTS})
 
 
 def simulated(*, settings, initial_q=None):

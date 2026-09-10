@@ -53,6 +53,7 @@ class FreshnessTests(unittest.TestCase):
         controller._input_ready = True
         controller._input_freshness = Mock()
         controller._input_freshness.ready.side_effect = RuntimeError("frozen")
+        controller._control_gate_ready = Mock(return_value=True)
         controller._update_robot_state = Mock()
         with self.assertRaisesRegex(RuntimeError, "frozen"):
             controller._ik_thread(controller._stop_event)
@@ -77,6 +78,7 @@ class FreshnessTests(unittest.TestCase):
         controller._stop_event = threading.Event()
         controller._input_freshness = None
         controller.dt = .02
+        controller._control_gate_ready = Mock(return_value=True)
         controller._update_robot_state = Mock()
         controller._update_gripper_target = Mock()
         controller._pre_ik_update = Mock()

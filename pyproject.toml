@@ -16,6 +16,7 @@ dependencies = [
     "opencv-python==5.0.0.93",
     "xrobotoolkit-sdk==1.0.2",
     "rich==14.3.3",
+    "ruckig==0.12.2",
 ]
 
 [dependency-groups]

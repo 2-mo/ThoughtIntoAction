@@ -89,6 +89,15 @@ class ConsoleTests(unittest.TestCase):
             self.console.power.assert_not_called()
             spawn.assert_not_called()
 
+    def test_calibration_requires_running_child_and_preserves_terminal_input(self):
+        with patch.object(module.subprocess, "run") as run:
+            self.console.calibrate()
+            run.assert_not_called()
+            self.console.child = Mock()
+            self.console.child.poll.return_value = None
+            self.console.calibrate()
+            run.assert_called_once_with(["/fake/run.sh", "quest-calibrate"], check=False)
+
     def test_unconfirmed_usb_after_wake_does_not_start_control(self):
         self.console.transport.side_effect = [True, False]
         self.console.power = Mock(return_value=True)

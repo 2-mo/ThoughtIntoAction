@@ -347,6 +347,17 @@ class SharedBackendTests(unittest.TestCase):
                 command = native.set_joint_cmd.call_args.args[0]
                 np.testing.assert_array_equal(command.torque(), np.zeros(6))
                 self.assertEqual(command.gripper_pos, .04)
+                native.get_timestamp.return_value = 10.
+                backend.set_motion_limit(0, max_command_lead_rad=0, preview_time_s=.01, joint_soft_limit_margin_rad=0)
+                np.testing.assert_allclose(backend._max_step_rad, np.asarray(backend.robot_config.joint_vel_max) / 50)
+                backend.set_joint_positions(state.pos().copy() + .3)
+                backend.set_catch_pos(.04)
+                self.assertGreater(np.max(native.set_joint_cmd.call_args.args[0].pos() - state.pos()), .05)
+                self.assertAlmostEqual(native.set_joint_cmd.call_args.args[0].timestamp, 10.01)
+                backend.set_motion_limit(100, max_command_lead_rad=.15, preview_time_s=.02, joint_soft_limit_margin_rad=.05)
+                np.testing.assert_allclose(backend._max_step_rad, np.asarray(backend.robot_config.joint_vel_max) / 50)
+                backend.set_catch_pos(.04)
+                self.assertAlmostEqual(native.set_joint_cmd.call_args.args[0].timestamp, 10.02)
                 backend.set_catch_pos(.082)
                 self.assertAlmostEqual(native.set_joint_cmd.call_args.args[0].gripper_pos, .077)
                 self.assertAlmostEqual(backend.robot_config.gripper_width, .082)

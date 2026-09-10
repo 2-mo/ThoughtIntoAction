@@ -45,6 +45,7 @@ class TeleopSession:
         self.preview_frame = None
         self.recording = None
         self.last_episode = None
+        self._web_replay = None
         self.task_paused = False
         self.task_active = False
         self.task_run_id = None
@@ -125,6 +126,7 @@ class TeleopSession:
     def status(self):
         writer = self.recording
         return {"session_id": self.id, "pid": os.getpid(), "mode": self.control_metadata.get("mode", "teleop"),
+                "rotation_frame": self.control_metadata.get("rotation_frame", "base"),
                 "actuate": self.control_metadata["actuate"], "state": self.latest_state,
                 "state_age_s": self.age(self.latest_state, "host_monotonic_ns"),
                 "camera": {"metadata": self.camera_metadata, "error": self.camera_error,
@@ -136,8 +138,68 @@ class TeleopSession:
                 "log_dir": str(self.log_root),
                 "collection": self.collection_status() if self.collection_status else None}
 
+    def saved_episodes(self):
+        result = []
+        for manifest in self.dataset_root.glob("*/episode.json"):
+            try:
+                if not manifest.resolve().is_relative_to(self.dataset_root.resolve()): continue
+                meta = json.loads(manifest.read_text())
+                if meta.get("kind") == "quest_teleop_episode" and meta.get("lifecycle") == "complete" and meta.get("outcome") != "discarded":
+                    result.append({"id": manifest.parent.name, "task": meta.get("task", ""),
+                                   "started": meta.get("started_unix_ns", 0)})
+            except (OSError, ValueError, TypeError):
+                continue
+        return sorted(result, key=lambda row: (row["started"], row["id"]), reverse=True)
+
+    def load_saved_episode(self, episode_id):
+        from ..replay import RecordedEpisode
+        if not isinstance(episode_id, str) or Path(episode_id).name != episode_id or episode_id in (".", "..", ""):
+            raise ValueError("无效数据集编号")
+        root = (self.dataset_root / episode_id).resolve()
+        if not root.is_relative_to(self.dataset_root.resolve()): raise ValueError("数据集路径越界")
+        with self.operations:
+            if self.closed or self.recording is not None: raise ValueError("请先完成并保存当前采集")
+        return RecordedEpisode(root)
+
+    def load_previous_episode(self):
+        from ..replay import RecordedEpisode
+        with self.operations:
+            if self.closed or self.recording is not None:
+                raise ValueError("请先保存当前采集，再回放上一条")
+            previous = self.last_episode
+        if previous is None:
+            saved = self.saved_episodes()
+            if not saved: raise ValueError("还没有完整保存的数据可回放")
+            return self.load_saved_episode(saved[0]["id"])
+        return RecordedEpisode(previous["path"])
+
     def dispatch(self, payload):
         command = payload.get("command")
+        if command == "replay.list":
+            return {"episodes": self.saved_episodes()}
+        if command in ("collection.replay_previous", "collection.replay_episode"):
+            from ..replay import WebReplay
+            episode = self.load_previous_episode() if command.endswith("previous") else self.load_saved_episode(payload.get("episode_id"))
+            with self.operations:
+                if self.closed or self.recording is not None:
+                    raise ValueError("采集状态已变化，请先完成保存")
+                self._web_replay = WebReplay(episode)
+            return {"episode": episode.meta["id"]}
+        if command in ("replay.frame", "replay.control"):
+            with self.operations:
+                if command == "replay.control":
+                    if self._web_replay is None: raise ValueError("请先加载上一条")
+                    self._web_replay.control(payload.get("action"), payload.get("position_s"))
+                frame = self._web_replay.frame() if self._web_replay else None
+                return {"replay": frame, "robot_replay": (self.latest_state or {}).get("robot_replay")}
+
+        if command == "input.calibrate":
+            callback = getattr(self, "frame_calibration", None)
+            if callback is None:
+                raise RuntimeError("This session does not support frame calibration")
+            result = callback(payload["rotation"], payload["session_id"])
+            save_json(self.log_root / f"direction-alignment-{time.time_ns()}.json", result)
+            return result
         if command in ("input.pause", "input.resume"):
             callback = getattr(self, "input_pause", None)
             if callback is None:
@@ -151,6 +213,10 @@ class TeleopSession:
             return {"camera": snapshot["camera"],
                     "preview": self.dispatch({"command": "preview"}),
                     "input": state.get("input"),
+                    "orientation_preview": state.get("orientation_preview"),
+                    "loop_rates": state.get("loop_rates"),
+                    "table_safety": state.get("table_safety"),
+                    "state_age_s": snapshot["state_age_s"],
                     "motion_diagnostics": state.get("motion_diagnostics"),
                     "joint_limit": state.get("joint_limit"),
                     "timing": state.get("timing"),
@@ -171,6 +237,20 @@ class TeleopSession:
                 raise RuntimeError("Session is closing")
             if command.startswith("collection."):
                 action = command.removeprefix("collection.")
+                if action == "toggle_episode":
+                    if self.recording is not None:
+                        result = self._stop_recording("unknown")
+                        if result["lifecycle"] != "complete":
+                            raise RuntimeError("当前 Episode 未完整保存，请检查采集错误")
+                        return result
+                    if not self.task_active:
+                        if not self.task_paused:
+                            self.task_run_id = uuid.uuid4().hex
+                            self.counted_episodes = frozenset()
+                            self.last_episode = None
+                        self.task_active, self.task_paused = True, False
+                    action = "start_episode"
+
                 if action == "start_task":
                     if not self.task_active:
                         if not self.task_paused:

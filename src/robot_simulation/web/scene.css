@@ -137,3 +137,31 @@ input { accent-color: #9cd7c0; margin: 0; }
 @media (max-width: 850px) { .collection-panel .collection-controls { font-size: 10px; } }
 
 .collection-controls span { display: block; }
+
+#control-state { position: absolute; top: 52px; left: 16px; pointer-events: none; background: #182329e6; padding: 4px 10px; border-radius: 6px; font-size: clamp(18px, 2vw, 28px); font-weight: 700; color: #f5c66b; margin: 4px 0; }
+#control-state[data-enabled="true"] { color: #79dfac; }
+
+/* Read-only comparison floats above the scene without resizing sensor panels. */
+.orientation-panel { position: absolute; right: 16px; bottom: 40px; width: min(450px, calc(100% - 32px)); max-height: calc(100% - 95px); overflow: auto; padding: 10px; background: #10171cf2; border: 1px solid #45535f; border-radius: 8px; }
+.orientation-panel summary { cursor: pointer; margin-bottom: 6px; }
+#orientation-canvas { position: relative; inset: auto; width: 100%; height: 170px; touch-action: none; }
+.orientation-labels { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; margin-bottom: 4px; }
+.orientation-labels span:first-child { color: #55dcec; }
+.orientation-labels span:nth-child(2) { color: #ffb84c; }
+#orientation-status { margin-top: 6px; }
+@media (max-width: 600px), (max-height: 740px) { #orientation-canvas { height: 100px; } .orientation-panel .hint { display: none; } }
+
+#table-safety { position: absolute; top: 104px; left: 16px; max-width: calc(100% - 32px); background: #182329e6; padding: 4px 10px; color: #f5c66b; border-radius: 6px; pointer-events: none; }
+
+#dataset-replay { position: fixed; z-index: 20; top: 12%; left: 5%; width: min(900px, 90%); max-height: 85%; overflow: auto; background: #182329; border: 1px solid #637c89; border-radius: 10px; padding: 16px; box-shadow: 0 12px 45px #000a; }
+.replay-heading, .replay-buttons { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.replay-heading button { margin-left: auto; }
+.replay-views { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+.replay-views img { width: 100%; aspect-ratio: 4/3; object-fit: contain; background: #10171c; }
+.replay-model { position: relative; min-height: 180px; }
+#replay-seek { width: 100%; }
+#robot-replay-state { color: #f5c66b; }
+@media (max-width: 600px) { .replay-views { grid-template-columns: 1fr; } }
+
+.replay-buttons { flex-wrap: wrap; }
+#replay-episodes { max-width: 100%; flex: 1 1 200px; color: #dce2e5; background: #10171c; padding: 7px; }

@@ -12,10 +12,12 @@ function renderCollection(data = {}) {
   const last = data.last_episode;
   const error = collection?.error || recording?.error || data.runtime_error;
   const state = error ? 'ERROR' : collection?.state || (recording ? 'RECORDING' : data.session_id ? 'DISABLED' : 'OFFLINE');
-  const labels = {PAUSED: '任务采集已暂停', IDLE: '任务采集未开启', POSITIONING: '前往预抓取位', READY: '准备就绪', RECORDING: '● 采集中', BUSY: '正在处理', HOME_WAIT: '等待松开 Grip', HOMING: '正在回零', ERROR: '采集异常', DISABLED: '按键采集未启用', OFFLINE: '未连接'};
+  const labels = {REPLAY_POSITIONING: '真机回放 · 前往起点', REPLAYING: '真机回放 · 执行中', REPLAY_LOADING: '正在加载回放', PAUSED: '任务采集已暂停', IDLE: '任务采集未开启', POSITIONING: '前往预抓取位', READY: '准备就绪', RECORDING: '● 采集中', BUSY: '正在处理', HOME_WAIT: '等待松开 Grip', HOMING: '正在回零', ERROR: '采集异常', DISABLED: '按键采集未启用', OFFLINE: '未连接'};
   document.querySelector('.collection-panel').dataset.state = state;
   const put = (id, text) => { byId(id).textContent = text; byId(id).title = text; };
   put('collection-state', labels[state] || state);
+  put('control-state', collection?.control_stopping ? '平滑停车中' : collection?.control_enabled === true ? '控制已启用' : collection?.control_enabled === false ? '待机 · 未启用控制' : '控制状态未连接');
+  byId('control-state').dataset.enabled = String(collection?.control_enabled === true);
   put('collection-count', String(data.collection_count ?? '—'));
   byId('collection-count').title = '本轮任务，自上次重置以来完整保存且未丢弃的条数；不代表任务成功';
   put('collection-task', recording?.task || collection?.task || '等待采集会话');
@@ -25,7 +27,7 @@ function renderCollection(data = {}) {
   put('collection-samples', String(recording?.counts?.state ?? '—'));
   put('collection-episode', '当前 Episode：' + (recording?.id || '—'));
   const drops = Object.values(recording?.dropped || {}).reduce((a, b) => a + b, 0);
-  put('collection-health', error || (recording ? `写入队列 ${recording.queue_size ?? 0} · 丢弃样本 ${drops}` : state === 'IDLE' ? 'A 前往预抓取位 · 左推摇杆开启任务采集' : state === 'PAUSED' ? '左推摇杆恢复任务 · A 仅前往预抓取位' : state === 'READY' ? '按 A 到预抓取位后开始下一条' : state === 'OFFLINE' ? '等待采集会话' : '等待采集操作完成'));
+  put('collection-health', error || (recording ? `写入队列 ${recording.queue_size ?? 0} · 丢弃样本 ${drops}` : state === 'IDLE' ? 'A 开始采集 · B 前往预抓取位' : state === 'PAUSED' ? 'A 恢复并开始采集 · B 前往预抓取位' : state === 'READY' ? 'A 开始下一条 · B 前往预抓取位' : state === 'OFFLINE' ? '等待采集会话' : '等待采集操作完成'));
   const result = last ? (last.lifecycle !== 'complete' ? '未完整保存' : last.outcome === 'discarded' ? '已丢弃' : '已保存') : '—';
   put('collection-last', '上一条：' + result + (last ? ' · ' + last.id : ''));
 }
@@ -34,12 +36,27 @@ async function refresh() {
     const response = await fetch('/api/sensors', { cache: 'no-store', signal: AbortSignal.timeout(1500) });
     if (!response.ok) throw new Error('监看接口未连接');
     const data = await response.json();
+    window.dispatchEvent(new CustomEvent('teleop-preview', { detail: data }));
     for (const [key, id] of [['arm', 'arm-latency'], ['quest_usb', 'input-latency']]) {
       const value = data.connections?.[key]?.duration_ms;
       byId(id).textContent = !Object.hasOwn(data, 'connections') ? '需重启监看' :
         Number.isFinite(value) && value >= 0 ? value.toFixed(1) + ' ms' : '未测';
     }
     renderCollection(data);
+    const safety = data.table_safety;
+    byId('table-safety').hidden = !safety;
+    if (safety) byId('table-safety').textContent = data.state_age_s == null || data.state_age_s >= .5 ? '桌面限制状态已过期' :
+      '末端最低 Z ' + (safety.minimum_z_m * 100).toFixed(1) + ' cm · ' +
+      (safety.blocked ? '已拦截越界路径，请抬高手柄或取消预设' : '桌面软限位已启用');
+    const rates = data.loop_rates || {};
+    const rateLive = data.state_age_s != null && data.state_age_s < .5;
+    const rateText = key => {
+      const rate = rates[key];
+      if (!rate) return '—';
+      const observed = rateLive && Number.isFinite(rate.observed_hz) ? rate.observed_hz.toFixed(1) : '—';
+      return observed + '/' + rate.configured_hz;
+    };
+    byId('loop-rates').textContent = 'IK ' + rateText('ik') + ' Hz · 服务 ' + rateText('arm_service') + ' Hz';
     const limit = data.joint_limit;
     byId('motion-joints').textContent = limit?.age_s < .5 && limit.joints.length ?
       '限位 J' + limit.joints.join('/J') + ' · 反向移动可恢复' : '关节快照（悬停查看）';
@@ -81,7 +98,10 @@ async function refresh() {
       }
     }
   } catch {
+    window.dispatchEvent(new CustomEvent('teleop-preview', { detail: null }));
     renderCollection();
+    byId('table-safety').textContent = '桌面限制状态未连接';
+    byId('loop-rates').textContent = 'IK — Hz · 服务 — Hz';
     byId('arm-latency').textContent = byId('input-latency').textContent = '未测';
     byId('motion-joints').textContent = '关节快照（悬停查看）';
     byId('depth-image').hidden = true;

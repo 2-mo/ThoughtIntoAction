@@ -133,6 +133,8 @@ class PluginTests(unittest.TestCase):
         controller.active = {"right_arm": True}
         controller._session_control = {"input_plugin": "another_pose_source"}
         controller._input_name = "another_pose_source"
+        controller.rotation_frame = "base"
+        controller._control_enabled = True
         controller._publish_runtime()
         self.assertEqual(controller._session.publish.call_args.args[0]["source"], "another_pose_source")
 

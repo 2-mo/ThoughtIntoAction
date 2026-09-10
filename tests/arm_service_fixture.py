@@ -13,7 +13,7 @@ from robot_control.service import ArmService, serve
 
 
 class ServiceFixture:
-    def __init__(self, hardware=False):
+    def __init__(self, hardware=False, table_safety=False):
         self.folder = tempfile.TemporaryDirectory(prefix="x5-service-test-")
         self.path = Path(self.folder.name) / "arm.sock"
         self.config = Path(self.folder.name) / "config.toml"
@@ -31,7 +31,8 @@ class ServiceFixture:
         self.arm.get_recording_snapshot = recording
         self.publisher = Mock()
         self.service = ArmService(self.robot, self.arm, self.publisher, backend="simulated",
-                                  hardware=hardware, settings=settings)
+                                  hardware=hardware, settings=settings,
+                                  safety={"table_enabled": table_safety, "table_z_m": 0., "table_clearance_m": 0.})
         self.ready, self.stop = threading.Event(), threading.Event()
         self.errors = []
         def run():

@@ -42,6 +42,7 @@ MAINTENANCE_COMMANDS = {
     "check-camera": "diagnostics/check_camera.py",
 }
 MODULE_COMMANDS = {
+    "quest-calibrate": "quest_teleop.frame_calibration",
     "camera-service": "robot_core.camera_service",
     "teleop-official-x5": "quest_teleop.cli",
     "teleop-presets-x5": "quest_teleop.cli",
@@ -112,6 +113,11 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
     prefix = python.parent.parent
     # The multi-robot upstream distribution is not installed; load the pinned source.
     paths = [PROJECT_ROOT / "src", PROJECT_ROOT / "third_party/XRoboToolkit-Teleop-Sample-Python"]
+    if sdk_path := config["environment"].get("arm_sdk_python"):
+        sdk_path = resolve_path(sdk_path)
+        if not list(sdk_path.glob("arx5_interface*.so")):
+            raise RuntimeError("Patched arm SDK missing; see docs/gripper-startup.md")
+        paths.insert(0, sdk_path)
     env["PYTHONPATH"] = os.pathsep.join(map(str, paths))
     xr_dependencies = PROJECT_ROOT / "third_party/XRoboToolkit-Teleop-Sample-Python/dependencies"
     libs = [

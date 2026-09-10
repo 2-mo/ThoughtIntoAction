@@ -19,7 +19,7 @@ DEFAULT_GRASP_READY_JOINTS = (0.0, 1.50, 1.45, -1.52, 0.0, 0.0)
 
 
 class PresetSingleX5Controller(X5TeleopController):
-    """A prepositions then records; B saves or homes; the stick manages tasks."""
+    """A starts/saves; B prepositions or homes; the stick manages tasks."""
 
     def __init__(
         self,
@@ -29,6 +29,10 @@ class PresetSingleX5Controller(X5TeleopController):
         home_hold_s: float,
         preset_tolerance_rad: float,
         collection_task: str = "X5 遥操采集",
+        home_speed_rad_s: float = .3,
+        home_acceleration_rad_s2: float = .5,
+        preset_speed_rad_s: float = .5,
+        preset_acceleration_rad_s2: float = 1.,
         **kwargs,
     ) -> None:
         if not isinstance(collection_task, str) or not collection_task.strip() or len(collection_task) > 2000:
@@ -39,22 +43,35 @@ class PresetSingleX5Controller(X5TeleopController):
             raise ValueError("preset_tolerance_rad must be positive")
 
         self._home_joints = np.asarray(home_joints, dtype=float)
+        if not np.isfinite(preset_speed_rad_s) or preset_speed_rad_s < 0:
+            raise ValueError("Preset speed must be finite and nonnegative; 0 uses the session speed limit")
+        for value in (home_speed_rad_s, home_acceleration_rad_s2, preset_acceleration_rad_s2):
+            if not np.isfinite(value) or value <= 0:
+                raise ValueError("Preset speed and acceleration must be finite and positive")
+        self._preset_rates = {"HOME": (home_speed_rad_s, home_acceleration_rad_s2),
+                              "GRASP_READY": (preset_speed_rad_s, preset_acceleration_rad_s2)}
         self._grasp_ready_joints = np.asarray(grasp_ready_joints, dtype=float)
         self._home_hold_s = float(home_hold_s)
         self._preset_tolerance_rad = float(preset_tolerance_rad)
 
-        self._record_on_arrival = False
-        self._start_recording_ready = False
+        self._robot_replay = None
+        self._replay_loading = False
+        self._replay_generation = 0
+        self._replay_closed = False
+        self._replay_error = None
         self._preset_lock = threading.Lock()
         self._preset_target: np.ndarray | None = None
         self._preset_name: str | None = None
         self._reset_buttons()
         self._collection = EpisodeActions(lambda: self._session, collection_task)
 
+        kwargs.update(home_speed_rad_s=home_speed_rad_s, home_acceleration_rad_s2=home_acceleration_rad_s2,
+                      preset_speed_rad_s=preset_speed_rad_s, preset_acceleration_rad_s2=preset_acceleration_rad_s2)
         super().__init__(*args, **kwargs)
         self._session_control["presets"] = {
             "home_joints": self._home_joints.tolist(), "grasp_ready_joints": self._grasp_ready_joints.tolist(),
             "home_hold_s": self._home_hold_s, "tolerance_rad": self._preset_tolerance_rad,
+            "motion_limits": self._preset_rates,
         }
         try:
             self._validate_preset("HOME", self._home_joints)
@@ -63,29 +80,95 @@ class PresetSingleX5Controller(X5TeleopController):
             self.close()
             raise
 
-        print("Quest controls: A -> GRASP_READY, then record if task active; B short -> save")
+        print("  X: 网页回放上一条；Y: 真机回放 / 取消；回放前先保存，Grip / B 取消真机回放")
+        print("Quest controls: A -> start/save recording; B short -> GRASP_READY")
         print(f"  B hold {self._home_hold_s:.1f}s: discard current episode, then HOME (release Grip)")
         print("  Right stick push: left start/resume task; right save/pause; up discard previous")
-        print("  Stick click hold 1s: save/end task and reset count; down unbound")
+        print("  Stick click hold 1s: save/end task and reset count; down hold 1s: toggle control / standby")
         print("  Grip cancels preset and pending recording. Return stick to center between actions.")
 
     def _collection_status(self):
         status = self._collection.status()
+        status["control_enabled"] = self._control_enabled
+        status["control_stopping"] = any(arm.info.get("mode") == "stopping" for arm in self.arm_controllers.values())
         if self._preset_name is not None:
             status["state"] = "HOMING" if self._preset_name == "HOME" else "POSITIONING"
+        if self._robot_replay is not None:
+            status["state"] = "REPLAY_POSITIONING" if self._robot_replay.phase == "positioning" else "REPLAYING"
+        elif self._replay_loading:
+            status["state"] = "REPLAY_LOADING"
+        if self._replay_error: status["error"] = self._replay_error
         return status
 
     def _reset_buttons(self):
+        self._x_press = Press()
+        self._y_press = Press()
         self._a_press = Press()
         self._b_press = Press(long_s=self._home_hold_s)
         self._task_end_press = Press(long_s=1.)
         self._stick_action = StickAction()
 
     def close(self):
+        self._replay_closed = True
+        self._replay_generation += 1
         actions = getattr(self, "_collection", None)
         if actions:
             actions.close()
         super().close()
+
+    def _control_gate_ready(self):
+        now = time.monotonic()
+        x = bool(self.xr_client.get_button_state_by_name("X"))
+        y = bool(self.xr_client.get_button_state_by_name("Y"))
+        if self._x_press.update(x, now, enabled=not y) == "short":
+            self._collection.submit("replay_previous")
+        if self._y_press.update(y, now, enabled=not x) == "short":
+            if self._robot_replay is not None or self._replay_loading:
+                self._cancel_robot_replay("Y 取消")
+            elif not self._control_enabled:
+                print("真机回放：请先下拨 1 秒启用控制", flush=True)
+            elif self._preset_target is not None or self._collection.busy or self._collection.recording:
+                print("真机回放：请先完成并保存当前操作", flush=True)
+            elif any(self.xr_client.get_key_value_by_name(key) > .1 for key in ("right_grip", "right_trigger")):
+                print("真机回放：请松开右 Grip 和扳机", flush=True)
+            else:
+                self._prepare_robot_replay()
+        return super()._control_gate_ready()
+
+    def _prepare_robot_replay(self):
+        self._replay_loading, self._replay_error = True, None
+        self._replay_generation += 1
+        generation = self._replay_generation
+        def prepare():
+            try:
+                if self._session is None: raise ValueError("采集会话未启用")
+                episode = self._session.load_previous_episode()
+                from .replay import RobotReplay
+                with self._state_lock:
+                    if generation != self._replay_generation or self._replay_closed: return
+                    if not self._control_enabled or self._collection.recording: return
+                    self._reset_teleop_reference()
+                    self._robot_replay = RobotReplay(episode)
+                    print("真机回放：前往上一条起点；Y / Grip / B 可取消", flush=True)
+            except Exception as exc:
+                with self._state_lock:
+                    if generation == self._replay_generation:
+                        self._replay_error = str(exc)
+                        print("真机回放未开始：" + str(exc), flush=True)
+            finally:
+                with self._state_lock:
+                    if generation == self._replay_generation: self._replay_loading = False
+        threading.Thread(target=prepare, name="prepare-robot-replay", daemon=True).start()
+
+    def _cancel_robot_replay(self, reason):
+        if self._robot_replay is None and not self._replay_loading: return
+        self._replay_generation += 1
+        self._replay_loading = False
+        self._robot_replay = None
+        for arm in self.arm_controllers.values():
+            arm.stop_control()
+        self._reset_teleop_reference()
+        print("真机回放取消：" + reason, flush=True)
 
     def _validate_preset(self, name: str, target: np.ndarray) -> None:
         if target.shape != (6,) or not np.all(np.isfinite(target)):
@@ -109,6 +192,7 @@ class PresetSingleX5Controller(X5TeleopController):
             self.ref_controller_quat[arm_name] = None
 
     def _start_preset(self, name: str, target: np.ndarray) -> None:
+        self._cancel_robot_replay("切换预设")
         self._reset_teleop_reference()
         with self._preset_lock:
             self._preset_name = name
@@ -116,8 +200,8 @@ class PresetSingleX5Controller(X5TeleopController):
         print(f"PRESET {name} started: q={np.round(target, 4)}")
 
     def _cancel_preset(self, reason: str) -> None:
-        self._record_on_arrival = self._start_recording_ready = False
-        if reason == "Headset pause":
+        self._cancel_robot_replay(reason)
+        if reason in ("Headset pause", "Control standby"):
             self._collection.cancel_home()
             self._reset_buttons()
         with self._preset_lock:
@@ -126,7 +210,7 @@ class PresetSingleX5Controller(X5TeleopController):
             name = self._preset_name
             self._preset_target = None
             self._preset_name = None
-        self._reset_teleop_reference()
+            self._reset_teleop_reference()
         print(f"PRESET {name} cancelled: {reason}")
 
     def _finish_preset(self, expected_name: str) -> None:
@@ -135,16 +219,16 @@ class PresetSingleX5Controller(X5TeleopController):
                 return
             self._preset_target = None
             self._preset_name = None
-            self._start_recording_ready = expected_name == "GRASP_READY" and self._record_on_arrival
-            self._record_on_arrival = False
-        self._reset_teleop_reference()
+            self._reset_teleop_reference()
         print(f"PRESET {expected_name} reached")
 
     def _pre_ik_update(self) -> None:
+        if not self._control_enabled:
+            return
         now = time.monotonic()
         a = bool(self.xr_client.get_button_state_by_name("A"))
         b = bool(self.xr_client.get_button_state_by_name("B"))
-        enabled = self._preset_target is None and not self._collection.busy
+        enabled = self._preset_target is None and not self._collection.busy and self._robot_replay is None and not self._replay_loading
         a_event = self._a_press.update(a, now, enabled=enabled)
         b_event = self._b_press.update(b, now, enabled=not self._collection.busy)
         stick = bool(self.xr_client.get_button_state_by_name("right_axis_click"))
@@ -163,21 +247,32 @@ class PresetSingleX5Controller(X5TeleopController):
         elif end_event == "long":
             self._collection.submit("end_task")
         elif b_event == "short":
-            self._collection.submit("stop_episode")
+            if self._collection.recording:
+                print("请先按 A 保存当前采集，再按 B 到预抓取位", flush=True)
+            elif not grip_active and not (a or stick) and not self._collection.busy:
+                self._start_preset("GRASP_READY", self._grasp_ready_joints)
         elif direction_event:
             self._collection.submit(direction_event)
-        elif a_event and not (b or stick or grip_active) and not self._collection.busy:
-            if self._preset_target is None and not self._collection.recording:
-                self._start_preset("GRASP_READY", self._grasp_ready_joints)
-                self._record_on_arrival = self._collection.task_active
-        if self._start_recording_ready:
-            self._start_recording_ready = False
-            if self._collection.task_active and not grip_active:
-                self._collection.submit("start_episode")
+        elif a_event and not (b or stick) and not self._collection.busy:
+            self._collection.submit("toggle_episode")
         if not grip_active and self._collection.take_home():
             self._start_preset("HOME", self._home_joints)
 
     def _send_command(self) -> None:
+        if not self._control_enabled:
+            self._publish_runtime()
+            return
+        if self._robot_replay is not None:
+            try:
+                if not self._robot_replay.tick(self.arm_controllers["right_arm"], time.monotonic()):
+                    self._robot_replay = None
+                    self._reset_teleop_reference()
+                    print("真机回放完成", flush=True)
+            except Exception as exc:
+                self._replay_error = str(exc)
+                self._cancel_robot_replay(str(exc))
+            self._publish_runtime()
+            return
         self._ik_limit_report = None
         """Preset targets take priority; otherwise preserve stock teleoperation."""
         with self._preset_lock:
@@ -188,10 +283,13 @@ class PresetSingleX5Controller(X5TeleopController):
 
         for arm_name, controller in self.arm_controllers.items():
             if preset_target is not None:
-                controller.set_joint_positions(preset_target)
+                controller.set_joint_positions(preset_target, profile="home" if preset_name == "HOME" else "preset")
                 q_actual = controller.get_joint_positions()[:6]
                 error = float(np.max(np.abs(q_actual - preset_target)))
-                if error <= self._preset_tolerance_rad and preset_name is not None:
+                state = controller.snapshot()
+                planner = state.get("trajectory") or {}
+                finished = planner.get("finished", False) and not planner.get("stopping", True)
+                if finished and np.max(np.abs(state["actual_vel"])) < .03 and error <= self._preset_tolerance_rad and preset_name is not None:
                     self._finish_preset(preset_name)
             elif self.active.get(arm_name, False):
                 q_des = self._bounded_ik_command(arm_name)

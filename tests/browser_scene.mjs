@@ -17,7 +17,7 @@ await once(portProbe, 'listening');
 const endpoint = `tcp://127.0.0.1:${portProbe.address().port}`;
 await new Promise((resolve) => portProbe.close(resolve));
 const config = `${temp}/local.toml`;
-await writeFile(config, `[telemetry]\nendpoint = "${endpoint}"\n[arm_service]\nsocket = "${temp}/arm.sock"\n[runtime]\nsocket = "${temp}/teleop.sock"\n[camera_service]\nsocket = "${temp}/camera.sock"\n`);
+await writeFile(config, `[arm_safety]\ntable_enabled = false\n[telemetry]\nendpoint = "${endpoint}"\n[arm_service]\nsocket = "${temp}/arm.sock"\n[runtime]\nsocket = "${temp}/teleop.sock"\n[camera_service]\nsocket = "${temp}/camera.sock"\n`);
 const hosts = [];
 function start(script, args = []) {
   const child = spawn(`${root}/${script}`, args, { cwd: '/tmp', stdio: ['pipe', 'pipe', 'pipe'],
@@ -66,6 +66,9 @@ try {
   await page.waitForFunction(() => document.getElementById('camera-status').textContent.includes('未连接'));
   const sample = { camera: { error: null }, preview: {
     age_s: .03, jpeg_base64: '' }, input_age_s: .02, input: { hands: {} } };
+  sample.state_age_s = .02;
+  sample.table_safety = {minimum_z_m: 0, blocked: true};
+  sample.loop_rates = {ik: {observed_hz: 48.2, configured_hz: 50}, arm_service: {observed_hz: 46.7, configured_hz: 50}};
   sample.collection_count = 12;
   sample.collection = {state: "RECORDING", task: "Place object", error: null};
   sample.recording = {id: 'episode-test', task: 'Place object', duration_s: 65, counts: {frame: 1950, state: 6500}, queue_size: 2, dropped: {frame: 0, state: 0}};
@@ -87,6 +90,17 @@ try {
     buttons: side === 'left' ? { X: true, Y: false } : { A: true, B: false }
   };
   await page.route('**/api/sensors', route => route.fulfill({ json: sample }));
+  sample.collection.control_enabled = false;
+  await page.waitForFunction(() => document.getElementById('control-state').textContent === '待机 · 未启用控制');
+  assert.equal(await page.locator('#collection-state').textContent(), '● 采集中');
+  assert.equal(await page.locator('#loop-rates').textContent(), 'IK 48.2/50 Hz · 服务 46.7/50 Hz');
+  assert.ok((await page.locator('#table-safety').textContent()).includes('已拦截'));
+  sample.table_safety.blocked = false;
+  await page.waitForFunction(() => document.getElementById('table-safety').textContent.includes('软限位已启用'));
+  sample.collection.control_enabled = true;
+  await page.waitForFunction(() => document.getElementById('control-state').textContent === '控制已启用');
+  sample.collection.control_enabled = false;
+  await page.waitForFunction(() => document.getElementById('control-state').textContent === '待机 · 未启用控制');
   await page.waitForFunction(() => !document.getElementById('camera-image').hidden && !document.getElementById('depth-image').hidden &&
     document.getElementById('right-hand').textContent.includes('0.75') &&
     document.getElementById('motion-diagnostics').textContent.includes('0.2700') &&
@@ -125,6 +139,55 @@ try {
     document.getElementById('input-status').textContent === '数据已过期' &&
     document.getElementById('right-hand').textContent === '—' &&
     document.getElementById('motion-diagnostics').textContent === '—' && document.getElementById('arm-latency').textContent === '未测' && document.getElementById('input-latency').textContent === '未测');
+  await page.setViewportSize({ width: 1440, height: 960 });
+  // Attitude preview uses the Cartesian task, and never leaves stale ghosts visible.
+  const identity = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+  sample.state_age_s = .01; sample.input_age_s = .01;
+  sample.orientation_preview = {basis: [[0,0,-1],[-1,0,0],[0,1,0]], input_ready: true, active: true, target: identity};
+  await page.unroute('**/api/sensors');
+  await page.route('**/api/sensors', route => {
+    sample.input.device_timestamp_ns = Date.now() * 1000000;
+    return route.fulfill({json: sample});
+  });
+  const previewState = await page.evaluate(async () => (await (await fetch('/api/model')).json()).reference);
+  previewState.actual.eef = identity;
+  previewState.stream = {status: 'live', source: {}, stream_id: 'preview-test'};
+  await page.route('**/api/state', route => route.fulfill({json: previewState}));
+  await page.waitForFunction(() => document.getElementById('orientation-canvas').dataset.handVisible === 'true' &&
+    document.getElementById('orientation-error').textContent.endsWith('0.0°'));
+  sample.orientation_preview.target = [0,1,0,0, -1,0,0,0, 0,0,1,0, 0,0,0,1];
+  await page.waitForFunction(() => document.getElementById('orientation-error').textContent.endsWith('90.0°'));
+  await page.screenshot({path: output + '/monitor-orientation.png'});
+  sample.orientation_preview.active = false;
+  await page.waitForFunction(() => document.getElementById('orientation-canvas').dataset.targetVisible === 'false' &&
+    document.getElementById('orientation-canvas').dataset.handVisible === 'true');
+  sample.state_age_s = 2;
+  await page.waitForFunction(() => document.getElementById('orientation-canvas').dataset.handVisible === 'false');
+  const replayFixture = {replay: {episode: 'review-test', generation: 1, playing: true,
+    duration_s: 2, position_s: .5, q: [0, 0, 0, 0, 0, 0], gripper_m: .04,
+    jpeg_base64: sample.preview.jpeg_base64, pose: previewState.actual}, robot_replay: {phase: 'idle'}};
+  const replayActions = [];
+  await page.route('**/api/replay', async route => {
+    if (route.request().method() === 'POST') {
+      const command = route.request().postDataJSON(); replayActions.push(command);
+      if (command.action === 'pause') replayFixture.replay.playing = false;
+      if (command.action === 'seek') replayFixture.replay.position_s = command.position_s;
+      return route.fulfill({json: {ok: true}});
+    }
+    return route.fulfill({json: replayFixture});
+  });
+  await page.waitForFunction(() => !document.getElementById('dataset-replay').hidden && document.getElementById('replay-status').textContent.includes('review-test'));
+  await page.waitForFunction(() => document.getElementById('replay-video').naturalWidth > 0);
+  await page.click('#replay-pause');
+  await page.waitForFunction(() => document.getElementById('replay-status').textContent.includes('暂停'));
+  await page.locator('#replay-seek').evaluate(input => { input.value = '1.5'; input.dispatchEvent(new Event('change')); });
+  await page.waitForFunction(() => document.getElementById('replay-time').textContent.startsWith('1.50'));
+  assert.ok(replayActions.some(command => command.action === 'seek' && command.position_s === 1.5));
+  await page.screenshot({path: output + '/dataset-replay.png'});
+  await page.click('#close-replay');
+  await page.unroute('**/api/replay');
+  await page.unroute('**/api/state');
+  await page.waitForFunction(() => document.getElementById('connection').dataset.state === 'waiting');
   await page.unroute('**/api/sensors');
   await page.setViewportSize({ width: 1440, height: 960 });
 

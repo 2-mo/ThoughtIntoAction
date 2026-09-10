@@ -43,6 +43,29 @@ class ArmServiceTests(unittest.TestCase):
         client.snapshot()
         self.assertEqual(client.command_timing, timing)
 
+    def test_table_floor_rejects_unsafe_preset_and_allows_safe_recovery(self):
+        self.fixture = ServiceFixture(table_safety=True)
+        self.addCleanup(self.fixture.close)
+        override = self.client(actuate=True, motion={"tcp_min_z_m": -1.})
+        with self.assertRaisesRegex(RuntimeError, "Invalid motion settings"):
+            override.start_control()
+        client = self.client(actuate=True, motion={"max_command_lead_rad": 0.})
+        self.assertTrue(client.info["safety"]["table_enabled"])
+        client.set_joint_positions([0, 1.5, 0, 0, 0, 0], profile="preset")
+        client.set_catch_pos(.04)
+        time.sleep(.1)
+        state = client.snapshot()
+        self.assertTrue(state["table_safety"]["blocked"])
+        self.assertIsNone(state["service_command"])
+        self.assertIsNone(self.fixture.service.target)
+        current = state["actual_pos"]
+        client.set_joint_positions(current, profile="home")
+        client.set_catch_pos(.04)
+        time.sleep(.06)
+        state = client.snapshot()
+        self.assertFalse(state["table_safety"]["blocked"])
+        self.assertEqual(state["service_command"]["profile"], "home")
+
     def test_full_open_request_is_capped_without_losing_control(self):
         client = self.client(actuate=True)
         client.set_catch_pos(.082)
@@ -101,6 +124,47 @@ class ArmServiceTests(unittest.TestCase):
                 self.assertEqual(self.fixture.service.settings["max_joint_speed_rad_s"], default)
                 client.close()
 
+    def test_motion_overrides_are_per_lease_and_zero_speed_uses_hardware(self):
+        requested = {"max_command_lead_rad": 0.15, "preview_time_s": .01, "joint_soft_limit_margin_rad": .02, "preset_speed_rad_s": 0.}
+        client = self.client(actuate=True, speed=0, motion=requested)
+        client.start_control()
+        client.snapshot()
+        self.assertEqual({k: client.info["effective_motion_limits"][k] for k in requested}, requested)
+        self.assertEqual(client.info["effective_joint_speed_limits_rad_s"], client.info["hardware_joint_speed_limits_rad_s"])
+        np.testing.assert_allclose(self.fixture.arm._max_step, self.fixture.arm._hardware_speed * self.fixture.arm._dt)
+        client.close()
+        next_client = self.client(actuate=True)
+        next_client.start_control(); next_client.snapshot()
+        self.assertEqual({k: next_client.info["effective_motion_limits"][k] for k in requested}, {k:self.fixture.service.settings[k] for k in requested})
+
+    def test_invalid_motion_override_does_not_acquire(self):
+        for motion in ({"teleop_preview_time_s": -1}, {"preset_speed_rad_s": -1}, {"home_speed_rad_s": 0}, {"preset_acceleration_rad_s2": 0}, {"preview_time_s": -1}, {"max_command_lead_rad": "off"}, {"unknown": 1}):
+            client = self.client(actuate=True, motion=motion)
+            with self.assertRaises(RuntimeError):
+                client.start_control()
+            self.assertIsNone(self.fixture.service.owner)
+
+    def test_preview_tracks_actual_motion_profile(self):
+        client = self.client(actuate=True, speed=0, motion={
+            "preview_time_s": .05, "teleop_preview_time_s": .01,
+            "max_command_lead_rad": 0.})
+        q = client.get_joint_positions()
+        with patch.object(self.fixture.arm, "set_motion_limit",
+                          wraps=self.fixture.arm.set_motion_limit) as limits:
+            client.start_control()
+            for profile, preview in (("teleop", .01), ("preset", .05), ("home", .05), ("teleop", .01)):
+                client.set_joint_positions(q[:6], profile=profile)
+                client.set_catch_pos(q[6])
+                deadline = time.monotonic() + .3
+                while time.monotonic() < deadline:
+                    state = client.snapshot()
+                    if state["trajectory"]["profile"] == profile and limits.call_args.kwargs["preview_time_s"] == preview:
+                        break
+                    time.sleep(.01)
+                self.assertEqual(state["trajectory"]["profile"], profile)
+                self.assertEqual(limits.call_args.kwargs["preview_time_s"], preview)
+                self.assertEqual(limits.call_args.kwargs["max_command_lead_rad"], 0.)
+
     def test_motion_is_rate_limited_at_service_ticks_and_release_keeps_feedback(self):
         client = self.client(actuate=True, speed=.1)
         initial = client.get_joint_positions()
@@ -121,6 +185,38 @@ class ArmServiceTests(unittest.TestCase):
         self.assertFalse(observer.snapshot()["actuate"])
         self.assertIsNone(self.fixture.service.owner)
         self.assertTrue(self.fixture.worker.is_alive())
+
+    def test_normal_stop_brakes_without_chasing_goal_and_holds_without_client(self):
+        client = self.client(actuate=True, speed=2, motion={"max_command_lead_rad": 0})
+        initial = client.get_joint_positions()
+        target = initial[:6].copy()
+        target[0] += 1.
+        for _ in range(12):
+            client.set_joint_positions(target)
+            client.set_catch_pos(initial[6])
+            time.sleep(.02)
+        before = client.snapshot()
+        self.assertGreater(before["trajectory"]["velocity"][0], 0)
+        client.stop_control(release=True)
+        self.assertIsNone(client.token)
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            state = client.snapshot()
+            if client.info["mode"] == "hold":
+                break
+            time.sleep(.02)
+        self.assertEqual(client.info["mode"], "hold")
+        self.assertIsNone(self.fixture.service.owner)
+        self.assertLess(state["actual_pos"][0], target[0] - .1)
+        np.testing.assert_allclose(state["trajectory"]["velocity"], 0, atol=1e-7)
+        np.testing.assert_allclose(state["trajectory"]["acceleration"], 0, atol=1e-7)
+        held = state["actual_pos"]
+        time.sleep(.55)
+        np.testing.assert_allclose(client.snapshot()["actual_pos"], held, atol=1e-7)
+        self.assertTrue(client.snapshot()["actuate"])
+        client.start_control()
+        client.snapshot()
+        self.assertEqual(client.info["mode"], "control")
 
     def test_watchdog_revokes_silent_owner_and_rejects_old_token(self):
         client = self.client(actuate=True)
@@ -195,7 +291,8 @@ class ArmServiceTests(unittest.TestCase):
         state.pos()[:] = [0.1, 1.1, 1.2, -1.0, .1, .2]
         state.gripper_pos = .035
         native.get_joint_state.return_value = state
-        settings = self.fixture.service.settings
+        from robot_control.online_motion import DEFAULTS
+        settings = {k:v for k,v in self.fixture.service.settings.items() if k not in DEFAULTS}
         with patch.object(arx5, "Arx5JointController", return_value=native):
             backend = OfficialX5HardwareAdapter(**settings, can_port="offline-service-enable", actuate=False)
             try:
@@ -207,6 +304,13 @@ class ArmServiceTests(unittest.TestCase):
                 np.testing.assert_array_equal(command.pos(), state.pos())
                 self.assertEqual(command.gripper_pos, state.gripper_pos)
                 np.testing.assert_array_equal(command.torque(), np.zeros(6))
+                q = state.pos().copy() + .02
+                dq = np.full(6, .12)
+                backend.set_planned_joint_state(q, dq)
+                backend.set_catch_pos(.035)
+                command = native.set_joint_cmd.call_args.args[0]
+                np.testing.assert_allclose(command.pos(), q)
+                np.testing.assert_allclose(command.vel(), dq)
                 backend.set_control_enabled(False)
                 native.reset_mock()
                 backend.set_catch_pos(.01)

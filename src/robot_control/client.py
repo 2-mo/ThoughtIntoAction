@@ -14,16 +14,20 @@ MAX_RPC = 65536
 
 
 class ArmClient:
-    def __init__(self, robot, *, path=None, hardware=True, actuate=False, input_name="terminal", speed=None):
+    def __init__(self, robot, *, path=None, hardware=True, actuate=False, input_name="terminal", speed=None, motion=None):
         self.path = str(resolve_path(path or load_config()["arm_service"]["socket"]))
         self.robot, self.hardware, self.actuate = robot, hardware, actuate
         self.input_name, self.speed = input_name, speed
+        self.motion = dict(motion or {})
         self.service_id = self.token = None
         self.closed = False
         self._sequence = 0
         self._pending_q = None
+        self._pending_profile = "teleop"
         self._lock = threading.RLock()
         self.info = self._rpc("describe")
+        if self.info.get("trajectory_protocol") != 1:
+            raise RuntimeError("机械臂服务版本较旧，请退出遥操并重启 启动机械臂服务.sh，再启动遥操")
         self.service_id = self.info["service_id"]
         if self.info["robot"] != robot.metadata():
             raise ValueError("Robot model/frame differs from arm service")
@@ -93,14 +97,15 @@ class ArmClient:
         with self._lock:
             if self.token is None:
                 args = {"robot": self.robot.metadata(), "hardware": self.hardware,
-                        "actuate": self.actuate, "input": self.input_name}
+                        "actuate": self.actuate, "input": self.input_name, "motion": self.motion}
                 if self.speed is not None:
                     args["speed"] = self.speed
                 self.token = self._rpc("acquire", **args)["token"]
 
-    def set_joint_positions(self, positions):
+    def set_joint_positions(self, positions, *, profile="teleop"):
         with self._lock:
             self._pending_q = self.robot.joints(positions).tolist()
+            self._pending_profile = profile
         return True
 
     def set_catch_pos(self, position):
@@ -109,9 +114,18 @@ class ArmClient:
                 raise ValueError("Invalid gripper target")
             self.start_control()
             self._sequence += 1
-            self.info = self._rpc("command", q=self._pending_q, gripper=float(position), sequence=self._sequence)
+            self.info = self._rpc("command", q=self._pending_q, gripper=float(position), sequence=self._sequence, profile=self._pending_profile)
             self._pending_q = None
         return True
+
+    def stop_control(self, *, release=False):
+        """Normal jerk-limited stop; service retains hold after voluntary release."""
+        with self._lock:
+            if self.token is not None:
+                self.info = self._rpc("stop", release_after_stop=release)
+                if release:
+                    self.token = None
+            self._pending_q = None
 
     def set_to_damping(self):
         with self._lock:

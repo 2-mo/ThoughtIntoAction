@@ -3,6 +3,7 @@ default_command = "teleop-presets-x5"
 
 [environment]
 teleop_python = ".venv/bin/python"
+arm_sdk_python = "outputs/build/arx-gripper/source/python"
 
 [paths]
 log_dir = "outputs/logs"
@@ -37,12 +38,22 @@ socket = "outputs/runtime/teleop.sock"
 endpoint = "tcp://127.0.0.1:5567"
 
 [arm_service]
+max_joint_acceleration_rad_s2 = 2.0
+max_joint_jerk_rad_s3 = 10.0
+home_speed_rad_s = 0.3
+home_acceleration_rad_s2 = 0.5
+home_jerk_rad_s3 = 2.0
+preset_speed_rad_s = 0.5
+preset_acceleration_rad_s2 = 1.0
+preset_jerk_rad_s3 = 4.0
 socket = "outputs/runtime/arm.sock"
 backend = "stanford"
 control_rate_hz = 50
 max_joint_speed_rad_s = 2.0
+max_command_lead_rad = 0.05
 joint_soft_limit_margin_rad = 0.05
 preview_time_s = 0.03
+teleop_preview_time_s = 0.01
 gripper_width = 0.082
 # Command limit only; keep the SDK width/angle mapping unchanged.
 gripper_open_limit_m = 0.077
@@ -51,6 +62,13 @@ gripper_contact_torque = 0.60
 gripper_hold_torque = 0.30
 gripper_contact_cycles = 1
 gripper_release_margin_m = 0.004
+
+# 机械臂控制服务统一执行；所有控制客户端共用，遥操脚本不可覆盖。
+[arm_safety]
+table_enabled = true
+table_z_m = 0.0
+# 底座直接放在桌面上，允许夹指尖端中心到达桌面。
+table_clearance_m = 0.0
 
 [recording]
 queue_size = 128

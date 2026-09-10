@@ -87,8 +87,8 @@ class PackageBoundaryTests(unittest.TestCase):
             from quest_teleop.cli import presets_main
             import inspect
             options = inspect.signature(presets_main).parameters
-            assert "service_socket" in options
-            assert not {"backend", "can_port", "preview_time_s", "telemetry"} & options.keys()
+            assert {"service_socket", "preview_time_s", "max_command_lead_rad", "joint_soft_limit_margin_rad"} <= options.keys()
+            assert not {"backend", "can_port", "telemetry"} & options.keys()
             ''',
         )
 

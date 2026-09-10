@@ -115,8 +115,14 @@ class Console:
                     pass
             print(f"日志：{self.log_path}；处理后按 w 重新启动。")
 
+    def calibrate(self, reuse=False):
+        if self.child is None or self.child.poll() is not None:
+            print("请先输入 w 启动遥操，再在待机状态输入 c 标定。")
+            return
+        subprocess.run([self.runner, "quest-calibrate", *(["--reuse"] if reuse else [])], check=False)
+
     def run(self):
-        print("w / 1 模拟佩戴并启动遥操 | s / 2 停止遥操并休眠 | u / 3 取消模拟佩戴（保留程序） | p 状态 | q 退出")
+        print("w / 1 模拟佩戴并启动遥操 | s / 2 停止遥操并休眠 | u / 3 取消模拟佩戴（保留程序） | c 快速方向对齐 | cr 复用上次方向（Quest 未重定位） | p 状态 | q 退出")
         print(f"启动日志与异常：{self.log_path}")
         watcher_stop = threading.Event()
         watcher = threading.Thread(target=self.watch_child, args=(watcher_stop,), daemon=True)
@@ -137,11 +143,13 @@ class Console:
                     self.unwear()
                 elif command == "p":
                     self.status()
+                elif command in ("c", "cr"):
+                    self.calibrate(reuse=command == "cr")
                 elif command == "q":
                     if self.stop():
                         break
                 else:
-                    print("输入 w / u / s / p / q 后回车。")
+                    print("输入 w / u / s / c / cr / p / q 后回车。")
         finally:
             watcher_stop.set()
             watcher.join(timeout=1)

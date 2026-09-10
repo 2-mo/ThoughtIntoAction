@@ -87,7 +87,7 @@ class EpisodeActions:
                 return False
             session = self.session()
             writer = session.recording if session is not None else None
-            self.saving_episode = writer.id if action in ("stop_episode", "pause_task", "end_task") and writer is not None else None
+            self.saving_episode = writer.id if action in ("stop_episode", "toggle_episode", "pause_task", "end_task") and writer is not None else None
             self.discard_after_save = False
             self.busy, self.error = True, None
             generation = self.generation
