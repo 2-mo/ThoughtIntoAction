@@ -14,13 +14,13 @@ MAX_EEF_LINEAR_SPEED_M_S=0   # 遥操末端平移目标速度，m/s；0 不附�
 MAX_EEF_ANGULAR_SPEED_RAD_S=0   # 遥操末端旋转目标速度，rad/s；0 不附加限速
 MAX_COMMAND_LEAD_RAD=0   # 规划前目标相对反馈最大超前量；0 关闭此附加限制
 PREVIEW_TIME_S=0.05         # Home / 预抓取 SDK 插值目标时间，秒
-TELEOP_PREVIEW_TIME_S=0.05  # 恢复减少平滑前的 50 ms 预览，排查方向异常
+TELEOP_PREVIEW_TIME_S=0.01  # 遥操 SDK 插值缩短至 10 ms，减少跟随延迟
 JOINT_SOFT_LIMIT_MARGIN_RAD=0.05  # 软件关节边界余量，弧度
 MAX_JOINT_SPEED_RAD_S=0     # 关节速度请求上限，单位 rad/s
 # 速度 0 使用 SDK 各关节硬件上限；正值取此值与硬件上限的较小值。
 # 服务层 Ruckig 统一规划速度、加速度和 jerk；以下为待真机验证的初值。
-MAX_JOINT_ACCELERATION_RAD_S2=6.0
-MAX_JOINT_JERK_RAD_S3=30.0
+MAX_JOINT_ACCELERATION_RAD_S2=12.0
+MAX_JOINT_JERK_RAD_S3=120.0
 # Home 按约半时长缩放：速度 ×2、加速度 ×4、jerk ×8。
 HOME_JERK_RAD_S3=16.0
 PRESET_JERK_RAD_S3=24.0

@@ -33,9 +33,9 @@ if sys.argv[1:3] == ["quest-wake", "start"] and os.environ["TEST_WAKE_FAIL"] == 
                                         text=True, env={**os.environ, "TEST_WAKE_FAIL": str(int(fail))})
                 calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
                 control = ["--profile", "presets", "teleop-presets-x5", "--actuate", "--enable-session",
-                           "--control-link", "link6", "--control-mode", "pose", "--collection-task", "X5 遥操采集", "--max-joint-acceleration-rad-s2", "6.0", "--max-joint-jerk-rad-s3", "30.0", "--home-jerk-rad-s3", "16.0", "--preset-jerk-rad-s3", "24.0", "--home-speed-rad-s", "0.6", "--home-acceleration-rad-s2", "2.0", "--preset-speed-rad-s", "0", "--preset-acceleration-rad-s2", "6.0", "--scale-factor", "0.5", "--operator-yaw-deg", "0", "--rotation-frame", "base", "--max-eef-linear-speed-m-s", "0",
+                           "--control-link", "link6", "--control-mode", "pose", "--collection-task", "X5 遥操采集", "--max-joint-acceleration-rad-s2", "12.0", "--max-joint-jerk-rad-s3", "120.0", "--home-jerk-rad-s3", "16.0", "--preset-jerk-rad-s3", "24.0", "--home-speed-rad-s", "0.6", "--home-acceleration-rad-s2", "2.0", "--preset-speed-rad-s", "0", "--preset-acceleration-rad-s2", "6.0", "--scale-factor", "0.5", "--operator-yaw-deg", "0", "--rotation-frame", "base", "--max-eef-linear-speed-m-s", "0",
                            "--max-eef-angular-speed-rad-s", "0", "--max-joint-speed-rad-s", "0",
-                           "--max-command-lead-rad", "0", "--preview-time-s", "0.05", "--teleop-preview-time-s", "0.05",
+                           "--max-command-lead-rad", "0", "--preview-time-s", "0.05", "--teleop-preview-time-s", "0.01",
                            "--joint-soft-limit-margin-rad", "0.05", *arguments]
                 self.assertEqual(calls, [["quest-transport", "prepare"], ["quest-wake", "start"]] if fail else
                                  [control] if "--help" in arguments else [["quest-transport", "prepare"], ["quest-wake", "start"], ["quest-transport", "wait"], control])
