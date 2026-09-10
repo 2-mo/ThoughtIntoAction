@@ -120,6 +120,11 @@ class EpisodeActions:
                 self.saving_episode = None
             print(f"COLLECTION {action} failed: {exc}", flush=True)
 
+    def clear_error(self):
+        with self.lock:
+            if not self.busy:
+                self.error = None
+
     def take_home(self):
         with self.lock:
             if not self.home:

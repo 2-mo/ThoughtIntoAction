@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import re
 from pathlib import Path
 import shutil
 import threading
@@ -36,6 +37,7 @@ class TeleopSession:
         self.dataset_root = resolve_path(config["paths"]["dataset_dir"])
         self.log_root = resolve_path(config["paths"]["log_dir"]) / f"session-{datetime.now():%Y%m%d-%H%M%S}-{self.id[:8]}"
         self.log_root.mkdir(parents=True)
+        self._sample_cursor = 0
         self.latest_state = None
         self.latest_frame = None
         self.camera_metadata = None
@@ -49,6 +51,8 @@ class TeleopSession:
         self.task_paused = False
         self.task_active = False
         self.task_run_id = None
+        self.task_dataset = None
+        self._dataset_run_id = None
         self.counted_episodes = frozenset()
         self.operations = threading.Lock()
         self.stop_event = threading.Event()
@@ -72,7 +76,7 @@ class TeleopSession:
     def start(self):
         try:
             self.server = LocalServer(self.socket_path, self.dispatch)
-            for name, target in (("wrist-camera", self._camera_worker), ("session-log", self._background)):
+            for name, target in (("wrist-camera", self._camera_worker), ("session-log", self._background), ("arm-samples", self._sample_worker)):
                 thread = threading.Thread(target=target, name=name, daemon=True)
                 self.threads.append(thread)
                 thread.start()
@@ -90,8 +94,31 @@ class TeleopSession:
                   "host_received_monotonic_ns": received}
         self.latest_state = packet
         writer = self.recording
-        if writer is not None:
+        if writer is not None and not getattr(self, "record_samples", None):
             writer.add("state", packet)
+
+    def _drain_samples(self, writer):
+        while True:
+            batch = self.record_samples(self._sample_cursor)
+            for sample in batch['states']:
+                self._sample_cursor = sample['sample_sequence']
+                writer.add('state', {**sample, 'arm_service_id': (self.latest_state or {}).get('arm_service_id')})
+            if self._sample_cursor >= batch['latest'] or not batch['states']:
+                break
+
+    def _sample_worker(self):
+        while not self.stop_event.wait(.01):
+            if not getattr(self, 'record_samples', None):
+                continue
+            try:
+                with self.operations:
+                    if self.recording is not None:
+                        self._drain_samples(self.recording)
+            except Exception as exc:
+                self.runtime_error = '逐周期录制失败：' + str(exc)
+                with self.operations:
+                    if self.recording is not None:
+                        self._stop_recording(reason=self.runtime_error)
 
     def _camera_worker(self):
         options = self.config["cameras"]["wrist_rgb"]
@@ -132,7 +159,7 @@ class TeleopSession:
                 "camera": {"metadata": self.camera_metadata, "error": self.camera_error,
                            "age_s": self.age(self.latest_frame, "host_received_monotonic_ns")},
                 "recording": writer.status() if writer else None,
-                "last_episode": self.last_episode, "runtime_error": self.runtime_error,
+                "last_episode": self.last_episode, "task_dataset": self.task_dataset, "runtime_error": self.runtime_error,
                 "collection_count": len(self.counted_episodes),
                 "task_active": self.task_active, "task_paused": self.task_paused, "task_run_id": self.task_run_id,
                 "log_dir": str(self.log_root),
@@ -140,7 +167,7 @@ class TeleopSession:
 
     def saved_episodes(self):
         result = []
-        for manifest in self.dataset_root.glob("*/episode.json"):
+        for manifest in [*self.dataset_root.glob("*/episode.json"), *self.dataset_root.glob(".raw/*/episode.json")]:
             try:
                 if not manifest.resolve().is_relative_to(self.dataset_root.resolve()): continue
                 meta = json.loads(manifest.read_text())
@@ -156,6 +183,8 @@ class TeleopSession:
         if not isinstance(episode_id, str) or Path(episode_id).name != episode_id or episode_id in (".", "..", ""):
             raise ValueError("无效数据集编号")
         root = (self.dataset_root / episode_id).resolve()
+        if not (root / "episode.json").is_file():
+            root = (self.dataset_root / ".raw" / episode_id).resolve()
         if not root.is_relative_to(self.dataset_root.resolve()): raise ValueError("数据集路径越界")
         with self.operations:
             if self.closed or self.recording is not None: raise ValueError("请先完成并保存当前采集")
@@ -213,6 +242,7 @@ class TeleopSession:
             return {"camera": snapshot["camera"],
                     "preview": self.dispatch({"command": "preview"}),
                     "input": state.get("input"),
+                    "button_feedback": state.get("button_feedback"),
                     "orientation_preview": state.get("orientation_preview"),
                     "loop_rates": state.get("loop_rates"),
                     "table_safety": state.get("table_safety"),
@@ -228,6 +258,7 @@ class TeleopSession:
                     "task_paused": snapshot["task_paused"],
                     "task_run_id": snapshot["task_run_id"],
                     "last_episode": snapshot["last_episode"],
+                    "task_dataset": snapshot.get("task_dataset"),
                     "runtime_error": snapshot["runtime_error"]}
         if command == "preview":
             return {"jpeg_base64": self.preview_jpeg,
@@ -268,10 +299,13 @@ class TeleopSession:
                         self.task_paused = self.task_active or self.task_paused
                         self.task_active = False
                     elif action == "end_task":
+                        self._finalize_task_dataset()
                         self.task_active = self.task_paused = False
                         self.counted_episodes = frozenset()
                     return {"task_active": self.task_active, "task_paused": self.task_paused}
                 if action == "discard_previous":
+                    if self.task_dataset and self.task_dataset["state"] == "complete":
+                        raise ValueError("任务已导出；请在结束任务前丢弃条目，避免训练目录与原始数据不一致")
                     previous = self.last_episode
                     if payload.get("episode_id") is not None and (previous is None or previous["id"] != payload["episode_id"]):
                         raise ValueError("上一条 Episode 已变化；未丢弃其他数据")
@@ -311,8 +345,23 @@ class TeleopSession:
                         "hand_eye_calibrated": self.config["cameras"]["wrist_rgb"]["hand_eye_calibrated"],
                         "timing": "Robot host sample / RGB host receipt; not exposure-synchronized",
                         "action_definition": "submission is the last accepted Python SDK waypoint; sdk_cmd is interpolated output; neither is state[t+1]"}
-                self.recording = EpisodeWriter(self.dataset_root, meta, payload.get("task"),
-                                               queue_size=self.config["recording"]["queue_size"])
+                if getattr(self, "record_samples", None):
+                    self._sample_cursor = self.record_samples(0)["latest"]
+                raw_root = self.dataset_root
+                if getattr(self, "record_samples", None):
+                    if not self.task_run_id:
+                        self.task_run_id = uuid.uuid4().hex
+                    if self._dataset_run_id != self.task_run_id:
+                        task = re.sub(r"[^\w\-]+", "_", (payload.get("task") or "task").strip())[:48]
+                        self.task_dataset = {"path": str(self.dataset_root / f"{task}_{datetime.now():%Y%m%d-%H%M%S}-{self.task_run_id[:8]}"),
+                                             "state": "collecting", "episodes": 0}
+                        self._dataset_run_id = self.task_run_id
+                    meta["task_run_id"] = self.task_run_id
+                    raw_root = self.dataset_root / ".raw"
+                self.recording = EpisodeWriter(raw_root, meta, payload.get("task"),
+                                               queue_size=self.config["recording"]["queue_size"],
+                                               rgb_video=self.config["recording"].get("rgb_video", False),
+                                               video_crf=self.config["recording"].get("video_crf", 20))
                 return self.recording.status()
             if command == "record.stop":
                 return self._stop_recording(payload.get("outcome", "unknown"))
@@ -321,12 +370,36 @@ class TeleopSession:
     def _stop_recording(self, outcome="unknown", reason=None):
         if self.recording is None:
             raise ValueError("No active episode")
+        if getattr(self, "record_samples", None) and reason is None:
+            self._drain_samples(self.recording)
         result = self.recording.stop(outcome, reason=reason)
         self.last_episode = result
         if result["lifecycle"] == "complete" and result["outcome"] != "discarded":
             self.counted_episodes = self.counted_episodes | {result["id"]}
         self.recording = None
+        if self.task_dataset is not None:
+            self.task_dataset["episodes"] = len(self.counted_episodes)
         return result
+
+    def _finalize_task_dataset(self):
+        if not self.config["recording"].get("lerobot_on_save", False) or not self.task_dataset:
+            return
+        if self.task_dataset["state"] == "complete":
+            return
+        if not self.counted_episodes:
+            self.task_dataset["state"] = "empty"
+            return
+        from ..auto_dataset import finalize_task
+        self.task_dataset.update(state="saving", episodes=len(self.counted_episodes))
+        try:
+            finalize_task(self.dataset_root / ".raw", sorted(self.counted_episodes),
+                          self.task_dataset["path"], self.control_metadata["recording_rate_hz"])
+        except Exception as exc:
+            self.task_dataset.update(state="failed", error=str(exc))
+            raise
+        self.task_dataset.pop("error", None)
+        self.task_dataset.update(state="complete")
+        print("任务数据集已保存，可上传整个目录：" + self.task_dataset["path"], flush=True)
 
     def _background(self):
         try:

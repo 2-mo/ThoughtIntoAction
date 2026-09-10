@@ -30,7 +30,7 @@ class OfficialX5HardwareAdapter:
         max_joint_speed_rad_s: float,
         joint_soft_limit_margin_rad: float,
         max_command_lead_rad: float = 0.05,
-        gripper_open_limit_m: float = 0.077,
+        gripper_open_limit_m: float = 0.078,
         gripper_force_hold: bool = True,
         gripper_contact_torque: float = 0.60,
         gripper_hold_torque: float = 0.30,

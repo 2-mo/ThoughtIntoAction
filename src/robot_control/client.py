@@ -28,6 +28,11 @@ class ArmClient:
         self.info = self._rpc("describe")
         if self.info.get("trajectory_protocol") != 1:
             raise RuntimeError("机械臂服务版本较旧，请退出遥操并重启 启动机械臂服务.sh，再启动遥操")
+        from .online_motion import DEFAULTS
+        missing = (set(self.motion) & set(DEFAULTS)) - set(self.info.get("effective_motion_limits", {}))
+        if missing:
+            raise RuntimeError("机械臂服务版本较旧，不支持参数 " + ", ".join(sorted(missing))
+                + "；请退出遥操并重启 启动机械臂服务.sh，再启动遥操")
         self.service_id = self.info["service_id"]
         if self.info["robot"] != robot.metadata():
             raise ValueError("Robot model/frame differs from arm service")
@@ -89,6 +94,9 @@ class ArmClient:
     def get_runtime_diagnostics(self):
         state = self.snapshot()
         return {key: np.asarray(value) if isinstance(value, list) else value for key, value in state.items()}
+
+    def recording_samples(self, after=0):
+        return self._rpc("samples", after=after)
 
     def get_recording_snapshot(self):
         return {**self.snapshot(), "arm_service_id": self.service_id}

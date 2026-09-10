@@ -16,16 +16,8 @@
       <div id="control-state" role="status">控制状态未连接</div>
       <div id="table-safety" role="status" hidden></div>
       <div id="loading" role="status">正在加载 X5 模型与材质…</div>
-      <details class="orientation-panel" open><summary>姿态对齐对照 · 点击收起</summary>
-        <h2>姿态对齐 <span>同一基座坐标系</span></h2>
-        <div class="orientation-labels"><span>手柄 · 青</span><span>遥操目标 · 橙</span><span>夹爪实际 · 白</span></div>
-        <canvas id="orientation-canvas" aria-label="同一视角下的手柄、遥操目标和实际夹爪姿态"></canvas>
-        <p id="orientation-status" role="status">等待遥操姿态数据</p>
-        <p id="orientation-error">目标与实际角度差：—</p>
-        <p class="hint">箭头指向前端，短柱指向上方。三个模型仅比较朝向，位置已分开展示。拖动可一起转动视角。</p>
-        <p class="hint">手柄按当前方向映射转换到基座；目标包含按下 Grip 时的姿态偏置，两者不必重合。</p>
-      </details>
-      <div class="stage-bottom"><span>拖动旋转 · 滚轮缩放 · 右键平移</span><span id="model-name"></span></div>
+
+      <div class="stage-bottom"><span title="拖动旋转 · 滚轮缩放 · 右键平移">3D 视图</span><span id="model-name"></span></div>
     </section>
     <section class="collection-panel" aria-label="采集监控" data-state="OFFLINE">
       <div class="collection-heading"><strong id="collection-state" role="status">未连接</strong><span id="collection-task">等待采集会话</span></div>
@@ -38,8 +30,17 @@
       <p id="collection-episode">当前 Episode：—</p>
       <p id="collection-health">等待采集会话</p>
       <p id="collection-last">上一条：—</p>
-      <p class="collection-controls"><span>A 开始/保存 · B 预抓取/长按回零 · 下拨1秒切换控制 · X 网页回放 · Y 真机回放</span><span>摇杆：左开始任务 · 右暂停 · 上作废上一条 · 按住 1 秒结束清零</span></p>
+      <p class="collection-controls"><span>A 预抓取后开始 / 保存后返位 · B 预抓取/长按回零 · 下拨1秒切换控制 · X 网页回放 · Y 真机回放</span><span>摇杆：左开始任务 · 右暂停 · 上作废上一条 · 按住 1 秒结束清零</span></p>
     </section>
+          <section class="orientation-panel">
+        <h2>姿态对齐 <span>同一基座坐标系</span></h2>
+        <div class="orientation-labels"><span>手柄 · 青</span><span>遥操目标 · 橙</span><span>夹爪实际 · 白</span></div>
+        <canvas id="orientation-canvas" aria-label="同一视角下的手柄、遥操目标和实际夹爪姿态"></canvas>
+        <p id="orientation-status" role="status">等待遥操姿态数据</p>
+        <p id="orientation-error">目标与实际角度差：—</p>
+        <p class="hint">箭头指向前端，短柱指向上方。三个模型仅比较朝向，位置已分开展示。拖动可一起转动视角。</p>
+        <p class="hint">手柄按当前方向映射转换到基座；目标包含按下 Grip 时的姿态偏置，两者不必重合。</p>
+      </section>
     <aside>
 
       <section class="camera-panel"><h2>D435i · RGB / 深度 <span>未标定</span></h2>
@@ -49,9 +50,9 @@
       </section>
       <section class="input-panel"><h2>Quest 手柄 <span id="input-status">等待数据</span></h2>
         <div class="hands"><div><h3>左 · X / Y</h3><div id="left-hand">—</div></div><div><h3>右 · A / B / R3</h3><div id="right-hand">—</div></div></div>
-        <p class="hint">位置 m / 四元数</p>
+        <p id="button-response" role="status">等待按键响应</p><p class="hint">进度来自控制程序实际长按计时；按键亮起仅代表输入已收到。</p>
       </section>
-      <section><h2>关节位置 <span>°</span></h2><div class="joint-head"><span>关节</span><span>实际</span><span>目标</span></div><div id="joints"></div></section>
+      <div class="telemetry-group"><section><h2>关节位置 <span>°</span></h2><div class="joint-head"><span>关节</span><span>实际</span><span>目标</span></div><div id="joints"></div></section>
       <section><h2>末端位置 <span id="eef-name">link6 / m</span></h2><div id="eef-position" class="coordinates">—</div></section>
       <section class="diagnostics-panel"><h2>控制误差 / rad <span id="loop-rates" title="近一秒实测 / 配置频率；不是电机内部伺服频率。">IK — Hz · 服务 — Hz</span></h2>
         <div id="motion-diagnostics">—</div>
@@ -66,17 +67,18 @@
       </section>
       <section class="operation-note"><p id="state-source">等待机械臂状态</p>
         <p class="timing-row"><span title="监看端向本机机械臂服务发出只读查询并收到应答的往返时间，不是 CAN 或电机动作延迟。">机械臂服务 RTT <b id="arm-latency">未测</b></span><span title="持续 ADB 通道到 USB 头显的回显往返时间，排除建连时间；不代表 XR 协议处理或动作延迟。">Quest USB RTT <b id="input-latency">未测</b></span></p><span id="model-id" hidden></span></section>
+      </div>
     </aside>
-  </main>
-  <section id="dataset-replay" hidden aria-label="录制数据回放">
-    <div class="replay-heading"><strong>数据回放 · 录制视频与机械臂</strong><button id="close-replay" type="button">收起</button></div>
+  <section id="dataset-replay" aria-label="录制数据回放">
+    <div class="replay-heading"><strong>数据回放 · 录制视频与机械臂</strong></div>
     <p id="replay-status">X 网页回放上一条 · Y 真机回放 / 取消（需启用控制）</p>
     <div class="replay-views"><div><img id="replay-video" alt="录制的腕部 RGB 视频"><p id="replay-video-status">等待视频</p></div><div class="replay-model"><canvas id="replay-canvas" aria-label="录制的机械臂姿态"></canvas></div></div>
     <div class="replay-buttons"><select id="replay-episodes" aria-label="已保存数据集"></select><button id="replay-load" type="button">回放所选</button><button id="replay-last" type="button">加载上一条</button><button id="replay-play" type="button">播放</button><button id="replay-pause" type="button">暂停</button><span id="replay-time">0 / 0 s</span></div>
-    <input id="replay-seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="回放时间">
+    <label class="replay-jump" title="输入秒数定位回放画面">跳转 / 秒 <input id="replay-seek" type="number" min="0" max="1" step="0.01" value="0" aria-label="回放时间"></label>
     <p id="replay-joints">关节与夹爪数据：—</p><p id="robot-replay-state">真机回放：未运行</p>
     <p class="hint">窗口中是录制数据，主场景仍显示实时机械臂。Y 真机回放前先保存；Y / Grip / B 可取消。视频按记录时间对齐，不代表硬件曝光同步。</p>
   </section>
+  </main>
   <script type="module" src="/replay.js"></script>
   <script type="module" src="/scene.js"></script>
   <script type="module" src="/sensors.js"></script>

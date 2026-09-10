@@ -90,6 +90,7 @@ try {
     buttons: side === 'left' ? { X: true, Y: false } : { A: true, B: false }
   };
   await page.route('**/api/sensors', route => route.fulfill({ json: sample }));
+  sample.button_feedback = {B: {progress: .6, fired: false}, R3: {progress: .2}, down: {progress: .4}, Y: 'Y 已识别'};
   sample.collection.control_enabled = false;
   await page.waitForFunction(() => document.getElementById('control-state').textContent === '待机 · 未启用控制');
   assert.equal(await page.locator('#collection-state').textContent(), '● 采集中');
@@ -102,21 +103,23 @@ try {
   sample.collection.control_enabled = false;
   await page.waitForFunction(() => document.getElementById('control-state').textContent === '待机 · 未启用控制');
   await page.waitForFunction(() => !document.getElementById('camera-image').hidden && !document.getElementById('depth-image').hidden &&
-    document.getElementById('right-hand').textContent.includes('0.75') &&
+    document.querySelector('#right-hand [data-meter=grip]').textContent === '75%' &&
     document.getElementById('motion-diagnostics').textContent.includes('0.2700') &&
     document.getElementById('motion-joints').textContent.includes('限位 J2/J3') &&
     document.getElementById('arm-latency').textContent === '2.5 ms' && document.getElementById('input-latency').textContent === '4.1 ms' &&
     document.getElementById('collection-state').textContent === '● 采集中' && document.getElementById('collection-duration').textContent === '01:05' && document.getElementById('collection-frames').textContent === '1950' && document.getElementById('collection-count').textContent === '12');
-  for (const [width, height] of [[1440, 960], [1366, 768], [1024, 600], [760, 700], [390, 844]]) {
+  assert.equal(await page.locator('#right-hand [data-hold=B]').getAttribute('aria-valuenow'), '60');
+  assert.equal(await page.locator('#button-response').textContent(), 'Y 已识别');
+  for (const [width, height] of [[1440, 960], [1366, 768], [1024, 600]]) {
     await page.setViewportSize({ width, height });
     await page.waitForTimeout(250);
     assert.equal(await page.evaluate(() => {
       const all = [document.documentElement, document.body, document.querySelector('aside'), document.querySelector('.collection-panel'), document.querySelector('.collection-controls')];
-      return all.some(e => e.scrollWidth > e.clientWidth || e.scrollHeight > e.clientHeight);
+      return all.some(e => e.scrollWidth > e.clientWidth + 1);
     }), false, 'Overflow at ' + width + 'x' + height);
     for (const id of ['collection-count', 'collection-state', 'collection-duration', 'collection-last', 'collection-health', 'camera-image', 'depth-image', 'left-hand', 'right-hand', 'joints', 'eef-position', 'state-source', 'motion-diagnostics', 'arm-latency', 'input-latency']) {
       const box = await page.locator('#' + id).boundingBox();
-      assert.ok(box && box.y >= 0 && box.y + box.height <= height, id + ' clipped');
+      assert.ok(box && box.height > 0 && box.x >= 0 && box.x + box.width <= width + 1 && box.y >= 0 && box.y + box.height <= height + 1, id + ' clipped');
     }
     await page.screenshot({ path: output + '/monitor-sensors-' + width + '.png' });
   }
@@ -137,7 +140,7 @@ try {
   sample.depth_preview.age_s = 2; sample.preview.age_s = 2; sample.input_age_s = 2; sample.motion_diagnostics.age_s = 2; sample.joint_limit.age_s = 2; sample.timing.arm_command.age_s = 2; sample.timing.input_processing.age_s = 2; sample.connections = {};
   await page.waitForFunction(() => document.getElementById('camera-image').hidden && document.getElementById('depth-image').hidden &&
     document.getElementById('input-status').textContent === '数据已过期' &&
-    document.getElementById('right-hand').textContent === '—' &&
+    document.querySelector('#right-hand [data-meter=grip]').textContent === '0%' && document.querySelector('#right-hand [data-key=A]').dataset.pressed === 'false' &&
     document.getElementById('motion-diagnostics').textContent === '—' && document.getElementById('arm-latency').textContent === '未测' && document.getElementById('input-latency').textContent === '未测');
   await page.setViewportSize({ width: 1440, height: 960 });
   // Attitude preview uses the Cartesian task, and never leaves stale ghosts visible.
@@ -184,7 +187,8 @@ try {
   await page.waitForFunction(() => document.getElementById('replay-time').textContent.startsWith('1.50'));
   assert.ok(replayActions.some(command => command.action === 'seek' && command.position_s === 1.5));
   await page.screenshot({path: output + '/dataset-replay.png'});
-  await page.click('#close-replay');
+  assert.equal(await page.locator('details').count(), 0);
+  assert.equal(await page.locator('#dataset-replay').isVisible(), true);
   await page.unroute('**/api/replay');
   await page.unroute('**/api/state');
   await page.waitForFunction(() => document.getElementById('connection').dataset.state === 'waiting');

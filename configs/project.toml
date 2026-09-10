@@ -7,7 +7,7 @@ arm_sdk_python = "outputs/build/arx-gripper/source/python"
 
 [paths]
 log_dir = "outputs/logs"
-dataset_dir = "~/work/datasets/quest_x5"
+dataset_dir = "datasets"
 checkpoint_dir = "~/work/models/pi05_base"
 installer_dir = "~/work/installers/QuestArmTeleop"
 
@@ -48,7 +48,7 @@ preset_acceleration_rad_s2 = 1.0
 preset_jerk_rad_s3 = 4.0
 socket = "outputs/runtime/arm.sock"
 backend = "stanford"
-control_rate_hz = 50
+control_rate_hz = 240
 max_joint_speed_rad_s = 2.0
 max_command_lead_rad = 0.05
 joint_soft_limit_margin_rad = 0.05
@@ -56,7 +56,7 @@ preview_time_s = 0.03
 teleop_preview_time_s = 0.01
 gripper_width = 0.082
 # Command limit only; keep the SDK width/angle mapping unchanged.
-gripper_open_limit_m = 0.077
+gripper_open_limit_m = 0.078
 gripper_open_readout = -3.4
 gripper_contact_torque = 0.60
 gripper_hold_torque = 0.30
@@ -71,7 +71,10 @@ table_z_m = 0.0
 table_clearance_m = 0.0
 
 [recording]
-queue_size = 128
+lerobot_on_save = true
+rgb_video = true
+video_crf = 20
+queue_size = 1024
 min_free_bytes = 2147483648
 max_duration_s = 120
 min_duration_s = 2.0

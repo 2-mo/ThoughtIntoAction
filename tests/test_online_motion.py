@@ -84,6 +84,48 @@ class OnlineMotionTests(unittest.TestCase):
             errors.append(np.sqrt(np.mean(np.square(samples))))
         self.assertLess(errors[1], .75 * errors[0])
 
+    def test_two_stage_home_repeated_targets_keep_midpoint_and_final_speed(self):
+        start = np.array([2., -1., .5, 0., .3, 0.])
+        planner = OnlineMotion(start, np.zeros(6), [5.]*6, 0.,
+            {**DEFAULTS, 'home_speed_rad_s': 2., 'home_final_speed_rad_s': .75,
+             'home_acceleration_rad_s2': 2., 'home_jerk_rad_s3': 16.,
+             'joint_soft_limit_margin_rad': .05}, .01, [-3.]*6, [3.]*6)
+        phases = set()
+        for _ in range(2000):
+            planner.target(np.zeros(6), 'home')
+            phase = planner.home_phase
+            phases.add(phase)
+            q, v = planner.step()
+            self.assertLessEqual(np.max(np.abs(v)), (2. if phase == 'first' else .75) + 1e-7)
+            if phase == 'first' and planner.home_phase == 'final':
+                np.testing.assert_allclose(q, start / 2, atol=1e-8)
+                np.testing.assert_allclose(v, 0, atol=1e-8)
+            if planner.finished:
+                break
+        self.assertTrue(planner.finished)
+        self.assertEqual(phases, {'first', 'final'})
+        np.testing.assert_allclose(q, 0, atol=1e-8)
+        planner.stop()
+        self.assertIsNone(planner.home_phase)
+        planner.target([.2]*6, 'home')
+        np.testing.assert_allclose(planner._home_midpoint, [.1]*6, atol=1e-8)
+
+    def test_two_stage_floor_check_covers_second_half_without_mutating_motion(self):
+        from types import SimpleNamespace
+        planner = OnlineMotion([2.]*6, np.zeros(6), [5.]*6, 0.,
+            {**DEFAULTS, 'home_speed_rad_s': 2., 'home_final_speed_rad_s': .75,
+             'joint_soft_limit_margin_rad': .05}, .01, [-3.]*6, [3.]*6)
+        seen = []
+        def fk(q):
+            seen.append(q[0])
+            result = np.eye(4)
+            result[2, 3] = -1. if q[0] < .5 else 1.
+            return result
+        before = planner.snapshot()
+        self.assertFalse(planner.path_above_floor([0.]*6, 'home', SimpleNamespace(fk=fk), 0.))
+        self.assertLess(min(seen), .5)
+        self.assertEqual(planner.snapshot(), before)
+
     def test_home_has_independent_limits(self):
         planner = self.planner()
         planner.target([.5]*6, 'home')

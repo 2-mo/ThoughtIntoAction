@@ -7,6 +7,7 @@ import time
 import numpy as np
 
 from .datasets import load_episode, image_path
+from .video import media_path, read_frame
 from robot_core.model import RobotModel
 from robot_core.project import load_config, resolve_path
 
@@ -35,7 +36,7 @@ class RecordedEpisode:
         if any(b <= a for a, b in zip(self.frame_times, self.frame_times[1:])):
             raise ValueError('视频记录时间不连续递增')
         for frame in self.frames:
-            if not image_path(self.root, frame['image']).is_file():
+            if not media_path(self.root, frame).is_file():
                 raise ValueError('录制视频有缺失图片')
         self._image_cache = (None, None)
 
@@ -50,10 +51,15 @@ class RecordedEpisode:
             frame = max(0, min(len(self.frames) - 1, bisect_right(self.frame_times, seconds) - 1))
             if self._image_cache[0] != frame:
                 import cv2
-                raw = cv2.imread(str(image_path(self.root, self.frames[frame]['image'])))
+                raw = read_frame(self.root, self.frames[frame])
                 if raw is None:
                     raise ValueError('录制视频图片损坏')
-                encoded = image_path(self.root, self.frames[frame]['image']).read_bytes()
+                if 'video' in self.frames[frame]:
+                    ok, buffer = cv2.imencode('.jpg', raw, [cv2.IMWRITE_JPEG_QUALITY, 90])
+                    if not ok: raise ValueError('回放视频编码失败')
+                    encoded = buffer.tobytes()
+                else:
+                    encoded = image_path(self.root, self.frames[frame]['image']).read_bytes()
                 if len(encoded) > 5_500_000: raise ValueError('单帧图像过大，无法通过监看接口回放')
                 mime = 'image/png' if encoded.startswith(b'\x89PNG') else 'image/jpeg'
                 self._image_cache = (frame, base64.b64encode(encoded).decode(), mime)

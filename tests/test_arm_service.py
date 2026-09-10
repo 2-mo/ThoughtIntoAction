@@ -29,6 +29,22 @@ class ArmServiceTests(unittest.TestCase):
         self.addCleanup(close)
         return client
 
+    def test_recording_stream_retains_every_service_tick_between_reads(self):
+        client = self.client()
+        start = client.recording_samples(0)['latest']
+        time.sleep(.08)
+        sequence = []
+        cursor = start
+        while True:
+            batch = client.recording_samples(cursor)
+            sequence.extend(row['sample_sequence'] for row in batch['states'])
+            if batch['states']: cursor = sequence[-1]
+            if cursor >= batch['latest']: break
+        self.assertGreater(len(sequence), 8)
+        self.assertEqual(sequence, list(range(start+1, cursor+1)))
+        self.assertIsNone(self.fixture.service.owner)
+        self.assertEqual(client.info['settings']['control_rate_hz'], 240)
+
     def test_command_timing_is_measured_and_not_refreshed_by_observer_reads(self):
         client = self.client(actuate=True)
         self.assertFalse(hasattr(client, "command_timing"))
@@ -71,7 +87,7 @@ class ArmServiceTests(unittest.TestCase):
         client.set_catch_pos(.082)
         time.sleep(.06)
         state = client.snapshot()
-        self.assertAlmostEqual(state["service_command"]["gripper"], .077)
+        self.assertAlmostEqual(state["service_command"]["gripper"], .078)
         self.assertEqual(client.settings["gripper_width"], .082)
         self.assertIsNotNone(self.fixture.service.owner)
         client.set_catch_pos(.04)
@@ -136,6 +152,17 @@ class ArmServiceTests(unittest.TestCase):
         next_client = self.client(actuate=True)
         next_client.start_control(); next_client.snapshot()
         self.assertEqual({k: next_client.info["effective_motion_limits"][k] for k in requested}, {k:self.fixture.service.settings[k] for k in requested})
+
+    def test_old_service_missing_home_stage_is_rejected_before_acquire(self):
+        describe = self.fixture.service.describe
+        def old_description():
+            info = describe()
+            info['effective_motion_limits'].pop('home_final_speed_rad_s')
+            return info
+        with patch.object(self.fixture.service, 'describe', side_effect=old_description):
+            with self.assertRaisesRegex(RuntimeError, 'home_final_speed_rad_s.*重启'):
+                self.client(actuate=True, motion={'home_final_speed_rad_s': .75})
+        self.assertIsNone(self.fixture.service.owner)
 
     def test_invalid_motion_override_does_not_acquire(self):
         for motion in ({"teleop_preview_time_s": -1}, {"preset_speed_rad_s": -1}, {"home_speed_rad_s": 0}, {"preset_acceleration_rad_s2": 0}, {"preview_time_s": -1}, {"max_command_lead_rad": "off"}, {"unknown": 1}):

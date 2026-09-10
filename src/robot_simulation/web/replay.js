@@ -51,10 +51,11 @@ el('open-replay').onclick = open;
 async function command(action, position_s, episode_id) {
   try {
     const response = await fetch('/api/replay', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action, position_s, episode_id}), signal: AbortSignal.timeout(6000)});
+    if (!response.ok) throw Error(`回放请求失败（HTTP ${response.status}）`);
     const result = await response.json(); if (result.error) throw Error(result.error); commandError = null;
   } catch (error) { commandError = error.message; el('replay-status').textContent = error.message; }
 }
-el('close-replay').onclick = () => { panel.hidden = true; command('pause'); };
+
 el('replay-load').onclick = () => command('load', undefined, el('replay-episodes').value);
 el('replay-last').onclick = () => command('load_last');
 el('replay-play').onclick = () => command('play');
@@ -86,4 +87,5 @@ async function poll() {
   } finally { if (!closed) timer = setTimeout(poll, document.hidden ? 1000 : panel.hidden ? 400 : 33); }
 }
 window.addEventListener('pagehide', () => { closed = true; clearTimeout(timer); renderer?.setAnimationLoop(null); controls?.dispose(); resize?.disconnect(); meshes.forEach(mesh => {mesh.geometry.dispose(); mesh.material.dispose();}); renderer?.dispose(); }, {once: true});
+open();
 poll();

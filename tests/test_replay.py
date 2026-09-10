@@ -48,6 +48,29 @@ class ReplayTests(unittest.TestCase):
             replay.control('play')
             self.assertEqual(replay.frame()['position_s'], 0.)
 
+    def test_mp4_review_seek_keeps_image_and_robot_sample_together(self):
+        from quest_teleop.video import RGBVideoWriter
+        writer = RGBVideoWriter(self.root / "wrist_rgb.mp4", 16, 16, 1, 20)
+        try:
+            for value in (0, 200):
+                writer.write(np.full((16, 16, 3), value, dtype=np.uint8))
+        finally:
+            writer.close()
+        frames = [{"host_received_monotonic_ns": row["host_monotonic_ns"],
+                   "video": "wrist_rgb.mp4", "video_frame_index": i, "video_pts_s": float(i)}
+                  for i, row in enumerate(self.rows)]
+        (self.root / "frames.jsonl").write_text("\n".join(map(json.dumps, frames)))
+        replay = WebReplay(RecordedEpisode(self.root))
+        replay.control("pause")
+        replay.control("seek", 0.)
+        first = replay.frame()
+        replay.control("seek", 1.)
+        last = replay.frame()
+        self.assertEqual(first["sample_index"], 0)
+        self.assertEqual(last["sample_index"], 1)
+        self.assertTrue(first["image_base64"])
+        self.assertNotEqual(first["image_base64"], last["image_base64"])
+
     def test_discarded_incomplete_wrong_model_and_invalid_times_rejected(self):
         for field, value in [('outcome', 'discarded'), ('lifecycle', 'failed')]:
             (self.root / 'episode.json').write_text(json.dumps({**self.meta, field: value}))
@@ -87,12 +110,17 @@ class ReplayTests(unittest.TestCase):
         scene = Scene(RobotModel(), port=0)
         self.addCleanup(scene.close)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        def post(action):
+        def post(action, origin=None):
             request = urllib.request.Request(scene.url + 'api/replay',
-                data=json.dumps({'action': action}).encode(), headers={'Content-Type': 'application/json'})
+                data=json.dumps({'action': action}).encode(), headers={'Content-Type': 'application/json', **({'Origin': origin} if origin else {})})
             with opener.open(request) as response: return json.load(response)
         with patch('robot_core.project.load_config', return_value={'runtime': {'socket': str(socket)}}):
             self.assertTrue(post('load_last')['ok'])
+            self.assertTrue(post('load_last', scene.url.rstrip('/').replace('127.0.0.1', 'localhost'))['ok'])
+            import urllib.error
+            with self.assertRaises(urllib.error.HTTPError) as rejected:
+                post('load_last', 'http://untrusted.example')
+            self.assertEqual(rejected.exception.code, 403)
             with opener.open(scene.url + 'api/replay') as response: payload = json.load(response)
             self.assertNotIn('error', payload)
             frame = payload['replay']

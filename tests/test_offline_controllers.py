@@ -109,6 +109,22 @@ class OfflineControllerTests(unittest.TestCase):
         with patch.object(cli.PresetSingleX5Controller, "run", run):
             cli.presets_main(actuate=False, operator_yaw_deg=90., rotation_frame="aligned")
 
+    def test_button_feedback_uses_control_timers(self):
+        def run(controller):
+            controller._b_press.started = 10.
+            controller._task_end_press.started = 10.25
+            controller._activation_gate.down_since = 10.1
+            with patch.object(preset_logic.time, "monotonic", return_value=10.5):
+                feedback = controller.button_feedback()
+            self.assertAlmostEqual(feedback["B"]["progress"], .5)
+            self.assertAlmostEqual(feedback["R3"]["progress"], .25)
+            self.assertAlmostEqual(feedback["down"]["progress"], .4)
+            controller._reset_buttons()
+            self.assertEqual(controller.button_feedback()["B"]["progress"], 0.)
+            controller.close()
+        with patch.object(cli.PresetSingleX5Controller, "run", run):
+            cli.presets_main(actuate=False)
+
     def test_xy_replay_buttons_separate_web_review_from_gated_robot_motion(self):
         def run(controller):
             buttons = {}
@@ -123,12 +139,14 @@ class OfflineControllerTests(unittest.TestCase):
             press("X", 0)
             controller._collection.submit.assert_called_once_with("replay_previous")
             press("Y", 1)
+            self.assertIn("启用控制", controller.button_feedback()["Y"])
             controller._prepare_robot_replay.assert_not_called()
             controller._control_enabled = True
             press("Y", 2)
             controller._prepare_robot_replay.assert_called_once()
             self.xr.grip = 1.
             press("Y", 3)
+            self.assertIn("Grip", controller.button_feedback()["Y"])
             controller._prepare_robot_replay.assert_called_once()
             self.xr.grip = 0.
             controller._robot_replay = Mock()
@@ -406,6 +424,7 @@ class OfflineControllerTests(unittest.TestCase):
             controller._collection = Mock()
             controller._collection.busy = False
             controller._collection.task_active = True
+            controller._collection.error = None
             controller._collection.recording = False
             controller._collection.take_home.return_value = False
             def step(t, a=False, b=False, grip=0., stick=False):
@@ -414,7 +433,9 @@ class OfflineControllerTests(unittest.TestCase):
                     controller._pre_ik_update()
             step(0)
             step(.1, a=True); step(.14, a=True); step(.2); step(.24)
-            self.assertIsNone(controller._preset_name)
+            self.assertEqual(controller._preset_name, "GRASP_READY")
+            controller._collection.submit.assert_not_called()
+            controller._finish_preset("GRASP_READY")
             controller._collection.submit.assert_called_once_with("toggle_episode")
             controller._collection.recording = True
             step(.3, a=True); step(.34, a=True); step(.4); step(.44)
@@ -454,6 +475,43 @@ class OfflineControllerTests(unittest.TestCase):
         with patch.object(cli.PresetSingleX5Controller, "run", run):
             cli.presets_main(actuate=False)
 
+    def test_a_waits_for_save_and_grip_and_cancellation_prevents_autorecord(self):
+        def run(controller):
+            controller._control_enabled = True
+            actions = controller._collection
+            controller._collection = Mock(busy=False, recording=False, error=None)
+            controller._collection.take_home.return_value = False
+            def step(t, a=False, grip=0.):
+                self.xr.a, self.xr.grip = a, grip
+                with patch.object(preset_logic, "time", SimpleNamespace(monotonic=lambda: t)):
+                    controller._pre_ik_update()
+            step(0)
+            step(.1, True, 1.); step(.15, True, 1.); step(.2, grip=1.); step(.25, grip=1.)
+            self.assertIsNone(controller._preset_target)
+            controller._collection.submit.assert_not_called()
+            step(.3)
+            self.assertEqual(controller._preset_name, "GRASP_READY")
+            step(.4, grip=1.)
+            controller._finish_preset("GRASP_READY")
+            controller._collection.submit.assert_not_called()
+            controller._collection.recording = True
+            step(.5); step(.6, True); step(.65, True); step(.7); step(.75)
+            controller._collection.submit.assert_called_once_with("toggle_episode")
+            self.assertIsNone(controller._preset_target)
+            controller._collection.busy = True
+            controller._collection.recording = False
+            step(.8)
+            self.assertIsNone(controller._preset_target)
+            controller._collection.busy = False
+            step(.9)
+            self.assertEqual(controller._preset_name, "GRASP_READY")
+            controller._finish_preset("GRASP_READY")
+            controller._collection.submit.assert_called_once_with("toggle_episode")
+            controller._collection = actions
+            controller.close()
+        with patch.object(cli.PresetSingleX5Controller, "run", run):
+            cli.presets_main(actuate=False)
+
     def test_b_pregrasp_never_autorecords_and_a_saves_during_recording(self):
         def run(controller):
             controller._control_enabled = True  # Existing tests exercise already-enabled controls.
@@ -461,6 +519,7 @@ class OfflineControllerTests(unittest.TestCase):
             controller._collection = Mock()
             controller._collection.busy = False
             controller._collection.task_active = True
+            controller._collection.error = None
             controller._collection.recording = False
             controller._collection.take_home.return_value = False
             def step(t, a=False, b=False, grip=0.):

@@ -66,7 +66,8 @@ class Scene:
             def do_POST(self):
                 if urlsplit(self.path).path != "/api/replay":
                     self.send_error(404); return
-                if self.headers.get("Origin") not in (None, owner.url.rstrip("/")):
+                if self.headers.get("Origin") not in (None, owner.url.rstrip("/"),
+                        owner.url.rstrip("/").replace("127.0.0.1", "localhost")):
                     self.send_error(403); return
                 try:
                     length = int(self.headers.get("Content-Length", "0"))

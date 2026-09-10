@@ -8,7 +8,8 @@ COLLECTION_TASK="X5 遥操采集"  # 按实际任务修改，写入每条 Episod
 OPERATOR_YAW_DEG=0  # 恢复 8adcaf4 启动方式：使用 XRoboToolkit 默认方向，不额外旋转
 # 旧版 pose 跟随：以腕部 link6 为控制点，旋转时指尖会绕腕部运动。
 ROTATION_FRAME="base"  # 使用固定方向映射；每次握 Grip 时记录当前位姿起点
-SCALE_FACTOR=0.5               # 手柄到机械臂末端的位移比例
+VR_CONTROL_RATE_HZ=90
+SCALE_FACTOR=1.0               # 手柄到机械臂末端的位移比例
 # 运动参数；桌面安全边界由机械臂服务读取 configs/project.toml 的 arm_safety。
 MAX_EEF_LINEAR_SPEED_M_S=0   # 遥操末端平移目标速度，m/s；0 不附加限速
 MAX_EEF_ANGULAR_SPEED_RAD_S=0   # 遥操末端旋转目标速度，rad/s；0 不附加限速
@@ -21,12 +22,13 @@ MAX_JOINT_SPEED_RAD_S=0     # 关节速度请求上限，单位 rad/s
 # 服务层 Ruckig 统一规划速度、加速度和 jerk；以下为待真机验证的初值。
 MAX_JOINT_ACCELERATION_RAD_S2=12.0
 MAX_JOINT_JERK_RAD_S3=120.0
-# Home 按约半时长缩放：速度 ×2、加速度 ×4、jerk ×8。
+# Home 按关节行程分两段，中点减速停稳后进入后半段。
 HOME_JERK_RAD_S3=16.0
 PRESET_JERK_RAD_S3=24.0
-HOME_SPEED_RAD_S=0.6
+HOME_SPEED_RAD_S=2.0
+HOME_FINAL_SPEED_RAD_S=0.75
 HOME_ACCELERATION_RAD_S2=2.0
-PRESET_SPEED_RAD_S=0  # 0：使用各关节硬件速度上限
+PRESET_SPEED_RAD_S=2.0  # 预抓取关节速度上限
 PRESET_ACCELERATION_RAD_S2=6.0
 # 关节速度、超前量和预览时间也影响预抓取与回零。
 # 以上参数覆盖当前控制会话的服务默认值。
@@ -40,9 +42,11 @@ TELEOP_ARGS=(--profile presets teleop-presets-x5 --actuate --enable-session
     --home-jerk-rad-s3 "$HOME_JERK_RAD_S3"
     --preset-jerk-rad-s3 "$PRESET_JERK_RAD_S3"
     --home-speed-rad-s "$HOME_SPEED_RAD_S"
+    --home-final-speed-rad-s "$HOME_FINAL_SPEED_RAD_S"
     --home-acceleration-rad-s2 "$HOME_ACCELERATION_RAD_S2"
     --preset-speed-rad-s "$PRESET_SPEED_RAD_S"
     --preset-acceleration-rad-s2 "$PRESET_ACCELERATION_RAD_S2"
+    --control-rate-hz "$VR_CONTROL_RATE_HZ"
     --scale-factor "$SCALE_FACTOR"
     --operator-yaw-deg "$OPERATOR_YAW_DEG"
     --rotation-frame "$ROTATION_FRAME"

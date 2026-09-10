@@ -4,6 +4,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 import queue
+import re
 import threading
 import time
 import uuid
@@ -12,12 +13,13 @@ from robot_core.storage import save_json
 
 
 class EpisodeWriter:
-    def __init__(self, root, metadata, task, *, queue_size=128):
+    def __init__(self, root, metadata, task, *, queue_size=128, rgb_video=False, video_crf=20):
         if not isinstance(task, str) or not task.strip() or len(task) > 2000:
             raise ValueError("Provide a task description (1..2000 characters)")
         if queue_size < 1:
             raise ValueError("Writer queue must be positive")
-        self.id = f"{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}"
+        task_name = re.sub(r"[^\w\-]+", "_", task.strip(), flags=re.UNICODE).strip("_.")[:48] or "task"
+        self.id = f"{task_name}_{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}"
         self.path = Path(root) / self.id
         self.path.mkdir(parents=True, exist_ok=False)
         (self.path / "wrist_rgb").mkdir()
@@ -27,12 +29,16 @@ class EpisodeWriter:
         self.accepting = True
         self.error = None
         self.stopped_ns = None
+        if not 18 <= video_crf <= 23:
+            raise ValueError("video_crf must be between 18 and 23")
+        self.rgb_video, self.video_crf = rgb_video, video_crf
         self.counts = {"state": 0, "frame": 0}
         self.dropped = {"state": 0, "frame": 0}
         self.manifest = {"schema_version": 1, "kind": "quest_teleop_episode",
                          "id": self.id, "task": task.strip(), "lifecycle": "recording",
                          "outcome": "unknown", "started_unix_ns": time.time_ns(),
                          "started_monotonic_ns": time.monotonic_ns(), **metadata}
+        self.manifest["rgb_storage"] = {"format": "mp4" if rgb_video else "png", "codec": "libx264" if rgb_video else None, "crf": video_crf if rgb_video else None}
         save_json(self.path / "episode.json", self.manifest)
         self.thread = threading.Thread(target=self._write, name="episode-writer", daemon=True)
         self.thread.start()
@@ -60,6 +66,7 @@ class EpisodeWriter:
 
     def _write(self):
         import cv2
+        video = None
         try:
             with (self.path / "states.jsonl").open("w") as states, (self.path / "frames.jsonl").open("w") as frames:
                 last_flush = time.monotonic()
@@ -70,10 +77,18 @@ class EpisodeWriter:
                         continue
                     if kind == "frame":
                         row = {k: v for k, v in payload.items() if k != "image"}
-                        row["image"] = f"wrist_rgb/{self.counts['frame']:06d}.png"
-                        if not cv2.imwrite(str(self.path / row["image"]), payload["image"],
-                                           [cv2.IMWRITE_PNG_COMPRESSION, 1]):
-                            raise OSError("Cannot write RGB image")
+                        if self.rgb_video:
+                            if video is None:
+                                from .video import RGBVideoWriter
+                                camera = self.manifest['camera']
+                                video = RGBVideoWriter(self.path / 'wrist_rgb.mp4', camera['width'], camera['height'], camera['fps'], self.video_crf)
+                            video.write(payload['image'])
+                            row.update(video='wrist_rgb.mp4', video_frame_index=self.counts['frame'],
+                                       video_pts_s=self.counts['frame'] / self.manifest['camera']['fps'])
+                        else:
+                            row["image"] = f"wrist_rgb/{self.counts['frame']:06d}.png"
+                            if not cv2.imwrite(str(self.path / row["image"]), payload["image"], [cv2.IMWRITE_PNG_COMPRESSION, 1]):
+                                raise OSError("Cannot write RGB image")
                         frames.write(json.dumps(row, allow_nan=False) + "\n")
                     else:
                         states.write(json.dumps(payload, allow_nan=False) + "\n")
@@ -82,7 +97,15 @@ class EpisodeWriter:
                         states.flush()
                         frames.flush()
                         last_flush = time.monotonic()
+            if video is not None:
+                video.close()
+                video = None
         except Exception as exc:
+            if video is not None:
+                try:
+                    video.close()
+                except Exception:
+                    pass
             with self.lock:
                 self.error = f"{type(exc).__name__}: {exc}"
                 self.accepting = False

@@ -1,6 +1,7 @@
 """Independent X5 device owner, command arbitration and continuous feedback."""
 
 import argparse
+from collections import deque
 from contextlib import ExitStack, contextmanager
 import json
 import math
@@ -45,6 +46,8 @@ class ArmService:
                                        self.safety["table_clearance_m"])
         self._table_report = (None if self._table_plane.minimum_z is None else
                               {"minimum_z_m": self._table_plane.minimum_z, "blocked": False})
+        self.sample_sequence = 0
+        self.sample_history = deque(maxlen=max(256, self.settings["control_rate_hz"] * 3))
         self._loop_rate = LoopRate(self.settings["control_rate_hz"])
         self.motion = None
         self.holding = self.release_after_stop = False
@@ -105,6 +108,8 @@ class ArmService:
                 self._accept_pending(q, command)
         self._advance_motion()
         self.sample()
+        self.sample_sequence += 1
+        self.sample_history.append({**self.state, "sample_sequence": self.sample_sequence})
 
     def _accept_pending(self, q, command):
         previous = self.applied_command.get("q") if self.applied_command else None
@@ -187,7 +192,7 @@ class ArmService:
     def describe(self):
         hardware_speed = np.asarray(self.arm.robot_config.joint_vel_max, dtype=float)
         speed = self.owner["speed"] if self.owner else self.settings["max_joint_speed_rad_s"]
-        return {"trajectory_protocol": 1, "service_id": self.service_id, "robot": self.robot.metadata(),
+        return {"sample_protocol": 1, "trajectory_protocol": 1, "service_id": self.service_id, "robot": self.robot.metadata(),
                 "backend": self.backend, "hardware": self.hardware, "settings": self.settings,
                 "safety": self.safety,
                 "hardware_joint_speed_limits_rad_s": hardware_speed.tolist(),
@@ -209,6 +214,15 @@ class ArmService:
             return self.describe()
         if request.get("service_id") != self.service_id:
             raise ValueError("Arm service restarted; reconnect explicitly")
+        if op == "samples":
+            after = request.get("after")
+            if type(after) is not int or after < 0:
+                raise ValueError("Invalid sample cursor")
+            oldest = self.sample_history[0]["sample_sequence"] if self.sample_history else self.sample_sequence + 1
+            if after and after < oldest - 1:
+                raise ValueError("Recording sample buffer overflow; data is incomplete")
+            rows = [row for row in self.sample_history if row["sample_sequence"] > after][:4] if after else []
+            return {"states": rows, "latest": self.sample_sequence}
         if op == "snapshot":
             self.sample()
         if self.state is None or (time.monotonic_ns() - self.state["host_monotonic_ns"]) / 1e9 > .25:
@@ -234,8 +248,8 @@ class ArmService:
             from .trajectory import validate_motion_limits
             validate_motion_limits(speed, motion["max_command_lead_rad"], motion["preview_time_s"], motion["joint_soft_limit_margin_rad"])
             for key in TRAJECTORY_DEFAULTS:
-                if type(motion[key]) not in (int, float) or not math.isfinite(motion[key]) or motion[key] < 0 or (motion[key] == 0 and key != "preset_speed_rad_s"):
-                    raise ValueError(f"Invalid trajectory limit {key}; only preset speed may be zero")
+                if type(motion[key]) not in (int, float) or not math.isfinite(motion[key]) or motion[key] < 0 or (motion[key] == 0 and key not in {"preset_speed_rad_s", "home_final_speed_rad_s"}):
+                    raise ValueError(f"Invalid trajectory limit {key}; preset/final Home speed may be zero")
             floor = self._table_plane.minimum_z
             motion["tcp_min_z_m"] = floor
             if floor is not None:
@@ -347,7 +361,9 @@ def serve(service, path, *, ready=None, stop=None, listener=None):
             now = time.monotonic()
             if now >= next_tick:
                 service.tick()
-                next_tick = time.monotonic() + dt
+                next_tick += dt
+                if next_tick < time.monotonic():
+                    next_tick = time.monotonic() + dt
             for key, _ in selector.select(max(0., min(.02, next_tick - time.monotonic()))):
                 client = key.fileobj
                 if client is server:

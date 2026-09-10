@@ -41,6 +41,7 @@ class X5TeleopController(X5TeleopBase):
         max_joint_acceleration_rad_s2: float = 2.,
         max_joint_jerk_rad_s3: float = 10.,
         home_speed_rad_s: float = .3,
+        home_final_speed_rad_s: float = 0.,
         home_acceleration_rad_s2: float = .5,
         home_jerk_rad_s3: float = 2.,
         preset_speed_rad_s: float = .5,
@@ -50,14 +51,15 @@ class X5TeleopController(X5TeleopBase):
     ) -> None:
         self._trajectory_settings = dict(teleop_preview_time_s=teleop_preview_time_s, max_joint_acceleration_rad_s2=max_joint_acceleration_rad_s2,
             max_joint_jerk_rad_s3=max_joint_jerk_rad_s3, home_speed_rad_s=home_speed_rad_s,
+            home_final_speed_rad_s=home_final_speed_rad_s,
             home_acceleration_rad_s2=home_acceleration_rad_s2, home_jerk_rad_s3=home_jerk_rad_s3,
             preset_speed_rad_s=preset_speed_rad_s, preset_acceleration_rad_s2=preset_acceleration_rad_s2,
             preset_jerk_rad_s3=preset_jerk_rad_s3)
         import math
         if not all(type(v) in (int, float) and math.isfinite(v)
-                   and (v > 0 or (key == "preset_speed_rad_s" and v == 0))
+                   and (v > 0 or (key in {"preset_speed_rad_s", "home_final_speed_rad_s"} and v == 0))
                    for key, v in self._trajectory_settings.items()):
-            raise ValueError("Trajectory limits must be finite and positive; preset speed 0 uses the session limit")
+            raise ValueError("Trajectory limits must be finite and positive; preset speed 0 uses the session limit, final Home speed 0 disables staging")
         registry = Registry()
         self._service_mode = backend == "service"
         self._service_socket = service_socket
@@ -273,6 +275,8 @@ class X5TeleopController(X5TeleopBase):
             packet["table_safety"] = {"minimum_z_m": self._table_plane.minimum_z,
                 "blocked": bool((packet.get("table_safety") or {}).get("blocked", False))}
         replay = getattr(self, "_robot_replay", None)
+        feedback = getattr(self, "button_feedback", None)
+        packet["button_feedback"] = feedback() if feedback else None
         packet["quest_to_base_rotation"] = self.R_headset_world.tolist()
         packet["robot_replay"] = replay.status() if replay else {
             "phase": "loading" if getattr(self, "_replay_loading", False) else "idle",
@@ -289,7 +293,7 @@ class X5TeleopController(X5TeleopBase):
             packet["rotation_alignment"] = dict(self._rotation_alignment)
             packet["position_alignment"] = dict(self._position_alignment)
         if self._input_name == "quest":
-            # Sample diagnostics at 10 Hz; never let optional display data stop control.
+            # Sample display diagnostics at 10 Hz.
             now = time.monotonic_ns()
             previous = getattr(self, "_monitor_input", None)
             if previous is None or now - previous["sample_monotonic_ns"] >= 100_000_000:
@@ -412,11 +416,18 @@ class X5TeleopController(X5TeleopBase):
                 from robot_core.model import RobotModel
                 from quest_teleop.runtime.session import TeleopSession
                 model = RobotModel(self._x5_dynamics_urdf_path, eef=self.manipulator_config["right_arm"]["link_name"])
+                if self._service_mode:
+                    arm = self.arm_controllers["right_arm"]
+                    if arm.info.get("sample_protocol") != 1:
+                        raise RuntimeError("逐周期录制需要新版机械臂服务，请重启 启动机械臂服务.sh")
+                    self._session_control["recording_rate_hz"] = arm.info["settings"]["control_rate_hz"]
                 self._session = TeleopSession(load_config(), model.metadata(), self._session_control)
                 self._session.input_pause = self.set_input_paused
                 self._session.frame_calibration = self.set_frame_calibration
                 if hasattr(self, "_collection"):
                     self._session.collection_status = self._collection_status
+                if self._service_mode:
+                    self._session.record_samples = arm.recording_samples
                 self._session.start()
                 print(f"Local session: {self._session.socket_path}; use ./run.sh session status / record start")
             super().run()

@@ -97,6 +97,7 @@ def presets_main(
     home_jerk_rad_s3: float = 2.,
     preset_jerk_rad_s3: float = 4.,
     home_speed_rad_s: float = .3,
+    home_final_speed_rad_s: float = 0.,  # 0: single-stage Home; positive: slower second half
     home_acceleration_rad_s2: float = .5,
     preset_speed_rad_s: float = .5,
     preset_acceleration_rad_s2: float = 1.,
@@ -154,7 +155,7 @@ def presets_main(
         grasp_ready_joints=grasp_ready_joints,
         home_hold_s=home_hold_s,
         home_jerk_rad_s3=home_jerk_rad_s3, preset_jerk_rad_s3=preset_jerk_rad_s3,
-        home_speed_rad_s=home_speed_rad_s, home_acceleration_rad_s2=home_acceleration_rad_s2,
+        home_final_speed_rad_s=home_final_speed_rad_s, home_speed_rad_s=home_speed_rad_s, home_acceleration_rad_s2=home_acceleration_rad_s2,
         preset_speed_rad_s=preset_speed_rad_s, preset_acceleration_rad_s2=preset_acceleration_rad_s2,
         preset_tolerance_rad=preset_tolerance_rad,
         dynamics_urdf_path=robot_urdf_path,

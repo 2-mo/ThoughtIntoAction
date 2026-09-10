@@ -2,9 +2,40 @@
 const byId = (id) => document.getElementById(id);
 let closed = false;
 window.addEventListener('pagehide', () => { closed = true; });
+function renderHand(side, hand, feedback = {}) {
+  const root = byId(side + '-hand');
+  if (!root.querySelector('.controller-shell')) {
+    const keys = side === 'left' ? ['X', 'Y'] : ['A', 'B'];
+    const ring = (key, content, label) => `<span class="hold-ring" data-hold="${key}" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">${content}</span>`;
+    const stick = `<span class="controller-stick" ${side === 'right' ? 'data-key="R3"' : ''}><i></i></span>`;
+    root.innerHTML = `<div class="controller-shell"><div class="controller-face"><div class="key-unit">${side === 'right' ? ring('stick', stick, '摇杆长按进度') : stick}<small class="stick-label">摇杆</small></div>${keys.map(key => `<div class="key-unit">${key === 'B' ? ring('B', `<span class="controller-key" data-key="B">B</span>`, 'B 回零长按进度') : `<span class="controller-key" data-key="${key}">${key}</span>`}<small>${({A:'预抓取/采集', B:'预抓取/回零', X:'网页回放', Y:'真机回放'})[key]}</small></div>`).join('')}</div><div class="meters"></div></div><p class="controller-pose"></p>`;
+    const labels = [['trigger', 'Trigger'], ['grip', 'Grip']];
+    root.querySelector('.meters').innerHTML = labels.map(([key, label]) => `<label class="controller-meter">${label}<output data-meter="${key}" aria-label="${label}">0%</output></label>`).join('');
+  }
+  root.querySelectorAll('[data-key]').forEach(node => { node.dataset.pressed = String(!!hand?.buttons?.[node.dataset.key]); });
+  root.querySelectorAll('[data-meter]').forEach(node => {
+    const key = node.dataset.meter;
+    const value = hand ? (hand[key] || 0) : 0;
+    node.textContent = Math.round(value * 100) + '%';
+    node.title = hand ? feedback[key]?.fired ? '长按已触发' : Math.round(value * 100) + '%' : '数据未连接';
+  });
+  root.querySelectorAll('[data-hold]').forEach(node => {
+    const key = node.dataset.hold === 'stick' ? ((feedback.down?.progress || 0) > 0 ? 'down' : 'R3') : node.dataset.hold;
+    const value = hand ? Math.max(0, Math.min(1, feedback[key]?.progress || 0)) : 0;
+    node.style.setProperty('--hold', `${value * 360}deg`);
+    node.setAttribute('aria-valuenow', String(Math.round(value * 100)));
+    node.dataset.active = String(value > 0);
+    node.title = !hand ? '数据未连接' : feedback[key]?.fired ? '长按已触发' : `${Math.round(value * 100)}%`;
+    if (node.dataset.hold === 'stick') root.querySelector('.stick-label').textContent = key === 'down' ? '下拨切换' : '按住结束任务';
+  });
+  const axes = hand?.axes || [0, 0];
+  root.querySelector('.controller-stick i').style.transform = `translate(${axes[0] * 10}px, ${-axes[1] * 10}px)`;
+  root.querySelector('.controller-pose').textContent = hand ? 'XYZ ' + hand.pose.slice(0, 3).map(v => v.toFixed(2)).join(' / ') + ' m' : '数据未连接';
+}
 function clearInput(message) {
   byId('input-status').textContent = message;
-  for (const side of ['left', 'right']) byId(side + '-hand').textContent = '—';
+  for (const side of ['left', 'right']) renderHand(side, null);
+  byId('button-response').textContent = '按键响应：' + message;
 }
 function renderCollection(data = {}) {
   const collection = data.collection;
@@ -12,7 +43,7 @@ function renderCollection(data = {}) {
   const last = data.last_episode;
   const error = collection?.error || recording?.error || data.runtime_error;
   const state = error ? 'ERROR' : collection?.state || (recording ? 'RECORDING' : data.session_id ? 'DISABLED' : 'OFFLINE');
-  const labels = {REPLAY_POSITIONING: '真机回放 · 前往起点', REPLAYING: '真机回放 · 执行中', REPLAY_LOADING: '正在加载回放', PAUSED: '任务采集已暂停', IDLE: '任务采集未开启', POSITIONING: '前往预抓取位', READY: '准备就绪', RECORDING: '● 采集中', BUSY: '正在处理', HOME_WAIT: '等待松开 Grip', HOMING: '正在回零', ERROR: '采集异常', DISABLED: '按键采集未启用', OFFLINE: '未连接'};
+  const labels = {REPLAY_POSITIONING: '真机回放 · 前往起点', REPLAYING: '真机回放 · 执行中', REPLAY_LOADING: '正在加载回放', PAUSED: '任务采集已暂停', IDLE: '任务采集未开启', POSITIONING: '前往预抓取位', READY: '准备就绪', RECORDING: '● 采集中', BUSY: '正在处理', HOME_WAIT: '等待保存 / 松开 Grip', HOMING: '正在回零', ERROR: '采集异常', DISABLED: '按键采集未启用', OFFLINE: '未连接'};
   document.querySelector('.collection-panel').dataset.state = state;
   const put = (id, text) => { byId(id).textContent = text; byId(id).title = text; };
   put('collection-state', labels[state] || state);
@@ -28,6 +59,13 @@ function renderCollection(data = {}) {
   put('collection-episode', '当前 Episode：' + (recording?.id || '—'));
   const drops = Object.values(recording?.dropped || {}).reduce((a, b) => a + b, 0);
   put('collection-health', error || (recording ? `写入队列 ${recording.queue_size ?? 0} · 丢弃样本 ${drops}` : state === 'IDLE' ? 'A 开始采集 · B 前往预抓取位' : state === 'PAUSED' ? 'A 恢复并开始采集 · B 前往预抓取位' : state === 'READY' ? 'A 开始下一条 · B 前往预抓取位' : state === 'OFFLINE' ? '等待采集会话' : '等待采集操作完成'));
+  const dataset = data.task_dataset;
+  if (dataset) {
+    byId('collection-health').title = dataset.path || '';
+    if (dataset.state === 'saving') put('collection-health', '正在生成任务数据集 · ' + dataset.episodes + ' 条');
+    else if (dataset.state === 'complete') put('collection-health', '可上传 · ' + dataset.episodes + ' 条 · ' + dataset.path.split('/').pop());
+    else if (dataset.state === 'failed') put('collection-health', '数据集生成失败：' + dataset.error);
+  }
   const result = last ? (last.lifecycle !== 'complete' ? '未完整保存' : last.outcome === 'discarded' ? '已丢弃' : '已保存') : '—';
   put('collection-last', '上一条：' + result + (last ? ' · ' + last.id : ''));
 }
@@ -87,15 +125,8 @@ async function refresh() {
       clearInput(data.input_error || (input?.error ? '读取异常' : input ? '数据已过期' : '等待手柄新帧'));
     } else {
       byId('input-status').textContent = '数据正常';
-      for (const side of ['left', 'right']) {
-        const hand = input.hands[side];
-        const line = document.createElement('p');
-        line.textContent = 'XYZ ' + hand.pose.slice(0, 3).map(v => v.toFixed(2)).join(' ') +
-          '\nq ' + hand.pose.slice(3).map(v => v.toFixed(2)).join(' ') +
-          '\n扳机 ' + hand.trigger.toFixed(2) + ' · 握持 ' + hand.grip.toFixed(2) +
-          '\n' + Object.entries(hand.buttons).map(([k, v]) => k + ' ' + (v ? '●' : '○')).join('  ');
-        byId(side + '-hand').replaceChildren(line);
-      }
+      for (const side of ['left', 'right']) renderHand(side, input.hands[side], data.button_feedback || {});
+      byId('button-response').textContent = data.button_feedback?.Y || '需重启遥操以显示实际按键响应和长按进度';
     }
   } catch {
     window.dispatchEvent(new CustomEvent('teleop-preview', { detail: null }));
@@ -119,3 +150,9 @@ async function refresh() {
   }
 }
 refresh();
+
+// Keep operating guidance available on hover without taking dashboard space.
+document.querySelectorAll('.hint, .collection-controls').forEach(note => {
+  const section = note.closest('section');
+  if (section) section.title = [section.title, note.textContent.trim()].filter(Boolean).join('\n');
+});

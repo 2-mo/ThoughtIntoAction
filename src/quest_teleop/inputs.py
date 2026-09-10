@@ -72,7 +72,7 @@ def controller_snapshot(client, now):
             grip = float(client.get_key_value_by_name(side + "_grip"))
             if len(pose) != 7 or not all(math.isfinite(v) for v in [*pose, trigger, grip]):
                 raise ValueError("Invalid controller values")
-            hands[side] = {"pose": pose, "trigger": trigger, "grip": grip,
+            hands[side] = {"axes": list(client.get_joystick_state(side)), "pose": pose, "trigger": trigger, "grip": grip,
                            "buttons": {**{b: bool(client.get_button_state_by_name(b)) for b in buttons},
                                        **({"R3": bool(client.get_button_state_by_name("right_axis_click"))} if side == "right" else {})}}
         return {"sample_monotonic_ns": now, "device_timestamp_ns": client.get_timestamp_ns(),

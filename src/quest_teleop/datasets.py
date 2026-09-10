@@ -9,6 +9,7 @@ import numpy as np
 
 from robot_core.model import RobotModel
 from robot_core.storage import save_json
+from .video import media_path, read_frame
 
 
 def read_jsonl(path):
@@ -70,7 +71,7 @@ def validate_episode(path, *, settings=None, robot=None, check_images=True):
             errors.append("Invalid outcome")
         if meta.get("error") or any(meta.get("dropped", {}).values()):
             errors.append("Writer reported a failure or dropped records")
-        if meta.get("counts") != {"state": len(states), "frame": len(frames)}:
+        if any(meta.get("counts", {}).get(k) != n for k, n in (("state", len(states)), ("frame", len(frames)))):
             errors.append("Manifest counts differ from stored rows")
         if len(states) < 2 or len(frames) < 2:
             raise ValueError("Need at least two robot samples and two RGB frames")
@@ -91,7 +92,7 @@ def validate_episode(path, *, settings=None, robot=None, check_images=True):
                 errors.append(f"{name} stream does not cover episode boundaries")
             report[f"{name}_max_gap_s"] = float(max(gaps))
             report[f"{name}_hz"] = float((len(timestamps) - 1) * 1e9 / max(1, timestamps[-1] - timestamps[0]))
-            nominal = meta["control"]["control_rate_hz"] if name == "state" else meta["camera"]["fps"]
+            nominal = meta["control"].get("recording_rate_hz", meta["control"]["control_rate_hz"]) if name == "state" else meta["camera"]["fps"]
             if report[f"{name}_hz"] < 0.8 * nominal:
                 errors.append(f"{name} average rate is below 80% of configured rate")
         duration = (min(state_time[-1], frame_time[-1]) - max(state_time[0], frame_time[0])) / 1e9
@@ -170,17 +171,18 @@ def validate_episode(path, *, settings=None, robot=None, check_images=True):
         report["alignment_clock"] = "host monotonic receipt/sample times, not synchronized exposure"
         seen_images = set()
         for row in frames:
-            image = image_path(root, row["image"])
-            if image in seen_images:
+            image = media_path(root, row)
+            frame_key = (image, row.get("video_frame_index"))
+            if frame_key in seen_images:
                 errors.append("Multiple frames reference one image")
-            seen_images.add(image)
+            seen_images.add(frame_key)
             if not image.is_file():
-                raise ValueError(f"Missing image: {row['image']}")
+                raise ValueError(f"Missing image: {image}")
             if check_images:
                 import cv2
-                decoded = cv2.imread(str(image))
+                decoded = read_frame(root, row)
                 if decoded is None or decoded.shape != (meta["camera"]["height"], meta["camera"]["width"], 3):
-                    raise ValueError(f"Corrupt image or incorrect resolution: {row['image']}")
+                    raise ValueError(f"Corrupt image or incorrect resolution: {image}")
         if not meta["hand_eye_calibrated"]:
             warnings.append("Hand-eye uncalibrated; RGB/joint records remain usable")
         has_actions = meta["control"]["actuate"] and all(s["actuate"] for s in states) and submitted_count == len(states)
@@ -230,7 +232,7 @@ def replay(path, *, speed=1., headless=False, telemetry="local"):
             row = states[selected[index]]
             target = None if row["submission"] is None else np.asarray(row["submission"]["pos"])
             sink.update(np.asarray(row["actual_pos"]), target)
-            decoded = cv2.imread(str(image_path(root, frame["image"])))
+            decoded = read_frame(root, frame)
             if decoded is None:
                 raise ValueError("Missing/corrupt replay image")
             cv2.imshow("Recorded wrist RGB (q/Esc to exit)", decoded)

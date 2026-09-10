@@ -45,6 +45,31 @@ def snapshot(index=1, actuate=True):
             "sequence": index, "host_monotonic_ns": stamp}
 
 
+
+class ServiceSampleRecordingTests(unittest.TestCase):
+    def test_drain_preserves_all_service_samples_across_batches(self):
+        session = TeleopSession.__new__(TeleopSession)
+        session._sample_cursor = 10
+        session.latest_state = {"arm_service_id": "test-service"}
+        rows = [{**snapshot(i), "sample_sequence": i} for i in range(11, 22)]
+        session.record_samples = lambda after: {
+            "states": [row for row in rows if row["sample_sequence"] > after][:4],
+            "latest": 21,
+        }
+        saved = []
+        class Writer:
+            def add(self, kind, row):
+                saved.append((kind, row))
+        session._drain_samples(Writer())
+        self.assertEqual(session._sample_cursor, 21)
+        self.assertEqual([row["sample_sequence"] for _, row in saved], list(range(11, 22)))
+        self.assertTrue(all(kind == "state" for kind, _ in saved))
+        self.assertEqual([row["host_monotonic_ns"] for _, row in saved],
+                         [row["host_monotonic_ns"] for row in rows])
+        session._drain_samples(Writer())
+        self.assertEqual(len(saved), 11)
+
+
 class FakeCamera:
     def __init__(self, serial, width, height, fps):
         self.metadata = {"serial": serial, "model": "fake D435i", "width": width,
@@ -107,6 +132,51 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.session.task_run_id, run_id)
         self.session.dispatch({"command": "collection.toggle_episode", "task": "pick"})
         self.assertEqual(len(self.session.counted_episodes), 2)
+
+    def test_task_groups_episodes_and_exports_once_at_end(self):
+        sequence = 1
+        def samples(after):
+            nonlocal sequence
+            if not after:
+                return {"states": [], "latest": sequence}
+            sequence += 1
+            return {"states": [{**snapshot(sequence), "sample_sequence": sequence}], "latest": sequence}
+        self.session.record_samples = samples
+        self.session.control_metadata["recording_rate_hz"] = 240
+        with patch("quest_teleop.auto_dataset.finalize_task") as export:
+            saved = []
+            for _ in range(3):
+                self.session.dispatch({"command": "collection.toggle_episode", "task": "pick place"})
+                self.wait_for(lambda: self.session.recording.counts["state"] >= 2)
+                self.session.dispatch({"command": "collection.stop_episode"})
+                saved.append(dict(self.session.last_episode))
+            self.assertFalse(export.called)
+            target = self.session.task_dataset["path"]
+            self.assertTrue(Path(target).name.startswith("pick_place_"))
+            self.assertTrue(all(Path(row["path"]).parent.name == ".raw" for row in saved))
+            self.session.dispatch({"command": "collection.discard_previous"})
+            self.session.dispatch({"command": "collection.pause_task"})
+            self.session.dispatch({"command": "collection.start_task"})
+            self.assertEqual(self.session.task_dataset["path"], target)
+            self.session.dispatch({"command": "collection.end_task"})
+            export.assert_called_once()
+            self.assertEqual(export.call_args.args[1], sorted(row["id"] for row in saved[:2]))
+            self.assertEqual(export.call_args.args[2], target)
+            self.assertEqual(self.session.task_dataset["state"], "complete")
+            self.assertEqual(self.session.task_dataset["episodes"], 2)
+            self.assertEqual(len(self.session.saved_episodes()), 2)
+
+    def test_failed_task_export_keeps_task_for_retry(self):
+        self.session.task_dataset = {"state": "collecting", "path": str(self.root / "pick")}
+        self.session.counted_episodes = frozenset(["example"])
+        self.session.control_metadata["recording_rate_hz"] = 240
+        self.session.task_active = True
+        with patch("quest_teleop.auto_dataset.finalize_task", side_effect=RuntimeError("encoding failed")):
+            with self.assertRaisesRegex(RuntimeError, "encoding failed"):
+                self.session.dispatch({"command": "collection.end_task"})
+        self.assertTrue(self.session.task_active)
+        self.assertEqual(self.session.counted_episodes, frozenset(["example"]))
+        self.assertEqual(self.session.task_dataset["state"], "failed")
 
     def publish(self):
         counter = 0

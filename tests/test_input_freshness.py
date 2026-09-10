@@ -56,6 +56,7 @@ class FreshnessTests(unittest.TestCase):
         controller._control_gate_ready = Mock(return_value=True)
         controller._update_robot_state = Mock()
         with self.assertRaisesRegex(RuntimeError, "frozen"):
+            controller._ik_rate = Mock()
             controller._ik_thread(controller._stop_event)
         self.assertFalse(controller._input_ready)
         self.assertTrue(controller._stop_event.is_set())
@@ -84,5 +85,6 @@ class FreshnessTests(unittest.TestCase):
         controller._pre_ik_update = Mock()
         controller._update_ik = Mock(side_effect=controller._stop_event.set)
         with patch("quest_teleop.base_controller.time.monotonic_ns", side_effect=[1_000_000, 4_500_000]):
+            controller._ik_rate = Mock()
             controller._ik_thread(controller._stop_event)
         self.assertEqual(controller._input_timing, {"sample_monotonic_ns": 4_500_000, "duration_ms": 3.5})

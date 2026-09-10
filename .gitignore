@@ -229,3 +229,6 @@ __marimo__/
 # Vendored browser modules are runtime assets, not generated project build output.
 !/src/robot_simulation/web/vendor/three/build/
 !/src/robot_simulation/web/vendor/three/build/*.js
+
+# Recorded raw episodes and generated training datasets.
+/datasets/
