@@ -13,8 +13,9 @@ import unicodedata
 
 from robot_core.project import load_config, resolve_path
 
-KEYS = {"h": "home", "p": "pregrasp", "s": "stop", "i": "status"}
-LABELS = {"home": "回零", "pregrasp": "预抓取并张开夹爪", "stop": "停止并保持", "status": "查看状态"}
+KEYS = {"h": "home", "p": "pregrasp", "s": "stop", "i": "status", "d": "damping"}
+LABELS = {"home": "回零", "pregrasp": "预抓取并张开夹爪", "stop": "停止并保持",
+          "status": "查看状态", "damping": "切入阻尼（不锁定位置，请支撑机械臂）"}
 
 
 def recovery_command(command, args, hardware):
@@ -110,6 +111,7 @@ class Console:
             pass
         self.write("H 回零保持夹爪；P 预抓取并张开夹爪。动作前停止本项目策略；其他会话占用时拒绝。")
         self.write("S / 空格 / Ctrl+C：取消当前动作，空闲时停止策略并保持。此操作不是硬件急停。")
+        self.write("D 进入阻尼，不锁定当前位置，请先支撑机械臂；S 恢复当前位置保持。")
         self.write("Q 关闭服务；↑↓ 翻阅输出，End 返回最新输出。")
         offset = 0
         while True:
@@ -140,7 +142,7 @@ class Console:
             for y, line in enumerate(list(self.lines)[max(0, end - count):end], 4):
                 row(y, line)
             row(height - 2, " H 回零  P 预抓取  S/空格 停止  I 状态", curses.A_REVERSE)
-            row(height - 1, " Q 退出服务  ↑↓ 日志  End 最新  ? 帮助", curses.A_REVERSE)
+            row(height - 1, " D 阻尼  Q 退出服务  ↑↓ 日志  End 最新  ? 帮助", curses.A_REVERSE)
             screen.refresh()
             key = screen.getch()
             if key in (ord("q"), ord("Q"), 4):
@@ -152,7 +154,7 @@ class Console:
             elif key == curses.KEY_END:
                 offset = 0
             elif key in (ord("?"), curses.KEY_F1):
-                self.write("H 回零；P 预抓取（张开夹爪）；S/空格/Ctrl+C 停止；I 状态；Q 关闭服务。无需回车。")
+                self.write("H 回零；P 预抓取（张开夹爪）；D 阻尼（先支撑机械臂）；S/空格/Ctrl+C 停止并保持；I 状态；Q 关闭服务。无需回车。")
             elif key in (3, ord(" ")):
                 self.command("stop")
             elif 0 <= key < 256 and chr(key).lower() in KEYS:

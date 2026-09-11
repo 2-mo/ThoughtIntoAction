@@ -27,11 +27,17 @@ class ArmConsoleTests(unittest.TestCase):
         action.poll.return_value = None
         with patch.object(self.console, 'launch') as launch:
             self.console.command('pregrasp')
+            self.console.command('damping')
             launch.assert_not_called()
             self.console.command('stop')
             self.console.command('stop')
         action.send_signal.assert_called_once_with(signal.SIGINT)
         self.console.service.send_signal.assert_not_called()
+
+    def test_damping_shortcut_uses_selected_service(self):
+        with patch.object(self.console, 'launch') as launch:
+            self.console.command('damping')
+        launch.assert_called_once_with(recovery_command('damping', self.args, False))
 
     def test_no_commands_before_ready_or_after_service_exit(self):
         with patch.object(self.console, 'launch') as launch:
