@@ -31,8 +31,8 @@ async function initialize() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x151a1e);
-  scene.fog = new THREE.FogExp2(0x151a1e, 0.17);
+  scene.background = new THREE.Color(0x191b1e);
+  scene.fog = new THREE.FogExp2(0x191b1e, 0.17);
   const environment = new RoomEnvironment();
   const pmrem = new THREE.PMREMGenerator(renderer);
   const environmentTarget = pmrem.fromScene(environment, 0.04);
@@ -78,7 +78,7 @@ async function initialize() {
   fill.position.set(-0.75, 0.45, 0.45);
   scene.add(fill);
 
-  const ground = new THREE.GridHelper(4, 80, 0x506168, 0x303b42);
+  const ground = new THREE.GridHelper(4, 80, 0x505258, 0x303237);
   ground.rotation.x = Math.PI / 2;
   ground.position.z = -0.043;
   ground.material.transparent = true;
@@ -93,18 +93,8 @@ async function initialize() {
   scene.add(axes);
 
   // A visual work surface only. No physical table transform or camera extrinsic is assumed.
-  const textureLoader = new THREE.TextureLoader();
-  const textures = await Promise.all(['diff', 'nor_gl', 'rough'].map(async (kind) => {
-    const texture = await textureLoader.loadAsync(`/textures/oak_veneer_01/oak_veneer_01_${kind}_2k.jpg`);
-    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-    texture.colorSpace = kind === 'diff' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-    return texture;
-  }));
   const table = new THREE.Mesh(new RoundedBoxGeometry(1.2, 0.9, 0.04, 3, 0.006),
-    new THREE.MeshPhysicalMaterial({ color: 0xffd4cf, map: textures[0], normalMap: textures[1],
-      normalScale: new THREE.Vector2(0.32, 0.32), roughnessMap: textures[2], roughness: 0.4,
-      metalness: 0, clearcoat: 0.28, clearcoatRoughness: 0.32 }));
+    new THREE.MeshStandardMaterial({ color: 0x55575a, roughness: 0.95, metalness: 0 }));
   table.position.set(0.42, 0, -0.02);
   table.receiveShadow = true;
   scene.add(table);
@@ -146,36 +136,6 @@ async function initialize() {
   scene.add(paths);
   const pathObjects = new Map();
   const pathSignatures = new Map();
-  const rows = [...manifest.robot.joint_names, '夹爪'].map((name, index) => {
-    const row = document.createElement('div');
-    row.className = 'position-row';
-    row.innerHTML = '<span class="position-name"></span><div class="position-track"><i class="position-zero"></i><i class="position-fill target"></i><i class="position-fill actual"></i></div><span class="position-values"><b>—</b><b>—</b></span>';
-    row.querySelector('.position-name').textContent = index < 6 ? `J${index + 1}` : name;
-    element('joints').append(row);
-    return row;
-  });
-  function renderPosition(row, actual, target, lower, upper, unit) {
-    const validRange = Number.isFinite(lower) && Number.isFinite(upper) && upper > lower;
-    // Symmetric scales keep every zero on the same vertical centerline.
-    const extent = Math.max(Math.abs(lower), Math.abs(upper));
-    const percent = value => 50 + 50 * Math.min(extent, Math.max(-extent, value)) / extent;
-    const origin = 50;
-    const zero = row.querySelector('.position-zero');
-    zero.hidden = !validRange;
-    zero.style.left = `${origin}%`;
-    [actual, target].forEach((value, index) => {
-      const valid = Number.isFinite(value);
-      row.querySelectorAll('.position-values b')[index].textContent = valid ? `${value.toFixed(2)}${unit}` : '—';
-      const fill = row.querySelector(index ? '.position-fill.target' : '.position-fill.actual');
-      fill.hidden = !valid || !validRange;
-      if (valid && validRange) {
-        const end = percent(value);
-        fill.style.left = `${Math.min(origin, end)}%`;
-        fill.style.width = `${Math.abs(end - origin)}%`;
-      }
-    });
-    row.title = `实际 ${Number.isFinite(actual) ? actual.toFixed(2) + unit : '—'} · 目标 ${Number.isFinite(target) ? target.toFixed(2) + unit : '—'}`;
-  }
   let latest = null;
   let feedbackLive = false, armDeadline = 0, armVisualState = null;
   function displayOptions() {
@@ -190,7 +150,6 @@ async function initialize() {
     armVisualState = state;
     feedbackLive = state === 'connected';
     canvas.dataset.feedback = feedbackLive ? 'live' : state;
-    element('joints').classList.toggle('feedback-inactive', !feedbackLive);
     actualMeshes.forEach(mesh => {
       const original = mesh.userData.online;
       mesh.material.color.copy(feedbackLive ? original.color : new THREE.Color(0x384148));
@@ -219,14 +178,6 @@ async function initialize() {
     });
     actualAxes.matrix.fromArray(state.actual.eef);
     actualModel.visible = true;
-    rows.slice(0, 6).forEach((row, index) => {
-      const degrees = value => Number.isFinite(value) ? value * 180 / Math.PI : null;
-      renderPosition(row, degrees(state.actual.q[index]), degrees(state.target.q[index]),
-        degrees(manifest.joint_limits?.lower[index]), degrees(manifest.joint_limits?.upper[index]), '°');
-    });
-    const grip = state.gripper;
-    const mm = value => Number.isFinite(value) ? value * 1000 : null;
-    renderPosition(rows[6], mm(grip?.actual), mm(grip?.target), 0, mm(grip?.max), 'mm');
     element('eef-position').textContent = state.actual.eef.slice(12, 15)
       .map((value, index) => `${'XYZ'[index]} ${value.toFixed(4)}`).join('  ');
     for (const [name, line] of pathObjects) {
@@ -274,7 +225,6 @@ async function initialize() {
       else if (state.stream.status === 'waiting') {
         status('参考姿态 · 无机械臂反馈', 'waiting');
         element('loading').hidden = true;
-        rows.forEach(row => renderPosition(row, null, null, null, null, ''));
         element('eef-position').textContent = '—';
       } else if (state.stream.status === 'stale') status('状态已过期 · 保留最后画面', 'stale');
       else status(`状态不匹配：${state.stream.message}`, 'error');
@@ -313,7 +263,6 @@ async function initialize() {
     });
     geometries.forEach((geometry) => geometry.dispose());
     materials.forEach((material) => material.dispose());
-    textures.forEach((texture) => texture.dispose());
     renderer.dispose();
   }, { once: true });
   window.addEventListener('pageshow', (event) => { if (event.persisted) location.reload(); });

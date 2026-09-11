@@ -47,6 +47,7 @@ def main(argv=None):
                 packet = subscriber.receive()
                 if packet is not None:
                     packet["gripper"] = legacy_gripper.read(packet)
+                    packet["actual_torque"] = legacy_gripper.read_torque(packet)
                     scene.accept(packet)
             except (ValueError, TypeError, KeyError, OverflowError) as exc:
                 scene.set_stream_error(str(exc))

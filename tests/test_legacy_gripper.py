@@ -31,6 +31,12 @@ class LegacyGripperTests(unittest.TestCase):
         self.assertEqual(request['op'], 'describe')
         self.assertEqual(set(request), {'op', 'sent_monotonic_ns'})
 
+    def test_legacy_torque_is_measured_feedback_and_missing_is_empty(self):
+        self.assertIsNone(self.reader.read_torque(self.packet))
+        self.info['state']['actual_torque'] = [1, -2, 0, .4, -.5, 3]
+        self.reader.next_probe = 0
+        self.assertEqual(self.reader.read_torque(self.packet), [1, -2, 0, .4, -.5, 3])
+
     def test_native_feedback_and_other_sources_do_not_probe(self):
         grip = {'actual': .02, 'target': .03, 'max': .085}
         self.assertEqual(self.reader.read({**self.packet, 'gripper': grip}), grip)

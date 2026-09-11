@@ -357,3 +357,69 @@ aside > .input-panel { grid-row: 2 / 4 !important; display: flex; flex-direction
   .position-row { min-height:21px; gap:5px; grid-template-columns:24px minmax(25px,1fr) 49px; }
   .position-values { flex-direction:column; align-items:flex-end; gap:0; font-size:9px; line-height:10px; }
 }
+
+/* Neutral surfaces; status colors are reserved for live input and exceptions. */
+:root { background:#111214; color:#dedfe2; }
+main > section, aside > section, .telemetry-group, #dataset-replay { background:#1a1c1f; }
+aside { background:transparent; }
+.stage { background:#191b1e; }
+.camera-frame, .replay-views img, .replay-model { background:#141517; }
+button, #replay-seek, #replay-episodes { background:#25282d; color:#dedfe2; border-color:#35383e; }
+button:hover { background:#30343a; }
+.input-panel .controller-shell { background:#2b4037; }
+.hands [data-state="offline"] > .controller-shell { background:#292c31; }
+.hands [data-state="stale"] > .controller-shell { background:#403b30; }
+.controller-key, .controller-stick { background:#1b1d21; }
+.hold-ring { background:conic-gradient(#79dfac var(--hold), #373b41 0); }
+h2 span, .hint, .position-name { color:#94989f; }
+.telemetry-group { display:grid; grid-template-columns:minmax(0,1.12fr) minmax(0,1fr); gap:7px 12px; align-content:start; }
+.telemetry-group > .positions-panel { grid-column:1; grid-row:1 / 4; }
+.telemetry-group > .torque-panel { grid-column:2; grid-row:1; }
+.telemetry-group > section:nth-child(3) { grid-column:2; grid-row:2; }
+.telemetry-group > .diagnostics-panel { grid-column:2; grid-row:3; }
+.telemetry-group > .display-panel { grid-column:1 / -1; grid-row:4; }
+.telemetry-group > .operation-note { grid-column:1 / -1; grid-row:5; }
+.position-row { grid-template-columns:24px minmax(25px,1fr) 49px; gap:5px; min-height:24px; }
+.position-row:last-child { border:0; padding:0; margin:0; }
+.position-values { flex-direction:column; align-items:flex-end; gap:0; font-size:9px; line-height:11px; }
+.position-track { background:#25282d; }
+.gripper-row { display:grid; grid-template-columns:24px minmax(25px,1fr) 49px; align-items:center; gap:5px; border-top:1px solid #ffffff0c; padding-top:4px; margin-top:4px; font-size:11px; }
+.gripper-row svg { width:100%; height:32px; overflow:visible; }
+.gripper-row svg path { fill:none; stroke:#78b6c3; stroke-width:3; stroke-linejoin:round; }
+.gripper-row .gripper-guide { stroke:#686d76; stroke-width:1; opacity:.25; }
+.gripper-row .gripper-placeholder path { stroke:#737880; stroke-width:1; stroke-dasharray:2 2; opacity:.45; }
+.gripper-row[data-state="live"] .gripper-placeholder, .gripper-row[data-state="stale"] .gripper-placeholder { visibility:hidden; }
+#gripper-target { opacity:.3; }
+#gripper-target path { stroke-width:7; }
+.gripper-row.feedback-inactive { opacity:.45; }
+.torque-row { display:grid; grid-template-columns:18px minmax(25px,1fr) 32px; align-items:center; gap:4px; height:18px; color:#94989f; font-size:9px; }
+.torque-row svg { width:100%; height:100%; }
+.torque-row b { font-weight:400; text-align:right; font-variant-numeric:tabular-nums; color:#c3c8cd; }
+.torque-grid { stroke:#373a40; stroke-width:.5; fill:none; }
+.torque-line { stroke:#78b6c3; stroke-width:1.3; fill:none; vector-effect:non-scaling-stroke; }
+#torques[data-state="waiting"] .torque-line { opacity:.35; }
+.torque-axis { display:flex; justify-content:space-between; padding:2px 36px 0 22px; font-size:8px; color:#747981; }
+@media(max-height:700px) {
+  .telemetry-group { gap:4px 8px; }
+  .position-row { min-height:20px; }
+  .torque-row { height:12px; }
+  .gripper-row { margin-top:2px; padding-top:2px; }
+  .gripper-row svg { height:26px; }
+  .telemetry-group .toggles { grid-template-columns:1fr 1fr; }
+}
+
+aside > .input-panel, .collection-panel, .collection-panel[data-state] { background:#1a1c1f; }
+#joints.feedback-inactive { opacity:.6; }
+.gripper-row.feedback-inactive { opacity:.65; }
+@media(max-height:700px) {
+  .torque-row { height:10px; }
+  .torque-axis { line-height:9px; padding-top:0; }
+  .telemetry-group h2 { font-size:10px; line-height:12px; }
+  .diagnostics-panel, .diagnostics-panel h2 span { font-size:9px; line-height:11px; }
+  .telemetry-group .coordinates { font-size:9px; line-height:11px; }
+}
+@media(max-height:700px) { .position-values { line-height:9px; } }
+
+.replay-video-wrap { background:#141517; }
+.replay-empty { position:absolute; inset:0; display:grid; place-items:center; font-size:11px; color:#858a92; }
+.replay-video-wrap:has(img[src]) .replay-empty, #replay-video:not([src]) { display:none; }

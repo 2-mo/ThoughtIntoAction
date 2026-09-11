@@ -43,6 +43,15 @@ def gripper_data(value):
     return {"actual": float(actual), "target": target, "max": float(maximum)}
 
 
+def torque_data(value):
+    if value is None:
+        return None
+    values = np.asarray(value, dtype=float)
+    if values.shape != (6,) or not np.isfinite(values).all():
+        raise ValueError("Expected six finite joint feedback torques")
+    return values.tolist()
+
+
 def path_data(points, color):
     points = np.asarray(points, dtype=float)
     if points.size == 0:
@@ -107,15 +116,16 @@ class LocalPublisher:
             self._error = exc
             self._ready.set()
 
-    def update(self, actual, target=None, *, gripper=None):
+    def update(self, actual, target=None, *, gripper=None, actual_torque=None):
         actual, target = joint_pair(actual, target)
         gripper = gripper_data(gripper)
+        actual_torque = torque_data(actual_torque)
         with self._lock:
             if self.closed:
                 raise RuntimeError("State publisher is closed")
             self._sequence += 1
             self._state = {"sequence": self._sequence, "actual": actual, "target": target,
-                           "sample_monotonic_ns": time.monotonic_ns(), "gripper": gripper}
+                           "sample_monotonic_ns": time.monotonic_ns(), "gripper": gripper, "actual_torque": actual_torque}
 
     def path(self, name, points, color):
         data = path_data(points, color)
@@ -145,7 +155,7 @@ class NullPublisher:
     def __init__(self, robot, source=None):
         pass
 
-    def update(self, actual, target=None, *, gripper=None):
+    def update(self, actual, target=None, *, gripper=None, actual_torque=None):
         pass
 
     def path(self, name, points, color):

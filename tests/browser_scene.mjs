@@ -151,7 +151,7 @@ try {
       const all = [document.documentElement, document.body, document.querySelector('aside'), document.querySelector('.collection-panel'), document.querySelector('.collection-controls')];
       return all.some(e => e.scrollWidth > e.clientWidth + 1);
     }), false, 'Overflow at ' + width + 'x' + height);
-    for (const id of ['collection-count', 'collection-state', 'collection-duration', 'collection-last', 'collection-health', 'camera-image', 'depth-image', 'left-hand', 'right-hand', 'orientation-canvas', 'control-state', 'joints', 'eef-position', 'state-source', 'motion-diagnostics', 'arm-latency', 'input-latency']) {
+    for (const id of ['collection-count', 'collection-state', 'collection-duration', 'collection-last', 'collection-health', 'camera-image', 'depth-image', 'left-hand', 'right-hand', 'orientation-canvas', 'control-state', 'joints', 'gripper', 'torques', 'eef-position', 'state-source', 'motion-diagnostics', 'arm-latency', 'input-latency']) {
       const box = await page.locator('#' + id).boundingBox();
       assert.ok(box && box.height > 0 && box.x >= 0 && box.x + box.width <= width + 1 && box.y >= 0 && box.y + box.height <= height + 1, id + ' clipped');
     }
@@ -188,8 +188,18 @@ try {
   });
   const previewState = await page.evaluate(async () => (await (await fetch('/api/model')).json()).reference);
   previewState.actual.eef = identity;
-  previewState.stream = {status: 'live', source: {}, stream_id: 'preview-test'};
+  previewState.stream = {status: 'live', source: {}, stream_id: 'preview-test', sequence: 1};
+  previewState.actual_torque = [1, -2, 0, .4, -.5, 3];
+  previewState.gripper = {actual: .02, target: .05, max: .082};
   await page.route('**/api/state', route => route.fulfill({json: previewState}));
+  await page.waitForFunction(() => document.querySelector('.torque-row b').textContent === '1.00');
+  previewState.stream.sequence++;
+  previewState.actual_torque[0] = 2;
+  await page.waitForFunction(() => document.querySelector('.torque-line').getAttribute('d').includes('L'));
+  assert.notEqual(await page.locator('#gripper-actual path').getAttribute('d'), await page.locator('#gripper-target path').getAttribute('d'));
+  previewState.stream.status = 'stale';
+  await page.waitForFunction(() => document.querySelector('.torque-row b').textContent === '—');
+  previewState.stream.status = 'live';
   await page.waitForFunction(() => document.getElementById('orientation-canvas').dataset.handVisible === 'true' &&
     document.getElementById('orientation-error').textContent.endsWith('0.0°'));
   sample.orientation_preview.target = [0,1,0,0, -1,0,0,0, 0,0,1,0, 0,0,0,1];
@@ -230,6 +240,9 @@ try {
   await page.setViewportSize({ width: 1440, height: 960 });
 
   assert.equal(await page.locator('#connection').getAttribute('data-state'), 'waiting');
+  await page.waitForFunction(() => document.querySelector('#gripper').dataset.state === 'waiting');
+  assert.equal(await page.locator('.torque-grid').count(), 6);
+  assert.equal(await page.locator('.gripper-placeholder').isVisible(), true);
   await page.screenshot({ path: `${output}/monitor-waiting.png` });
   await page.evaluate(() => { document.documentElement.dataset.session = 'same-page'; });
 
@@ -251,8 +264,8 @@ try {
   await page.waitForFunction(() => document.querySelector('.position-values b')?.textContent === '8.59°');
   assert.notDeepEqual(await canvas.screenshot(), initial, 'Arm rendering did not move');
   await page.screenshot({ path: `${output}/monitor-terminal.png` });
-  await page.waitForFunction(() => document.querySelector('.position-row:last-child .position-values b').textContent.endsWith('mm'));
-  assert.equal(await page.locator('.position-row').count(), 7);
+  await page.waitForFunction(() => document.querySelector('#gripper .position-values b').textContent.endsWith('mm'));
+  assert.equal(await page.locator('.position-row').count(), 6);
   assert.equal(await page.evaluate(() => [...document.querySelectorAll('.position-zero')]
     .every(zero => !zero.hidden && zero.style.left === '50%')), true, 'All position zeros must align');
   for (const [width, height] of [[1440, 960], [1366, 768], [1024, 600]]) {

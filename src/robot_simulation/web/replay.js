@@ -8,7 +8,7 @@ const meshes = [];
 let initializePromise, commandError = null;
 async function initialize() {
   const manifest = await (await fetch('/api/model', {cache: 'no-store'})).json();
-  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x10171c);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x141517);
   renderer = new THREE.WebGLRenderer({canvas: el('replay-canvas'), antialias: true});
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   const camera = new THREE.PerspectiveCamera(40, 1, .01, 10);
@@ -79,6 +79,8 @@ async function poll() {
       el('replay-video-status').textContent = pixels ? '录制 RGB 原图' : '该条没有 RGB 视频';
       if (pixels) el('replay-video').src = 'data:' + (frame.image_mime || 'image/jpeg') + ';base64,' + pixels;
       else el('replay-video').removeAttribute('src');
+    } else {
+      el('replay-video').removeAttribute('src');
     }
   } catch (error) {
     frame = null; el('replay-status').textContent = '回放数据未连接：' + error.message;

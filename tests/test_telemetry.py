@@ -134,6 +134,24 @@ class TelemetryTests(unittest.TestCase):
         scene.accept(packet)
         self.assertIsNone(scene.snapshot()['gripper'])
 
+    def test_optional_torque_validates_and_reaches_scene(self):
+        publisher = self.publisher()
+        subscriber = self.subscriber()
+        torque = [1, -2, 0, .4, -.5, 3]
+        publisher.update(self.q, actual_torque=torque)
+        packet = self.packet(subscriber)
+        scene = Scene(self.robot)
+        self.addCleanup(scene.close)
+        scene.accept(packet)
+        self.assertEqual(scene.snapshot()['actual_torque'], torque)
+        for invalid in ([1, 2], [float('nan')] * 6):
+            with self.assertRaises(ValueError):
+                scene.accept({**packet, 'actual_torque': invalid})
+        packet.pop('actual_torque')
+        packet['sequence'] += 1
+        scene.accept(packet)
+        self.assertIsNone(scene.snapshot()['actual_torque'])
+
     def subscriber_after_publisher(self):
         self.publisher()
         return self.subscriber()

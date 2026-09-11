@@ -111,6 +111,15 @@ class LegacyGripperFeedback:
         except (ValueError, KeyError, TypeError):
             return None
 
+    def read_torque(self, packet):
+        from robot_core.telemetry import torque_data
+        if packet.get("actual_torque") is not None:
+            return torque_data(packet["actual_torque"])
+        # Reuse the bounded, model-checked legacy status read and its cache.
+        if self.read({**packet, "gripper": None}) is None:
+            return None
+        return torque_data(self.info["state"].get("actual_torque"))
+
 
 class ConnectionProbe:
     def __init__(self, arm_socket):
