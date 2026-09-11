@@ -117,8 +117,13 @@ class SessionTests(unittest.TestCase):
         self.addCleanup(self.stop_publisher)
         self.wait_for(lambda: self.session.latest_frame is not None)
 
-    def test_a_toggle_starts_task_saves_and_starts_next_without_pregrasp(self):
+    def test_a_toggle_requires_task_then_saves_and_starts_next(self):
         self.assertFalse(self.session.task_active)
+        with self.assertRaisesRegex(ValueError, "任务采集未开启"):
+            self.session.dispatch({"command": "collection.toggle_episode", "task": "pick"})
+        self.assertFalse(self.session.task_active)
+        self.assertIsNone(self.session.recording)
+        self.session.dispatch({"command": "collection.start_task"})
         first = self.session.dispatch({"command": "collection.toggle_episode", "task": "pick"})
         run_id = self.session.task_run_id
         self.assertTrue(self.session.task_active)
@@ -132,8 +137,18 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.session.task_run_id, run_id)
         self.session.dispatch({"command": "collection.toggle_episode", "task": "pick"})
         self.assertEqual(len(self.session.counted_episodes), 2)
+        self.session.dispatch({"command": "collection.pause_task"})
+        with self.assertRaisesRegex(ValueError, "任务采集未开启"):
+            self.session.dispatch({"command": "collection.toggle_episode", "task": "pick"})
+        self.assertTrue(self.session.task_paused)
+        self.assertEqual(self.session.task_run_id, run_id)
+        self.assertEqual(len(self.session.counted_episodes), 2)
+        self.session.dispatch({"command": "collection.start_task"})
+        self.assertTrue(self.session.task_active)
+        self.assertEqual(self.session.task_run_id, run_id)
 
     def test_task_groups_episodes_and_exports_once_at_end(self):
+        self.session.dispatch({"command": "collection.start_task"})
         sequence = 1
         def samples(after):
             nonlocal sequence

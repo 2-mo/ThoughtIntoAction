@@ -274,12 +274,6 @@ class TeleopSession:
                         if result["lifecycle"] != "complete":
                             raise RuntimeError("当前 Episode 未完整保存，请检查采集错误")
                         return result
-                    if not self.task_active:
-                        if not self.task_paused:
-                            self.task_run_id = uuid.uuid4().hex
-                            self.counted_episodes = frozenset()
-                            self.last_episode = None
-                        self.task_active, self.task_paused = True, False
                     action = "start_episode"
 
                 if action == "start_task":

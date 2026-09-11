@@ -417,6 +417,36 @@ class OfflineControllerTests(unittest.TestCase):
         with patch.object(cli.PresetSingleX5Controller, "run", run):
             cli.presets_main(actuate=False)
 
+    def test_a_requires_task_and_does_not_queue_a_press_from_idle(self):
+        def run(controller):
+            controller._control_enabled = True
+            actions = controller._collection
+            controller._collection = Mock(busy=False, recording=False, error=None, task_active=False)
+            controller._collection.take_home.return_value = False
+            def step(t, a=False):
+                self.xr.a = a
+                with patch.object(preset_logic, "time", SimpleNamespace(monotonic=lambda: t)):
+                    controller._pre_ik_update()
+            step(0); step(.1, True); step(.14, True); step(.2); step(.24)
+            self.assertIsNone(controller._preset_target)
+            self.assertIsNone(controller._episode_position_pending)
+            controller._collection.submit.assert_not_called()
+            # A held before task activation must be released and pressed again.
+            step(.3, True); step(.34, True)
+            controller._collection.task_active = True
+            step(.4); step(.44)
+            self.assertIsNone(controller._preset_target)
+            step(.5, True); step(.54, True); step(.6); step(.64)
+            self.assertEqual(controller._preset_name, "GRASP_READY")
+            # Ending/pausing during positioning must not start recording on arrival.
+            controller._collection.task_active = False
+            controller._finish_preset("GRASP_READY")
+            controller._collection.submit.assert_not_called()
+            controller._collection = actions
+            controller.close()
+        with patch.object(cli.PresetSingleX5Controller, "run", run):
+            cli.presets_main(actuate=False)
+
     def test_collection_edges_map_once_and_home_waits_for_grip_release(self):
         def run(controller):
             controller._control_enabled = True  # Existing tests exercise already-enabled controls.
@@ -479,7 +509,7 @@ class OfflineControllerTests(unittest.TestCase):
         def run(controller):
             controller._control_enabled = True
             actions = controller._collection
-            controller._collection = Mock(busy=False, recording=False, error=None)
+            controller._collection = Mock(busy=False, recording=False, error=None, task_active=True)
             controller._collection.take_home.return_value = False
             def step(t, a=False, grip=0.):
                 self.xr.a, self.xr.grip = a, grip

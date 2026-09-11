@@ -81,7 +81,7 @@ function renderCollection(data = {}) {
   put('collection-samples', String(recording?.counts?.state ?? '—'));
   put('collection-episode', '当前 Episode：' + (recording?.id || '—'));
   const drops = Object.values(recording?.dropped || {}).reduce((a, b) => a + b, 0);
-  put('collection-health', error || (recording ? `写入队列 ${recording.queue_size ?? 0} · 丢弃样本 ${drops}` : state === 'IDLE' ? 'A 开始采集 · B 前往预抓取位' : state === 'PAUSED' ? 'A 恢复并开始采集 · B 前往预抓取位' : state === 'READY' ? 'A 开始下一条 · B 前往预抓取位' : state === 'OFFLINE' ? '等待采集会话' : '等待采集操作完成'));
+  put('collection-health', error || (recording ? `写入队列 ${recording.queue_size ?? 0} · 丢弃样本 ${drops}` : state === 'IDLE' ? '右摇杆左推开启任务 · B 前往预抓取位' : state === 'PAUSED' ? '右摇杆左推恢复任务 · B 前往预抓取位' : state === 'READY' ? 'A 开始下一条 · B 前往预抓取位' : state === 'OFFLINE' ? '等待采集会话' : '等待采集操作完成'));
   const dataset = data.task_dataset;
   if (dataset) {
     byId('collection-health').title = dataset.path || '';

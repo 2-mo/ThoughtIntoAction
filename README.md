@@ -1,6 +1,6 @@
 # QuestArmTeleop
 
-Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随、Trigger 控制夹爪、A 预抓取后开始采集、B 保存／长按回 Home、右摇杆左开始／右暂停／上作废上一条／按下长按结束清零；Grip 可取消预设动作。
+Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随、Trigger 控制夹爪、任务开启后 A 预抓取并开始采集、B 保存／长按回 Home、右摇杆左开始／右暂停／上作废上一条／按下长按结束清零；Grip 可取消预设动作。
 
 已整理目录、依赖和启动配置，支持独立运动学仿真、单腕部 D435i 手眼标定，以及主遥操进程内的原始 episode 采集。命令行/脚本为主，网页只读监看。本机 π0.5 与 LeRobot 导出尚未接入；H800 只负责训练。
 

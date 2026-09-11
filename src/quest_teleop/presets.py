@@ -78,7 +78,7 @@ class PresetSingleX5Controller(X5TeleopController):
             raise
 
         print("  X: 网页回放上一条；Y: 真机回放 / 取消；回放前先保存，Grip / B 取消真机回放")
-        print("Quest controls: A -> pregrasp then record / save then pregrasp; B short -> GRASP_READY")
+        print("Quest controls: A (task active) -> pregrasp then record / save then pregrasp; B short -> GRASP_READY")
         print(f"  B hold {self._home_hold_s:.1f}s: discard current episode, then HOME (release Grip)")
         print("  Right stick push: left start/resume task; right save/pause; up discard previous")
         print("  Stick click hold 1s: save/end task and reset count; down hold 1s: toggle control / standby")
@@ -249,7 +249,7 @@ class PresetSingleX5Controller(X5TeleopController):
         print(f"PRESET {expected_name} reached")
         if expected_name == "GRASP_READY" and self._record_after_position:
             self._record_after_position = False
-            if self._control_enabled and not self._collection.recording:
+            if self._control_enabled and self._collection.task_active and not self._collection.recording:
                 self._collection.submit("toggle_episode")
 
     def _pre_ik_update(self) -> None:
@@ -259,7 +259,8 @@ class PresetSingleX5Controller(X5TeleopController):
         a = bool(self.xr_client.get_button_state_by_name("A"))
         b = bool(self.xr_client.get_button_state_by_name("B"))
         enabled = self._episode_position_pending is None and self._preset_target is None and not self._collection.busy and self._robot_replay is None and not self._replay_loading
-        a_event = self._a_press.update(a, now, enabled=enabled)
+        a_allowed = self._collection.task_active or self._collection.recording
+        a_event = self._a_press.update(a, now, enabled=enabled and a_allowed)
         b_event = self._b_press.update(b, now, enabled=not self._collection.busy)
         stick = bool(self.xr_client.get_button_state_by_name("right_axis_click"))
         end_event = self._task_end_press.update(stick, now, enabled=not self._collection.busy)
@@ -283,13 +284,15 @@ class PresetSingleX5Controller(X5TeleopController):
                 self._start_preset("GRASP_READY", self._grasp_ready_joints)
         elif direction_event:
             self._collection.submit(direction_event)
-        elif a_event and not (b or stick) and not self._collection.busy:
+        elif a_event and a_allowed and not (b or stick) and not self._collection.busy:
             if self._collection.recording:
                 if self._collection.submit("toggle_episode"):
                     self._episode_position_pending = "saved"
             else:
                 self._collection.clear_error()
                 self._episode_position_pending = "start"
+        if self._episode_position_pending == "start" and not self._collection.task_active:
+            self._episode_position_pending = None
         if self._episode_position_pending and not self._collection.busy:
             if self._collection.error:
                 self._episode_position_pending = None
