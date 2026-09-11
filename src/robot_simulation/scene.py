@@ -56,7 +56,7 @@ class Scene:
                           "meshes": meshes, "matrix_order": "column-major",
                           "joint_limits": {"lower": robot.lower.tolist(), "upper": robot.upper.tolist()}}
         from robot_core.project import load_config
-        gripper_max = load_config()["telemetry"].get("gripper_torque_max_nm")
+        gripper_max = load_config().get("telemetry", {}).get("gripper_torque_max_nm")
         if gripper_max is not None and (not np.isfinite(gripper_max) or gripper_max <= 0):
             raise ValueError("Invalid gripper display torque limit")
         self._manifest["torque_limits"] = [*robot.model.effortLimit.tolist(), gripper_max]
@@ -70,7 +70,7 @@ class Scene:
                 self.respond(body=True)
 
             def do_POST(self):
-                if urlsplit(self.path).path != "/api/replay":
+                if urlsplit(self.path).path not in ("/api/replay", "/api/camera"):
                     self.send_error(404); return
                 if self.headers.get("Origin") not in (None, owner.url.rstrip("/"),
                         owner.url.rstrip("/").replace("127.0.0.1", "localhost")):
@@ -80,14 +80,18 @@ class Scene:
                     if not 0 < length <= 4096: raise ValueError("Invalid request size")
                     data = json.loads(self.rfile.read(length))
                     if not isinstance(data, dict): raise ValueError("Expected object")
-                    action = data.get("action")
-                    if action not in ("load_last", "load", "play", "pause", "seek"):
-                        raise ValueError("Only web review controls are supported")
-                    from robot_core.project import load_config, resolve_path
-                    from robot_core.session_protocol import request
-                    command = "collection.replay_previous" if action == "load_last" else "collection.replay_episode" if action == "load" else "replay.control"
-                    request(resolve_path(load_config()["runtime"]["socket"]), command,
-                            action=action, position_s=data.get("position_s"), episode_id=data.get("episode_id"), timeout=5)
+                    if urlsplit(self.path).path == "/api/camera":
+                        from robot_core.camera_control import set_enabled
+                        set_enabled(data.get("enabled"))
+                    else:
+                        action = data.get("action")
+                        if action not in ("load_last", "load", "play", "pause", "seek"):
+                            raise ValueError("Only web review controls are supported")
+                        from robot_core.project import load_config, resolve_path
+                        from robot_core.session_protocol import request
+                        command = "collection.replay_previous" if action == "load_last" else "collection.replay_episode" if action == "load" else "replay.control"
+                        request(resolve_path(load_config()["runtime"]["socket"]), command,
+                                action=action, position_s=data.get("position_s"), episode_id=data.get("episode_id"), timeout=5)
                     content = json.dumps({"ok": True}).encode()
                 except (OSError, ValueError, RuntimeError, TypeError) as exc:
                     content = json.dumps({"error": str(exc)}).encode()

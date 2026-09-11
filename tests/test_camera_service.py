@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import time
+import threading
 import unittest
 from unittest.mock import patch
 from urllib.request import build_opener, ProxyHandler
@@ -56,6 +57,45 @@ class CameraServiceTests(unittest.TestCase):
                         client.read()
                 with self.assertRaisesRegex(RuntimeError, "settings differ"):
                     SharedCamera("another", 3, 2, 30).__enter__()
+
+    def test_switch_stops_pipeline_preserves_off_state_and_blocks_recording(self):
+        from robot_core.camera_control import recording_guard
+        with tempfile.TemporaryDirectory() as folder, patch("robot_core.camera_control.socket_path", return_value=Path(folder)/"camera.sock"), patch("robot_core.camera_control.check_legacy_session"):
+            feed = CameraFeed({"enabled": True})
+            opened, closed = threading.Event(), threading.Event()
+            def capture(options, stop):
+                feed.frame = {"host_received_monotonic_ns": time.monotonic_ns()}
+                opened.set()
+                stop.wait()
+                closed.set()
+            feed.capture = capture
+            self.addCleanup(feed.close)
+            feed.set_enabled(True)
+            self.assertTrue(opened.wait(1))
+            lease = recording_guard()
+            try:
+                with self.assertRaisesRegex(RuntimeError, "录制"):
+                    feed.set_enabled(False)
+                self.assertTrue(feed.enabled)
+            finally:
+                lease.close()
+            feed.set_enabled(False)
+            self.assertTrue(closed.is_set())
+            self.assertIsNone(feed.frame)
+            self.assertFalse(feed.dispatch({"command": "monitor"})["camera"]["enabled"])
+            feed.dispatch({"command": "monitor"})
+            self.assertIsNone(feed.thread)
+            feed.set_enabled(True)
+            self.assertTrue(feed.enabled)
+
+    def test_old_session_cannot_be_silently_disconnected(self):
+        from robot_core.camera_control import check_legacy_session
+        with patch("robot_core.camera_control.request", return_value={"recording": None}):
+            with self.assertRaisesRegex(RuntimeError, "退出遥操"):
+                check_legacy_session()
+        with patch("robot_core.camera_control.request", return_value={"camera_switch_protocol": 1, "recording": {"id": "recording"}}):
+            with self.assertRaisesRegex(RuntimeError, "录制"):
+                check_legacy_session()
 
     def test_camera_protocol_is_read_only(self):
         with self.assertRaises(ValueError):

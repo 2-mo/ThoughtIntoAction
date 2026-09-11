@@ -45,6 +45,7 @@ MAINTENANCE_COMMANDS = {
 MODULE_COMMANDS = {
     "quest-calibrate": "quest_teleop.frame_calibration",
     "camera-service": "robot_core.camera_service",
+    "viewer-control": "robot_simulation.control",
     "teleop-official-x5": "quest_teleop.cli",
     "teleop-presets-x5": "quest_teleop.cli",
     "teleop": "quest_teleop.legacy.controller",

@@ -92,6 +92,19 @@ function renderCollection(data = {}) {
   const result = last ? (last.lifecycle !== 'complete' ? '未完整保存' : last.outcome === 'discarded' ? '已丢弃' : '已保存') : '—';
   put('collection-last', '上一条：' + result + (last ? ' · ' + last.id : ''));
 }
+let cameraSwitchBusy = false;
+byId('camera-toggle').addEventListener('click', async () => {
+  const button = byId('camera-toggle');
+  cameraSwitchBusy = true; button.disabled = true;
+  const error = byId('camera-control-error'); error.hidden = true;
+  try {
+    const response = await fetch('/api/camera', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({enabled:button.getAttribute('aria-pressed') !== 'true'}), signal:AbortSignal.timeout(8000)});
+    const result = await response.json();
+    if (!response.ok || result.error) throw new Error(result.error || '相机开关失败');
+  } catch (exc) {error.textContent = exc.message; error.hidden = false;}
+  finally {cameraSwitchBusy = false;}
+});
 async function refresh() {
   try {
     const response = await fetch('/api/sensors', { cache: 'no-store', signal: AbortSignal.timeout(1500) });
@@ -103,6 +116,12 @@ async function refresh() {
       byId(id).textContent = !Object.hasOwn(data, 'connections') ? '需重启监看' :
         Number.isFinite(value) && value >= 0 ? value.toFixed(1) + ' ms' : '未测';
     }
+    const cameraButton = byId('camera-toggle');
+    const cameraOn = data.camera?.enabled === true;
+    cameraButton.setAttribute('aria-pressed', String(cameraOn));
+    cameraButton.disabled = cameraSwitchBusy || !!data.recording || data.camera?.switch_protocol !== 1;
+    cameraButton.textContent = cameraSwitchBusy ? '切换中' : data.recording ? '采集中' : cameraOn ? '相机开' : '相机关';
+    cameraButton.title = data.camera?.switch_protocol !== 1 ? '相机服务需要更新后才能切换' : data.recording ? '录制期间不能关闭相机' : '控制 RGB 和深度采集';
     renderCollection(data);
     const safety = data.table_safety;
     byId('table-safety').hidden = !safety;
@@ -158,9 +177,15 @@ async function refresh() {
       for (const side of ['left', 'right']) renderHand(side, hands[side], data.button_feedback || {});
       byId('button-response').textContent = data.button_feedback?.Y || '需重启遥操以显示实际按键响应和长按进度';
     }
+    if (data.camera?.enabled === false) {
+      byId('camera-empty').textContent = '相机已关闭';
+      byId('depth-empty').textContent = '深度已关闭';
+      byId('camera-status').textContent = '相机已关闭';
+    } else { byId('depth-empty').textContent = '等待深度'; }
   } catch {
     window.dispatchEvent(new CustomEvent('teleop-preview', { detail: null }));
     renderCollection();
+    byId('camera-toggle').disabled = true;
     byId('table-safety').textContent = '桌面限制状态未连接';
     byId('loop-rates').textContent = 'IK — Hz · 服务 — Hz';
     byId('arm-latency').textContent = byId('input-latency').textContent = '未测';

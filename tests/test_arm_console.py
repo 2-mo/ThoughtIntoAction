@@ -46,6 +46,12 @@ class ArmConsoleTests(unittest.TestCase):
             self.assertNotIn('--socket', cmd)
             self.assertNotIn('--home', cmd)
 
+    def test_viewer_commands_do_not_touch_arm_recovery(self):
+        for command, action in [('viewer-start','start'), ('viewer-stop','stop'), ('camera-off','camera-off')]:
+            cmd = recovery_command(command, self.args, True)
+            self.assertEqual(cmd[-2:], ['viewer-control', action])
+            self.assertNotIn('--socket', cmd)
+
     def test_no_commands_before_ready_or_after_service_exit(self):
         with patch.object(self.console, 'launch') as launch:
             self.console.ready.clear()

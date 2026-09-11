@@ -14,13 +14,16 @@ import unicodedata
 from robot_core.project import load_config, resolve_path
 
 KEYS = {"h": "home", "p": "pregrasp", "s": "stop", "i": "status", "d": "damping",
-        "b": "discovery-on", "n": "discovery-off"}
-LABELS = {"home": "回零", "pregrasp": "预抓取并张开夹爪", "stop": "停止并保持",
+        "b": "discovery-on", "n": "discovery-off", "w": "viewer-start", "e": "viewer-stop", "v": "viewer-status", "c": "camera-on", "x": "camera-off"}
+LABELS = {"viewer-start": "启动网页", "viewer-stop": "停止网页", "viewer-status": "网页状态",
+          "camera-on": "开启相机", "camera-off": "关闭相机","home": "回零", "pregrasp": "预抓取并张开夹爪", "stop": "停止并保持",
           "status": "查看状态", "damping": "切入阻尼（不锁定位置，请支撑机械臂）",
           "discovery-on": "开启头显发现广播", "discovery-off": "关闭头显发现广播"}
 
 
 def recovery_command(command, args, hardware):
+    if command.startswith(("viewer-", "camera-")):
+        return [str(Path(__file__).resolve().parents[2] / "run.sh"), "viewer-control", command.removeprefix("viewer-")]
     if command in {"discovery-on", "discovery-off"}:
         runner = Path(__file__).resolve().parents[2] / "run.sh"
         return [str(runner), "quest-discovery", command.removeprefix("discovery-")]
@@ -118,6 +121,7 @@ class Console:
         self.write("S / 空格 / Ctrl+C：取消当前动作，空闲时停止策略并保持。此操作不是硬件急停。")
         self.write("D 进入阻尼，不锁定当前位置，请先支撑机械臂；S 恢复当前位置保持。")
         self.write("B 开启头显发现广播；N 关闭广播（默认关闭，不重连 USB，最多约 5 秒生效）。")
+        self.write("W 启动网页；E 停止网页；V 网页状态；C 开相机；X 关相机（录制时拒绝）。")
         self.write("Q 关闭服务；↑↓ 翻阅输出，End 返回最新输出。")
         offset = 0
         while True:
@@ -141,7 +145,7 @@ class Console:
                         pass
             row(0, " X5 机械臂控制台  |  " + state, curses.A_REVERSE | curses.A_BOLD)
             row(1, " 当前操作：" + self.activity)
-            row(2, " 服务：" + self.args.socket, curses.A_DIM)
+            row(2, " W 开网页 E 关网页 V 状态 | C 开相机 X 关相机", curses.A_DIM)
             count = max(0, height - 7)
             offset = min(offset, max(0, len(self.lines) - count))
             end = len(self.lines) - offset

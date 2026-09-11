@@ -40,6 +40,7 @@ class TeleopSession:
         self._sample_cursor = 0
         self.latest_state = None
         self.latest_frame = None
+        self._camera_record_lease = None
         self.camera_metadata = None
         self.camera_error = None
         self.runtime_error = None
@@ -125,26 +126,30 @@ class TeleopSession:
         if not options["enabled"]:
             self.camera_error = "Wrist camera disabled"
             return
-        try:
-            import cv2
-            with self.camera_factory(options["serial"], options["width"], options["height"], options["fps"]) as camera:
-                self.camera_metadata = camera.metadata
-                last_preview = 0.
-                while not self.stop_event.is_set():
-                    frame = camera.read()
-                    self.latest_frame = frame
-                    writer = self.recording
-                    if writer is not None:
-                        writer.add("frame", frame)
-                    if time.monotonic() - last_preview >= .2:
-                        thumbnail = cv2.resize(frame["image"], (320, 240))
-                        ok, encoded = cv2.imencode(".jpg", thumbnail, [cv2.IMWRITE_JPEG_QUALITY, 75])
-                        if ok:
-                            self.preview_jpeg = base64.b64encode(encoded).decode("ascii")
-                            self.preview_frame = {"host_received_monotonic_ns": frame["host_received_monotonic_ns"]}
-                        last_preview = time.monotonic()
-        except Exception as exc:
-            self.camera_error = f"{type(exc).__name__}: {exc}"
+        while not self.stop_event.is_set():
+            try:
+                import cv2
+                with self.camera_factory(options["serial"], options["width"], options["height"], options["fps"]) as camera:
+                    self.camera_metadata = camera.metadata
+                    last_preview = 0.
+                    while not self.stop_event.is_set():
+                        frame = camera.read()
+                        self.camera_error = None
+                        self.latest_frame = frame
+                        writer = self.recording
+                        if writer is not None:
+                            writer.add("frame", frame)
+                        if time.monotonic() - last_preview >= .2:
+                            thumbnail = cv2.resize(frame["image"], (320, 240))
+                            ok, encoded = cv2.imencode(".jpg", thumbnail, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                            if ok:
+                                self.preview_jpeg = base64.b64encode(encoded).decode("ascii")
+                                self.preview_frame = {"host_received_monotonic_ns": frame["host_received_monotonic_ns"]}
+                            last_preview = time.monotonic()
+            except Exception as exc:
+                self.camera_error = f"{type(exc).__name__}: {exc}"
+                self.latest_frame = self.preview_frame = self.preview_jpeg = None
+                self.stop_event.wait(.5)
 
     @staticmethod
     def age(packet, key):
@@ -239,7 +244,7 @@ class TeleopSession:
         if command == "monitor":
             snapshot = self.status()
             state = snapshot["state"] or {}
-            return {"camera": snapshot["camera"],
+            return {"camera_switch_protocol": 1, "camera": snapshot["camera"],
                     "preview": self.dispatch({"command": "preview"}),
                     "input": state.get("input"),
                     "button_feedback": state.get("button_feedback"),
@@ -352,11 +357,25 @@ class TeleopSession:
                         self._dataset_run_id = self.task_run_id
                     meta["task_run_id"] = self.task_run_id
                     raw_root = self.dataset_root / ".raw"
-                self.recording = EpisodeWriter(raw_root, meta, payload.get("task"),
-                                               queue_size=self.config["recording"]["queue_size"],
-                                               rgb_video=self.config["recording"].get("rgb_video", False),
-                                               video_crf=self.config["recording"].get("video_crf", 20),
-                                               compress_records=self.config["recording"].get("compress_records", False))
+                from robot_core.camera_client import SharedCamera, socket_path
+                from robot_core.camera_control import recording_guard
+                from robot_core.session_protocol import request
+                lease = recording_guard() if self.camera_factory is SharedCamera else None
+                try:
+                    if lease:
+                        camera_state = request(socket_path(), "monitor", timeout=.5)["camera"]
+                        if camera_state.get("enabled") is False or camera_state.get("age_s") is None or camera_state["age_s"] > .5:
+                            raise RuntimeError("相机未开启或反馈已过期")
+                    self.recording = EpisodeWriter(raw_root, meta, payload.get("task"),
+                                                   queue_size=self.config["recording"]["queue_size"],
+                                                   rgb_video=self.config["recording"].get("rgb_video", False),
+                                                   video_crf=self.config["recording"].get("video_crf", 20),
+                                                   compress_records=self.config["recording"].get("compress_records", False))
+                    self._camera_record_lease = lease
+                except BaseException:
+                    if lease:
+                        lease.close()
+                    raise
                 return self.recording.status()
             if command == "record.stop":
                 return self._stop_recording(payload.get("outcome", "unknown"))
@@ -372,6 +391,9 @@ class TeleopSession:
         if result["lifecycle"] == "complete" and result["outcome"] != "discarded":
             self.counted_episodes = self.counted_episodes | {result["id"]}
         self.recording = None
+        if self._camera_record_lease:
+            self._camera_record_lease.close()
+            self._camera_record_lease = None
         if self.task_dataset is not None:
             self.task_dataset["episodes"] = len(self.counted_episodes)
         return result

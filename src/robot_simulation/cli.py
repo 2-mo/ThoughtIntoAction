@@ -2,6 +2,8 @@
 
 import argparse
 import signal
+import os
+import threading
 
 from robot_core.model import DEFAULT_URDF, RobotModel
 from robot_core.telemetry import StateSubscriber, endpoint
@@ -17,6 +19,7 @@ def main(argv=None):
     parser.add_argument("--viewer", default="web", help="Display plugin; independent of controllers")
     parser.add_argument("--camera", action=argparse.BooleanOptionalAction, default=False, help="Ensure independent shared RGB service is running")
     parser.add_argument("--connections", action=argparse.BooleanOptionalAction, default=True, help="Read-only arm-service and USB RTT probes")
+    parser.add_argument("--managed", action="store_true", help="Expose terminal start/stop control")
     args = parser.parse_args(argv)
     address = endpoint(args.endpoint)
     robot = RobotModel(args.urdf, args.eef)
@@ -29,7 +32,20 @@ def main(argv=None):
     from .connections import LegacyGripperFeedback
     legacy_gripper = LegacyGripperFeedback(resolve_path(load_config()["arm_service"]["socket"]))
     subscriber = None
+    control_server = None
+    quit_event = threading.Event()
     try:
+        if args.managed:
+            from robot_core.local_server import LocalServer
+            from .control import socket_path
+            def dispatch(payload):
+                command = payload.get("command")
+                if command == "stop":
+                    quit_event.set()
+                elif command != "status":
+                    raise ValueError("Only viewer status/stop are supported")
+                return {"url": scene.url, "pid": os.getpid()}
+            control_server = LocalServer(socket_path(), dispatch)
         if args.connections and hasattr(scene, "connection_probe"):
             from robot_core.project import load_config, resolve_path
             from .connections import ConnectionProbe
@@ -42,7 +58,7 @@ def main(argv=None):
                 print(f"Camera service: {exc}", flush=True)
         subscriber = StateSubscriber(address)
         print(f"Watching robot state: {address}; waiting for arm-service", flush=True)
-        while True:
+        while not quit_event.is_set():
             try:
                 packet = subscriber.receive()
                 if packet is not None:
@@ -60,6 +76,8 @@ def main(argv=None):
         if getattr(scene, "connection_probe", None):
             scene.connection_probe.close()
         scene.close()
+        if control_server:
+            control_server.close()
         signal.signal(signal.SIGTERM, previous)
 
 

@@ -505,3 +505,9 @@ aside > .input-panel, .collection-panel, .collection-panel[data-state] { backgro
   #torques { gap:3px; }
   .torque-row { grid-template-rows:14px 40px; }
 }
+
+.camera-actions { display:flex; align-items:center; gap:8px; }
+#camera-toggle { font-size:10px; padding:3px 8px; border:0; background:#292d33; color:#9da5ae; }
+#camera-toggle[aria-pressed="true"] { background:#29473c; color:#bbdbcb; }
+#camera-toggle:disabled { cursor:default; opacity:.6; }
+#camera-control-error { color:#e1b782; font-size:10px; margin:3px 0 0; }

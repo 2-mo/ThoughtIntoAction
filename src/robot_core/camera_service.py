@@ -1,5 +1,6 @@
 """Independent single-owner RGB service; monitor and recording share original frames."""
 import base64
+from contextlib import closing
 import signal
 import threading
 import time
@@ -12,14 +13,62 @@ from .project import load_config
 
 
 class CameraFeed:
-    def __init__(self):
+    def __init__(self, options=None):
+        self.options = options
+        self.enabled = False
+        self.control_lock = threading.RLock()
+        self.capture_stop = threading.Event()
+        self.thread = None
         self.frame = None
         self.preview = None
         self.depth_preview = None
         self.metadata = None
         self.error = "Camera starting"
 
+    def set_enabled(self, enabled):
+        from .camera_control import recording_guard, check_legacy_session
+        if type(enabled) is not bool:
+            raise ValueError("Expected enabled boolean")
+        with self.control_lock:
+            if enabled == self.enabled:
+                return self.dispatch({"command": "monitor"})
+            guard = None
+            if not enabled:
+                check_legacy_session()
+                try:
+                    guard = recording_guard()
+                except RuntimeError as exc:
+                    raise RuntimeError("正在录制，不能关闭相机") from exc
+            try:
+                if enabled:
+                    self.capture_stop = threading.Event()
+                    self.error = "Camera starting"
+                    self.enabled = True
+                    self.thread = threading.Thread(target=self.capture, args=(self.options, self.capture_stop), daemon=True)
+                    self.thread.start()
+                else:
+                    self.capture_stop.set()
+                    if self.thread:
+                        self.thread.join(timeout=5)
+                        if self.thread.is_alive():
+                            raise RuntimeError("相机仍在停止，请稍后重试")
+                    self.thread = None
+                    self.enabled = False
+                    self.frame = self.preview = self.depth_preview = self.metadata = None
+                    self.error = "相机已关闭"
+                return self.dispatch({"command": "monitor"})
+            finally:
+                if guard:
+                    guard.close()
+
+    def close(self):
+        self.capture_stop.set()
+        if self.thread:
+            self.thread.join(timeout=5)
+
     def dispatch(self, payload):
+        if payload.get("command") == "set_enabled":
+            return self.set_enabled(payload.get("enabled"))
         if payload.get("command") == "frame":
             return self.frame
         if payload.get("command") != "monitor":
@@ -27,6 +76,7 @@ class CameraFeed:
         now = time.monotonic_ns()
         frame, preview, depth = self.frame, self.preview, self.depth_preview
         return {"camera": {"metadata": self.metadata, "error": self.error,
+                           "enabled": self.enabled, "switch_protocol": 1,
                            "age_s": None if frame is None else (now - frame["host_received_monotonic_ns"]) / 1e9},
                 "depth_preview": {"jpeg_base64": None if depth is None else depth[1],
                                   "age_s": None if depth is None else (now - depth[0]) / 1e9,
@@ -38,7 +88,7 @@ class CameraFeed:
         while not stop.is_set():
             try:
                 import cv2
-                with RealSenseCamera(options["serial"], options["width"], options["height"], options["fps"]) as camera:
+                with closing(DeviceLease("camera:" + options["serial"])), RealSenseCamera(options["serial"], options["width"], options["height"], options["fps"]) as camera:
                     self.metadata = camera.metadata
                     last_preview = 0
                     while not stop.is_set():
@@ -83,26 +133,22 @@ def main():
     stop = threading.Event()
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: stop.set())
-    lease = DeviceLease("camera:" + options["serial"])
     server = None
-    thread = None
     try:
-        feed = CameraFeed()
+        feed = CameraFeed(options)
         server = LocalServer(socket_path(), feed.dispatch)
         if options["enabled"]:
-            thread = threading.Thread(target=feed.capture, args=(options, stop), daemon=True)
-            thread.start()
+            feed.set_enabled(True)
         else:
-            feed.error = "Wrist camera disabled"
+            feed.error = "相机已关闭"
         print(f"Camera service ready: {socket_path()}", flush=True)
         stop.wait()
     finally:
         stop.set()
-        if thread:
-            thread.join(timeout=5)
+        if "feed" in locals():
+            feed.close()
         if server:
             server.close()
-        lease.close()
 
 
 if __name__ == "__main__":
