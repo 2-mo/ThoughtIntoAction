@@ -2,13 +2,27 @@
 const byId = (id) => document.getElementById(id);
 let closed = false;
 window.addEventListener('pagehide', () => { closed = true; });
-function renderHand(side, hand, feedback = {}) {
+const inputPanel = document.querySelector('.input-panel');
+const stateLabels = { live: '输入在线', offline: '无输入', stale: '已过期', partial: '单侧输入' };
+let inputDeadline = 0;
+function inputState(state, detail = '') {
+  inputPanel.dataset.state = state;
+  byId('input-status').textContent = stateLabels[state];
+  byId('input-status').title = detail;
+}
+function validHand(hand) {
+  return hand?.pose?.length === 7 && hand.pose.every(Number.isFinite) &&
+    Math.hypot(...hand.pose.slice(3)) > .1;
+}
+function renderHand(side, hand, feedback = {}, state = hand ? 'live' : 'offline') {
   const root = byId(side + '-hand');
+  root.dataset.state = state;
+  root.setAttribute('aria-label', (side === 'left' ? '左手柄：' : '右手柄：') + stateLabels[state]);
   if (!root.querySelector('.controller-shell')) {
     const keys = side === 'left' ? ['X', 'Y'] : ['A', 'B'];
     const ring = (key, content, label) => `<span class="hold-ring" data-hold="${key}" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">${content}</span>`;
     const stick = `<span class="controller-stick" ${side === 'right' ? 'data-key="R3"' : ''}><i></i></span>`;
-    root.innerHTML = `<div class="controller-shell"><div class="controller-face"><div class="key-unit">${side === 'right' ? ring('stick', stick, '摇杆长按进度') : stick}<small class="stick-label">摇杆</small></div>${keys.map(key => `<div class="key-unit">${key === 'B' ? ring('B', `<span class="controller-key" data-key="B">B</span>`, 'B 回零长按进度') : `<span class="controller-key" data-key="${key}">${key}</span>`}<small>${({A:'预抓取/采集', B:'预抓取/回零', X:'网页回放', Y:'真机回放'})[key]}</small></div>`).join('')}</div><div class="meters"></div></div><p class="controller-pose"></p>`;
+    root.innerHTML = `<div class="controller-shell"><div class="hand-signal" aria-hidden="true"><span class="signal-mark"></span></div><div class="controller-face"><div class="key-unit">${side === 'right' ? ring('stick', stick, '摇杆长按进度') : stick}<small class="stick-label">摇杆</small></div>${keys.map(key => `<div class="key-unit">${key === 'B' ? ring('B', `<span class="controller-key" data-key="B">B</span>`, 'B 回零长按进度') : `<span class="controller-key" data-key="${key}">${key}</span>`}<small>${({A:'预抓取/采集', B:'预抓取/回零', X:'网页回放', Y:'真机回放'})[key]}</small></div>`).join('')}</div><div class="meters"></div></div><p class="controller-pose"></p>`;
     const labels = [['trigger', 'Trigger'], ['grip', 'Grip']];
     root.querySelector('.meters').innerHTML = labels.map(([key, label]) => `<label class="controller-meter">${label}<output data-meter="${key}" aria-label="${label}">0%</output></label>`).join('');
   }
@@ -16,7 +30,7 @@ function renderHand(side, hand, feedback = {}) {
   root.querySelectorAll('[data-meter]').forEach(node => {
     const key = node.dataset.meter;
     const value = hand ? (hand[key] || 0) : 0;
-    node.textContent = Math.round(value * 100) + '%';
+    node.textContent = hand ? Math.round(value * 100) + '%' : '—';
     node.title = hand ? feedback[key]?.fired ? '长按已触发' : Math.round(value * 100) + '%' : '数据未连接';
   });
   root.querySelectorAll('[data-hold]').forEach(node => {
@@ -32,9 +46,10 @@ function renderHand(side, hand, feedback = {}) {
   root.querySelector('.controller-stick i').style.transform = `translate(${axes[0] * 10}px, ${-axes[1] * 10}px)`;
   root.querySelector('.controller-pose').textContent = hand ? 'XYZ ' + hand.pose.slice(0, 3).map(v => v.toFixed(2)).join(' / ') + ' m' : '数据未连接';
 }
-function clearInput(message) {
-  byId('input-status').textContent = message;
-  for (const side of ['left', 'right']) renderHand(side, null);
+function clearInput(message, state = 'offline') {
+  inputDeadline = 0;
+  inputState(state, message);
+  for (const side of ['left', 'right']) renderHand(side, null, {}, state);
   byId('button-response').textContent = '按键响应：' + message;
 }
 function renderCollection(data = {}) {
@@ -121,11 +136,16 @@ async function refresh() {
       'RGB：' + (cameraLive ? '正常' : '暂无新画面') + ' · 深度：' + (depthLive ? '正常' : '暂无新画面');
     byId('camera-status').title = byId('camera-status').textContent;
     const input = data.input;
-    if (!input || input.error || data.input_age_s == null || data.input_age_s > .5) {
-      clearInput(data.input_error || (input?.error ? '读取异常' : input ? '数据已过期' : '等待手柄新帧'));
+    if (!input || input.error || data.input_error || !Number.isFinite(data.input_age_s)) {
+      clearInput(data.input_error || input?.error || '等待手柄新帧');
+    } else if (data.input_age_s >= .5 || !Number.isFinite(data.state_age_s) || data.state_age_s >= .5) {
+      clearInput('手柄输入数据已过期', 'stale');
     } else {
-      byId('input-status').textContent = '数据正常';
-      for (const side of ['left', 'right']) renderHand(side, input.hands[side], data.button_feedback || {});
+      const hands = Object.fromEntries(['left', 'right'].map(side => [side, validHand(input.hands?.[side]) ? input.hands[side] : null]));
+      const count = Object.values(hands).filter(Boolean).length;
+      inputState(count === 2 ? 'live' : count === 1 ? 'partial' : 'offline', '依据手柄输入帧的新鲜度；不代表机械臂控制已启用');
+      inputDeadline = count ? performance.now() + 1000 * (.5 - Math.max(data.input_age_s, data.state_age_s)) : 0;
+      for (const side of ['left', 'right']) renderHand(side, hands[side], data.button_feedback || {});
       byId('button-response').textContent = data.button_feedback?.Y || '需重启遥操以显示实际按键响应和长按进度';
     }
   } catch {
@@ -149,7 +169,13 @@ async function refresh() {
     if (!closed) setTimeout(refresh, document.hidden ? 1000 : 200);
   }
 }
+clearInput('等待手柄新帧');
 refresh();
+// A stalled HTTP request must not leave the last green frame on screen.
+const inputWatchdog = setInterval(() => {
+  if (inputDeadline && performance.now() >= inputDeadline) clearInput('手柄输入数据已过期', 'stale');
+}, 100);
+window.addEventListener('pagehide', () => clearInterval(inputWatchdog));
 
 // Keep operating guidance available on hover without taking dashboard space.
 document.querySelectorAll('.hint, .collection-controls').forEach(note => {

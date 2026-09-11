@@ -48,7 +48,7 @@
         <div class="camera-frame"><img id="depth-image" alt="深度伪彩色预览" hidden><span id="depth-empty">等待深度</span><span class="depth-key" title="近端蓝色，远端红色；黑色为无效深度；范围外颜色饱和。未对齐 RGB。">0.2–2 m · 原生深度</span></div></div>
         <p id="camera-status" role="status">等待相机数据</p>
       </section>
-      <section class="input-panel"><h2>Quest 手柄 <span id="input-status">等待数据</span></h2>
+      <section class="input-panel" data-state="offline"><h2>Quest 手柄 <span class="input-badge" role="status"><span class="signal-mark" aria-hidden="true"></span><span id="input-status">无输入</span></span></h2>
         <div class="hands"><div><h3>左 · X / Y</h3><div id="left-hand">—</div></div><div><h3>右 · A / B / R3</h3><div id="right-hand">—</div></div></div>
         <p id="button-response" role="status">等待按键响应</p><p class="hint">进度来自控制程序实际长按计时；按键亮起仅代表输入已收到。</p>
       </section>

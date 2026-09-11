@@ -89,7 +89,11 @@ try {
     pose: [.1, -.2, .3, 0, 0, 0, 1], trigger: .25, grip: .75,
     buttons: side === 'left' ? { X: true, Y: false } : { A: true, B: false }
   };
-  await page.route('**/api/sensors', route => route.fulfill({ json: sample }));
+  let delayInput = false;
+  await page.route('**/api/sensors', async route => {
+    if (delayInput) await new Promise(resolve => setTimeout(resolve, 900));
+    return route.fulfill({ json: sample });
+  });
   sample.button_feedback = {B: {progress: .6, fired: false}, R3: {progress: .2}, down: {progress: .4}, Y: 'Y 已识别'};
   sample.collection.control_enabled = false;
   await page.waitForFunction(() => document.getElementById('control-state').textContent === '待机 · 未启用控制');
@@ -110,6 +114,33 @@ try {
     document.getElementById('collection-state').textContent === '● 采集中' && document.getElementById('collection-duration').textContent === '01:05' && document.getElementById('collection-frames').textContent === '1950' && document.getElementById('collection-count').textContent === '12');
   assert.equal(await page.locator('#right-hand [data-hold=B]').getAttribute('aria-valuenow'), '60');
   assert.equal(await page.locator('#button-response').textContent(), 'Y 已识别');
+  const inputPanel = page.locator('.input-panel');
+  await page.waitForFunction(() => document.querySelector('.input-panel').dataset.state === 'live');
+  const liveColor = await inputPanel.evaluate(e => getComputedStyle(e).backgroundColor);
+  await inputPanel.screenshot({path: output + '/quest-input-live.png'});
+  const left = sample.input.hands.left;
+  delete sample.input.hands.left;
+  await page.waitForFunction(() => document.querySelector('.input-panel').dataset.state === 'partial');
+  assert.equal(await page.locator('#left-hand').getAttribute('data-state'), 'offline');
+  assert.equal(await page.locator('#right-hand').getAttribute('data-state'), 'live');
+  await inputPanel.screenshot({path: output + '/quest-input-partial.png'});
+  sample.input.hands.left = left;
+  sample.input_age_s = .5;
+  await page.waitForFunction(() => document.querySelector('.input-panel').dataset.state === 'stale');
+  assert.notEqual(await inputPanel.evaluate(e => getComputedStyle(e).backgroundColor), liveColor);
+  assert.equal(await page.locator('#right-hand [data-key=A]').getAttribute('data-pressed'), 'false');
+  await inputPanel.screenshot({path: output + '/quest-input-stale.png'});
+  sample.input.error = 'disconnected';
+  await page.waitForFunction(() => document.querySelector('.input-panel').dataset.state === 'offline');
+  await inputPanel.screenshot({path: output + '/quest-input-offline.png'});
+  delete sample.input.error;
+  sample.input_age_s = .02;
+  await page.waitForFunction(() => document.querySelector('.input-panel').dataset.state === 'live');
+  delayInput = true;
+  await page.waitForFunction(() => document.querySelector('.input-panel').dataset.state === 'stale');
+  delayInput = false;
+  await page.waitForFunction(() => document.querySelector('.input-panel').dataset.state === 'live');
+
   for (const [width, height] of [[1440, 960], [1366, 768], [1024, 600]]) {
     await page.setViewportSize({ width, height });
     await page.waitForTimeout(250);
@@ -139,8 +170,8 @@ try {
   sample.collection.error = null;
   sample.depth_preview.age_s = 2; sample.preview.age_s = 2; sample.input_age_s = 2; sample.motion_diagnostics.age_s = 2; sample.joint_limit.age_s = 2; sample.timing.arm_command.age_s = 2; sample.timing.input_processing.age_s = 2; sample.connections = {};
   await page.waitForFunction(() => document.getElementById('camera-image').hidden && document.getElementById('depth-image').hidden &&
-    document.getElementById('input-status').textContent === '数据已过期' &&
-    document.querySelector('#right-hand [data-meter=grip]').textContent === '0%' && document.querySelector('#right-hand [data-key=A]').dataset.pressed === 'false' &&
+    document.querySelector('.input-panel').dataset.state === 'stale' &&
+    document.querySelector('#right-hand [data-meter=grip]').textContent === '—' && document.querySelector('#right-hand [data-key=A]').dataset.pressed === 'false' &&
     document.getElementById('motion-diagnostics').textContent === '—' && document.getElementById('arm-latency').textContent === '未测' && document.getElementById('input-latency').textContent === '未测');
   await page.setViewportSize({ width: 1440, height: 960 });
   // Attitude preview uses the Cartesian task, and never leaves stale ghosts visible.
