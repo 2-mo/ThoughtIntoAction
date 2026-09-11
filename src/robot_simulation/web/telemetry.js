@@ -59,7 +59,9 @@ function render() {
   const now = performance.now();
   const live = state?.stream?.status === 'live' && now - received + (state.stream.age_s || 0) * 1000 < 1000;
   showPositions(live);
-  history = history.filter(sample => now - sample.time <= 5000);
+  const windowStart = now - 5000;
+  // Keep one point before the boundary so the trace can be clipped continuously.
+  while (history.length > 1 && history[1].time <= windowStart) history.shift();
   byId('torque-scale').textContent = 'N·m · 5 s';
   const values = live ? [...(state?.actual_torque || Array(6).fill(null)), state?.gripper_actual_torque] : null;
   byId('torques').dataset.state = values?.some(finite) ? 'live' : 'waiting';
@@ -71,14 +73,23 @@ function render() {
     row.dataset.state = finite(values?.[index]) ? 'live' : 'waiting';
     row.querySelector('b').textContent = finite(values?.[index]) ? values[index].toFixed(2) : '—';
     let previous;
-    const d = history.map(sample => {
-      if (!validScale || !finite(sample.values[index])) { previous = undefined; return ''; }
-      const x = 200 * (1 - (now - sample.time) / 5000);
-      const y = 12 - Math.max(-1, Math.min(1, sample.values[index] / scale)) * 9;
-      const command = previous === undefined || sample.time - previous > 500 ? 'M' : 'L';
-      previous = sample.time;
-      return `${command}${x.toFixed(1)} ${y.toFixed(1)}`;
-    }).join(' ');
+    const segments = [];
+    const yFor = value => 12 - Math.max(-1, Math.min(1, value / scale)) * 9;
+    for (const sample of history) {
+      const value = sample.values[index];
+      if (!validScale || !finite(value)) { previous = undefined; continue; }
+      if (sample.time < windowStart) { previous = sample; continue; }
+      const connected = previous && sample.time - previous.time <= 500;
+      if (connected && previous.time < windowStart) {
+        const fraction = (windowStart - previous.time) / (sample.time - previous.time);
+        const boundary = previous.values[index] + fraction * (value - previous.values[index]);
+        segments.push(`M0.0 ${yFor(boundary).toFixed(1)}`);
+      }
+      const x = 200 * (sample.time - windowStart) / 5000;
+      segments.push(`${connected ? 'L' : 'M'}${x.toFixed(1)} ${yFor(value).toFixed(1)}`);
+      previous = sample;
+    }
+    const d = segments.join(' ');
     row.querySelector('.torque-line').setAttribute('d', d);
   });
 }

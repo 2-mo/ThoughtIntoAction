@@ -57,6 +57,16 @@ try {
   assert.equal(await page.locator('.torque-range').first().textContent(), '±30');
   await page.waitForTimeout(5100);
   assert.equal(await page.locator('.torque-line').first().getAttribute('d'), '', 'Samples must leave the five-second window');
+  await page.evaluate(() => {
+    window.traceFeed = setInterval(() => {window.fixture.stream.sequence++;}, 80);
+  });
+  await page.waitForTimeout(5400);
+  for (let i = 0; i < 8; i++) {
+    assert.match(await page.locator('.torque-line').first().getAttribute('d'), /^M0\.0 /,
+      'A full live trace must stay anchored at the five-second boundary');
+    await page.waitForTimeout(110);
+  }
+  await page.evaluate(() => {clearInterval(window.traceFeed);});
   await page.evaluate(() => {window.fixture.stream.status='stale';});
   await page.waitForFunction(() => document.querySelector('.torque-row b').textContent === '—');
   await page.evaluate(() => {window.fixture={stream:{status:'waiting'},actual:null};});
