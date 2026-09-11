@@ -156,10 +156,12 @@ async function initialize() {
   });
   function renderPosition(row, actual, target, lower, upper, unit) {
     const validRange = Number.isFinite(lower) && Number.isFinite(upper) && upper > lower;
-    const percent = value => 100 * (Math.min(upper, Math.max(lower, value)) - lower) / (upper - lower);
-    const origin = validRange ? percent(0) : 0;
+    // Symmetric scales keep every zero on the same vertical centerline.
+    const extent = Math.max(Math.abs(lower), Math.abs(upper));
+    const percent = value => 50 + 50 * Math.min(extent, Math.max(-extent, value)) / extent;
+    const origin = 50;
     const zero = row.querySelector('.position-zero');
-    zero.hidden = !validRange || lower >= 0 || upper <= 0;
+    zero.hidden = !validRange;
     zero.style.left = `${origin}%`;
     [actual, target].forEach((value, index) => {
       const valid = Number.isFinite(value);

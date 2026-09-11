@@ -64,6 +64,54 @@ def arm_rtt(path):
     return (finished - started) / 1e6
 
 
+class LegacyGripperFeedback:
+    """Read cached opening from older services without acquiring control."""
+
+    def __init__(self, path):
+        self.path = str(path)
+        self.next_probe = 0
+        self.stream_id = None
+        self.info = None
+
+    def read(self, packet):
+        from robot_core.telemetry import gripper_data
+        if not isinstance(packet, dict) or not isinstance(packet.get("source"), dict):
+            return None
+        source = packet["source"]
+        if packet.get("gripper") is not None or source.get("controller") != "arm-service":
+            return packet.get("gripper")
+        now = time.monotonic_ns()
+        if self.stream_id != packet.get("stream_id"):
+            self.info, self.next_probe = None, 0
+            self.stream_id = packet.get("stream_id")
+        if now >= self.next_probe:
+            self.next_probe = now + 200_000_000
+            self.info = None
+            try:
+                with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as sock:
+                    sock.settimeout(.1)
+                    sock.connect(self.path)
+                    sock.sendall(json.dumps({"op": "describe", "sent_monotonic_ns": now}).encode())
+                    raw, _, flags, _ = sock.recvmsg(1_000_000)
+                reply = json.loads(raw)
+                if not flags & socket.MSG_TRUNC and reply.get("ok"):
+                    self.info = reply["result"]
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+        info = self.info
+        try:
+            state = info["state"]
+            if (info["robot"] != packet["robot"] or info["backend"] != source.get("backend")
+                    or source.get("kind") != ("hardware" if info["hardware"] else "virtual")
+                    or not 0 <= time.monotonic_ns() - state["host_monotonic_ns"] < 500_000_000):
+                return None
+            # Old services expose measured opening only; do not invent a target.
+            return gripper_data({"actual": state["gripper_actual_pos"], "target": None,
+                                 "max": info["settings"]["gripper_width"]})
+        except (ValueError, KeyError, TypeError):
+            return None
+
+
 class ConnectionProbe:
     def __init__(self, arm_socket):
         self.arm_socket = arm_socket

@@ -25,6 +25,9 @@ def main(argv=None):
     def interrupted(*_):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, interrupted)
+    from robot_core.project import load_config, resolve_path
+    from .connections import LegacyGripperFeedback
+    legacy_gripper = LegacyGripperFeedback(resolve_path(load_config()["arm_service"]["socket"]))
     subscriber = None
     try:
         if args.connections and hasattr(scene, "connection_probe"):
@@ -43,6 +46,7 @@ def main(argv=None):
             try:
                 packet = subscriber.receive()
                 if packet is not None:
+                    packet["gripper"] = legacy_gripper.read(packet)
                     scene.accept(packet)
             except (ValueError, TypeError, KeyError, OverflowError) as exc:
                 scene.set_stream_error(str(exc))

@@ -253,6 +253,8 @@ try {
   await page.screenshot({ path: `${output}/monitor-terminal.png` });
   await page.waitForFunction(() => document.querySelector('.position-row:last-child .position-values b').textContent.endsWith('mm'));
   assert.equal(await page.locator('.position-row').count(), 7);
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.position-zero')]
+    .every(zero => !zero.hidden && zero.style.left === '50%')), true, 'All position zeros must align');
   for (const [width, height] of [[1440, 960], [1366, 768], [1024, 600]]) {
     await page.setViewportSize({width, height});
     assert.equal(await page.evaluate(() => [...document.querySelectorAll('.position-row')].every(row => {
