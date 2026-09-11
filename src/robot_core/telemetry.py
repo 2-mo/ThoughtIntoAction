@@ -32,6 +32,17 @@ def joint_pair(actual, target=None):
     return actual.tolist(), target.tolist()
 
 
+def gripper_data(value):
+    if value is None:
+        return None
+    actual, target, maximum = value["actual"], value.get("target"), value["max"]
+    if not all(type(v) in (int, float) and np.isfinite(v) for v in (actual, maximum)) or maximum <= 0:
+        raise ValueError("Invalid gripper feedback/range")
+    if target is not None and (type(target) not in (int, float) or not np.isfinite(target)):
+        raise ValueError("Invalid gripper target")
+    return {"actual": float(actual), "target": target, "max": float(maximum)}
+
+
 def path_data(points, color):
     points = np.asarray(points, dtype=float)
     if points.size == 0:
@@ -96,14 +107,15 @@ class LocalPublisher:
             self._error = exc
             self._ready.set()
 
-    def update(self, actual, target=None):
+    def update(self, actual, target=None, *, gripper=None):
         actual, target = joint_pair(actual, target)
+        gripper = gripper_data(gripper)
         with self._lock:
             if self.closed:
                 raise RuntimeError("State publisher is closed")
             self._sequence += 1
             self._state = {"sequence": self._sequence, "actual": actual, "target": target,
-                           "sample_monotonic_ns": time.monotonic_ns()}
+                           "sample_monotonic_ns": time.monotonic_ns(), "gripper": gripper}
 
     def path(self, name, points, color):
         data = path_data(points, color)
@@ -133,7 +145,7 @@ class NullPublisher:
     def __init__(self, robot, source=None):
         pass
 
-    def update(self, actual, target=None):
+    def update(self, actual, target=None, *, gripper=None):
         pass
 
     def path(self, name, points, color):

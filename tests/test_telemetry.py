@@ -111,6 +111,29 @@ class TelemetryTests(unittest.TestCase):
                 scene.accept({**packet, **changes})
             np.testing.assert_allclose(scene.snapshot()['actual']['q'], self.q)
 
+    def test_gripper_feedback_target_and_legacy_absence(self):
+        publisher = self.publisher()
+        subscriber = self.subscriber()
+        grip = {"actual": .018, "target": .04, "max": .085}
+        publisher.update(self.q, gripper=grip)
+        packet = self.packet(subscriber)
+        scene = Scene(self.robot)
+        self.addCleanup(scene.close)
+        scene.accept(packet)
+        self.assertEqual(scene.snapshot()['gripper'], grip)
+        for invalid in ({**grip, 'max': 0}, {**grip, 'actual': float('nan')},
+                        {**grip, 'target': float('inf')}):
+            with self.assertRaises(ValueError):
+                scene.accept({**packet, 'gripper': invalid})
+            self.assertEqual(scene.snapshot()['gripper'], grip)
+        scene.accept({**packet, 'sequence': packet['sequence'] + 1,
+                      'gripper': {**grip, 'target': None}})
+        self.assertIsNone(scene.snapshot()['gripper']['target'])
+        packet.pop('gripper')
+        packet['sequence'] += 2
+        scene.accept(packet)
+        self.assertIsNone(scene.snapshot()['gripper'])
+
     def subscriber_after_publisher(self):
         self.publisher()
         return self.subscriber()

@@ -106,6 +106,8 @@ class SceneTests(unittest.TestCase):
         self.scene.update(self.q)
         manifest = json.loads(self.read('api/model'))
         self.assertEqual(manifest['robot'], self.robot.metadata())
+        np.testing.assert_allclose(manifest['joint_limits']['lower'], self.robot.lower)
+        np.testing.assert_allclose(manifest['joint_limits']['upper'], self.robot.upper)
         self.assertIn(b'robot-canvas', self.read(''))
         for spec in manifest['meshes']:
             self.assertGreater(len(self.read(spec['url'].lstrip('/'))), 1000)
@@ -115,7 +117,7 @@ class SceneTests(unittest.TestCase):
             self.assertEqual(error.exception.code, 404)
         with self.assertRaises(HTTPError) as error:
             self.http.open(Request(self.scene.url + 'api/state', data=b'{}', method='POST'), timeout=2)
-        self.assertEqual(error.exception.code, 501)
+        self.assertEqual(error.exception.code, 404)
         provenance = json.loads((WEB_ROOT / 'provenance.json').read_text())
         for path, digest in provenance['sha256'].items():
             self.assertEqual(hashlib.sha256((WEB_ROOT / path).read_bytes()).hexdigest(), digest, path)

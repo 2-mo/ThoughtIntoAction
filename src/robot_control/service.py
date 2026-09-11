@@ -188,7 +188,11 @@ class ArmService:
                       "table_safety": self._table_report,
                       "actuate": bool(self.holding or self.owner and self.owner["actuate"]),
                       "trajectory": self.motion.snapshot() if self.motion else None}
-        self.publisher.update(state["actual_pos"], self.target)
+        self.publisher.update(state["actual_pos"], self.target, gripper={
+            "actual": state["gripper_actual_pos"],
+            "target": self.gripper if self.state["actuate"] else None,
+            "max": self.settings["gripper_width"],
+        })
 
     def describe(self):
         hardware_speed = np.asarray(self.arm.robot_config.joint_vel_max, dtype=float)

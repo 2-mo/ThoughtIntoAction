@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 import numpy as np
 
-from robot_core.telemetry import SCHEMA, joint_pair, path_data
+from robot_core.telemetry import SCHEMA, joint_pair, path_data, gripper_data
 
 WEB_ROOT = Path(__file__).with_name("web")
 
@@ -53,7 +53,8 @@ class Scene:
         if not meshes:
             raise ValueError("Robot has no visual meshes")
         self._manifest = {"robot": robot.metadata(), "model_file": robot.urdf.name,
-                          "meshes": meshes, "matrix_order": "column-major"}
+                          "meshes": meshes, "matrix_order": "column-major",
+                          "joint_limits": {"lower": robot.lower.tolist(), "upper": robot.upper.tolist()}}
         reference = np.zeros(6)
         self._manifest["reference"] = {"sequence": 0, "actual": self._pose(reference),
                                        "target": self._pose(reference), "target_visible": False, "paths": {}}
@@ -206,6 +207,7 @@ class Scene:
         if packet["schema"] != SCHEMA or packet["robot"] != self._manifest["robot"]:
             raise ValueError("Robot model/frame or state schema mismatch")
         actual, target = joint_pair(packet["actual"], packet["target"])
+        gripper = gripper_data(packet.get("gripper"))
         stream_id, source = packet["stream_id"], packet["source"]
         if not isinstance(stream_id, str) or not stream_id or not isinstance(source, dict):
             raise ValueError("Invalid robot state source")
@@ -231,6 +233,7 @@ class Scene:
             if changed_source or previous["sequence"] != sequence or self._paths_without_history() != paths:
                 self._paths = paths
                 self.update(actual, target)
+                self._state["gripper"] = gripper
 
     def _paths_without_history(self):
         return {name: value for name, value in self._paths.items() if name != "playback_path"}

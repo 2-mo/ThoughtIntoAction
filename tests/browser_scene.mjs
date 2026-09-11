@@ -248,9 +248,21 @@ try {
   const initial = await canvas.screenshot();
   const firstStream = await page.evaluate(async () => (await (await fetch('/api/state')).json()).stream.stream_id);
   terminal.child.stdin.write('q 0.15 1.5 1.45 -1.52 0 0\n');
-  await page.waitForFunction(() => document.querySelector('.joint-row span:nth-child(2)')?.textContent === '8.59');
+  await page.waitForFunction(() => document.querySelector('.position-values b')?.textContent === '8.59°');
   assert.notDeepEqual(await canvas.screenshot(), initial, 'Arm rendering did not move');
   await page.screenshot({ path: `${output}/monitor-terminal.png` });
+  await page.waitForFunction(() => document.querySelector('.position-row:last-child .position-values b').textContent.endsWith('mm'));
+  assert.equal(await page.locator('.position-row').count(), 7);
+  for (const [width, height] of [[1440, 960], [1366, 768], [1024, 600]]) {
+    await page.setViewportSize({width, height});
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll('.position-row')].every(row => {
+      const box = row.getBoundingClientRect();
+      const track = row.querySelector('.position-track').getBoundingClientRect();
+      return row.scrollWidth <= row.clientWidth + 1 && box.bottom <= innerHeight && track.width >= 25;
+    })), true, 'Position bars overflow at ' + width);
+    await page.screenshot({path: `${output}/position-bars-${width}.png`});
+  }
+  await page.setViewportSize({width: 1440, height: 960});
   await page.locator('#show-table').uncheck();
   const noTable = await canvas.screenshot();
   await page.locator('#show-table').check();

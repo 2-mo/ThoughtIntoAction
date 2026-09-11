@@ -146,15 +146,34 @@ async function initialize() {
   scene.add(paths);
   const pathObjects = new Map();
   const pathSignatures = new Map();
-  const rows = manifest.robot.joint_names.map((name) => {
+  const rows = [...manifest.robot.joint_names, '夹爪'].map((name, index) => {
     const row = document.createElement('div');
-    row.className = 'joint-row';
-    const cells = [name, '—', '—'].map((text) => {
-      const span = document.createElement('span'); span.textContent = text; row.append(span); return span;
-    });
+    row.className = 'position-row';
+    row.innerHTML = '<span class="position-name"></span><div class="position-track"><i class="position-zero"></i><i class="position-fill target"></i><i class="position-fill actual"></i></div><span class="position-values"><b>—</b><b>—</b></span>';
+    row.querySelector('.position-name').textContent = index < 6 ? `J${index + 1}` : name;
     element('joints').append(row);
-    return cells;
+    return row;
   });
+  function renderPosition(row, actual, target, lower, upper, unit) {
+    const validRange = Number.isFinite(lower) && Number.isFinite(upper) && upper > lower;
+    const percent = value => 100 * (Math.min(upper, Math.max(lower, value)) - lower) / (upper - lower);
+    const origin = validRange ? percent(0) : 0;
+    const zero = row.querySelector('.position-zero');
+    zero.hidden = !validRange || lower >= 0 || upper <= 0;
+    zero.style.left = `${origin}%`;
+    [actual, target].forEach((value, index) => {
+      const valid = Number.isFinite(value);
+      row.querySelectorAll('.position-values b')[index].textContent = valid ? `${value.toFixed(2)}${unit}` : '—';
+      const fill = row.querySelector(index ? '.position-fill.target' : '.position-fill.actual');
+      fill.hidden = !valid || !validRange;
+      if (valid && validRange) {
+        const end = percent(value);
+        fill.style.left = `${Math.min(origin, end)}%`;
+        fill.style.width = `${Math.abs(end - origin)}%`;
+      }
+    });
+    row.title = `实际 ${Number.isFinite(actual) ? actual.toFixed(2) + unit : '—'} · 目标 ${Number.isFinite(target) ? target.toFixed(2) + unit : '—'}`;
+  }
   let latest = null;
   let feedbackLive = false, armDeadline = 0, armVisualState = null;
   function displayOptions() {
@@ -169,6 +188,7 @@ async function initialize() {
     armVisualState = state;
     feedbackLive = state === 'connected';
     canvas.dataset.feedback = feedbackLive ? 'live' : state;
+    element('joints').classList.toggle('feedback-inactive', !feedbackLive);
     actualMeshes.forEach(mesh => {
       const original = mesh.userData.online;
       mesh.material.color.copy(feedbackLive ? original.color : new THREE.Color(0x384148));
@@ -197,10 +217,14 @@ async function initialize() {
     });
     actualAxes.matrix.fromArray(state.actual.eef);
     actualModel.visible = true;
-    rows.forEach((cells, index) => {
-      cells[1].textContent = (state.actual.q[index] * 180 / Math.PI).toFixed(2);
-      cells[2].textContent = (state.target.q[index] * 180 / Math.PI).toFixed(2);
+    rows.slice(0, 6).forEach((row, index) => {
+      const degrees = value => Number.isFinite(value) ? value * 180 / Math.PI : null;
+      renderPosition(row, degrees(state.actual.q[index]), degrees(state.target.q[index]),
+        degrees(manifest.joint_limits?.lower[index]), degrees(manifest.joint_limits?.upper[index]), '°');
     });
+    const grip = state.gripper;
+    const mm = value => Number.isFinite(value) ? value * 1000 : null;
+    renderPosition(rows[6], mm(grip?.actual), mm(grip?.target), 0, mm(grip?.max), 'mm');
     element('eef-position').textContent = state.actual.eef.slice(12, 15)
       .map((value, index) => `${'XYZ'[index]} ${value.toFixed(4)}`).join('  ');
     for (const [name, line] of pathObjects) {
@@ -248,7 +272,7 @@ async function initialize() {
       else if (state.stream.status === 'waiting') {
         status('参考姿态 · 无机械臂反馈', 'waiting');
         element('loading').hidden = true;
-        rows.forEach(cells => { cells[1].textContent = '—'; cells[2].textContent = '—'; });
+        rows.forEach(row => renderPosition(row, null, null, null, null, ''));
         element('eef-position').textContent = '—';
       } else if (state.stream.status === 'stale') status('状态已过期 · 保留最后画面', 'stale');
       else status(`状态不匹配：${state.stream.message}`, 'error');
