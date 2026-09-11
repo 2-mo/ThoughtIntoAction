@@ -144,6 +144,14 @@ class ArmClient:
                     self.token = None
                     self._pending_q = None
 
+    def recover_stopped_hold(self, expected_owner):
+        """Explicitly recover a stationary, abandoned PI05 stop; no torque-off transition."""
+        if self.token is not None:
+            raise RuntimeError('Recovery must use an observer connection')
+        if self.info.get('stopped_hold_recovery_protocol') != 1:
+            raise RuntimeError('当前运行的是旧机械臂服务，不支持停稳保持恢复接口')
+        return self._rpc('recover_hold', expected_owner=expected_owner)
+
     def close(self):
         if self.closed:
             return

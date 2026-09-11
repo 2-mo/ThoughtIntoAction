@@ -199,6 +199,7 @@ class ArmService:
                 "effective_joint_speed_limits_rad_s": (hardware_speed if speed == 0 else np.minimum(hardware_speed, speed)).tolist(),
                 "effective_motion_limits": self.owner["motion"] if self.owner else {key: self.settings.get(key) for key in ("max_command_lead_rad", "preview_time_s", "joint_soft_limit_margin_rad", *TRAJECTORY_DEFAULTS)},
                 "effective_max_joint_speed_rad_s": self.owner["speed"] if self.owner else self.settings["max_joint_speed_rad_s"],
+                "stopped_hold_recovery_protocol": 1,
                 "mode": "stopping" if self.release_after_stop else "hold" if self.holding else "control" if self.owner and self.owner["actuate"] else "damping",
                 "owner": self.owner["input"] if self.owner else None, "state": self.state}
 
@@ -227,6 +228,34 @@ class ArmService:
             self.sample()
         if self.state is None or (time.monotonic_ns() - self.state["host_monotonic_ns"]) / 1e9 > .25:
             raise ValueError("Arm feedback is stale")
+        if op == "recover_hold":
+            # A stopped, abandoned voluntary release may never reach its old planned
+            # position. Explicit recovery holds measured position without disabling torque.
+            if (not self.owner or self.owner['input'] != request.get('expected_owner')
+                    or self.owner['input'] not in ('pi05-sft', 'pi05-rollout', 'zero-shot-pregrasp')
+                    or not self.release_after_stop or self.motion is None
+                    or not self.motion.finished or time.monotonic() <= self.owner['deadline']):
+                raise ValueError('Recovery requires an abandoned, finished PI05 stop')
+            cutoff = time.monotonic_ns() - 500_000_000
+            recent = [s for s in self.sample_history if s['host_monotonic_ns'] >= cutoff]
+            if (not recent or recent[0]['host_monotonic_ns'] > cutoff + 50_000_000
+                    or any(not np.isfinite([*s['actual_pos'], *s['actual_vel']]).all()
+                           or np.max(np.abs(s['actual_vel'])) >= .03 for s in recent)
+                    or np.max(np.ptp([s['actual_pos'] for s in recent], axis=0)) > .01):
+                raise ValueError('Recovery requires stationary feedback for 0.5 seconds')
+            q = self.robot.joints(self.state['actual_pos'])
+            previous_error = float(np.max(np.abs(q - self.motion.input.current_position)))
+            planner = OnlineMotion(q, np.zeros(6), self.arm.robot_config.joint_vel_max,
+                                   self.owner['speed'], self.motion.settings,
+                                   1/self.settings['control_rate_hz'], self.robot.lower, self.robot.upper)
+            planner.stop()
+            self.motion = planner
+            self.pending = self.target = self.applied_command = None
+            self.owner = None
+            self.release_after_stop = False
+            self.holding = True
+            self._source()
+            return {'recovered': True, 'held_rad': q.tolist(), 'previous_tracking_error_rad': previous_error}
         if op == "acquire":
             if self.owner:
                 raise ValueError(f"Arm control is owned by {self.owner['input']}")

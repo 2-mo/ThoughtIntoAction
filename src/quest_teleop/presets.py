@@ -10,12 +10,7 @@ import numpy as np
 from .controller import X5TeleopController
 
 
-DEFAULT_HOME_JOINTS = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-# With the Stanford X5 kinematic chain used by X5_2025_hybrid.urdf, this
-# configuration points the eef/gripper x-axis approximately straight down
-# while keeping the arm forward of the base. Treat it as a starting preset and
-# override it after validating the exact hardware setup if needed.
-DEFAULT_GRASP_READY_JOINTS = (0.0, 1.50, 1.45, -1.52, 0.0, 0.0)
+from robot_core.presets import DEFAULT_HOME_JOINTS, DEFAULT_GRASP_READY_JOINTS
 
 
 class PresetSingleX5Controller(X5TeleopController):
