@@ -177,13 +177,25 @@ def main():
     movement = parser.add_mutually_exclusive_group()
     movement.add_argument('--home', action='store_true', help='结束策略进程后按数据采集参数回零')
     movement.add_argument('--pregrasp', action='store_true', help='结束策略进程后按数据采集参数到预抓取位并张开夹爪')
+    movement.add_argument('--status', action='store_true', help='只读查看服务状态')
+    parser.add_argument('--socket', help='目标机械臂服务 socket')
+    parser.add_argument('--urdf', help='目标机械臂模型')
+    parser.add_argument('--virtual', action='store_true', help='连接虚拟机械臂服务')
     args = parser.parse_args()
-    stop_policy_processes()
-    robot = RobotModel(resolve_path(load_config()['robot']['urdf']))
+    if not args.status and not args.virtual:
+        stop_policy_processes()
+    robot = RobotModel(resolve_path(args.urdf or load_config()['robot']['urdf']))
     # Do not reset/restart a faulty service in recovery; preserve its device ownership.
-    arm = ArmClient(robot, hardware=True, actuate=True, input_name='terminal-recovery',
+    arm = ArmClient(robot, path=args.socket, hardware=not args.virtual,
+                    actuate=not args.status, input_name='terminal-recovery',
                     speed=HOME_SPEED, motion=HOME_MOTION)
     try:
+        if args.status:
+            state = arm.snapshot()
+            print(f'模式：{arm.info["mode"]}；控制者：{arm.info["owner"] or "无"}', flush=True)
+            print('关节 (rad)：' + ', '.join(f'{q:.4f}' for q in state['actual_pos']))
+            print(f'夹爪开度：{state["gripper_actual_pos"]:.4f} m', flush=True)
+            return
         hold(arm)
         if args.home:
             home(arm)

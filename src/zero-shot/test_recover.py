@@ -1,11 +1,13 @@
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 import numpy as np
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'tests'))
 from arm_service_fixture import ServiceFixture
 from robot_control.client import ArmClient
 from recover import HOME_SPEED, HOME_MOTION, home, hold, move_pregrasp
+import recover
 
 
 class RecoveryTests(unittest.TestCase):
@@ -44,6 +46,18 @@ class RecoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'quest'):
             hold(self.arm)
         self.assertEqual(self.fixture.service.owner['input'],'quest')
+
+    def test_status_is_read_only_and_does_not_stop_policy(self):
+        other = ArmClient(self.fixture.robot, path=self.fixture.path, hardware=False,
+                          actuate=True, input_name='quest')
+        self.addCleanup(other.close)
+        other.start_control()
+        with patch.object(sys, 'argv', ['recover.py', '--status', '--virtual',
+                                      '--socket', str(self.fixture.path)]), \
+                patch.object(recover, 'stop_policy_processes') as stop:
+            recover.main()
+        stop.assert_not_called()
+        self.assertEqual(self.fixture.service.owner['input'], 'quest')
 
 
 if __name__=='__main__':unittest.main()

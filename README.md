@@ -22,6 +22,10 @@ Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随�
 
 # 终端 1：机械臂服务。连接真机并进入阻尼待机，持续发布反馈。
 ./启动机械臂服务.sh
+# 启动后显示 TUI，底部常驻快捷键栏，无需回车：H 回零、P 预抓取、S/空格 停止、I 状态。
+# Ctrl+C 取消动作并保留服务；Q 或 Ctrl+D 关闭服务；↑↓ 查看日志，End 返回最新。
+# 完整输出保存至配置的 log_dir 下 arm-console-*.log。
+# 不需要交互时：./启动机械臂服务.sh --no-interactive
 # 如需虚拟机械臂，改用：./run.sh arm-service --backend simulated
 
 # 终端 2：只读三维监看，可以先开并长期保留。
