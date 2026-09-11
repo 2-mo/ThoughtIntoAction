@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const element = (id) => document.getElementById(id);
 let showArmConnection = () => {};
@@ -101,10 +100,31 @@ async function initialize() {
     texture.colorSpace = kind === 'diff' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
     return texture;
   }));
-  const tableWidth = 1.2, tableThickness = 0.04, tableRadius = 0.018;
-  const table = new THREE.Mesh(new RoundedBoxGeometry(tableWidth, 0.9, tableThickness, 5, tableRadius),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, map: textures[0], normalMap: textures[1],
-      normalScale: new THREE.Vector2(0.25, 0.25), roughnessMap: textures[2], roughness: 0.8, metalness: 0 }));
+  const tableWidth = 1.2, tableDepth = 0.9, tableThickness = 0.04;
+  const cornerRadius = 0.06, tableBevel = 0.004;
+  // Round the tabletop in plan independently from its thin, softly beveled edge.
+  const halfWidth = tableWidth / 2 - tableBevel, halfDepth = tableDepth / 2 - tableBevel;
+  const radius = cornerRadius - tableBevel;
+  const outline = new THREE.Shape();
+  outline.moveTo(-halfWidth + radius, -halfDepth);
+  outline.lineTo(halfWidth - radius, -halfDepth);
+  outline.absarc(halfWidth - radius, -halfDepth + radius, radius, -Math.PI / 2, 0, false);
+  outline.lineTo(halfWidth, halfDepth - radius);
+  outline.absarc(halfWidth - radius, halfDepth - radius, radius, 0, Math.PI / 2, false);
+  outline.lineTo(-halfWidth + radius, halfDepth);
+  outline.absarc(-halfWidth + radius, halfDepth - radius, radius, Math.PI / 2, Math.PI, false);
+  outline.lineTo(-halfWidth, -halfDepth + radius);
+  outline.absarc(-halfWidth + radius, -halfDepth + radius, radius, Math.PI, Math.PI * 1.5, false);
+  outline.closePath();
+  const tableGeometry = new THREE.ExtrudeGeometry(outline, {
+    depth: tableThickness - 2 * tableBevel, bevelEnabled: true,
+    bevelThickness: tableBevel, bevelSize: tableBevel, bevelSegments: 3, curveSegments: 12, steps: 1,
+  });
+  tableGeometry.translate(0, 0, -(tableThickness - 2 * tableBevel) / 2);
+  const table = new THREE.Mesh(tableGeometry,
+    // Muted brown wood tone referenced from the wrist RGB camera; retain a matte grain.
+    new THREE.MeshStandardMaterial({ color: 0x968574, map: textures[0], normalMap: textures[1],
+      normalScale: new THREE.Vector2(0.15, 0.15), roughnessMap: textures[2], roughness: 0.9, metalness: 0 }));
   table.position.set(0.42, 0, -tableThickness / 2);
   table.receiveShadow = true;
   scene.add(table);
@@ -152,7 +172,7 @@ async function initialize() {
       new THREE.Matrix4().fromArray(manifest.reference.actual.meshes[index])));
   });
   if (!baseBounds.isEmpty()) {
-    table.position.set(baseBounds.min.x - tableRadius - 0.003 + tableWidth / 2,
+    table.position.set(baseBounds.min.x - tableBevel - 0.003 + tableWidth / 2,
       (baseBounds.min.y + baseBounds.max.y) / 2, baseBounds.min.z - tableThickness / 2);
   }
   scene.add(actualModel, targetModel);
