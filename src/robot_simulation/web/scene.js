@@ -93,9 +93,19 @@ async function initialize() {
   scene.add(axes);
 
   // A visual work surface only. No physical table transform or camera extrinsic is assumed.
-  const table = new THREE.Mesh(new RoundedBoxGeometry(1.2, 0.9, 0.04, 3, 0.006),
-    new THREE.MeshStandardMaterial({ color: 0x55575a, roughness: 0.95, metalness: 0 }));
-  table.position.set(0.42, 0, -0.02);
+  const textureLoader = new THREE.TextureLoader();
+  const textures = await Promise.all(['diff', 'nor_gl', 'rough'].map(async kind => {
+    const texture = await textureLoader.loadAsync(`/textures/oak_veneer_01/oak_veneer_01_${kind}_2k.jpg`);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    texture.colorSpace = kind === 'diff' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    return texture;
+  }));
+  const tableWidth = 1.2, tableThickness = 0.04, tableRadius = 0.018;
+  const table = new THREE.Mesh(new RoundedBoxGeometry(tableWidth, 0.9, tableThickness, 5, tableRadius),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, map: textures[0], normalMap: textures[1],
+      normalScale: new THREE.Vector2(0.25, 0.25), roughnessMap: textures[2], roughness: 0.8, metalness: 0 }));
+  table.position.set(0.42, 0, -tableThickness / 2);
   table.receiveShadow = true;
   scene.add(table);
 
@@ -131,6 +141,20 @@ async function initialize() {
     actualModel.add(actual);
     targetModel.add(target);
   }));
+  // Place the entire base on the flat part of the near edge, just beyond the roundover.
+  // Reference mesh transforms include the URDF visual origin; robot coordinates stay unchanged.
+  const baseBounds = new THREE.Box3();
+  manifest.meshes.forEach((spec, index) => {
+    if (spec.link !== 'base_link') return;
+    const geometry = actualMeshes[index].geometry;
+    geometry.computeBoundingBox();
+    baseBounds.union(geometry.boundingBox.clone().applyMatrix4(
+      new THREE.Matrix4().fromArray(manifest.reference.actual.meshes[index])));
+  });
+  if (!baseBounds.isEmpty()) {
+    table.position.set(baseBounds.min.x - tableRadius - 0.003 + tableWidth / 2,
+      (baseBounds.min.y + baseBounds.max.y) / 2, baseBounds.min.z - tableThickness / 2);
+  }
   scene.add(actualModel, targetModel);
   const paths = new THREE.Group();
   scene.add(paths);
@@ -260,6 +284,7 @@ async function initialize() {
     });
     geometries.forEach((geometry) => geometry.dispose());
     materials.forEach((material) => material.dispose());
+    textures.forEach(texture => texture.dispose());
     renderer.dispose();
   }, { once: true });
   window.addEventListener('pageshow', (event) => { if (event.persisted) location.reload(); });
