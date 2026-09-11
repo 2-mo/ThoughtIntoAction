@@ -316,23 +316,22 @@ aside > .input-panel { grid-column: 3 !important; grid-row: 2 !important; }
 .replay-jump { font-size: 10px; gap: 8px; }
 #replay-seek { width: 75px; border: 0; background: #293a44; color: #dce2e5; border-radius: 5px; padding: 4px 6px; }
 
-/* Input health uses surface, shape and contrast together, not a text-only label. */
+/* Quiet input indicators: neutral surfaces, local icons and disabled contrast. */
 aside > .input-panel {
   --signal: #f18e93; --signal-ink: #301519; --signal-surface: #342126;
-  background: #251c22;
-  box-shadow: inset 0 5px 0 var(--signal);
-  transition: background-color 160ms, box-shadow 160ms;
+  background: #182329;
 }
-.input-panel[data-state="live"] { --signal: #8af1bf; --signal-ink: #09291c; --signal-surface: #153d30; background: #142d26; }
-.input-panel[data-state="stale"], .input-panel[data-state="partial"] { --signal: #ffd078; --signal-ink: #382608; --signal-surface: #41341e; background: #2b271d; }
+.input-panel[data-state="live"] { --signal: #8af1bf; --signal-ink: #09291c; --signal-surface: #153d30; background: #182329; }
+.input-panel[data-state="stale"], .input-panel[data-state="partial"] { --signal: #ffd078; --signal-ink: #382608; --signal-surface: #41341e; background: #182329; }
 .input-panel > h2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 5px; }
-.input-panel .input-badge { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 7px; background: var(--signal); color: var(--signal-ink); font-size: 12px; font-weight: 800; white-space: nowrap; }
-.input-badge #input-status { color: inherit; }
+.input-panel .input-badge { display: inline-flex; align-items: center; gap: 7px; padding: 0; background: none; color: var(--signal); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.input-badge #input-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.input-badge .signal-mark { color: inherit; }
 .signal-mark { display: inline-grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; position: relative; }
 .signal-mark::before, .signal-mark::after { content: ''; position: absolute; box-sizing: border-box; }
 /* Broken link: two separated halves and a diagonal cut. */
 .signal-mark::before { width: 17px; height: 9px; border: 2px solid currentColor; border-radius: 6px; transform: rotate(-45deg); }
-.signal-mark::after { width: 24px; height: 5px; background: currentColor; border: 2px solid var(--signal); transform: rotate(45deg); }
+.signal-mark::after { width: 24px; height: 5px; background: currentColor; border: 2px solid #182329; transform: rotate(45deg); }
 .input-panel[data-state="live"] .input-badge .signal-mark::before,
 [data-state="live"] > .controller-shell .signal-mark::before { width: 12px; height: 7px; border: 0; border-left: 3px solid currentColor; border-bottom: 3px solid currentColor; border-radius: 0; transform: translateY(-2px) rotate(-45deg); }
 .input-panel[data-state="live"] .input-badge .signal-mark::after,
@@ -344,19 +343,26 @@ aside > .input-panel {
 .input-panel[data-state="partial"] .input-badge .signal-mark::before { width: 16px; height: 16px; border: 2px solid currentColor; border-radius: 50%; transform: none; background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
 .input-panel[data-state="partial"] .input-badge .signal-mark::after { display: none; }
 .input-panel .hands h3 { color: #dae6e0; }
-.input-panel .controller-shell { padding-top: 38px; background: var(--signal-surface); box-shadow: inset 0 0 0 2px var(--signal); }
-.hand-signal { display: flex; justify-content: center; position: absolute; top: 8px; left: 0; right: 0; color: var(--signal); }
-.hand-signal .signal-mark { border-radius: 50%; width: 23px; height: 23px; background: var(--signal); color: var(--signal-ink); }
+.input-panel .controller-shell { padding-top: 28px; background: #293a44; }
+.hand-signal { display: flex; justify-content: flex-end; position: absolute; top: 5px; right: 8px; color: var(--signal); }
+.hand-signal .signal-mark { border-radius: 50%; width: 18px; height: 18px; background: none; color: var(--signal); }
 .hands [data-state="live"] { --signal: #8af1bf; --signal-ink: #09291c; --signal-surface: #153d30; }
 .hands [data-state="offline"] { --signal: #f18e93; --signal-ink: #301519; --signal-surface: #342126; }
 .hands [data-state="stale"] { --signal: #ffd078; --signal-ink: #382608; --signal-surface: #41341e; }
-.hands [data-state="offline"] > .controller-shell { box-shadow: none; outline: 2px dashed #ad636b; outline-offset: -2px; }
+.hands [data-state="offline"] > .controller-shell { background: #232b30; }
 .hands [data-state="offline"] .controller-face, .hands [data-state="stale"] .controller-face { opacity: .32; filter: grayscale(1); }
 .hands [data-state="offline"] .controller-meter, .hands [data-state="stale"] .controller-meter { color: #a9989e; }
 .hands [data-state="offline"] .controller-meter output, .hands [data-state="stale"] .controller-meter output { color: inherit; }
 @media (prefers-reduced-motion: reduce) { aside > .input-panel { transition: none; } }
 @media (max-height: 800px), (max-width: 1100px) {
- .input-panel .input-badge { padding: 3px 6px; font-size: 10px; gap: 4px; }
- .input-panel .controller-shell { padding-top: 32px; }
+ .input-panel .input-badge { padding: 0; }
+ .input-panel .controller-shell { padding-top: 26px; }
  .hand-signal { top: 5px; }
 }
+
+#button-response:empty { display: none; }
+#connection { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #8b989f; }
+#connection::before { content: ''; width: 8px; height: 8px; border: 1.5px solid currentColor; border-radius: 50%; }
+#connection[data-state="connected"]::before { background: currentColor; }
+#connection[data-state="stale"] { color: #dcb774; }
+#connection[data-state="stale"]::before { border-radius: 1px; border: 0; border-left: 3px solid; border-right: 3px solid; }

@@ -6,9 +6,12 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const element = (id) => document.getElementById(id);
+let showArmConnection = () => {};
 const status = (message, state) => {
-  element('connection').textContent = message;
+  element('connection').textContent = state === 'connected' ? message : ({waiting: '未连接', stale: '已过期', error: '已断开'}[state] || message);
+  element('connection').title = message;
   element('connection').dataset.state = state;
+  showArmConnection(state);
 };
 
 async function readJSON(url) {
@@ -132,6 +135,7 @@ async function initialize() {
     actual.name = target.name = spec.name;
     actual.matrixAutoUpdate = target.matrixAutoUpdate = false;
     actual.castShadow = actual.receiveShadow = true;
+    actual.userData.online = { color: material.color.clone(), metalness: material.metalness, roughness: material.roughness };
     actualMeshes[index] = actual;
     targetMeshes[index] = target;
     actualModel.add(actual);
@@ -152,13 +156,29 @@ async function initialize() {
     return cells;
   });
   let latest = null;
+  let feedbackLive = false, armDeadline = 0, armVisualState = null;
   function displayOptions() {
     // Coincident ghosts wash out the real materials; show only a distinct target.
-    targetModel.visible = Boolean(latest?.target_visible) && element('show-target').checked;
-    paths.visible = element('show-path').checked;
+    targetModel.visible = feedbackLive && Boolean(latest?.target_visible) && element('show-target').checked;
+    paths.visible = feedbackLive && element('show-path').checked;
     table.visible = element('show-table').checked;
     axes.visible = element('show-axes').checked;
   }
+  showArmConnection = state => {
+    if (state === armVisualState) return;
+    armVisualState = state;
+    feedbackLive = state === 'connected';
+    canvas.dataset.feedback = feedbackLive ? 'live' : state;
+    actualMeshes.forEach(mesh => {
+      const original = mesh.userData.online;
+      mesh.material.color.copy(feedbackLive ? original.color : new THREE.Color(0x384148));
+      mesh.material.metalness = feedbackLive ? original.metalness : 0;
+      mesh.material.roughness = feedbackLive ? original.roughness : 1;
+      mesh.castShadow = feedbackLive;
+    });
+    displayOptions();
+  };
+  showArmConnection('waiting');
   for (const id of ['show-target', 'show-path', 'show-table', 'show-axes']) {
     element(id).addEventListener('change', displayOptions);
   }
@@ -220,7 +240,11 @@ async function initialize() {
       const kind = { hardware: '真机反馈', virtual: '虚拟机械臂', replay: '数据回放' }[source.kind] || '机械臂状态';
       element('state-source').textContent = state.stream.stream_id
         ? `${kind} · ${source.input || source.controller || '状态发布端'}${source.mode === 'damping' ? ' · 阻尼待机' : ''}` : '参考姿态 · 无机械臂反馈';
-      if (state.stream.status === 'live') status('实时状态', 'connected');
+      canvas.dataset.source = source.kind || 'unknown';
+      if (state.stream.status === 'live' && state.actual) {
+        armDeadline = performance.now() + 1000 * Math.max(0, 1 - (state.stream.age_s || 0));
+        status(({hardware: '真机在线', virtual: '仿真在线', replay: '回放'}[source.kind] || '反馈在线'), 'connected');
+      }
       else if (state.stream.status === 'waiting') {
         status('参考姿态 · 无机械臂反馈', 'waiting');
         element('loading').hidden = true;
@@ -236,6 +260,7 @@ async function initialize() {
     if (!stopped) timer = setTimeout(poll, document.hidden ? 500 : 50);
   }
   renderer.setAnimationLoop(() => {
+    if (feedbackLive && performance.now() >= armDeadline) status('机械臂反馈已过期，保留最后姿态', 'stale');
     controls.update();
     renderer.render(scene, camera);
   });

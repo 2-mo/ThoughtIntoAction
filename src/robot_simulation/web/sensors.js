@@ -50,7 +50,8 @@ function clearInput(message, state = 'offline') {
   inputDeadline = 0;
   inputState(state, message);
   for (const side of ['left', 'right']) renderHand(side, null, {}, state);
-  byId('button-response').textContent = '按键响应：' + message;
+  byId('button-response').textContent = '';
+  byId('button-response').title = message;
 }
 function renderCollection(data = {}) {
   const collection = data.collection;

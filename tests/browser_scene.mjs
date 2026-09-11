@@ -116,7 +116,7 @@ try {
   assert.equal(await page.locator('#button-response').textContent(), 'Y 已识别');
   const inputPanel = page.locator('.input-panel');
   await page.waitForFunction(() => document.querySelector('.input-panel').dataset.state === 'live');
-  const liveColor = await inputPanel.evaluate(e => getComputedStyle(e).backgroundColor);
+  const liveColor = await inputPanel.locator('.input-badge').evaluate(e => getComputedStyle(e).color);
   await inputPanel.screenshot({path: output + '/quest-input-live.png'});
   const left = sample.input.hands.left;
   delete sample.input.hands.left;
@@ -127,7 +127,7 @@ try {
   sample.input.hands.left = left;
   sample.input_age_s = .5;
   await page.waitForFunction(() => document.querySelector('.input-panel').dataset.state === 'stale');
-  assert.notEqual(await inputPanel.evaluate(e => getComputedStyle(e).backgroundColor), liveColor);
+  assert.notEqual(await inputPanel.locator('.input-badge').evaluate(e => getComputedStyle(e).color), liveColor);
   assert.equal(await page.locator('#right-hand [data-key=A]').getAttribute('data-pressed'), 'false');
   await inputPanel.screenshot({path: output + '/quest-input-stale.png'});
   sample.input.error = 'disconnected';
@@ -240,6 +240,8 @@ try {
   await page.waitForFunction(() => document.getElementById('connection').dataset.state === 'connected');
   const canvas = page.locator('#robot-canvas');
   await page.waitForTimeout(200);
+  assert.equal(await canvas.getAttribute('data-feedback'), 'live');
+  assert.equal(await canvas.getAttribute('data-source'), 'virtual');
   const initial = await canvas.screenshot();
   const firstStream = await page.evaluate(async () => (await (await fetch('/api/state')).json()).stream.stream_id);
   terminal.child.stdin.write('q 0.15 1.5 1.45 -1.52 0 0\n');
@@ -291,6 +293,8 @@ try {
   service.child.kill('SIGINT');
   assert.deepEqual(await service.result, [0, null], service.log());
   await page.waitForFunction(() => document.getElementById('connection').dataset.state === 'stale');
+  assert.equal(await canvas.getAttribute('data-feedback'), 'stale');
+  await page.screenshot({path: output + '/arm-feedback-stale.png'});
   const restartedService = start('run.sh', ['arm-service', '--backend', 'simulated']);
   await restartedService.wait(/Arm service ready:/);
   await page.waitForFunction(() => document.getElementById('connection').dataset.state === 'connected');
