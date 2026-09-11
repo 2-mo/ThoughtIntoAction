@@ -14,7 +14,8 @@ from .video import media_path, read_frame
 
 def read_jsonl(path):
     rows = []
-    with Path(path).open() as stream:
+    from .compressed_io import open_jsonl
+    with open_jsonl(path) as stream:
         for line, text in enumerate(stream, 1):
             try:
                 row = json.loads(text)

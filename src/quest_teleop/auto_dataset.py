@@ -17,7 +17,7 @@ def finalize_lerobot(raw_path, fps, output=None):
     env = {**os.environ, 'PYTHONPATH': str(PROJECT_ROOT/'src')}
     with (raw_path/'lerobot-save.log').open('w') as log:
         result = subprocess.run([str(python), '-m', 'quest_teleop.export_lerobot', '--source', str(raw_path),
-            '--output', str(output), '--fps', str(fps), '--preserve-samples'],
+            '--output', str(output), '--fps', '30', '--preserve-samples'],
             env=env, stdout=log, stderr=subprocess.STDOUT)
     if result.returncode:
         save_json(status, {'state': 'failed', 'returncode': result.returncode})

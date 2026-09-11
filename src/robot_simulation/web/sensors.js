@@ -62,9 +62,9 @@ function renderCollection(data = {}) {
   const dataset = data.task_dataset;
   if (dataset) {
     byId('collection-health').title = dataset.path || '';
-    if (dataset.state === 'saving') put('collection-health', '正在生成任务数据集 · ' + dataset.episodes + ' 条');
+    if (dataset.state === 'saving') put('collection-health', '正在打包任务 · ' + dataset.episodes + ' 条');
     else if (dataset.state === 'complete') put('collection-health', '可上传 · ' + dataset.episodes + ' 条 · ' + dataset.path.split('/').pop());
-    else if (dataset.state === 'failed') put('collection-health', '数据集生成失败：' + dataset.error);
+    else if (dataset.state === 'failed') put('collection-health', '任务打包失败：' + dataset.error);
   }
   const result = last ? (last.lifecycle !== 'complete' ? '未完整保存' : last.outcome === 'discarded' ? '已丢弃' : '已保存') : '—';
   put('collection-last', '上一条：' + result + (last ? ' · ' + last.id : ''));

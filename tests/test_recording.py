@@ -104,7 +104,7 @@ class SessionTests(unittest.TestCase):
         self.config["runtime"]["socket"] = str(self.root / "session.sock")
         self.config["paths"].update(dataset_dir=str(self.root / "data"), log_dir=str(self.root / "logs"))
         self.config["cameras"]["wrist_rgb"].update(serial="fake", width=32, height=24, fps=30)
-        self.config["recording"].update(min_free_bytes=0, min_duration_s=.15)
+        self.config["recording"].update(min_free_bytes=0, min_duration_s=.15, compress_records=False)
         self.robot = RobotModel()
         self.camera = FakeCamera("fake", 32, 24, 30)
         self.session = TeleopSession(self.config, self.robot.metadata(),
@@ -143,7 +143,7 @@ class SessionTests(unittest.TestCase):
             return {"states": [{**snapshot(sequence), "sample_sequence": sequence}], "latest": sequence}
         self.session.record_samples = samples
         self.session.control_metadata["recording_rate_hz"] = 240
-        with patch("quest_teleop.auto_dataset.finalize_task") as export:
+        with patch("quest_teleop.task_package.finalize_task") as export:
             saved = []
             for _ in range(3):
                 self.session.dispatch({"command": "collection.toggle_episode", "task": "pick place"})
@@ -160,10 +160,10 @@ class SessionTests(unittest.TestCase):
             self.assertEqual(self.session.task_dataset["path"], target)
             self.session.dispatch({"command": "collection.end_task"})
             export.assert_called_once()
-            self.assertEqual(export.call_args.args[1], sorted(row["id"] for row in saved[:2]))
+            self.assertEqual(export.call_args.args[1], sorted(row["id"] for row in saved))
             self.assertEqual(export.call_args.args[2], target)
             self.assertEqual(self.session.task_dataset["state"], "complete")
-            self.assertEqual(self.session.task_dataset["episodes"], 2)
+            self.assertEqual(self.session.task_dataset["episodes"], 3)
             self.assertEqual(len(self.session.saved_episodes()), 2)
 
     def test_failed_task_export_keeps_task_for_retry(self):
@@ -171,7 +171,10 @@ class SessionTests(unittest.TestCase):
         self.session.counted_episodes = frozenset(["example"])
         self.session.control_metadata["recording_rate_hz"] = 240
         self.session.task_active = True
-        with patch("quest_teleop.auto_dataset.finalize_task", side_effect=RuntimeError("encoding failed")):
+        raw = self.session.dataset_root / ".raw" / "example"
+        raw.mkdir(parents=True)
+        (raw / "episode.json").write_text(json.dumps({"task_run_id": self.session.task_run_id}))
+        with patch("quest_teleop.task_package.finalize_task", side_effect=RuntimeError("encoding failed")):
             with self.assertRaisesRegex(RuntimeError, "encoding failed"):
                 self.session.dispatch({"command": "collection.end_task"})
         self.assertTrue(self.session.task_active)

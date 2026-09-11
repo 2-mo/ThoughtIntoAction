@@ -55,3 +55,45 @@ def read_frame(root, row):
         return image if ok else None
     finally:
         capture.release()
+
+
+class SequentialFrameReader:
+    """Decode increasing frame indices once, retaining only the current image."""
+
+    def __init__(self):
+        self.capture = None
+        self.path = None
+        self.index = -1
+        self.image = None
+
+    def read(self, root, row):
+        import cv2
+        path = media_path(root, row)
+        if 'video' not in row:
+            return cv2.imread(str(path))
+        index = row.get('video_frame_index')
+        if type(index) is not int or index < 0:
+            raise ValueError('Invalid video frame index')
+        if path != self.path:
+            self.close()
+            self.capture = cv2.VideoCapture(str(path))
+            self.path, self.index = path, -1
+        if index < self.index:
+            raise ValueError('Video frame indices must be ordered')
+        while self.index < index:
+            ok, self.image = self.capture.read()
+            if not ok:
+                raise ValueError(f'Cannot decode source RGB frame {index}: {path}')
+            self.index += 1
+        return self.image
+
+    def close(self):
+        if self.capture is not None:
+            self.capture.release()
+        self.capture, self.path, self.image = None, None, None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()

@@ -361,7 +361,8 @@ class TeleopSession:
                 self.recording = EpisodeWriter(raw_root, meta, payload.get("task"),
                                                queue_size=self.config["recording"]["queue_size"],
                                                rgb_video=self.config["recording"].get("rgb_video", False),
-                                               video_crf=self.config["recording"].get("video_crf", 20))
+                                               video_crf=self.config["recording"].get("video_crf", 20),
+                                               compress_records=self.config["recording"].get("compress_records", False))
                 return self.recording.status()
             if command == "record.stop":
                 return self._stop_recording(payload.get("outcome", "unknown"))
@@ -382,24 +383,29 @@ class TeleopSession:
         return result
 
     def _finalize_task_dataset(self):
-        if not self.config["recording"].get("lerobot_on_save", False) or not self.task_dataset:
+        if not self.config["recording"].get("package_on_task_end", False) or not self.task_dataset:
             return
         if self.task_dataset["state"] == "complete":
             return
-        if not self.counted_episodes:
+        episode_ids = []
+        for manifest in (self.dataset_root / ".raw").glob("*/episode.json"):
+            meta = json.loads(manifest.read_text())
+            if meta.get("task_run_id") == self.task_run_id:
+                episode_ids.append(manifest.parent.name)
+        if not episode_ids:
             self.task_dataset["state"] = "empty"
             return
-        from ..auto_dataset import finalize_task
-        self.task_dataset.update(state="saving", episodes=len(self.counted_episodes))
+        from ..task_package import finalize_task
+        self.task_dataset.update(state="saving", episodes=len(episode_ids), retained_episodes=len(self.counted_episodes))
         try:
-            finalize_task(self.dataset_root / ".raw", sorted(self.counted_episodes),
+            package = finalize_task(self.dataset_root / ".raw", sorted(episode_ids),
                           self.task_dataset["path"], self.control_metadata["recording_rate_hz"])
         except Exception as exc:
             self.task_dataset.update(state="failed", error=str(exc))
             raise
         self.task_dataset.pop("error", None)
-        self.task_dataset.update(state="complete")
-        print("任务数据集已保存，可上传整个目录：" + self.task_dataset["path"], flush=True)
+        self.task_dataset.update(state="complete", path=str(package))
+        print("任务压缩包已保存，可上传：" + self.task_dataset["path"], flush=True)
 
     def _background(self):
         try:

@@ -71,7 +71,8 @@ table_z_m = 0.0
 table_clearance_m = 0.0
 
 [recording]
-lerobot_on_save = true
+package_on_task_end = true
+compress_records = true
 rgb_video = true
 video_crf = 20
 queue_size = 1024

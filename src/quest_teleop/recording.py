@@ -13,7 +13,7 @@ from robot_core.storage import save_json
 
 
 class EpisodeWriter:
-    def __init__(self, root, metadata, task, *, queue_size=128, rgb_video=False, video_crf=20):
+    def __init__(self, root, metadata, task, *, queue_size=128, rgb_video=False, video_crf=20, compress_records=False):
         if not isinstance(task, str) or not task.strip() or len(task) > 2000:
             raise ValueError("Provide a task description (1..2000 characters)")
         if queue_size < 1:
@@ -32,6 +32,7 @@ class EpisodeWriter:
         if not 18 <= video_crf <= 23:
             raise ValueError("video_crf must be between 18 and 23")
         self.rgb_video, self.video_crf = rgb_video, video_crf
+        self.compress_records = compress_records
         self.counts = {"state": 0, "frame": 0}
         self.dropped = {"state": 0, "frame": 0}
         self.manifest = {"schema_version": 1, "kind": "quest_teleop_episode",
@@ -130,6 +131,13 @@ class EpisodeWriter:
         if self.thread.is_alive():
             # Never claim completion while a writer can still modify the episode.
             raise RuntimeError("Writer is still finalizing; episode remains incomplete")
+        if self.compress_records and not self.error:
+            from .compressed_io import compress_jsonl
+            try:
+                for name in ("states.jsonl", "frames.jsonl"):
+                    compress_jsonl(self.path / name)
+            except Exception as exc:
+                self.error = "Record compression failed: " + str(exc)
         self.manifest.update({"lifecycle": "failed" if self.error else "interrupted" if reason else "complete",
                               "outcome": outcome, "stopped_monotonic_ns": self.stopped_ns,
                               "counts": dict(self.counts), "dropped": dict(self.dropped),

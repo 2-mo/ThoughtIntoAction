@@ -25,6 +25,9 @@ def main():
     from openpi.training import config
     from quest_x5 import train_config
     info = json.loads((dataset/"meta"/"info.json").read_text())
+    layout = json.loads((dataset/"meta"/"quest_export.json").read_text())
+    if layout.get("layout") != "aligned30_raw240_v1" or info["fps"] != 30:
+        raise SystemExit("Re-export with the aligned30_raw240_v1 converter first")
     item = train_config(fps=info["fps"])
     config._CONFIGS_DICT[item.name] = item
     script = checkout/'scripts'/('compute_norm_stats.py' if command == 'norm' else 'train.py')

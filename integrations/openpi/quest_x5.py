@@ -16,7 +16,8 @@ class X5DataConfig(config.DataConfigFactory):
     def create(self, assets_dirs, model_config):
         repack = transforms.Group(inputs=[transforms.RepackTransform({
             'state': 'observation.state', 'wrist_image': 'observation.images.wrist',
-            'actions': 'action', 'prompt': 'prompt', 'wrist_valid': 'observation.wrist_valid'})])
+            'actions': 'action',
+            'prompt': 'prompt', 'wrist_valid': 'observation.wrist_valid'})])
         # Delta joints relative to the first observed state of the chunk;
         # gripper remains absolute metres. Outputs restore absolute joint targets.
         mask = transforms.make_bool_mask(6, -1)
@@ -29,7 +30,9 @@ class X5DataConfig(config.DataConfigFactory):
             action_sequence_keys=('action',), prompt_from_task=True)
 
 
-def train_config(repo_id='local/quest_x5', fps=240):
+def train_config(repo_id='local/quest_x5', fps=30):
+    if fps != 30:
+        raise ValueError('X5 training state/action and video must all use 30 Hz')
     return config.TrainConfig(name='pi05_quest_x5',
         model=pi0_config.Pi0Config(pi05=True, action_horizon=round(fps * .5)),
         data=X5DataConfig(repo_id=repo_id, base_config=config.DataConfig(prompt_from_task=True)),
