@@ -96,16 +96,16 @@ try {
   });
   sample.button_feedback = {B: {progress: .6, fired: false}, R3: {progress: .2}, down: {progress: .4}, Y: 'Y 已识别'};
   sample.collection.control_enabled = false;
-  await page.waitForFunction(() => document.getElementById('control-state').textContent === '待机 · 未启用控制');
+  await page.waitForFunction(() => document.getElementById('control-state').textContent === '待机');
   assert.equal(await page.locator('#collection-state').textContent(), '● 采集中');
   assert.equal(await page.locator('#loop-rates').textContent(), 'IK 48.2/50 Hz · 服务 46.7/50 Hz');
   assert.ok((await page.locator('#table-safety').textContent()).includes('已拦截'));
   sample.table_safety.blocked = false;
   await page.waitForFunction(() => document.getElementById('table-safety').textContent.includes('软限位已启用'));
   sample.collection.control_enabled = true;
-  await page.waitForFunction(() => document.getElementById('control-state').textContent === '控制已启用');
+  await page.waitForFunction(() => document.getElementById('control-state').textContent === '控制中');
   sample.collection.control_enabled = false;
-  await page.waitForFunction(() => document.getElementById('control-state').textContent === '待机 · 未启用控制');
+  await page.waitForFunction(() => document.getElementById('control-state').textContent === '待机');
   await page.waitForFunction(() => !document.getElementById('camera-image').hidden && !document.getElementById('depth-image').hidden &&
     document.querySelector('#right-hand [data-meter=grip]').textContent === '75%' &&
     document.getElementById('motion-diagnostics').textContent.includes('0.2700') &&
@@ -115,8 +115,11 @@ try {
   assert.equal(await page.locator('#right-hand [data-hold=B]').getAttribute('aria-valuenow'), '60');
   assert.equal(await page.locator('#button-response').textContent(), 'Y 已识别');
   const inputPanel = page.locator('.input-panel');
+  assert.equal(await inputPanel.locator('#control-state').count(), 1);
+  assert.equal(await inputPanel.locator('#orientation-canvas').count(), 1);
+  assert.equal(await page.locator('.signal-mark, .hand-signal').count(), 0);
   await page.waitForFunction(() => document.querySelector('.input-panel').dataset.state === 'live');
-  const liveColor = await inputPanel.locator('.input-badge').evaluate(e => getComputedStyle(e).color);
+  const liveColor = await inputPanel.locator('#right-hand .controller-shell').evaluate(e => getComputedStyle(e).backgroundColor);
   await inputPanel.screenshot({path: output + '/quest-input-live.png'});
   const left = sample.input.hands.left;
   delete sample.input.hands.left;
@@ -127,7 +130,7 @@ try {
   sample.input.hands.left = left;
   sample.input_age_s = .5;
   await page.waitForFunction(() => document.querySelector('.input-panel').dataset.state === 'stale');
-  assert.notEqual(await inputPanel.locator('.input-badge').evaluate(e => getComputedStyle(e).color), liveColor);
+  await page.waitForFunction(color => getComputedStyle(document.querySelector('#right-hand .controller-shell')).backgroundColor !== color, liveColor);
   assert.equal(await page.locator('#right-hand [data-key=A]').getAttribute('data-pressed'), 'false');
   await inputPanel.screenshot({path: output + '/quest-input-stale.png'});
   sample.input.error = 'disconnected';
@@ -148,7 +151,7 @@ try {
       const all = [document.documentElement, document.body, document.querySelector('aside'), document.querySelector('.collection-panel'), document.querySelector('.collection-controls')];
       return all.some(e => e.scrollWidth > e.clientWidth + 1);
     }), false, 'Overflow at ' + width + 'x' + height);
-    for (const id of ['collection-count', 'collection-state', 'collection-duration', 'collection-last', 'collection-health', 'camera-image', 'depth-image', 'left-hand', 'right-hand', 'joints', 'eef-position', 'state-source', 'motion-diagnostics', 'arm-latency', 'input-latency']) {
+    for (const id of ['collection-count', 'collection-state', 'collection-duration', 'collection-last', 'collection-health', 'camera-image', 'depth-image', 'left-hand', 'right-hand', 'orientation-canvas', 'control-state', 'joints', 'eef-position', 'state-source', 'motion-diagnostics', 'arm-latency', 'input-latency']) {
       const box = await page.locator('#' + id).boundingBox();
       assert.ok(box && box.height > 0 && box.x >= 0 && box.x + box.width <= width + 1 && box.y >= 0 && box.y + box.height <= height + 1, id + ' clipped');
     }

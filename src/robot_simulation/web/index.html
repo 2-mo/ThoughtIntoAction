@@ -13,7 +13,6 @@
     <section class="stage" aria-label="机械臂三维场景">
       <canvas id="robot-canvas" aria-label="旋转、缩放和查看机械臂"></canvas>
       <div class="stage-top"><span id="connection" role="status" data-state="waiting">等待场景</span><button id="open-replay" type="button">数据回放</button><button id="reset-view" type="button">重置视角</button></div>
-      <div id="control-state" role="status">控制状态未连接</div>
       <div id="table-safety" role="status" hidden></div>
       <div id="loading" role="status">正在加载 X5 模型与材质…</div>
 
@@ -32,7 +31,18 @@
       <p id="collection-last">上一条：—</p>
       <p class="collection-controls"><span>A 预抓取后开始 / 保存后返位 · B 预抓取/长按回零 · 下拨1秒切换控制 · X 网页回放 · Y 真机回放</span><span>摇杆：左开始任务 · 右暂停 · 上作废上一条 · 按住 1 秒结束清零</span></p>
     </section>
-          <section class="orientation-panel">
+    <aside>
+
+      <section class="camera-panel"><h2>D435i · RGB / 深度 <span>未标定</span></h2>
+        <div class="camera-pair"><div class="camera-frame"><img id="camera-image" alt="腕部相机实时 RGB 画面" hidden><span id="camera-empty">等待采集会话</span></div>
+        <div class="camera-frame"><img id="depth-image" alt="深度伪彩色预览" hidden><span id="depth-empty">等待深度</span><span class="depth-key" title="近端蓝色，远端红色；黑色为无效深度；范围外颜色饱和。未对齐 RGB。">0.2–2 m · 原生深度</span></div></div>
+        <p id="camera-status" role="status">等待相机数据</p>
+      </section>
+      <section class="input-panel" data-state="offline"><h2>Quest 手柄 <span id="control-state" role="status" data-state="offline">未连接</span></h2>
+        <span id="input-status" class="visually-hidden" role="status">无输入</span>
+        <div class="hands"><div><h3>左 · X / Y</h3><div id="left-hand">—</div></div><div><h3>右 · A / B / R3</h3><div id="right-hand">—</div></div></div>
+        <p id="button-response" role="status">等待按键响应</p><p class="hint">进度来自控制程序实际长按计时；按键亮起仅代表输入已收到。</p>
+        <section class="orientation-panel">
         <h2>姿态对齐 <span>同一基座坐标系</span></h2>
         <div class="orientation-labels"><span>手柄 · 青</span><span>遥操目标 · 橙</span><span>夹爪实际 · 白</span></div>
         <canvas id="orientation-canvas" aria-label="同一视角下的手柄、遥操目标和实际夹爪姿态"></canvas>
@@ -41,16 +51,6 @@
         <p class="hint">箭头指向前端，短柱指向上方。三个模型仅比较朝向，位置已分开展示。拖动可一起转动视角。</p>
         <p class="hint">手柄按当前方向映射转换到基座；目标包含按下 Grip 时的姿态偏置，两者不必重合。</p>
       </section>
-    <aside>
-
-      <section class="camera-panel"><h2>D435i · RGB / 深度 <span>未标定</span></h2>
-        <div class="camera-pair"><div class="camera-frame"><img id="camera-image" alt="腕部相机实时 RGB 画面" hidden><span id="camera-empty">等待采集会话</span></div>
-        <div class="camera-frame"><img id="depth-image" alt="深度伪彩色预览" hidden><span id="depth-empty">等待深度</span><span class="depth-key" title="近端蓝色，远端红色；黑色为无效深度；范围外颜色饱和。未对齐 RGB。">0.2–2 m · 原生深度</span></div></div>
-        <p id="camera-status" role="status">等待相机数据</p>
-      </section>
-      <section class="input-panel" data-state="offline"><h2>Quest 手柄 <span class="input-badge" role="status"><span class="signal-mark" aria-hidden="true"></span><span id="input-status">无输入</span></span></h2>
-        <div class="hands"><div><h3>左 · X / Y</h3><div id="left-hand">—</div></div><div><h3>右 · A / B / R3</h3><div id="right-hand">—</div></div></div>
-        <p id="button-response" role="status">等待按键响应</p><p class="hint">进度来自控制程序实际长按计时；按键亮起仅代表输入已收到。</p>
       </section>
       <div class="telemetry-group"><section><h2>关节位置 <span>°</span></h2><div class="joint-head"><span>关节</span><span>实际</span><span>目标</span></div><div id="joints"></div></section>
       <section><h2>末端位置 <span id="eef-name">link6 / m</span></h2><div id="eef-position" class="coordinates">—</div></section>

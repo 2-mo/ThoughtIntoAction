@@ -4,7 +4,7 @@ let closed = false;
 window.addEventListener('pagehide', () => { closed = true; });
 const inputPanel = document.querySelector('.input-panel');
 const stateLabels = { live: '输入在线', offline: '无输入', stale: '已过期', partial: '单侧输入' };
-let inputDeadline = 0;
+let inputDeadline = 0, controlDeadline = 0;
 function inputState(state, detail = '') {
   inputPanel.dataset.state = state;
   byId('input-status').textContent = stateLabels[state];
@@ -18,11 +18,12 @@ function renderHand(side, hand, feedback = {}, state = hand ? 'live' : 'offline'
   const root = byId(side + '-hand');
   root.dataset.state = state;
   root.setAttribute('aria-label', (side === 'left' ? '左手柄：' : '右手柄：') + stateLabels[state]);
+  root.title = root.getAttribute('aria-label');
   if (!root.querySelector('.controller-shell')) {
     const keys = side === 'left' ? ['X', 'Y'] : ['A', 'B'];
     const ring = (key, content, label) => `<span class="hold-ring" data-hold="${key}" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">${content}</span>`;
     const stick = `<span class="controller-stick" ${side === 'right' ? 'data-key="R3"' : ''}><i></i></span>`;
-    root.innerHTML = `<div class="controller-shell"><div class="hand-signal" aria-hidden="true"><span class="signal-mark"></span></div><div class="controller-face"><div class="key-unit">${side === 'right' ? ring('stick', stick, '摇杆长按进度') : stick}<small class="stick-label">摇杆</small></div>${keys.map(key => `<div class="key-unit">${key === 'B' ? ring('B', `<span class="controller-key" data-key="B">B</span>`, 'B 回零长按进度') : `<span class="controller-key" data-key="${key}">${key}</span>`}<small>${({A:'预抓取/采集', B:'预抓取/回零', X:'网页回放', Y:'真机回放'})[key]}</small></div>`).join('')}</div><div class="meters"></div></div><p class="controller-pose"></p>`;
+    root.innerHTML = `<div class="controller-shell"><div class="controller-face"><div class="key-unit">${side === 'right' ? ring('stick', stick, '摇杆长按进度') : stick}<small class="stick-label">摇杆</small></div>${keys.map(key => `<div class="key-unit">${key === 'B' ? ring('B', `<span class="controller-key" data-key="B">B</span>`, 'B 回零长按进度') : `<span class="controller-key" data-key="${key}">${key}</span>`}<small>${({A:'预抓取/采集', B:'预抓取/回零', X:'网页回放', Y:'真机回放'})[key]}</small></div>`).join('')}</div><div class="meters"></div></div><p class="controller-pose"></p>`;
     const labels = [['trigger', 'Trigger'], ['grip', 'Grip']];
     root.querySelector('.meters').innerHTML = labels.map(([key, label]) => `<label class="controller-meter">${label}<output data-meter="${key}" aria-label="${label}">0%</output></label>`).join('');
   }
@@ -63,8 +64,14 @@ function renderCollection(data = {}) {
   document.querySelector('.collection-panel').dataset.state = state;
   const put = (id, text) => { byId(id).textContent = text; byId(id).title = text; };
   put('collection-state', labels[state] || state);
-  put('control-state', collection?.control_stopping ? '平滑停车中' : collection?.control_enabled === true ? '控制已启用' : collection?.control_enabled === false ? '待机 · 未启用控制' : '控制状态未连接');
-  byId('control-state').dataset.enabled = String(collection?.control_enabled === true);
+  const controlFresh = Number.isFinite(data.state_age_s) && data.state_age_s < .5;
+  const controlState = !controlFresh ? 'offline' : collection?.control_stopping ? 'stopping' :
+    collection?.control_enabled === true ? 'enabled' : collection?.control_enabled === false ? 'standby' : 'offline';
+  put('control-state', {enabled: '控制中', standby: '待机', stopping: '停车中', offline: '未连接'}[controlState]);
+  byId('control-state').dataset.state = controlState;
+  byId('control-state').dataset.enabled = String(controlState === 'enabled');
+  byId('control-state').title = '遥操控制状态';
+  controlDeadline = controlFresh ? performance.now() + 1000 * (.5 - data.state_age_s) : 0;
   put('collection-count', String(data.collection_count ?? '—'));
   byId('collection-count').title = '本轮任务，自上次重置以来完整保存且未丢弃的条数；不代表任务成功';
   put('collection-task', recording?.task || collection?.task || '等待采集会话');
@@ -175,6 +182,13 @@ refresh();
 // A stalled HTTP request must not leave the last green frame on screen.
 const inputWatchdog = setInterval(() => {
   if (inputDeadline && performance.now() >= inputDeadline) clearInput('手柄输入数据已过期', 'stale');
+  if (controlDeadline && performance.now() >= controlDeadline) {
+    controlDeadline = 0;
+    byId('control-state').dataset.state = 'offline';
+    byId('control-state').dataset.enabled = 'false';
+    byId('control-state').textContent = '未连接';
+    byId('control-state').title = '控制状态数据已过期';
+  }
 }, 100);
 window.addEventListener('pagehide', () => clearInterval(inputWatchdog));
 

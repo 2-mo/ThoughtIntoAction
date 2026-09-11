@@ -316,53 +316,35 @@ aside > .input-panel { grid-column: 3 !important; grid-row: 2 !important; }
 .replay-jump { font-size: 10px; gap: 8px; }
 #replay-seek { width: 75px; border: 0; background: #293a44; color: #dce2e5; border-radius: 5px; padding: 4px 6px; }
 
-/* Quiet input indicators: neutral surfaces, local icons and disabled contrast. */
-aside > .input-panel {
-  --signal: #f18e93; --signal-ink: #301519; --signal-surface: #342126;
-  background: #182329;
-}
-.input-panel[data-state="live"] { --signal: #8af1bf; --signal-ink: #09291c; --signal-surface: #153d30; background: #182329; }
-.input-panel[data-state="stale"], .input-panel[data-state="partial"] { --signal: #ffd078; --signal-ink: #382608; --signal-surface: #41341e; background: #182329; }
-.input-panel > h2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 5px; }
-.input-panel .input-badge { display: inline-flex; align-items: center; gap: 7px; padding: 0; background: none; color: var(--signal); font-size: 12px; font-weight: 800; white-space: nowrap; }
-.input-badge #input-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.input-badge .signal-mark { color: inherit; }
-.signal-mark { display: inline-grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; position: relative; }
-.signal-mark::before, .signal-mark::after { content: ''; position: absolute; box-sizing: border-box; }
-/* Broken link: two separated halves and a diagonal cut. */
-.signal-mark::before { width: 17px; height: 9px; border: 2px solid currentColor; border-radius: 6px; transform: rotate(-45deg); }
-.signal-mark::after { width: 24px; height: 5px; background: currentColor; border: 2px solid #182329; transform: rotate(45deg); }
-.input-panel[data-state="live"] .input-badge .signal-mark::before,
-[data-state="live"] > .controller-shell .signal-mark::before { width: 12px; height: 7px; border: 0; border-left: 3px solid currentColor; border-bottom: 3px solid currentColor; border-radius: 0; transform: translateY(-2px) rotate(-45deg); }
-.input-panel[data-state="live"] .input-badge .signal-mark::after,
-[data-state="live"] > .controller-shell .signal-mark::after { display: none; }
-.input-panel[data-state="stale"] .input-badge .signal-mark::before,
-[data-state="stale"] > .controller-shell .signal-mark::before { width: 12px; height: 15px; border: 0; border-left: 4px solid currentColor; border-right: 4px solid currentColor; border-radius: 0; transform: none; }
-.input-panel[data-state="stale"] .input-badge .signal-mark::after,
-[data-state="stale"] > .controller-shell .signal-mark::after { display: none; }
-.input-panel[data-state="partial"] .input-badge .signal-mark::before { width: 16px; height: 16px; border: 2px solid currentColor; border-radius: 50%; transform: none; background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
-.input-panel[data-state="partial"] .input-badge .signal-mark::after { display: none; }
-.input-panel .hands h3 { color: #dae6e0; }
-.input-panel .controller-shell { padding-top: 28px; background: #293a44; }
-.hand-signal { display: flex; justify-content: flex-end; position: absolute; top: 5px; right: 8px; color: var(--signal); }
-.hand-signal .signal-mark { border-radius: 50%; width: 18px; height: 18px; background: none; color: var(--signal); }
-.hands [data-state="live"] { --signal: #8af1bf; --signal-ink: #09291c; --signal-surface: #153d30; }
-.hands [data-state="offline"] { --signal: #f18e93; --signal-ink: #301519; --signal-surface: #342126; }
-.hands [data-state="stale"] { --signal: #ffd078; --signal-ink: #382608; --signal-surface: #41341e; }
-.hands [data-state="offline"] > .controller-shell { background: #232b30; }
-.hands [data-state="offline"] .controller-face, .hands [data-state="stale"] .controller-face { opacity: .32; filter: grayscale(1); }
-.hands [data-state="offline"] .controller-meter, .hands [data-state="stale"] .controller-meter { color: #a9989e; }
-.hands [data-state="offline"] .controller-meter output, .hands [data-state="stale"] .controller-meter output { color: inherit; }
-@media (prefers-reduced-motion: reduce) { aside > .input-panel { transition: none; } }
-@media (max-height: 800px), (max-width: 1100px) {
- .input-panel .input-badge { padding: 0; }
- .input-panel .controller-shell { padding-top: 26px; }
- .hand-signal { top: 5px; }
-}
-
+/* Controller input, control state and orientation share one card. */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+aside > .input-panel { grid-row: 2 / 4 !important; display: flex; flex-direction: column; background: #182329; }
+.input-panel > h2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex: 0 0 auto; }
+.input-panel #control-state { position: static; inset: auto; margin: 0; padding: 4px 9px; border-radius: 5px; font-size: 11px; font-weight: 500; background: #29353d; color: #9daab1; }
+.input-panel #control-state[data-state="enabled"] { background: #235440; color: #b0efd1; }
+.input-panel #control-state[data-state="stopping"] { background: #493f2b; color: #e0c387; }
+.input-panel .hands { flex: 0 0 auto; }
+.input-panel .hands h3 { color: #aebbc2; }
+.input-panel .controller-shell { background: #29473c; transition: background-color 160ms, opacity 160ms; }
+.hands [data-state="offline"] > .controller-shell { background: #293139; opacity: .38; }
+.hands [data-state="stale"] > .controller-shell { background: #413d30; opacity: .5; }
+.hands [data-state="offline"] .controller-face, .hands [data-state="stale"] .controller-face { filter: grayscale(1); }
+.hands [data-state="offline"] .controller-meter output, .hands [data-state="stale"] .controller-meter output { color: #9daab1; }
 #button-response:empty { display: none; }
-#connection { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #8b989f; }
-#connection::before { content: ''; width: 8px; height: 8px; border: 1.5px solid currentColor; border-radius: 50%; }
-#connection[data-state="connected"]::before { background: currentColor; }
+.input-panel > .orientation-panel { position: relative; inset: auto; width: 100%; max-height: none; flex: 1; min-height: 100px; padding: 12px 0 0; margin-top: 12px; border-top: 1px solid #ffffff0d; border-radius: 0; background: none; overflow: hidden; }
+.input-panel .orientation-panel h2 { font-size: 11px; color: #aebbc2; }
+.input-panel .orientation-panel h2 > span { display: none; }
+.input-panel .orientation-labels { font-size: 10px; }
+.input-panel #orientation-canvas { min-height: 60px; max-height: 260px; margin: auto 0; }
+.input-panel #orientation-status { display: none; }
+.input-panel #orientation-error { font-size: 10px; color: #99a9b1; }
+.telemetry-group { grid-column: 1 !important; grid-row: 3 !important; }
+#table-safety { top: 56px; }
+#connection { font-size: 11px; color: #8b989f; }
 #connection[data-state="stale"] { color: #dcb774; }
-#connection[data-state="stale"]::before { border-radius: 1px; border: 0; border-left: 3px solid; border-right: 3px solid; }
+@media (prefers-reduced-motion: reduce) { .input-panel .controller-shell { transition: none; } }
+@media (max-height: 800px), (max-width: 1100px) {
+ .input-panel > h2 { margin-bottom: 8px; }
+ .input-panel #control-state { font-size: 10px; padding: 3px 6px; }
+ .input-panel > .orientation-panel { padding-top: 8px; margin-top: 8px; }
+}
