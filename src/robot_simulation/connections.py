@@ -120,6 +120,14 @@ class LegacyGripperFeedback:
             return None
         return torque_data(self.info["state"].get("actual_torque"))
 
+    def read_gripper_torque(self, packet):
+        from robot_core.telemetry import scalar_torque
+        if packet.get("gripper_actual_torque") is not None:
+            return scalar_torque(packet["gripper_actual_torque"])
+        if self.read({**packet, "gripper": None}) is None:
+            return None
+        return scalar_torque(self.info["state"].get("gripper_actual_torque"))
+
 
 class ConnectionProbe:
     def __init__(self, arm_socket):

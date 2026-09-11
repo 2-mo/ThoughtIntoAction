@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 import numpy as np
 
-from robot_core.telemetry import SCHEMA, joint_pair, path_data, gripper_data, torque_data
+from robot_core.telemetry import SCHEMA, joint_pair, path_data, gripper_data, torque_data, scalar_torque
 
 WEB_ROOT = Path(__file__).with_name("web")
 
@@ -209,6 +209,7 @@ class Scene:
         actual, target = joint_pair(packet["actual"], packet["target"])
         gripper = gripper_data(packet.get("gripper"))
         torque = torque_data(packet.get("actual_torque"))
+        grip_torque = scalar_torque(packet.get("gripper_actual_torque"))
         stream_id, source = packet["stream_id"], packet["source"]
         if not isinstance(stream_id, str) or not stream_id or not isinstance(source, dict):
             raise ValueError("Invalid robot state source")
@@ -236,6 +237,7 @@ class Scene:
                 self.update(actual, target)
                 self._state["gripper"] = gripper
                 self._state["actual_torque"] = torque
+                self._state["gripper_actual_torque"] = grip_torque
 
     def _paths_without_history(self):
         return {name: value for name, value in self._paths.items() if name != "playback_path"}

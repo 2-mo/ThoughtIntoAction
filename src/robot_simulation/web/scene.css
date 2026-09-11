@@ -423,3 +423,24 @@ aside > .input-panel, .collection-panel, .collection-panel[data-state] { backgro
 .replay-video-wrap { background:#141517; }
 .replay-empty { position:absolute; inset:0; display:grid; place-items:center; font-size:11px; color:#858a92; }
 .replay-video-wrap:has(img[src]) .replay-empty, #replay-video:not([src]) { display:none; }
+
+/* Give each feedback trace a readable height and its own labeled zero-centered scale. */
+.telemetry-group > section.positions-panel { grid-row:1; }
+.telemetry-group > .torque-panel { grid-column:2; grid-row:1 / 4; }
+.telemetry-group > section:nth-child(3) { grid-column:1; grid-row:2; }
+.telemetry-group > .diagnostics-panel { grid-column:1; grid-row:3; }
+.torque-row { height:36px; grid-template-columns:28px minmax(25px,1fr) 32px; margin-bottom:3px; }
+.torque-range { display:block; font-size:8px; color:#727984; font-weight:400; }
+.torque-row[data-state="waiting"] .torque-line { opacity:.35; }
+.torque-axis { padding-left:32px; }
+@media(max-height:700px) {
+  main { grid-template-rows:76px minmax(0,.75fr) minmax(0,1.25fr); }
+  .torque-row { height:28px; margin-bottom:2px; }
+}
+@media (min-height:701px) and (max-height:800px) {
+  main { grid-template-rows:76px minmax(0,.75fr) minmax(0,1.25fr); }
+}
+@media(max-height:700px) {
+  .position-row { min-height:18px; }
+  .torque-row { margin-bottom:1px; }
+}

@@ -33,6 +33,10 @@ class LegacyGripperTests(unittest.TestCase):
 
     def test_legacy_torque_is_measured_feedback_and_missing_is_empty(self):
         self.assertIsNone(self.reader.read_torque(self.packet))
+        self.assertIsNone(self.reader.read_gripper_torque(self.packet))
+        self.info['state']['gripper_actual_torque'] = .35
+        self.reader.next_probe = 0
+        self.assertEqual(self.reader.read_gripper_torque(self.packet), .35)
         self.info['state']['actual_torque'] = [1, -2, 0, .4, -.5, 3]
         self.reader.next_probe = 0
         self.assertEqual(self.reader.read_torque(self.packet), [1, -2, 0, .4, -.5, 3])

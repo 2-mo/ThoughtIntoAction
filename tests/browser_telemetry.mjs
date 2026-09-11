@@ -17,20 +17,23 @@ try {
       {joint_limits:{lower:[-3,-1,-2,-3,-2,-3],upper:[3,3,2,1,2,3]}} : structuredClone(window.fixture)});
   });
   await page.addScriptTag({type:'module', content:await readFile(new URL('telemetry.js', root), 'utf8')});
-  await page.waitForFunction(() => document.querySelectorAll('.torque-row').length === 6);
+  await page.waitForFunction(() => document.querySelectorAll('.torque-row').length === 7);
   assert.equal(await page.locator('.position-row').count(), 6);
   assert.equal(await page.locator('.gripper-placeholder').isVisible(), true);
   assert.equal(await page.locator('.torque-line').first().getAttribute('d'), '');
   await page.evaluate(() => {
     window.fixture = {actual:{q:[0,1,-1,0,0,0]},target:{q:[0,2,-.5,0,0,0]},
-      gripper:{actual:.02,target:.06,max:.08}, actual_torque:[1,-2,0,.5,-.5,3],
+      gripper:{actual:.02,target:.06,max:.08}, actual_torque:[1,-2,0,.5,-.5,3], gripper_actual_torque:.35,
       stream:{status:'live',age_s:0,stream_id:'test',sequence:1}};
   });
   await page.waitForFunction(() => document.querySelector('#gripper').dataset.state === 'live');
+  await page.waitForFunction(() => document.querySelector('.torque-row:last-child b').textContent === '0.35');
+  assert.equal(await page.locator('.torque-row:last-child .torque-range').textContent(), '±0.4');
   await page.evaluate(() => {window.fixture.stream.sequence++; window.fixture.actual_torque[0] = 2;});
   await page.waitForFunction(() => document.querySelector('.torque-line').getAttribute('d').includes('L'));
   for (const [width,height] of [[1440,960],[1366,768],[1024,600]]) {
     await page.setViewportSize({width,height});
+    assert.ok(await page.locator('.torque-row svg').first().evaluate(e => e.getBoundingClientRect().height) >= 28);
     const overlap = await page.evaluate(() => {
       const sections = [...document.querySelectorAll('.telemetry-group > section')];
       return sections.flatMap(a => sections.filter(b => a !== b).map(b => {

@@ -241,7 +241,7 @@ try {
 
   assert.equal(await page.locator('#connection').getAttribute('data-state'), 'waiting');
   await page.waitForFunction(() => document.querySelector('#gripper').dataset.state === 'waiting');
-  assert.equal(await page.locator('.torque-grid').count(), 6);
+  assert.equal(await page.locator('.torque-grid').count(), 7);
   assert.equal(await page.locator('.gripper-placeholder').isVisible(), true);
   await page.screenshot({ path: `${output}/monitor-waiting.png` });
   await page.evaluate(() => { document.documentElement.dataset.session = 'same-page'; });

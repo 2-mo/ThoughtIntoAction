@@ -7,10 +7,11 @@ const jointRows = Array.from({length: 6}, (_, index) => {
   byId('joints').append(row);
   return row;
 });
-const torqueRows = jointRows.map((_, index) => {
+const torqueRows = [...jointRows, null].map((_, index) => {
+  const label = index < 6 ? `J${index + 1}` : '夹爪';
   const row = document.createElement('div');
   row.className = 'torque-row';
-  row.innerHTML = `<span>J${index + 1}</span><svg viewBox="0 0 200 24" preserveAspectRatio="none" role="img" aria-label="J${index + 1} 力矩，最近十秒"><path class="torque-grid" d="M0 3H200 M0 12H200 M0 21H200 M50 0V24 M100 0V24 M150 0V24"/><path class="torque-line"/></svg><b>—</b>`;
+  row.innerHTML = `<span>${label}<small class="torque-range">—</small></span><svg viewBox="0 0 200 24" preserveAspectRatio="none" role="img" aria-label="${label} 力矩，最近十秒"><path class="torque-grid" d="M0 3H200 M0 12H200 M0 21H200 M50 0V24 M100 0V24 M150 0V24"/><path class="torque-line"/></svg><b>—</b>`;
   byId('torques').append(row);
   return row;
 });
@@ -54,14 +55,20 @@ function render() {
   const live = state?.stream?.status === 'live' && now - received + (state.stream.age_s || 0) * 1000 < 1000;
   showPositions(live);
   history = history.filter(sample => now - sample.time <= 10000);
-  const scale = Math.max(1, Math.ceil(Math.max(0, ...history.flatMap(sample => sample.values.map(Math.abs)))));
-  byId('torque-scale').textContent = `±${scale} N·m · 10 s`;
-  const values = live && Array.isArray(state?.actual_torque) ? state.actual_torque : null;
-  byId('torques').dataset.state = values ? 'live' : 'waiting';
+  byId('torque-scale').textContent = 'N·m · 10 s';
+  const values = live ? [...(state?.actual_torque || Array(6).fill(null)), state?.gripper_actual_torque] : null;
+  byId('torques').dataset.state = values?.some(finite) ? 'live' : 'waiting';
   torqueRows.forEach((row, index) => {
+    const peak = Math.max(.1, ...history.map(sample => finite(sample.values[index]) ? Math.abs(sample.values[index]) : 0));
+    const step = 10 ** Math.floor(Math.log10(peak));
+    const scale = Math.ceil(peak / step) * step;
+    row.querySelector('.torque-range').textContent = `±${Number(scale.toPrecision(2))}`;
+    row.title = `独立纵轴 ±${Number(scale.toPrecision(2))} N·m，零点居中`;
+    row.dataset.state = finite(values?.[index]) ? 'live' : 'waiting';
     row.querySelector('b').textContent = finite(values?.[index]) ? values[index].toFixed(2) : '—';
     let previous;
     const d = history.map(sample => {
+      if (!finite(sample.values[index])) { previous = undefined; return ''; }
       const x = 200 * (1 - (now - sample.time) / 10000);
       const y = 12 - sample.values[index] / scale * 9;
       const command = previous === undefined || sample.time - previous > 500 ? 'M' : 'L';
@@ -85,9 +92,9 @@ async function poll() {
     if (state.stream?.stream_id !== streamId) {
       history = []; lastSample = undefined; streamId = state.stream?.stream_id;
     }
-    const values = state.actual_torque;
+    const values = [...(state.actual_torque || Array(6).fill(null)), state.gripper_actual_torque];
     if (state.stream?.status === 'live' && state.stream.sequence !== lastSample &&
-        Array.isArray(values) && values.length === 6 && values.every(finite)) {
+        values.some(finite)) {
       lastSample = state.stream.sequence;
       history.push({time: received - (state.stream.age_s || 0) * 1000, values});
     }

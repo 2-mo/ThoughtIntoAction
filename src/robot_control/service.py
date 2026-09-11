@@ -188,7 +188,8 @@ class ArmService:
                       "table_safety": self._table_report,
                       "actuate": bool(self.holding or self.owner and self.owner["actuate"]),
                       "trajectory": self.motion.snapshot() if self.motion else None}
-        self.publisher.update(state["actual_pos"], self.target, actual_torque=state.get("actual_torque"), gripper={
+        self.publisher.update(state["actual_pos"], self.target, actual_torque=state.get("actual_torque"),
+                              gripper_actual_torque=state.get("gripper_actual_torque"), gripper={
             "actual": state["gripper_actual_pos"],
             "target": self.gripper if self.state["actuate"] else None,
             "max": self.settings["gripper_width"],
