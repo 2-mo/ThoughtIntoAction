@@ -14,7 +14,7 @@ try {
   await page.evaluate(() => {
     window.fixture = {stream:{status:'waiting'}, actual:null};
     window.fetch = async url => ({ok:true, json:async () => url.includes('model') ?
-      {joint_limits:{lower:[-3,-1,-2,-3,-2,-3],upper:[3,3,2,1,2,3]}} : structuredClone(window.fixture)});
+      {torque_limits:[30,40,30,15,10,10,1.5],joint_limits:{lower:[-3,-1,-2,-3,-2,-3],upper:[3,3,2,1,2,3]}} : structuredClone(window.fixture)});
   });
   await page.addScriptTag({type:'module', content:await readFile(new URL('telemetry.js', root), 'utf8')});
   await page.waitForFunction(() => document.querySelectorAll('.torque-row').length === 7);
@@ -28,7 +28,7 @@ try {
   });
   await page.waitForFunction(() => document.querySelector('#gripper').dataset.state === 'live');
   await page.waitForFunction(() => document.querySelector('.torque-row:last-child b').textContent === '0.35');
-  assert.equal(await page.locator('.torque-row:last-child .torque-range').textContent(), '±0.4');
+  assert.equal(await page.locator('.torque-row:last-child .torque-range').textContent(), '±1.5');
   await page.evaluate(() => {window.fixture.stream.sequence++; window.fixture.actual_torque[0] = 2;});
   await page.waitForFunction(() => document.querySelector('.torque-line').getAttribute('d').includes('L'));
   await page.waitForFunction(() => document.querySelector('#eef-position b').textContent === '0.0962');
@@ -41,7 +41,7 @@ try {
   });
   for (const [width,height] of [[1440,960],[1366,768],[1024,600]]) {
     await page.setViewportSize({width,height});
-    assert.ok(await page.locator('.torque-row svg').first().evaluate(e => e.getBoundingClientRect().height) >= 28);
+    assert.ok(await page.locator('.torque-row svg').first().evaluate(e => e.getBoundingClientRect().height) >= 40);
     assert.equal(await page.locator('.metric-grid > div').evaluateAll(cells => cells.some(c => c.scrollWidth > c.clientWidth + 1)), false, 'Numeric tile overflow');
     const overlap = await page.evaluate(() => {
       const sections = [...document.querySelectorAll('.telemetry-group > section')];
@@ -54,6 +54,9 @@ try {
     await page.screenshot({path:new URL(`../outputs/logs/telemetry-layout-${width}.png`,import.meta.url).pathname});
     assert.equal(overlap, false, `Telemetry content overlaps at ${width}x${height}`);
   }
+  assert.equal(await page.locator('.torque-range').first().textContent(), '±30');
+  await page.waitForTimeout(5100);
+  assert.equal(await page.locator('.torque-line').first().getAttribute('d'), '', 'Samples must leave the five-second window');
   await page.evaluate(() => {window.fixture.stream.status='stale';});
   await page.waitForFunction(() => document.querySelector('.torque-row b').textContent === '—');
   await page.evaluate(() => {window.fixture={stream:{status:'waiting'},actual:null};});

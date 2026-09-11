@@ -34,6 +34,8 @@ socket = "outputs/runtime/camera.sock"
 socket = "outputs/runtime/teleop.sock"
 
 [telemetry]
+# Display-only full scale; X5 SDK gripper_torque_max (N*m).
+gripper_torque_max_nm = 1.5
 # One-way robot state stream. Monitor processes may start/stop independently.
 endpoint = "tcp://127.0.0.1:5567"
 

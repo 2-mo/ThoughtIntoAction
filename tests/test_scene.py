@@ -106,6 +106,8 @@ class SceneTests(unittest.TestCase):
         self.scene.update(self.q)
         manifest = json.loads(self.read('api/model'))
         self.assertEqual(manifest['robot'], self.robot.metadata())
+        np.testing.assert_allclose(manifest['torque_limits'][:6], self.robot.model.effortLimit)
+        self.assertEqual(manifest['torque_limits'][6], 1.5)
         np.testing.assert_allclose(manifest['joint_limits']['lower'], self.robot.lower)
         np.testing.assert_allclose(manifest['joint_limits']['upper'], self.robot.upper)
         self.assertIn(b'robot-canvas', self.read(''))

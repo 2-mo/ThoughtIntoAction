@@ -11,11 +11,11 @@ const torqueRows = [...jointRows, null].map((_, index) => {
   const label = index < 6 ? `J${index + 1}` : '夹爪';
   const row = document.createElement('div');
   row.className = 'torque-row';
-  row.innerHTML = `<span>${label}<small class="torque-range">—</small></span><svg viewBox="0 0 200 24" preserveAspectRatio="none" role="img" aria-label="${label} 力矩，最近十秒"><path class="torque-grid" d="M0 3H200 M0 12H200 M0 21H200 M50 0V24 M100 0V24 M150 0V24"/><path class="torque-line"/></svg><b>—</b>`;
+  row.innerHTML = `<span>${label}<small class="torque-range">—</small></span><svg viewBox="0 0 200 24" preserveAspectRatio="none" role="img" aria-label="${label} 力矩，最近五秒"><path class="torque-grid" d="M0 3H200 M0 12H200 M0 21H200 M50 0V24 M100 0V24 M150 0V24"/><path class="torque-line"/></svg><b>—</b>`;
   byId('torques').append(row);
   return row;
 });
-let limits, state = null, received = 0, history = [], streamId, lastSample;
+let limits, torqueLimits, state = null, received = 0, history = [], streamId, lastSample;
 const finite = Number.isFinite;
 function showPositions(live) {
   byId('joints').classList.toggle('feedback-inactive', !live);
@@ -59,23 +59,22 @@ function render() {
   const now = performance.now();
   const live = state?.stream?.status === 'live' && now - received + (state.stream.age_s || 0) * 1000 < 1000;
   showPositions(live);
-  history = history.filter(sample => now - sample.time <= 10000);
-  byId('torque-scale').textContent = 'N·m · 10 s';
+  history = history.filter(sample => now - sample.time <= 5000);
+  byId('torque-scale').textContent = 'N·m · 5 s';
   const values = live ? [...(state?.actual_torque || Array(6).fill(null)), state?.gripper_actual_torque] : null;
   byId('torques').dataset.state = values?.some(finite) ? 'live' : 'waiting';
   torqueRows.forEach((row, index) => {
-    const peak = Math.max(.1, ...history.map(sample => finite(sample.values[index]) ? Math.abs(sample.values[index]) : 0));
-    const step = 10 ** Math.floor(Math.log10(peak));
-    const scale = Math.ceil(peak / step) * step;
-    row.querySelector('.torque-range').textContent = `±${Number(scale.toPrecision(2))}`;
-    row.title = `独立纵轴 ±${Number(scale.toPrecision(2))} N·m，零点居中`;
+    const scale = torqueLimits?.[index];
+    const validScale = finite(scale) && scale > 0;
+    row.querySelector('.torque-range').textContent = validScale ? `±${scale}` : '—';
+    row.title = validScale ? `固定纵轴 ±${scale} N·m，最大力矩量程，零点居中` : '未配置最大力矩';
     row.dataset.state = finite(values?.[index]) ? 'live' : 'waiting';
     row.querySelector('b').textContent = finite(values?.[index]) ? values[index].toFixed(2) : '—';
     let previous;
     const d = history.map(sample => {
-      if (!finite(sample.values[index])) { previous = undefined; return ''; }
-      const x = 200 * (1 - (now - sample.time) / 10000);
-      const y = 12 - sample.values[index] / scale * 9;
+      if (!validScale || !finite(sample.values[index])) { previous = undefined; return ''; }
+      const x = 200 * (1 - (now - sample.time) / 5000);
+      const y = 12 - Math.max(-1, Math.min(1, sample.values[index] / scale)) * 9;
       const command = previous === undefined || sample.time - previous > 500 ? 'M' : 'L';
       previous = sample.time;
       return `${command}${x.toFixed(1)} ${y.toFixed(1)}`;
@@ -88,7 +87,10 @@ async function poll() {
   try {
     if (!limits) {
       const response = await fetch('/api/model', {cache: 'no-store', signal: AbortSignal.timeout(2000)});
-      if (response.ok) limits = (await response.json()).joint_limits;
+      if (response.ok) {
+        const model = await response.json();
+        limits = model.joint_limits; torqueLimits = model.torque_limits;
+      }
     }
     const response = await fetch('/api/state', {cache: 'no-store', signal: AbortSignal.timeout(2000)});
     if (!response.ok) throw new Error('Feedback unavailable');

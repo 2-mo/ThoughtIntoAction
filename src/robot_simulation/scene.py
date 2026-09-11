@@ -55,6 +55,11 @@ class Scene:
         self._manifest = {"robot": robot.metadata(), "model_file": robot.urdf.name,
                           "meshes": meshes, "matrix_order": "column-major",
                           "joint_limits": {"lower": robot.lower.tolist(), "upper": robot.upper.tolist()}}
+        from robot_core.project import load_config
+        gripper_max = load_config()["telemetry"].get("gripper_torque_max_nm")
+        if gripper_max is not None and (not np.isfinite(gripper_max) or gripper_max <= 0):
+            raise ValueError("Invalid gripper display torque limit")
+        self._manifest["torque_limits"] = [*robot.model.effortLimit.tolist(), gripper_max]
         reference = np.zeros(6)
         self._manifest["reference"] = {"sequence": 0, "actual": self._pose(reference),
                                        "target": self._pose(reference), "target_visible": False, "paths": {}}

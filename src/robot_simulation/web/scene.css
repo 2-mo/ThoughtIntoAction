@@ -483,3 +483,25 @@ aside > .input-panel, .collection-panel, .collection-panel[data-state] { backgro
 @media(min-height:701px) and (max-height:800px) {
   main { grid-template-rows:76px minmax(0,.7fr) minmax(0,1.3fr); }
 }
+
+/* Two-column torque tiles: labels above the plot leave the full width for time. */
+#torques { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.torque-row { height:auto; margin:0; grid-template-columns:1fr auto; grid-template-rows:16px 56px; gap:2px 4px; }
+.torque-row > span { display:flex; align-items:center; gap:5px; }
+.torque-range { display:inline; }
+.torque-row > b { grid-column:2; grid-row:1; }
+.torque-row > svg { grid-column:1 / -1; grid-row:2; height:56px; }
+.torque-row:last-child { grid-column:1 / -1; }
+.torque-axis { padding:4px 0 0; }
+@media(max-height:700px) {
+  #torques { gap:5px; }
+  .torque-row { grid-template-rows:14px 40px; }
+  .torque-row > svg { height:40px; }
+}
+#torques { gap:4px; }
+.torque-row { grid-template-rows:14px 56px; gap:0 4px; line-height:12px; }
+.torque-axis { line-height:10px; padding-top:2px; }
+@media(max-height:700px) {
+  #torques { gap:3px; }
+  .torque-row { grid-template-rows:14px 40px; }
+}
