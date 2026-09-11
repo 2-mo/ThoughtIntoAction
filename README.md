@@ -24,6 +24,7 @@ Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随�
 ./启动机械臂服务.sh
 # 启动后显示 TUI，底部常驻快捷键栏，无需回车：H 回零、P 预抓取、S/空格 停止、I 状态。
 # D 切入阻尼（不锁定位置，先支撑机械臂）；S/空格 恢复当前位置保持。动作期间先取消并等待停稳，再按 D。
+# B 开启头显发现广播，N 关闭；原生 XR 模块默认关闭广播，切换不重连 USB。见 docs/quest-discovery.md。
 # Ctrl+C 取消动作并保留服务；Q 或 Ctrl+D 关闭服务；↑↓ 查看日志，End 返回最新。
 # 完整输出保存至配置的 log_dir 下 arm-console-*.log。
 # 不需要交互时：./启动机械臂服务.sh --no-interactive

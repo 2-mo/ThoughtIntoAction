@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from robot_core.project import PROJECT_ROOT, load_config, resolve_path
 
 PYTHON_COMMANDS = {
+    "quest-discovery": "quest/discovery.py",
     "setup-quest-usb": "quest/transport.py",
     "quest-transport": "quest/transport.py",
     "quest-console": "quest/console.py",

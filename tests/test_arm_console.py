@@ -39,6 +39,13 @@ class ArmConsoleTests(unittest.TestCase):
             self.console.command('damping')
         launch.assert_called_once_with(recovery_command('damping', self.args, False))
 
+    def test_discovery_shortcuts_do_not_use_arm_recovery(self):
+        for command, action in [('discovery-on', 'on'), ('discovery-off', 'off')]:
+            cmd = recovery_command(command, self.args, True)
+            self.assertEqual(cmd[-2:], ['quest-discovery', action])
+            self.assertNotIn('--socket', cmd)
+            self.assertNotIn('--home', cmd)
+
     def test_no_commands_before_ready_or_after_service_exit(self):
         with patch.object(self.console, 'launch') as launch:
             self.console.ready.clear()
