@@ -444,3 +444,42 @@ aside > .input-panel, .collection-panel, .collection-panel[data-state] { backgro
   .position-row { min-height:18px; }
   .torque-row { margin-bottom:1px; }
 }
+
+/* Quiet numeric tiles, compact view switches and a separate connection footer. */
+.metric-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; font-variant-numeric:tabular-nums; }
+.metric-grid > div { background:#22252a; border-radius:5px; padding:5px 6px; display:flex; flex-direction:column; gap:3px; }
+.metric-grid span { font-size:9px; color:#939aa4; white-space:nowrap; }
+.metric-grid b { font-size:11px; line-height:13px; font-weight:500; color:#d9dee4; white-space:nowrap; }
+.metric-grid.feedback-inactive b { color:#737b85; }
+.telemetry-group .toggles { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; }
+.telemetry-group .toggles label { display:flex; align-items:center; justify-content:center; gap:5px; background:#22252a; border:1px solid transparent; border-radius:5px; padding:5px 3px; font-size:10px; color:#89929c; white-space:nowrap; cursor:pointer; }
+.telemetry-group .toggles label:has(input:checked) { background:#253136; color:#bfd0d5; }
+.telemetry-group .toggles input { appearance:none; flex:none; width:18px; height:10px; margin:0; border-radius:8px; background:#444b53; position:relative; cursor:pointer; }
+.telemetry-group .toggles input::before { content:''; position:absolute; width:6px; height:6px; top:2px; left:2px; border-radius:50%; background:#c1c8cf; }
+.telemetry-group .toggles input:checked { background:#527c86; }
+.telemetry-group .toggles input:checked::before { left:10px; background:#deedf0; }
+.telemetry-group .operation-note { border-top:1px solid #ffffff0c; padding-top:6px; }
+.runtime-line { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; }
+#state-source { font-size:10px; color:#a8b5be; }
+#loop-rates { font-size:8px; color:#777f89; text-align:right; }
+.telemetry-group .timing-row { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:0; }
+.timing-row > span { display:flex; align-items:center; justify-content:space-between; gap:6px; background:#22252a; padding:5px 7px; border-radius:5px; }
+.timing-row > span > span { color:#8c959f; font-size:9px; }
+.timing-row b { font-variant-numeric:tabular-nums; font-weight:500; color:#c8d1d8; white-space:nowrap; font-size:10px; }
+@media(max-height:700px) {
+  main { grid-template-rows:76px minmax(0,.6fr) minmax(0,1.4fr); }
+  .metric-grid { gap:3px; }
+  .metric-grid > div { padding:3px; gap:2px; }
+  .metric-grid b { font-size:9px; line-height:11px; }
+  .metric-grid span { font-size:8px; }
+  .telemetry-group .toggles label { font-size:9px; padding:4px 2px; gap:3px; }
+  .timing-row > span { padding:4px 5px; }
+  #state-source { font-size:9px; }
+}
+.metric-grid span { line-height:11px; }
+@media(min-height:801px) {
+  main { grid-template-rows:96px minmax(0,.9fr) minmax(0,1.1fr); }
+}
+@media(min-height:701px) and (max-height:800px) {
+  main { grid-template-rows:76px minmax(0,.7fr) minmax(0,1.3fr); }
+}

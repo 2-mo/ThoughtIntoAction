@@ -175,7 +175,7 @@ try {
   await page.waitForFunction(() => document.getElementById('camera-image').hidden && document.getElementById('depth-image').hidden &&
     document.querySelector('.input-panel').dataset.state === 'stale' &&
     document.querySelector('#right-hand [data-meter=grip]').textContent === '—' && document.querySelector('#right-hand [data-key=A]').dataset.pressed === 'false' &&
-    document.getElementById('motion-diagnostics').textContent === '—' && document.getElementById('arm-latency').textContent === '未测' && document.getElementById('input-latency').textContent === '未测');
+    [...document.querySelectorAll('#motion-diagnostics b')].every(cell => cell.textContent === '—') && document.getElementById('arm-latency').textContent === '未测' && document.getElementById('input-latency').textContent === '未测');
   await page.setViewportSize({ width: 1440, height: 960 });
   // Attitude preview uses the Cartesian task, and never leaves stale ghosts visible.
   const identity = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];

@@ -178,8 +178,6 @@ async function initialize() {
     });
     actualAxes.matrix.fromArray(state.actual.eef);
     actualModel.visible = true;
-    element('eef-position').textContent = state.actual.eef.slice(12, 15)
-      .map((value, index) => `${'XYZ'[index]} ${value.toFixed(4)}`).join('  ');
     for (const [name, line] of pathObjects) {
       if (!(name in state.paths)) {
         paths.remove(line); line.geometry.dispose(); line.material.dispose();
@@ -225,7 +223,6 @@ async function initialize() {
       else if (state.stream.status === 'waiting') {
         status('参考姿态 · 无机械臂反馈', 'waiting');
         element('loading').hidden = true;
-        element('eef-position').textContent = '—';
       } else if (state.stream.status === 'stale') status('状态已过期 · 保留最后画面', 'stale');
       else status(`状态不匹配：${state.stream.message}`, 'error');
       document.body.dataset.monitorReady = 'true';

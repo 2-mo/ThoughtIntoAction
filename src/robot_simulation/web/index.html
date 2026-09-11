@@ -56,20 +56,20 @@
         <span>夹爪</span><svg viewBox="0 0 160 32" role="img" aria-label="夹爪开合示意"><path class="gripper-guide" d="M20 7H140 M80 4V29"/><g class="gripper-placeholder"><path d="M52 9V26H60 M108 9V26H100"/></g><g id="gripper-target"></g><g id="gripper-actual"></g></svg>
         <span class="position-values"><b>—</b><b>—</b></span></div></section>
       <section class="torque-panel"><h2 title="SDK 关节力矩反馈，不等同于末端外力">力矩 <span id="torque-scale">N·m · 10 s</span></h2><div id="torques"></div><div class="torque-axis"><span>−10 s</span><span>现在</span></div></section>
-      <section><h2>末端位置 <span id="eef-name">link6 / m</span></h2><div id="eef-position" class="coordinates">—</div></section>
-      <section class="diagnostics-panel"><h2>控制误差 / rad <span id="loop-rates" title="近一秒实测 / 配置频率；不是电机内部伺服频率。">IK — Hz · 服务 — Hz</span></h2>
-        <div id="motion-diagnostics">—</div>
+      <section><h2>末端位置 <span id="eef-name">link6 / m</span></h2><div id="eef-position" class="metric-grid"><div><span>X</span><b>—</b></div><div><span>Y</span><b>—</b></div><div><span>Z</span><b>—</b></div></div></section>
+      <section class="diagnostics-panel"><h2>控制误差 <span>rad</span></h2>
+        <div id="motion-diagnostics" class="metric-grid"><div title="IK 相邻目标的最大关节步长"><span>IK 步长</span><b>—</b></div><div title="目标与实际位置的最大关节偏差"><span>积压</span><b>—</b></div><div title="规划指令与实际位置的最大关节偏差"><span>跟踪</span><b>—</b></div></div>
         <span id="motion-joints" class="hint" tabindex="0">关节快照（悬停查看）</span>
       </section>
       <section class="display-panel"><div class="toggles">
-        <label><input id="show-target" type="checkbox" checked>目标姿态 <span class="swatch target"></span></label>
-        <label><input id="show-path" type="checkbox" checked>运动轨迹 <span class="swatch path"></span></label>
-        <label><input id="show-table" type="checkbox" checked>示意工作台</label>
-        <label><input id="show-axes" type="checkbox" checked>基座与末端坐标轴</label>
+        <label><input id="show-target" type="checkbox" checked>目标姿态</label>
+        <label><input id="show-path" type="checkbox" checked>轨迹</label>
+        <label><input id="show-table" type="checkbox" checked>工作台</label>
+        <label><input id="show-axes" type="checkbox" checked>坐标轴</label>
         </div>
       </section>
-      <section class="operation-note"><p id="state-source">等待机械臂状态</p>
-        <p class="timing-row"><span title="监看端向本机机械臂服务发出只读查询并收到应答的往返时间，不是 CAN 或电机动作延迟。">机械臂服务 RTT <b id="arm-latency">未测</b></span><span title="持续 ADB 通道到 USB 头显的回显往返时间，排除建连时间；不代表 XR 协议处理或动作延迟。">Quest USB RTT <b id="input-latency">未测</b></span></p><span id="model-id" hidden></span></section>
+      <section class="operation-note"><div class="runtime-line"><span id="state-source">等待机械臂状态</span><span id="loop-rates" title="近一秒实测 / 配置频率；不是电机内部伺服频率。">IK — Hz · 服务 — Hz</span></div>
+        <p class="timing-row"><span title="监看端向本机机械臂服务发出只读查询并收到应答的往返时间，不是 CAN 或电机动作延迟。"><span>机械臂 RTT</span><b id="arm-latency">未测</b></span><span title="持续 ADB 通道到 USB 头显的回显往返时间，排除建连时间；不代表 XR 协议处理或动作延迟。"><span>Quest USB RTT</span><b id="input-latency">未测</b></span></p><span id="model-id" hidden></span></section>
       </div>
     </aside>
   <section id="dataset-replay" aria-label="录制数据回放">

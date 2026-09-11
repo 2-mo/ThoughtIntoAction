@@ -123,9 +123,11 @@ async function refresh() {
       '限位 J' + limit.joints.join('/J') + ' · 反向移动可恢复' : '关节快照（悬停查看）';
     const diagnostic = data.motion_diagnostics;
     const diagnosticLive = diagnostic && diagnostic.age_s != null && diagnostic.age_s < .5;
-    byId('motion-diagnostics').textContent = diagnosticLive ?
-      'IK 步长 ' + diagnostic.peak_ik_step.toFixed(4) + ' · 积压 ' + diagnostic.ik_backlog.toFixed(4) +
-      ' · 跟踪 ' + diagnostic.command_tracking_error.toFixed(4) : '—';
+    byId('motion-diagnostics').querySelectorAll('b').forEach((cell, index) => {
+      const value = diagnosticLive ? diagnostic[['peak_ik_step', 'ik_backlog', 'command_tracking_error'][index]] : null;
+      cell.textContent = Number.isFinite(value) ? value.toFixed(4) : '—';
+    });
+    byId('motion-diagnostics').classList.toggle('feedback-inactive', !diagnosticLive);
     byId('motion-joints').title = diagnosticLive ?
       ['q_actual', 'q_des', 'q_safe'].map(k => k + ': ' + diagnostic[k].map(v => v.toFixed(4)).join(' ')).join('\n') : '无新诊断数据';
     const depth = data.depth_preview || {};
@@ -166,7 +168,8 @@ async function refresh() {
     byId('depth-image').hidden = true;
     byId('depth-image').removeAttribute('src');
     byId('depth-empty').hidden = false;
-    byId('motion-diagnostics').textContent = '—';
+    byId('motion-diagnostics').querySelectorAll('b').forEach(cell => { cell.textContent = '—'; });
+    byId('motion-diagnostics').classList.add('feedback-inactive');
     byId('motion-joints').title = '无新诊断数据';
     byId('camera-image').hidden = true;
     byId('camera-image').removeAttribute('src');

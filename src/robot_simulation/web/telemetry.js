@@ -34,6 +34,11 @@ function showPositions(live) {
       }
     });
   });
+  byId('eef-position').querySelectorAll('b').forEach((cell, index) => {
+    const value = missing ? null : state?.actual?.eef?.[12 + index];
+    cell.textContent = finite(value) ? value.toFixed(4) : '—';
+  });
+  byId('eef-position').classList.toggle('feedback-inactive', !live);
   const grip = missing ? null : state?.gripper;
   const gripRow = byId('gripper');
   gripRow.classList.toggle('feedback-inactive', !live);

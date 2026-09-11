@@ -22,7 +22,7 @@ try {
   assert.equal(await page.locator('.gripper-placeholder').isVisible(), true);
   assert.equal(await page.locator('.torque-line').first().getAttribute('d'), '');
   await page.evaluate(() => {
-    window.fixture = {actual:{q:[0,1,-1,0,0,0]},target:{q:[0,2,-.5,0,0,0]},
+    window.fixture = {actual:{q:[0,1,-1,0,0,0],eef:[1,0,0,0,0,1,0,0,0,0,1,0,.0962,-.001,.1552,1]},target:{q:[0,2,-.5,0,0,0]},
       gripper:{actual:.02,target:.06,max:.08}, actual_torque:[1,-2,0,.5,-.5,3], gripper_actual_torque:.35,
       stream:{status:'live',age_s:0,stream_id:'test',sequence:1}};
   });
@@ -31,9 +31,18 @@ try {
   assert.equal(await page.locator('.torque-row:last-child .torque-range').textContent(), '±0.4');
   await page.evaluate(() => {window.fixture.stream.sequence++; window.fixture.actual_torque[0] = 2;});
   await page.waitForFunction(() => document.querySelector('.torque-line').getAttribute('d').includes('L'));
+  await page.waitForFunction(() => document.querySelector('#eef-position b').textContent === '0.0962');
+  await page.evaluate(() => {
+    document.querySelectorAll('#motion-diagnostics b').forEach((b,i) => {b.textContent = ['0.0000','0.0189','0.0189'][i];});
+    document.getElementById('state-source').textContent = '真机反馈 · quest';
+    document.getElementById('loop-rates').textContent = 'IK 48.2/50 Hz · 服务 46.7/50 Hz';
+    document.getElementById('arm-latency').textContent = '0.4 ms';
+    document.getElementById('input-latency').textContent = '4.2 ms';
+  });
   for (const [width,height] of [[1440,960],[1366,768],[1024,600]]) {
     await page.setViewportSize({width,height});
     assert.ok(await page.locator('.torque-row svg').first().evaluate(e => e.getBoundingClientRect().height) >= 28);
+    assert.equal(await page.locator('.metric-grid > div').evaluateAll(cells => cells.some(c => c.scrollWidth > c.clientWidth + 1)), false, 'Numeric tile overflow');
     const overlap = await page.evaluate(() => {
       const sections = [...document.querySelectorAll('.telemetry-group > section')];
       return sections.flatMap(a => sections.filter(b => a !== b).map(b => {
