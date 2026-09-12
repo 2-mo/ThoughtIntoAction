@@ -14,7 +14,7 @@ try {
   await page.evaluate(() => {
     window.fixture = {stream:{status:'waiting'}, actual:null};
     window.fetch = async url => ({ok:true, json:async () => url.includes('model') ?
-      {torque_limits:[30,40,30,15,10,10,1.5],joint_limits:{lower:[-3,-1,-2,-3,-2,-3],upper:[3,3,2,1,2,3]}} : structuredClone(window.fixture)});
+      {velocity_limits:[3,3,3,3,3,3],torque_limits:[30,40,30,15,10,10,1.5],joint_limits:{lower:[-3,-1,-2,-3,-2,-3],upper:[3,3,2,1,2,3]}} : structuredClone(window.fixture)});
   });
   const shared = 'data:text/javascript;base64,' + Buffer.from(await readFile(new URL('display-state.js', root), 'utf8')).toString('base64');
   await page.addScriptTag({type:'module', content:(await readFile(new URL('telemetry.js', root), 'utf8')).replace('./display-state.js', shared)});
@@ -24,6 +24,7 @@ try {
   assert.equal(await page.locator('.torque-line').first().getAttribute('d'), '');
   await page.evaluate(() => {
     window.fixture = {actual:{q:[0,1,-1,0,0,0],eef_quaternion:[0,0,0,1],eef:[1,0,0,0,0,1,0,0,0,0,1,0,.0962,-.001,.1552,1]},target:{q:[0,2,-.5,0,0,0]},
+      actual_vel:[.2,-.4,0,.1,0,.3],target_vel:[.3,-.3,0,.2,0,.4],
       gripper:{actual:.02,target:.06,max:.08}, actual_torque:[1,-2,0,.5,-.5,3], gripper_actual_torque:.35,
       stream:{status:'live',age_s:0,stream_id:'test',sequence:1}};
   });
@@ -41,6 +42,7 @@ try {
   assert.equal(await page.locator('#motor-feedback .motor-row').nth(6).locator('b').first().textContent(), '—');
   await page.evaluate(() => {window.fixture.stream.sequence++; window.fixture.actual_torque[0] = 2;});
   await page.waitForFunction(() => document.querySelector('.torque-line').getAttribute('d').includes('L'));
+  await page.waitForFunction(() => document.querySelector('.velocity-line.actual').getAttribute('d').includes('L'));
   await page.waitForFunction(() => document.querySelector('#eef-position b').textContent === '0.0962');
   await page.waitForFunction(() => document.querySelector('#eef-quaternion div:last-child b').textContent === '1.0000');
   await page.evaluate(() => {window.fixture.actual.eef_quaternion = [0,0,0,-1]; window.fixture.stream.sequence++;});
@@ -68,6 +70,10 @@ try {
     if (overlap) console.log(await page.evaluate(() => [...document.querySelectorAll('.telemetry-group > section')].map(s => ({name:s.className,height:s.clientHeight,scroll:s.scrollHeight,top:s.getBoundingClientRect().top,bottom:s.getBoundingClientRect().bottom})))) ;
     await page.screenshot({path:new URL(`../outputs/logs/telemetry-layout-${width}.png`,import.meta.url).pathname});
     assert.equal(overlap, false, `Telemetry content overlaps at ${width}x${height}`);
+    if (width >= 1200) assert.equal(await page.evaluate(() => {
+      const group = document.querySelector('.telemetry-group');
+      return document.documentElement.scrollHeight > innerHeight + 1 || group.scrollHeight > group.clientHeight + 1;
+    }), false, 'Desktop telemetry must fit without scrolling');
   }
   assert.equal(await page.locator('.torque-range').first().textContent(), '±30');
   await page.waitForTimeout(5100);

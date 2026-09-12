@@ -105,6 +105,8 @@ class RecordedEpisode:
         start = max(0, bisect_right(self.times, seconds - 5) - 1)
         submission = row.get('submission') or {}
         history = [{'time': self.times[i] * 1000,
+                    'velocity': self.states[i].get('actual_vel'),
+                    'target_velocity': self.states[i].get('sdk_cmd_vel'),
                     'values': [*(self.states[i].get('actual_torque') or [None] * 6), self.states[i].get('gripper_actual_torque')]}
                    for i in range(start, index + 1)]
         stride = max(1, (index + 1) // 500)

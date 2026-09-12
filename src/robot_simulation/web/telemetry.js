@@ -11,7 +11,7 @@ const jointRows = Array.from({length: 6}, (_, index) => {
 const velocityRows = jointRows.map((_, index) => {
   const row = document.createElement('div');
   row.className = 'position-row';
-  row.innerHTML = `<span class="position-name">J${index + 1}</span><div class="position-track"><i class="position-zero" style="left:50%"></i><i class="position-fill target" hidden></i><i class="position-fill actual" hidden></i></div><span class="position-values"><b>—</b><b>—</b></span>`;
+  row.innerHTML = `<span class="position-name">J${index + 1}</span><svg class="velocity-chart" viewBox="0 0 200 24" preserveAspectRatio="none" aria-label="J${index + 1} 速度，最近五秒"><path class="torque-grid" d="M0 12H200 M50 0V24 M100 0V24 M150 0V24"/><path class="velocity-line target"/><path class="velocity-line actual"/></svg><span class="position-values"><b>—</b><b>—</b></span>`;
   byId('velocities').append(row); return row;
 });
 const torqueRows = [...jointRows, null].map((_, index) => {
@@ -119,12 +119,23 @@ function render() {
     [state?.actual_vel?.[index], state?.target_vel?.[index]].forEach((v, side) => {
       const valid = live && finite(v);
       row.querySelectorAll('b')[side].textContent = valid ? (v * 180 / Math.PI).toFixed(1) : '—';
-      const bar = row.querySelector(side ? '.target' : '.actual');
-      bar.hidden = !valid || !finite(scale) || scale <= 0;
-      if (!bar.hidden) {
-        const end = 50 + 50 * Math.max(-1, Math.min(1, v / scale));
-        bar.style.left = `${Math.min(50, end)}%`; bar.style.width = `${Math.abs(end - 50)}%`;
+      const segments = [];
+      let previous;
+      const y = v => 12 - 10 * Math.max(-1, Math.min(1, v / scale));
+      const valueAt = sample => sample[side ? 'target_velocity' : 'velocity']?.[index];
+      for (const sample of history) {
+        const value = valueAt(sample);
+        if (!finite(value) || !finite(scale) || scale <= 0) {previous = null; continue;}
+        if (sample.time < now - 5000) {previous = sample; continue;}
+        const connected = previous && sample.time - previous.time <= 500;
+        if (connected && previous.time < now - 5000) {
+          const fraction = (now - 5000 - previous.time) / (sample.time - previous.time);
+          segments.push(`M0 ${y(valueAt(previous) + fraction * (value - valueAt(previous))).toFixed(2)}`);
+        }
+        segments.push(`${connected ? 'L' : 'M'}${(200 * (sample.time - now + 5000) / 5000).toFixed(2)} ${y(value).toFixed(2)}`);
+        previous = sample;
       }
+      row.querySelector(side ? '.target' : '.actual').setAttribute('d', live ? segments.join(' ') : '');
     });
   });
   const speeds = [state?.eef_velocity?.speed, state?.eef_velocity?.angular_speed, state?.gripper_actual_vel];
@@ -186,9 +197,10 @@ async function poll() {
     }
     const values = [...(state.actual_torque || Array(6).fill(null)), state.gripper_actual_torque];
     if (mode !== 'replay' && state.stream?.status === 'live' && state.stream.sequence !== lastSample &&
-        values.some(finite)) {
+        (values.some(finite) || state.actual_vel?.some(finite))) {
       lastSample = state.stream.sequence;
-      history.push({time: received - (state.stream.age_s || 0) * 1000, values});
+      history.push({time: received - (state.stream.age_s || 0) * 1000, values,
+        velocity: state.actual_vel, target_velocity: state.target_vel});
     }
   } catch {
     if (state) state = {...state, stream: {...state.stream, status: 'error'}};

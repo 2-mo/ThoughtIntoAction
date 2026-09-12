@@ -583,3 +583,46 @@ body[data-view="replay"] .scene-viewport { bottom:var(--replay-space, 164px); }
 @media(max-width:1000px) {
   .telemetry-group > section.torque-panel { grid-row: 6; }
 }
+
+/* Full-width telemetry frees the space formerly reserved for alignment. */
+main { grid-template-rows:76px minmax(230px,1fr) 390px; }
+aside > .input-panel { grid-row:2 !important; }
+.input-panel > h2 { margin-bottom:6px; }
+.input-panel > .orientation-panel { flex:1; min-height:70px; padding-top:6px; margin-top:6px; }
+.input-panel #orientation-canvas { margin:0; min-height:40px; max-height:120px; }
+.telemetry-group { grid-column:1 / -1 !important; grid-template-columns:1fr 1fr 1fr 1.2fr; grid-template-rows:max-content max-content max-content; gap:7px 14px; overflow:visible; }
+.telemetry-group > section.positions-panel { grid-column:1; grid-row:1; }
+.telemetry-group > section.velocity-panel { grid-column:2; grid-row:1; }
+.telemetry-group > section.torque-panel { grid-column:3; grid-row:1 / 4; }
+.telemetry-group > section.motor-panel { grid-column:4; grid-row:1 / 3; }
+.telemetry-group > section:has(#eef-position) { grid-column:1 / 3; grid-row:2; }
+.telemetry-group > .diagnostics-panel { grid-column:4; grid-row:3; }
+.telemetry-group > .display-panel { grid-column:1; grid-row:3; }
+.telemetry-group > .operation-note { grid-column:2; grid-row:3; margin:0; }
+.eef-pose-grid { grid-template-columns:3fr 4fr; }
+.velocity-chart { width:100%; height:24px; }
+.velocity-line { fill:none; stroke:#9dcbd1; stroke-width:1.5; vector-effect:non-scaling-stroke; }
+.velocity-line.target { opacity:.3; stroke-width:2.5; }
+.motor-row { padding:6px 3px; gap:3px; font-size:10px; }
+.motor-head { font-size:9px; }
+.telemetry-group .toggles { grid-template-columns:1fr 1fr; }
+.telemetry-group .timing-row { gap:3px; font-size:9px; }
+.runtime-line { flex-wrap:wrap; gap:2px; }
+@media(max-height:800px) {
+  main { padding:6px; gap:6px; grid-template-rows:66px minmax(190px,1fr) 350px; }
+  #torques .torque-row { grid-template-rows:14px 48px; }
+  #torques .torque-row > svg { height:48px; }
+  .telemetry-group { padding:8px; gap:5px 10px; }
+  .position-row { min-height:22px; }
+  .velocity-chart { height:22px; }
+}
+@media(max-width:1100px), (max-height:650px) {
+  html, body { height:auto; overflow:auto; }
+  main { height:auto; min-height:100dvh; grid-template-rows:66px 250px auto; }
+  .telemetry-group { grid-template-columns:1fr 1fr; grid-template-rows:repeat(5,max-content); }
+  .telemetry-group > section.torque-panel { grid-column:1; grid-row:3 / 6; }
+  .telemetry-group > section.motor-panel { grid-column:2; grid-row:3; }
+  .telemetry-group > .diagnostics-panel { grid-column:2; grid-row:4; }
+  .telemetry-group > .display-panel { grid-column:1; grid-row:6; }
+  .telemetry-group > .operation-note { grid-column:2; grid-row:5; }
+}
