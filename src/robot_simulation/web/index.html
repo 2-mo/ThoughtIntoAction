@@ -62,7 +62,7 @@
         <span class="position-values"><b>—</b><b>—</b></span></div></section>
       <section class="velocity-panel"><h2>速度 <span>实际 / 指令 · °/s</span></h2><div id="velocities"></div><div id="eef-velocity" class="metric-grid"><div><span>末端 mm/s</span><b>—</b></div><div><span>末端 °/s</span><b>—</b></div><div><span>夹爪 mm/s</span><b>—</b></div></div></section>
       <section class="torque-panel"><h2 title="SDK 关节力矩反馈，不等同于末端外力">力矩 <span id="torque-scale">N·m · 5 s</span></h2><div id="torques"></div><div class="torque-axis"><span>−5 s</span><span>现在</span></div></section>
-      <section><h2>末端位置 <span id="eef-name">link6 / m</span></h2><div id="eef-position" class="metric-grid"><div><span>X</span><b>—</b></div><div><span>Y</span><b>—</b></div><div><span>Z</span><b>—</b></div></div></section>
+      <section class="eef-pose-panel"><h2>末端位姿 <span id="eef-name">link6 · 基座坐标系</span></h2><div class="eef-pose-grid"><div><h3>位置 · m</h3><div id="eef-position" class="metric-grid"><div><span>X</span><b>—</b></div><div><span>Y</span><b>—</b></div><div><span>Z</span><b>—</b></div></div></div><div><h3>四元数 · XYZW</h3><div id="eef-quaternion" class="metric-grid" title="实际关节反馈计算的末端姿态；XYZW 顺序，单位四元数，符号保持连续"><div><span>X</span><b>—</b></div><div><span>Y</span><b>—</b></div><div><span>Z</span><b>—</b></div><div><span>W</span><b>—</b></div></div></div></div></section>
       <details class="diagnostics-panel"><summary>控制诊断 · 实时</summary>
         <div id="motion-diagnostics" class="metric-grid"><div title="IK 相邻目标的最大关节步长"><span>IK 步长</span><b>—</b></div><div title="目标与实际位置的最大关节偏差"><span>积压</span><b>—</b></div><div title="规划指令与实际位置的最大关节偏差"><span>跟踪</span><b>—</b></div></div>
         <span id="motion-joints" class="hint" tabindex="0">关节快照（悬停查看）</span>

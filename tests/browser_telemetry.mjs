@@ -23,7 +23,7 @@ try {
   assert.equal(await page.locator('.gripper-placeholder').isVisible(), true);
   assert.equal(await page.locator('.torque-line').first().getAttribute('d'), '');
   await page.evaluate(() => {
-    window.fixture = {actual:{q:[0,1,-1,0,0,0],eef:[1,0,0,0,0,1,0,0,0,0,1,0,.0962,-.001,.1552,1]},target:{q:[0,2,-.5,0,0,0]},
+    window.fixture = {actual:{q:[0,1,-1,0,0,0],eef_quaternion:[0,0,0,1],eef:[1,0,0,0,0,1,0,0,0,0,1,0,.0962,-.001,.1552,1]},target:{q:[0,2,-.5,0,0,0]},
       gripper:{actual:.02,target:.06,max:.08}, actual_torque:[1,-2,0,.5,-.5,3], gripper_actual_torque:.35,
       stream:{status:'live',age_s:0,stream_id:'test',sequence:1}};
   });
@@ -33,6 +33,11 @@ try {
   await page.evaluate(() => {window.fixture.stream.sequence++; window.fixture.actual_torque[0] = 2;});
   await page.waitForFunction(() => document.querySelector('.torque-line').getAttribute('d').includes('L'));
   await page.waitForFunction(() => document.querySelector('#eef-position b').textContent === '0.0962');
+  await page.waitForFunction(() => document.querySelector('#eef-quaternion div:last-child b').textContent === '1.0000');
+  await page.evaluate(() => {window.fixture.actual.eef_quaternion = [0,0,0,-1]; window.fixture.stream.sequence++;});
+  await page.waitForTimeout(250);
+  assert.equal(await page.locator('#eef-quaternion div:last-child b').textContent(), '1.0000');
+
   await page.evaluate(() => {
     document.querySelectorAll('#motion-diagnostics b').forEach((b,i) => {b.textContent = ['0.0000','0.0189','0.0189'][i];});
     document.getElementById('state-source').textContent = '真机反馈 · quest';

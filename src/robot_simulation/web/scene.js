@@ -151,7 +151,7 @@ async function initialize() {
   const manifest = await readJSON('/api/model');
   if (manifest.matrix_order !== 'column-major') throw new Error('未知的模型变换格式');
   element('model-name').textContent = manifest.model_file;
-  element('eef-name').textContent = `${manifest.robot.eef_frame} / m`;
+  element('eef-name').textContent = `${manifest.robot.eef_frame} · ${manifest.robot.base_frame}`;
   element('model-id').textContent = `模型 SHA256 ${manifest.robot.urdf_sha256.slice(0, 12)}`;
   const actualModel = new THREE.Group();
   const targetModel = new THREE.Group();

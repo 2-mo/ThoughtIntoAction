@@ -24,6 +24,7 @@ const torqueRows = [...jointRows, null].map((_, index) => {
 });
 let limits, torqueLimits, velocityLimits, state = null, received = 0, history = [], streamId, lastSample;
 const finite = Number.isFinite;
+let previousQuaternion = null, quaternionStream;
 function showPositions(live) {
   byId('joints').classList.toggle('feedback-inactive', !live);
   const missing = !state?.actual || state?.stream?.status === 'waiting';
@@ -46,6 +47,26 @@ function showPositions(live) {
     cell.textContent = finite(value) ? value.toFixed(4) : '—';
   });
   byId('eef-position').classList.toggle('feedback-inactive', !live);
+  if (quaternionStream !== state?.stream?.stream_id) {
+    previousQuaternion = null;
+    quaternionStream = state?.stream?.stream_id;
+  }
+  const quaternion = missing ? null : state?.actual?.eef_quaternion;
+  let displayedQuaternion = null;
+  if (Array.isArray(quaternion) && quaternion.length === 4 && quaternion.every(finite)) {
+    const norm = Math.hypot(...quaternion);
+    if (norm > 1e-9) {
+      displayedQuaternion = quaternion.map(v => v / norm);
+      if (previousQuaternion && displayedQuaternion.reduce((dot, v, i) => dot + v * previousQuaternion[i], 0) < 0)
+        displayedQuaternion = displayedQuaternion.map(v => -v);
+      previousQuaternion = displayedQuaternion;
+    }
+  }
+  byId('eef-quaternion').querySelectorAll('b').forEach((cell, i) => {
+    const value = displayedQuaternion?.[i];
+    cell.textContent = finite(value) ? (Math.abs(value) < .00005 ? 0 : value).toFixed(4) : '—';
+  });
+  byId('eef-quaternion').classList.toggle('feedback-inactive', !live);
   const grip = missing ? null : state?.gripper;
   const gripRow = byId('gripper');
   gripRow.classList.toggle('feedback-inactive', !live);

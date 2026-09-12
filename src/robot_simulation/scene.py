@@ -276,6 +276,7 @@ class Scene:
         pin.framesForwardKinematics(self.robot.model, self._data, q)
         pin.updateGeometryPlacements(self.robot.model, self._data, self._visual, self._geometry_data)
         return {"q": q.tolist(),
+                "eef_quaternion": pin.Quaternion(self._data.oMf[self.robot.frame].rotation).coeffs().tolist(),
                 "meshes": [pose.homogeneous.flatten(order="F").tolist()
                            for pose in self._geometry_data.oMg],
                 "eef": self._data.oMf[self.robot.frame].homogeneous.flatten(order="F").tolist()}
