@@ -37,6 +37,8 @@ def load_episode(path, max_gap_s=.1):
         if len(clock) < 2 or np.any(np.diff(clock) <= 0) or np.max(np.diff(clock)) > max_gap_s * 1e9:
             raise ValueError('Missing, unordered or gapped timestamps')
     for state in states:
+        if "feedback_valid" in state and (len(state["feedback_valid"]) != 7 or any(v is not True for v in state["feedback_valid"])):
+            raise ValueError("Invalid or faulted motor feedback in recording")
         if state.get('preset_name') or state.get('source') in ('preset', 'replay'):
             raise ValueError('Episode includes positioning/replay; collect a clean demonstration')
         values = np.asarray([[*state['actual_pos'], state['gripper_actual_pos']],

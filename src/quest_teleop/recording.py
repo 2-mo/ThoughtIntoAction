@@ -32,6 +32,7 @@ class EpisodeWriter:
         if not 18 <= video_crf <= 23:
             raise ValueError("video_crf must be between 18 and 23")
         self.rgb_video, self.video_crf = rgb_video, video_crf
+        self.diagnostic_counts = {"diagnostics": 0, "event": 0}
         self.counts = {"state": 0, "frame": 0}
         self.dropped = {"state": 0, "frame": 0}
         self.manifest = {"schema_version": 1, "kind": "quest_teleop_episode",
@@ -97,7 +98,11 @@ class EpisodeWriter:
                     else:
                         row = payload
 
-                    records.write(kind, row, self.counts[kind])
+                    if kind == "state":
+                        records.write_state(row, self.counts[kind])
+                        self.diagnostic_counts = dict(records.extra_counts)
+                    else:
+                        records.write(kind, row, self.counts[kind])
                     self.counts[kind] += 1
                     if time.monotonic() - last_flush > 1:
                         stream.flush()
@@ -121,7 +126,7 @@ class EpisodeWriter:
         return {"id": self.id, "path": str(self.path), "queue_size": self.queue.qsize(),
                 "task": self.manifest["task"], "lifecycle": self.manifest["lifecycle"],
                 "outcome": self.manifest["outcome"],
-                "counts": dict(self.counts), "dropped": dict(self.dropped), "error": self.error,
+                "counts": dict(self.counts), "diagnostic_counts": dict(self.diagnostic_counts), "dropped": dict(self.dropped), "error": self.error,
                 "duration_s": ((self.stopped_ns or time.monotonic_ns()) - self.manifest["started_monotonic_ns"]) / 1e9}
 
     def stop(self, outcome="unknown", *, reason=None, timeout=10):
@@ -138,7 +143,7 @@ class EpisodeWriter:
             raise RuntimeError("Writer is still finalizing; episode remains incomplete")
         self.manifest.update({"lifecycle": "failed" if self.error else "interrupted" if reason else "complete",
                               "outcome": outcome, "stopped_monotonic_ns": self.stopped_ns,
-                              "counts": dict(self.counts), "dropped": dict(self.dropped),
+                              "counts": dict(self.counts), "diagnostic_counts": dict(self.diagnostic_counts), "dropped": dict(self.dropped),
                               "error": self.error, "stop_reason": reason})
         save_json(self.path / "episode.json", self.manifest)
         return {**self.status(), "lifecycle": self.manifest["lifecycle"], "outcome": outcome}

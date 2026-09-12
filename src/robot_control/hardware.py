@@ -105,6 +105,7 @@ class OfficialX5HardwareAdapter:
         self._position_gripper_kp = float(config.default_gripper_kp)
         self._position_gripper_kd = float(config.default_gripper_kd)
 
+        self._motor_feedback = None
         self._device_lease = DeviceLease(can_port)
         try:
             self.arm = arx5.Arx5JointController(self.robot_config, config, can_port)
@@ -150,6 +151,11 @@ class OfficialX5HardwareAdapter:
             self.close()
             raise
 
+        from .motor_feedback import MotorFeedback
+        self._motor_feedback = MotorFeedback(can_port, self.robot_config.motor_id,
+            [t.name for t in self.robot_config.motor_type], self.robot_config.gripper_motor_id,
+            self.robot_config.gripper_motor_type.name)
+
     def get_joint_positions(self) -> np.ndarray:
         state = self.arm.get_joint_state()
         position = self._validated_position(state)
@@ -168,7 +174,15 @@ class OfficialX5HardwareAdapter:
         state = self.arm.get_joint_state()
         command = self.arm.get_joint_cmd()
         gain = self.arm.get_gain()
+        diagnostics = self._motor_feedback.snapshot() if self._motor_feedback else None
+        motors = diagnostics['motors'] if diagnostics else []
         return {
+            "joint_current_a": [m['current_a'] for m in motors[:6]] if motors else [None] * 6,
+            "gripper_current_a": motors[6]['current_a'] if motors else None,
+            "feedback_valid": [m['valid'] for m in motors] if motors else [False] * 7,
+            "motor_feedback_monotonic_ns": [m['host_received_monotonic_ns'] for m in motors] if motors else [None] * 7,
+            "motor_load_raw": [m['load_raw'] for m in motors] if motors else [None] * 7,
+            "motor_diagnostics": diagnostics,
             "actual_pos": self._validated_position(state),
             "actual_vel": state.vel().copy(),
             "actual_torque": state.torque().copy(),
@@ -426,6 +440,8 @@ class OfficialX5HardwareAdapter:
             if arm is not None:
                 arm.set_to_damping()
         finally:
+            if getattr(self, "_motor_feedback", None) is not None:
+                self._motor_feedback.close()
             self.arm = None
             del arm
             lease = getattr(self, "_device_lease", None)

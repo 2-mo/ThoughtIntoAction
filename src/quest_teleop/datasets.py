@@ -93,6 +93,8 @@ def validate_episode(path, *, settings=None, robot=None, check_images=True):
         submitted_count = 0
         previous_submission = None
         for row in states:
+            if "feedback_valid" in row and (len(row["feedback_valid"]) != 7 or any(v is not True for v in row["feedback_valid"])):
+                errors.append("Invalid or faulted motor feedback")
             for key in ("actual_pos", "actual_vel", "actual_torque", "sdk_cmd_pos", "sdk_cmd_vel", "sdk_cmd_torque", "kp", "kd"):
                 vector = np.asarray(row[key], dtype=float)
                 if vector.shape != (6,) or not np.isfinite(vector).all():
