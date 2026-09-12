@@ -192,6 +192,7 @@ class ArmService:
         self.publisher.update(state["actual_pos"], self.target, actual_torque=state.get("actual_torque"),
                               gripper_actual_torque=state.get("gripper_actual_torque"),
                               actual_vel=state.get("actual_vel"), target_vel=state.get("sdk_cmd_vel"),
+                              motor_diagnostics=state.get("motor_diagnostics"),
                               gripper_actual_vel=state.get("gripper_actual_vel"), gripper={
             "actual": state["gripper_actual_pos"],
             "target": self.gripper if self.state["actuate"] else None,

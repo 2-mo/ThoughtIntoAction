@@ -49,6 +49,32 @@ class ReplayTests(unittest.TestCase):
             replay.control('play')
             self.assertEqual(replay.frame()['position_s'], 0.)
 
+    def test_motor_diagnostics_use_causal_temperature_and_fault_events(self):
+        from quest_teleop.mcap_io import RecordWriter
+        self.rows[1].update(joint_current_a=[.2, None, None, None, None, None], feedback_valid=[False] * 7)
+        with (self.root / 'episode.mcap').open('wb') as stream:
+            writer = RecordWriter(stream, {'started_unix_ns': 0, 'started_monotonic_ns': 0})
+            for i, row in enumerate(self.rows):
+                writer.write('state', row, i)
+            base = {'host_monotonic_ns': 1_500_000_000, 'stream_id': 'a',
+                    'joint_order': [1, 2, 4, 5, 6, 7], 'gripper_id': 8,
+                    'motors': [{'motor_id': 1, 'temperature_c': 30, 'fault_code': 0,
+                                'feedback_status': 'live', 'valid': True}]}
+            writer.write('diagnostics', base, 0)
+            writer.write('event', {'host_monotonic_ns': 1_900_000_000, 'stream_id': 'a',
+                                  'motor_id': 1, 'fault_code': 8, 'valid': False}, 0)
+            writer.write('diagnostics', {**base, 'host_monotonic_ns': 2_100_000_000,
+                                        'motors': [{'motor_id': 1, 'temperature_c': 90}]}, 1)
+            writer.finish()
+        data = RecordedEpisode(self.root)
+        self.assertIsNone(data.review(0)['motor_diagnostics'])
+        motor = data.review(1)['motor_diagnostics']['motors'][0]
+        self.assertEqual(motor['temperature_c'], 30)
+        self.assertEqual(motor['current_a'], .2)
+        self.assertEqual(motor['fault_code'], 8)
+        self.assertFalse(motor['valid'])
+        self.assertIsNone(data.review(0)['motor_diagnostics'])
+
     def test_mp4_review_seek_keeps_image_and_robot_sample_together(self):
         from quest_teleop.video import RGBVideoWriter
         writer = RGBVideoWriter(self.root / "wrist_rgb.mp4", 16, 16, 1, 20)

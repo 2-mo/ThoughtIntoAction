@@ -16,7 +16,7 @@ export function displayedState(live) {
     paths: {recorded: {points: f.path_points || [], color: 0x91b8aa}},
     actual_vel: f.actual_vel, target_vel: f.target_vel, eef_velocity: f.eef_velocity,
     actual_torque: f.actual_torque, gripper_actual_torque: f.gripper_actual_torque,
-    gripper_actual_vel: f.gripper_actual_vel,
+    gripper_actual_vel: f.gripper_actual_vel, motor_diagnostics: f.motor_diagnostics,
     gripper: {actual: f.gripper_m, target: f.target_gripper_m, max: f.gripper_max},
     stream: {status: 'live', age_s: 0, stream_id: String(f.generation), sequence: f.sample_index, source: {kind: 'replay', input: f.episode}}};
 }

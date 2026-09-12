@@ -64,6 +64,11 @@ class RecordWriter:
 
 
 def read_records(path):
+    records = read_topics(path)
+    return records[TOPICS["state"]], records[TOPICS["frame"]]
+
+
+def read_topics(path):
     records = {topic: [] for topic in TOPICS.values()}
     try:
         with path.open('rb') as stream:
@@ -75,4 +80,4 @@ def read_records(path):
                 records[channel.topic].append(row)
     except (McapError, EOFError, struct.error, ZstdError) as exc:
         raise ValueError(f"Invalid or incomplete MCAP: {exc}") from exc
-    return records[TOPICS['state']], records[TOPICS['frame']]
+    return records

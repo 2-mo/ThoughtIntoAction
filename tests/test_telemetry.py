@@ -157,6 +157,24 @@ class TelemetryTests(unittest.TestCase):
         self.assertIsNone(scene.snapshot()['actual_torque'])
         self.assertIsNone(scene.snapshot()['gripper_actual_torque'])
 
+    def test_motor_feedback_reaches_scene_and_clears_on_absence(self):
+        publisher = self.publisher()
+        subscriber = self.subscriber()
+        diagnostics = {'joint_order': [1, 2, 4, 5, 6, 7], 'gripper_id': 8,
+                       'motors': [{'motor_id': 1, 'current_a': 1.25, 'valid': True},
+                                  {'motor_id': 8, 'current_a': None, 'valid': False}], 'events': []}
+        publisher.update(self.q, motor_diagnostics=diagnostics)
+        packet = self.packet(subscriber)
+        scene = Scene(self.robot)
+        self.addCleanup(scene.close)
+        scene.accept(packet)
+        expected = {k: v for k, v in diagnostics.items() if k != 'events'}
+        self.assertEqual(scene.snapshot()['motor_diagnostics'], expected)
+        packet.pop('motor_diagnostics')
+        packet['sequence'] += 1
+        scene.accept(packet)
+        self.assertIsNone(scene.snapshot()['motor_diagnostics'])
+
     def subscriber_after_publisher(self):
         self.publisher()
         return self.subscriber()

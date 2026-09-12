@@ -122,7 +122,7 @@ class LocalPublisher:
             self._error = exc
             self._ready.set()
 
-    def update(self, actual, target=None, *, gripper=None, actual_torque=None, gripper_actual_torque=None, actual_vel=None, target_vel=None, gripper_actual_vel=None):
+    def update(self, actual, target=None, *, gripper=None, actual_torque=None, gripper_actual_torque=None, actual_vel=None, target_vel=None, gripper_actual_vel=None, motor_diagnostics=None):
         actual, target = joint_pair(actual, target)
         gripper = gripper_data(gripper)
         actual_torque = torque_data(actual_torque)
@@ -137,7 +137,8 @@ class LocalPublisher:
             self._state = {"sequence": self._sequence, "actual": actual, "target": target,
                            "sample_monotonic_ns": time.monotonic_ns(), "gripper": gripper, "actual_torque": actual_torque,
                            "gripper_actual_torque": gripper_actual_torque, "actual_vel": actual_vel,
-                           "target_vel": target_vel, "gripper_actual_vel": gripper_actual_vel}
+                           "target_vel": target_vel, "gripper_actual_vel": gripper_actual_vel,
+                           "motor_diagnostics": {k: v for k, v in motor_diagnostics.items() if k != "events"} if isinstance(motor_diagnostics, dict) else None}
 
     def path(self, name, points, color):
         data = path_data(points, color)
@@ -167,7 +168,7 @@ class NullPublisher:
     def __init__(self, robot, source=None):
         pass
 
-    def update(self, actual, target=None, *, gripper=None, actual_torque=None, gripper_actual_torque=None, actual_vel=None, target_vel=None, gripper_actual_vel=None):
+    def update(self, actual, target=None, *, gripper=None, actual_torque=None, gripper_actual_torque=None, actual_vel=None, target_vel=None, gripper_actual_vel=None, motor_diagnostics=None):
         pass
 
     def path(self, name, points, color):

@@ -30,6 +30,15 @@ try {
   await page.waitForFunction(() => document.querySelector('#gripper').dataset.state === 'live');
   await page.waitForFunction(() => document.querySelector('.torque-row:last-child b').textContent === '0.35');
   assert.equal(await page.locator('.torque-row:last-child .torque-range').textContent(), '±1.5');
+  await page.evaluate(() => {
+    window.fixture.motor_diagnostics = {joint_order:[1,2,4,5,6,7],gripper_id:8,
+      motors:[{motor_id:1,current_a:1.234,temperature_c:32,valid:true,feedback_status:'live',fault_code:0},
+              {motor_id:5,current_a:null,temperature_c:35,rotor_temperature_c:33,valid:false,feedback_status:'live',fault_code:8}]};
+  });
+  await page.waitForFunction(() => document.querySelector('#motor-feedback b').textContent === '1.234');
+  assert.equal(await page.locator('#motor-feedback .motor-row').nth(3).getAttribute('data-state'), 'fault');
+  assert.equal(await page.locator('#motor-feedback .motor-row').nth(3).locator('b').first().textContent(), '—');
+  assert.equal(await page.locator('#motor-feedback .motor-row').nth(6).locator('b').first().textContent(), '—');
   await page.evaluate(() => {window.fixture.stream.sequence++; window.fixture.actual_torque[0] = 2;});
   await page.waitForFunction(() => document.querySelector('.torque-line').getAttribute('d').includes('L'));
   await page.waitForFunction(() => document.querySelector('#eef-position b').textContent === '0.0962');
@@ -75,6 +84,7 @@ try {
   await page.evaluate(() => {clearInterval(window.traceFeed);});
   await page.evaluate(() => {window.fixture.stream.status='stale';});
   await page.waitForFunction(() => document.querySelector('.torque-row b').textContent === '—');
+  assert.equal(await page.locator('#motor-feedback b').first().textContent(), '—');
   await page.evaluate(() => {window.fixture={stream:{status:'waiting'},actual:null};});
   await page.waitForFunction(() => document.querySelector('#gripper').dataset.state === 'waiting');
   assert.equal(await page.locator('.gripper-placeholder').isVisible(), true);

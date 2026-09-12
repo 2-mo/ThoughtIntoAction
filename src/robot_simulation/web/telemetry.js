@@ -22,6 +22,30 @@ const torqueRows = [...jointRows, null].map((_, index) => {
   byId('torques').append(row);
   return row;
 });
+const motorRows = Array.from({length: 7}, (_, i) => {
+  const row = document.createElement('div');
+  row.className = 'motor-row'; row.setAttribute('role', 'row');
+  row.innerHTML = `<span>${i < 6 ? `J${i + 1}` : '夹爪'}</span>${'<b>—</b>'.repeat(6)}`;
+  byId('motor-feedback').append(row);
+  return row;
+});
+function showMotors(live) {
+  const data = state?.motor_diagnostics;
+  const order = [...(data?.joint_order || []), data?.gripper_id];
+  motorRows.forEach((row, i) => {
+    const motor = live ? data?.motors?.find(m => m.motor_id === order[i]) : null;
+    const fresh = motor?.feedback_status === 'live';
+    const fault = Number.isInteger(motor?.fault_code) && motor.fault_code !== 0;
+    row.dataset.state = fault ? 'fault' : motor?.valid === true ? 'live' : 'missing';
+    const numbers = [motor?.current_a, motor?.temperature_c, motor?.rotor_temperature_c, motor?.bus_voltage_v];
+    row.querySelectorAll('b').forEach((cell, column) => {
+      if (column < 4) cell.textContent = fresh && finite(numbers[column]) ? numbers[column].toFixed(column === 0 ? 3 : 1) : '—';
+      else if (column === 4) cell.textContent = Number.isInteger(motor?.fault_code) ? String(motor.fault_code) : '—';
+      else cell.textContent = motor?.valid === true ? '有效' : motor?.valid === false ? '无效' : '—';
+    });
+    row.title = !motor ? '暂无电机反馈' : `CAN ID ${motor.motor_id} · ${motor.motor_type || ''} · ${motor.feedback_status}；— 表示未提供反馈`;
+  });
+}
 let limits, torqueLimits, velocityLimits, state = null, received = 0, history = [], streamId, lastSample;
 const finite = Number.isFinite;
 let previousQuaternion = null, quaternionStream;
@@ -88,6 +112,7 @@ function render() {
   if (mode === 'replay') { state = displayedState(null); history = replayFrame?.torque_history || []; }
   const live = state?.stream?.status === 'live' && (mode === 'replay' || now - received + (state.stream.age_s || 0) * 1000 < 1000);
   showPositions(live);
+  showMotors(live);
   velocityRows.forEach((row, index) => {
     const scale = velocityLimits?.[index];
     row.title = Number.isFinite(scale) ? `URDF 速度量程 ±${(scale * 180 / Math.PI).toFixed(1)} °/s；深色实际，浅色指令` : '速度量程未配置';

@@ -7,6 +7,8 @@ import time
 import numpy as np
 
 from .datasets import load_episode, image_path
+from .mcap_io import read_topics, TOPICS
+from copy import deepcopy
 from .video import media_path, read_frame
 from robot_core.model import RobotModel
 from robot_core.project import load_config, resolve_path
@@ -27,6 +29,10 @@ class RecordedEpisode:
             raise ValueError('机械臂记录时间不连续递增')
         self.times = [(t - stamps[0]) / 1e9 for t in stamps]
         self.duration = self.times[-1]
+        topics = read_topics(self.root / 'episode.mcap')
+        self.motor_diagnostics = sorted(topics[TOPICS['diagnostics']], key=lambda d: d['host_monotonic_ns'])
+        self.motor_events = sorted(topics[TOPICS['event']], key=lambda d: d['host_monotonic_ns'])
+        self.motor_times = [d['host_monotonic_ns'] for d in self.motor_diagnostics]
         for row in self.states:
             model.joints(row['actual_pos'])
             grip = row['gripper_actual_pos']
@@ -44,6 +50,37 @@ class RecordedEpisode:
     def row(self, seconds):
         index = max(0, min(len(self.times) - 1, bisect_right(self.times, seconds) - 1))
         return self.states[index], index
+
+    def diagnostics_at(self, row):
+        stamp = row['host_monotonic_ns']
+        index = bisect_right(self.motor_times, stamp) - 1
+        if index < 0:
+            return None
+        data = deepcopy(self.motor_diagnostics[index])
+        motors = {m['motor_id']: m for m in data['motors']}
+        for event in self.motor_events:
+            if event['host_monotonic_ns'] > stamp:
+                break
+            if event.get('stream_id') == data.get('stream_id') and event['host_monotonic_ns'] > data['host_monotonic_ns']:
+                motor = motors.get(event['motor_id'])
+                if motor is not None:
+                    motor.update({k: event[k] for k in ('valid', 'feedback_status', 'fault_code', 'status_code') if k in event})
+                    if motor.get('feedback_status') != 'live':
+                        for key in ('temperature_c', 'rotor_temperature_c', 'bus_voltage_v'):
+                            motor[key] = None
+        order = [*data['joint_order'], data['gripper_id']]
+        currents = [*(row.get('joint_current_a') or [None] * 6), row.get('gripper_current_a')]
+        validity = row.get('feedback_valid') or [None] * 7
+        for i, motor_id in enumerate(order):
+            motor = motors.get(motor_id)
+            if motor is None:
+                continue
+            motor['current_a'] = currents[i]
+            motor['valid'] = validity[i]
+            if motor.get('feedback_status') != 'live':
+                for key in ('temperature_c', 'rotor_temperature_c', 'bus_voltage_v'):
+                    motor[key] = None
+        return data
 
     def review(self, seconds):
         row, index = self.row(seconds)
@@ -71,7 +108,8 @@ class RecordedEpisode:
                     'values': [*(self.states[i].get('actual_torque') or [None] * 6), self.states[i].get('gripper_actual_torque')]}
                    for i in range(start, index + 1)]
         stride = max(1, (index + 1) // 500)
-        return {'actual_vel': row.get('actual_vel'), 'target_vel': row.get('sdk_cmd_vel'),
+        return {'motor_diagnostics': self.diagnostics_at(row),
+                'actual_vel': row.get('actual_vel'), 'target_vel': row.get('sdk_cmd_vel'),
                 'actual_torque': row.get('actual_torque'), 'gripper_actual_torque': row.get('gripper_actual_torque'),
                 'gripper_actual_vel': row.get('gripper_actual_vel'),
                 'target_q': submission.get('pos'), 'target_gripper_m': submission.get('gripper_pos'),

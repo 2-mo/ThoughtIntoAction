@@ -252,6 +252,7 @@ class Scene:
             if changed_source or previous["sequence"] != sequence or self._paths_without_history() != paths:
                 self._paths = paths
                 self.update(actual, target)
+                self._state["motor_diagnostics"] = packet.get("motor_diagnostics")
                 self._state["gripper"] = gripper
                 self._state["actual_torque"] = torque
                 self._state["gripper_actual_torque"] = grip_torque
