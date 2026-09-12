@@ -511,3 +511,50 @@ aside > .input-panel, .collection-panel, .collection-panel[data-state] { backgro
 #camera-toggle[aria-pressed="true"] { background:#29473c; color:#bbdbcb; }
 #camera-toggle:disabled { cursor:default; opacity:.6; }
 #camera-control-error { color:#e1b782; font-size:10px; margin:3px 0 0; }
+
+/* One workspace: live and recorded data share the scene, camera and telemetry. */
+.view-switch { pointer-events:auto; display:flex; padding:3px; border-radius:8px; background:#202429; }
+.view-switch button { border:0; background:transparent; padding:5px 10px; color:#89939b; }
+.view-switch button[aria-pressed="true"] { background:#35443f; color:#d7e4de; }
+#live-arm-status { color:#889099; font-size:10px; }
+#live-arm-status[data-state="live"] { color:#9ab9a8; }
+body[data-view="replay"] .stage { box-shadow:inset 0 0 0 1px #719c8b55; }
+.stage #dataset-replay { position:absolute; inset:auto 12px 34px; z-index:2; border:1px solid #ffffff12; border-radius:9px; background:#1b2428ed; padding:9px 12px; display:flex; gap:6px; }
+.stage #dataset-replay .replay-buttons { display:flex; flex-wrap:wrap; align-items:center; }
+.stage #replay-episodes { flex:1 1 140px; width:0; }
+#replay-speed { padding:5px; background:#242a2f; color:#ced7db; border:1px solid #394248; border-radius:5px; }
+#replay-seek { width:100%; cursor:pointer; }
+#replay-status { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#robot-replay-state { color:#94a1a8; }
+body:not([data-depth="true"]) .camera-pair > .camera-frame:nth-child(2) { display:none; }
+body:not([data-depth="true"]) .camera-pair { grid-template-columns:1fr; }
+body[data-view="replay"] .camera-pair,
+body[data-view="replay"] #camera-status,
+body[data-view="replay"] #camera-toggle,
+body[data-view="replay"] #depth-toggle,
+body[data-view="replay"] .diagnostics-panel { display:none !important; }
+#recorded-camera { flex:1; min-height:0; display:flex; flex-direction:column; gap:5px; }
+#replay-video-status { display:block; font-size:10px; color:#9ca9b0; }
+#replay-video { cursor:zoom-in; }
+#recorded-camera:fullscreen { padding:24px; background:#111416; }
+#depth-toggle { padding:3px 8px; font-size:10px; }
+#depth-toggle[aria-pressed="true"] { background:#35443f; }
+.telemetry-group { grid-column:1 / 3 !important; overflow:auto; grid-template-columns:repeat(3,minmax(0,1fr)); }
+.telemetry-group > section.positions-panel { grid-column:1; grid-row:1; }
+.telemetry-group > section.velocity-panel { grid-column:2; grid-row:1; }
+.telemetry-group > section.torque-panel { grid-column:3; grid-row:1 / 5; }
+.telemetry-group > section:has(#eef-position) { grid-column:1; grid-row:2; }
+.telemetry-group > .diagnostics-panel { grid-column:2; grid-row:2; }
+.telemetry-group > .display-panel { grid-column:1 / 3; grid-row:3; }
+.telemetry-group > .operation-note { grid-column:1 / 3; grid-row:4; }
+.diagnostics-panel summary { color:#98a5af; cursor:pointer; font-size:11px; margin-bottom:5px; }
+.velocity-panel #eef-velocity { margin-top:6px; }
+@media(max-width:1000px) {
+  .telemetry-group { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .telemetry-group > section.torque-panel { grid-column:1 / -1; grid-row:5; }
+  .stage-top { flex-wrap:wrap; gap:5px; left:10px; right:10px; }
+}
+body[data-view="replay"] .orientation-panel { display:none; }
+.scene-viewport { position:absolute; inset:0; min-height:0; }
+body[data-view="replay"] .scene-viewport { bottom:var(--replay-space, 164px); }
+#camera-title { color:inherit; font-size:inherit; font-weight:600; }

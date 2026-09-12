@@ -1,3 +1,4 @@
+import {mode, displayedState} from './display-state.js';
 // Display treatment adapted from arx5_test's scene; no desktop kinematics or controls.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -268,7 +269,10 @@ async function initialize() {
   let timer;
   async function poll() {
     try {
-      const state = await readJSON('/api/state');
+      const live = await readJSON('/api/state');
+      element('live-arm-status').textContent = live.stream?.status === 'live' ? '机械臂在线' : '机械臂未连接';
+      element('live-arm-status').dataset.state = live.stream?.status || 'waiting';
+      const state = displayedState(live);
       window.dispatchEvent(new CustomEvent('arm-preview', { detail: state }));
       if (stopped) return;
       if (state.actual) applyState(state);
@@ -283,7 +287,7 @@ async function initialize() {
         status(({hardware: '真机在线', virtual: '仿真在线', replay: '回放'}[source.kind] || '反馈在线'), 'connected');
       }
       else if (state.stream.status === 'waiting') {
-        status('参考姿态 · 无机械臂反馈', 'waiting');
+        status(mode === 'replay' ? '等待回放数据' : '参考姿态 · 无机械臂反馈', 'waiting');
         element('loading').hidden = true;
       } else if (state.stream.status === 'stale') status('状态已过期 · 保留最后画面', 'stale');
       else status(`状态不匹配：${state.stream.message}`, 'error');
@@ -295,7 +299,7 @@ async function initialize() {
     if (!stopped) timer = setTimeout(poll, document.hidden ? 500 : 50);
   }
   renderer.setAnimationLoop(() => {
-    if (feedbackLive && performance.now() >= armDeadline) status('机械臂反馈已过期，保留最后姿态', 'stale');
+    if (mode !== 'replay' && feedbackLive && performance.now() >= armDeadline) status('机械臂反馈已过期，保留最后姿态', 'stale');
     controls.update();
     renderer.render(scene, camera);
   });

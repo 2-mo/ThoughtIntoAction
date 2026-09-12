@@ -62,6 +62,8 @@ try {
   const monitor = start('scripts/viewer/启动仿真.sh', ['--port', '0', '--no-camera', '--no-connections']);
   const url = (await monitor.wait(urlPattern))[1];
   await page.goto(url);
+  await page.click('#depth-toggle');
+  await page.locator('.diagnostics-panel').evaluate(panel => {panel.open = true;});
   await page.waitForSelector('body[data-monitor-ready="true"]');
   await page.waitForFunction(() => document.getElementById('camera-status').textContent.includes('未连接'));
   const sample = { camera: { error: null }, preview: {
@@ -231,8 +233,9 @@ try {
   await page.waitForFunction(() => document.getElementById('replay-time').textContent.startsWith('1.50'));
   assert.ok(replayActions.some(command => command.action === 'seek' && command.position_s === 1.5));
   await page.screenshot({path: output + '/dataset-replay.png'});
-  assert.equal(await page.locator('details').count(), 0);
+  assert.equal(await page.locator('details.diagnostics-panel').count(), 1);
   assert.equal(await page.locator('#dataset-replay').isVisible(), true);
+  await page.click('#view-live');
   await page.unroute('**/api/replay');
   await page.unroute('**/api/state');
   await page.waitForFunction(() => document.getElementById('connection').dataset.state === 'waiting');
@@ -265,7 +268,7 @@ try {
   assert.notDeepEqual(await canvas.screenshot(), initial, 'Arm rendering did not move');
   await page.screenshot({ path: `${output}/monitor-terminal.png` });
   await page.waitForFunction(() => document.querySelector('#gripper .position-values b').textContent.endsWith('mm'));
-  assert.equal(await page.locator('.position-row').count(), 6);
+  assert.equal(await page.locator('.position-row').count(), 12);
   assert.equal(await page.evaluate(() => [...document.querySelectorAll('.position-zero')]
     .every(zero => !zero.hidden && zero.style.left === '50%')), true, 'All position zeros must align');
   for (const [width, height] of [[1440, 960], [1366, 768], [1024, 600]]) {

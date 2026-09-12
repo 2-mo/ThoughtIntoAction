@@ -1,3 +1,4 @@
+import {mode, replayFrame, displayedState} from './display-state.js';
 // Read-only telemetry stays visible even when WebGL or the robot is unavailable.
 const byId = id => document.getElementById(id);
 const jointRows = Array.from({length: 6}, (_, index) => {
@@ -7,6 +8,12 @@ const jointRows = Array.from({length: 6}, (_, index) => {
   byId('joints').append(row);
   return row;
 });
+const velocityRows = jointRows.map((_, index) => {
+  const row = document.createElement('div');
+  row.className = 'position-row';
+  row.innerHTML = `<span class="position-name">J${index + 1}</span><div class="position-track"><i class="position-zero" style="left:50%"></i><i class="position-fill target" hidden></i><i class="position-fill actual" hidden></i></div><span class="position-values"><b>—</b><b>—</b></span>`;
+  byId('velocities').append(row); return row;
+});
 const torqueRows = [...jointRows, null].map((_, index) => {
   const label = index < 6 ? `J${index + 1}` : '夹爪';
   const row = document.createElement('div');
@@ -15,14 +22,14 @@ const torqueRows = [...jointRows, null].map((_, index) => {
   byId('torques').append(row);
   return row;
 });
-let limits, torqueLimits, state = null, received = 0, history = [], streamId, lastSample;
+let limits, torqueLimits, velocityLimits, state = null, received = 0, history = [], streamId, lastSample;
 const finite = Number.isFinite;
 function showPositions(live) {
   byId('joints').classList.toggle('feedback-inactive', !live);
   const missing = !state?.actual || state?.stream?.status === 'waiting';
   jointRows.forEach((row, index) => {
     const extent = limits ? Math.max(Math.abs(limits.lower[index]), Math.abs(limits.upper[index])) : null;
-    [state?.actual?.q[index], state?.target?.q[index]].forEach((value, side) => {
+    [state?.actual?.q?.[index], state?.target?.q?.[index]].forEach((value, side) => {
       const valid = !missing && finite(value);
       row.querySelectorAll('b')[side].textContent = valid ? `${(value * 180 / Math.PI).toFixed(2)}°` : '—';
       const fill = row.querySelector(side ? '.target' : '.actual');
@@ -56,9 +63,29 @@ function showPositions(live) {
   });
 }
 function render() {
-  const now = performance.now();
-  const live = state?.stream?.status === 'live' && now - received + (state.stream.age_s || 0) * 1000 < 1000;
+  const now = mode === 'replay' ? (replayFrame?.position_s || 0) * 1000 : performance.now();
+  if (mode === 'replay') { state = displayedState(null); history = replayFrame?.torque_history || []; }
+  const live = state?.stream?.status === 'live' && (mode === 'replay' || now - received + (state.stream.age_s || 0) * 1000 < 1000);
   showPositions(live);
+  velocityRows.forEach((row, index) => {
+    const scale = velocityLimits?.[index];
+    row.title = Number.isFinite(scale) ? `URDF 速度量程 ±${(scale * 180 / Math.PI).toFixed(1)} °/s；深色实际，浅色指令` : '速度量程未配置';
+    [state?.actual_vel?.[index], state?.target_vel?.[index]].forEach((v, side) => {
+      const valid = live && finite(v);
+      row.querySelectorAll('b')[side].textContent = valid ? (v * 180 / Math.PI).toFixed(1) : '—';
+      const bar = row.querySelector(side ? '.target' : '.actual');
+      bar.hidden = !valid || !finite(scale) || scale <= 0;
+      if (!bar.hidden) {
+        const end = 50 + 50 * Math.max(-1, Math.min(1, v / scale));
+        bar.style.left = `${Math.min(50, end)}%`; bar.style.width = `${Math.abs(end - 50)}%`;
+      }
+    });
+  });
+  const speeds = [state?.eef_velocity?.speed, state?.eef_velocity?.angular_speed, state?.gripper_actual_vel];
+  byId('eef-velocity').querySelectorAll('b').forEach((cell, i) => {
+    cell.textContent = live && finite(speeds[i]) ? (speeds[i] * (i === 1 ? 180 / Math.PI : 1000)).toFixed(1) : '—';
+  });
+  byId('eef-velocity').title = '末端速度由反馈关节速度和 URDF 雅可比计算，坐标系与末端位置一致';
   const windowStart = now - 5000;
   // Keep one point before the boundary so the trace can be clipped continuously.
   while (history.length > 1 && history[1].time <= windowStart) history.shift();
@@ -100,18 +127,19 @@ async function poll() {
       const response = await fetch('/api/model', {cache: 'no-store', signal: AbortSignal.timeout(2000)});
       if (response.ok) {
         const model = await response.json();
-        limits = model.joint_limits; torqueLimits = model.torque_limits;
+        limits = model.joint_limits; torqueLimits = model.torque_limits; velocityLimits = model.velocity_limits;
       }
     }
     const response = await fetch('/api/state', {cache: 'no-store', signal: AbortSignal.timeout(2000)});
     if (!response.ok) throw new Error('Feedback unavailable');
-    state = await response.json();
+    const liveState = await response.json();
+    state = displayedState(liveState);
     received = performance.now();
     if (state.stream?.stream_id !== streamId) {
       history = []; lastSample = undefined; streamId = state.stream?.stream_id;
     }
     const values = [...(state.actual_torque || Array(6).fill(null)), state.gripper_actual_torque];
-    if (state.stream?.status === 'live' && state.stream.sequence !== lastSample &&
+    if (mode !== 'replay' && state.stream?.status === 'live' && state.stream.sequence !== lastSample &&
         values.some(finite)) {
       lastSample = state.stream.sequence;
       history.push({time: received - (state.stream.age_s || 0) * 1000, values});
@@ -121,6 +149,7 @@ async function poll() {
   }
   if (!stopped) setTimeout(poll, document.hidden ? 500 : 100);
 }
+window.addEventListener('view-mode', () => {state = null; history = []; streamId = undefined; lastSample = undefined; render();});
 render();
 const timer = setInterval(render, 100);
 window.addEventListener('pagehide', () => {stopped = true; clearInterval(timer);});

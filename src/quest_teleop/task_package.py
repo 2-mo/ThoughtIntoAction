@@ -65,7 +65,7 @@ def finalize_task(raw_root, episode_ids, output, fps):
                 for file in sorted((PROJECT_ROOT / folder).rglob("*")):
                     if file.is_file() and "__pycache__" not in file.parts:
                         package.write(file, output.name + "/tools/" + str(file.relative_to(PROJECT_ROOT)))
-            for filename in ("export_lerobot.py", "export_video.py", "export_decode.py", "multirate.py", "compressed_io.py", "video.py"):
+            for filename in ("export_lerobot.py", "export_video.py", "export_decode.py", "multirate.py", "compressed_io.py", "video.py", "mcap_io.py"):
                 package.write(PROJECT_ROOT / "src/quest_teleop" / filename,
                               output.name + "/tools/src/quest_teleop/" + filename)
             package.writestr(output.name + "/tools/src/quest_teleop/__init__.py", "")
@@ -107,8 +107,9 @@ Do not treat unknown as success. Decide selection on the server; preserve the or
 ## Files / 文件
 - manifest.json: episode IDs, outcomes, lifecycle, counts, and SHA256/size for every episode file.
 - episodes/<id>/episode.json: original task, camera calibration, robot model/control settings.
-- states.jsonl.gz: ALL robot samples and diagnostic fields; lossless gzip.
-- frames.jsonl.gz: ALL frame timestamps and indices.
+- episode.mcap: robot snapshots and RGB frame indices, lossless Zstd; keep the media files alongside it.
+- states.jsonl.gz (legacy): ALL robot samples and diagnostic fields; lossless gzip.
+- frames.jsonl.gz (legacy): ALL frame timestamps and indices.
 - wrist_rgb.mp4: original 640x480, 30 FPS H264 CRF20; never expanded to 240 FPS.
 - tools/: bundled conversion code, dependency setup, and OpenPI adapter snapshot.
 - 转换为LeRobot.sh: runnable conversion entry; paths are relative to the script, not your terminal.

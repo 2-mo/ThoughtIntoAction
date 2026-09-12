@@ -73,6 +73,7 @@ table_z_m = 0.0
 table_clearance_m = 0.0
 
 [recording]
+record_format = "mcap" # 状态与 RGB 帧索引；视频保留为旁置 MP4
 package_on_task_end = true
 compress_records = true
 rgb_video = true

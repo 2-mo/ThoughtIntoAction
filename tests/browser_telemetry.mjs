@@ -16,9 +16,10 @@ try {
     window.fetch = async url => ({ok:true, json:async () => url.includes('model') ?
       {torque_limits:[30,40,30,15,10,10,1.5],joint_limits:{lower:[-3,-1,-2,-3,-2,-3],upper:[3,3,2,1,2,3]}} : structuredClone(window.fixture)});
   });
-  await page.addScriptTag({type:'module', content:await readFile(new URL('telemetry.js', root), 'utf8')});
+  const shared = 'data:text/javascript;base64,' + Buffer.from(await readFile(new URL('display-state.js', root), 'utf8')).toString('base64');
+  await page.addScriptTag({type:'module', content:(await readFile(new URL('telemetry.js', root), 'utf8')).replace('./display-state.js', shared)});
   await page.waitForFunction(() => document.querySelectorAll('.torque-row').length === 7);
-  assert.equal(await page.locator('.position-row').count(), 6);
+  assert.equal(await page.locator('#joints .position-row').count(), 6);
   assert.equal(await page.locator('.gripper-placeholder').isVisible(), true);
   assert.equal(await page.locator('.torque-line').first().getAttribute('d'), '');
   await page.evaluate(() => {

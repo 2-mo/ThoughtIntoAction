@@ -353,6 +353,7 @@ class SessionTests(unittest.TestCase):
         self.assertFalse(self.session.socket_path.exists())
 
     def test_validation_detects_corruption_and_preserves_original_data(self):
+        self.config["recording"]["record_format"] = "jsonl"
         root = self.record_episode()
         frame_path = root / "frames.jsonl"
         rows = frame_path.read_text().splitlines()
@@ -421,7 +422,7 @@ class SessionTests(unittest.TestCase):
         meta = json.loads((root / "episode.json").read_text())
         self.assertEqual(meta["outcome_history"][-1]["previous"], "unknown")
         self.assertEqual(meta["outcome"], "success")
-        (root / "frames.jsonl").write_text("broken")
+        (root / "episode.mcap").write_bytes(b"broken")
         with self.assertRaises(ValueError):
             label_episode(root, "success")
 

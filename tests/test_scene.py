@@ -30,6 +30,15 @@ class SceneTests(unittest.TestCase):
             self.assertEqual(response.headers['Cache-Control'], 'no-store')
             return response.read()
 
+    def test_feedback_velocity_matches_fk_displacement_and_missing_stays_missing(self):
+        velocity = np.array([.1, -.2, .1, .05, -.1, .2])
+        dt = 1e-6
+        measured = self.scene._velocity(self.q, velocity)
+        expected = (self.robot.fk(self.q + velocity * dt)[:3, 3] - self.robot.fk(self.q)[:3, 3]) / dt
+        np.testing.assert_allclose(measured['linear'], expected, atol=1e-7)
+        self.assertIsNone(self.scene._velocity(self.q, None))
+        self.assertEqual(self.scene._velocity(self.q, np.zeros(6))['speed'], 0.)
+
     def test_fixed_port_restarts_at_same_url_and_rejects_second_owner(self):
         url = self.scene.url
         port = self.scene._server.server_port

@@ -31,7 +31,14 @@ def load_episode(path, max_gap_s=.1):
         raise ValueError('Episode is not complete or is discarded/failed')
     if meta.get('error') or any(meta.get('dropped', {}).values()):
         raise ValueError('Writer error or dropped samples')
-    states, images = read_rows(path / 'states.jsonl'), read_rows(path / 'frames.jsonl')
+    storage = meta.get('record_storage', {}).get('format', 'jsonl')
+    if storage == 'mcap':
+        from .mcap_io import read_records
+        states, images = read_records(path / 'episode.mcap')
+    elif storage == 'jsonl':
+        states, images = read_rows(path / 'states.jsonl'), read_rows(path / 'frames.jsonl')
+    else:
+        raise ValueError('Unknown record storage')
     if any(meta.get('counts', {}).get(k) != n for k, n in [('state', len(states)), ('frame', len(images))]):
         raise ValueError('Manifest counts disagree with stored records')
     clocks = [np.array([r[k] for r in rows], dtype=np.int64) for rows, k in

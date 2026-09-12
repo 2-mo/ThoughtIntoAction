@@ -24,3 +24,5 @@ node tests/browser_scene.mjs
 ```
 
 可通过 `SCENE_TEST_BROWSER=/path/to/chromium` 指定现有浏览器。脚本使用软件 WebGL，从 `/tmp` 分别启动监看、虚拟服务与控制；验证控制来源更换不刷新页面、监看重启不影响控制、实际渲染、运动、过期状态与显示开关。截图及日志写入 `outputs/logs/`，不连接真机。
+
+实时与网页回放共用 `robot-canvas`，浏览器本地模式由 `display-state.js` 管理，切换不改变真机控制权。回放的模型、速度、力矩与 RGB 使用同一播放时间；实时连接与 Quest 状态独立保留。速度反馈沿 telemetry 传输，末端速度由 Scene 的 URDF 雅可比计算。隔离回放验证：`node tests/browser_replay.mjs`（不启动相机或设备服务）。

@@ -223,7 +223,7 @@ class TeleopSession:
             with self.operations:
                 if command == "replay.control":
                     if self._web_replay is None: raise ValueError("请先加载上一条")
-                    self._web_replay.control(payload.get("action"), payload.get("position_s"))
+                    self._web_replay.control(payload.get("action"), payload.get("position_s"), payload.get("speed"))
                 frame = self._web_replay.frame() if self._web_replay else None
                 return {"replay": frame, "robot_replay": (self.latest_state or {}).get("robot_replay")}
 
@@ -368,6 +368,7 @@ class TeleopSession:
                             raise RuntimeError("相机未开启或反馈已过期")
                     self.recording = EpisodeWriter(raw_root, meta, payload.get("task"),
                                                    queue_size=self.config["recording"]["queue_size"],
+                                                   record_format=self.config["recording"].get("record_format", "mcap"),
                                                    rgb_video=self.config["recording"].get("rgb_video", False),
                                                    video_crf=self.config["recording"].get("video_crf", 20),
                                                    compress_records=self.config["recording"].get("compress_records", False))

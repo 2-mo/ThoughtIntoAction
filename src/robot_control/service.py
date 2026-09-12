@@ -190,7 +190,9 @@ class ArmService:
                       "actuate": bool(self.holding or self.owner and self.owner["actuate"]),
                       "trajectory": self.motion.snapshot() if self.motion else None}
         self.publisher.update(state["actual_pos"], self.target, actual_torque=state.get("actual_torque"),
-                              gripper_actual_torque=state.get("gripper_actual_torque"), gripper={
+                              gripper_actual_torque=state.get("gripper_actual_torque"),
+                              actual_vel=state.get("actual_vel"), target_vel=state.get("sdk_cmd_vel"),
+                              gripper_actual_vel=state.get("gripper_actual_vel"), gripper={
             "actual": state["gripper_actual_pos"],
             "target": self.gripper if self.state["actuate"] else None,
             "max": self.settings["gripper_width"],

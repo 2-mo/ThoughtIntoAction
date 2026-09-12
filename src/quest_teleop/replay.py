@@ -39,6 +39,7 @@ class RecordedEpisode:
             if not media_path(self.root, frame).is_file():
                 raise ValueError('录制视频有缺失图片')
         self._image_cache = (None, None)
+        self.path_points = [model.fk(row["actual_pos"])[:3, 3].tolist() for row in self.states]
 
     def row(self, seconds):
         index = max(0, min(len(self.times) - 1, bisect_right(self.times, seconds) - 1))
@@ -64,7 +65,21 @@ class RecordedEpisode:
                 mime = 'image/png' if encoded.startswith(b'\x89PNG') else 'image/jpeg'
                 self._image_cache = (frame, base64.b64encode(encoded).decode(), mime)
             image = self._image_cache[1]
-        return {'episode': self.meta['id'], 'duration_s': self.duration, 'position_s': seconds,
+        start = max(0, bisect_right(self.times, seconds - 5) - 1)
+        submission = row.get('submission') or {}
+        history = [{'time': self.times[i] * 1000,
+                    'values': [*(self.states[i].get('actual_torque') or [None] * 6), self.states[i].get('gripper_actual_torque')]}
+                   for i in range(start, index + 1)]
+        stride = max(1, (index + 1) // 500)
+        return {'actual_vel': row.get('actual_vel'), 'target_vel': row.get('sdk_cmd_vel'),
+                'actual_torque': row.get('actual_torque'), 'gripper_actual_torque': row.get('gripper_actual_torque'),
+                'gripper_actual_vel': row.get('gripper_actual_vel'),
+                'target_q': submission.get('pos'), 'target_gripper_m': submission.get('gripper_pos'),
+                'gripper_max': self.meta.get('control', {}).get('gripper_width_m', .082),
+                'torque_history': history, 'path_points': self.path_points[:index + 1:stride],
+                'record_format': self.meta.get('record_storage', {}).get('format', 'jsonl'),
+                'depth_recorded': self.meta.get('depth_recorded', False),
+                'episode': self.meta['id'], 'duration_s': self.duration, 'position_s': seconds,
                 'sample_index': index, 'sample_count': len(self.states),
                 'model_hash': self.meta['robot']['urdf_sha256'],
                 'q': row['actual_pos'], 'gripper_m': row['gripper_actual_pos'], 'image_base64': image,
@@ -77,18 +92,23 @@ class WebReplay:
         self.position = 0.
         self.started = time.monotonic()
         self.playing = True
+        self.speed = 1.
         self.generation = time.monotonic_ns()
 
     def seconds(self):
-        value = self.position + (time.monotonic() - self.started if self.playing else 0)
+        value = self.position + ((time.monotonic() - self.started) * self.speed if self.playing else 0)
         return min(self.episode.duration, value)
 
-    def control(self, action, position=None):
+    def control(self, action, position=None, speed=None):
         value = self.seconds()
         if action == 'seek':
             if type(position) not in (int, float) or not math.isfinite(position):
                 raise ValueError('无效回放时间')
             value = min(self.episode.duration, max(0., position))
+        elif action == 'speed':
+            if type(speed) not in (int, float) or speed not in (.25, .5, 1, 2):
+                raise ValueError('回放倍速须为 0.25、0.5、1 或 2')
+            self.speed = speed
         elif action == 'play':
             if value >= self.episode.duration: value = 0.
             self.playing = True
@@ -102,7 +122,7 @@ class WebReplay:
         position = self.seconds()
         if position >= self.episode.duration:
             self.position, self.playing = position, False
-        return {**self.episode.review(position), 'playing': self.playing, 'generation': self.generation}
+        return {**self.episode.review(position), 'playing': self.playing, 'speed': self.speed, 'generation': self.generation}
 
 
 class RobotReplay:

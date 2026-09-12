@@ -78,10 +78,15 @@
 ```text
 .raw/<episode-id>/
   episode.json        任务/结果/生命周期、模型、相机、实际控制参数、源码指纹
-  states.jsonl.gz     每个控制周期的反馈、请求目标、提交记录与 SDK 输出
-  frames.jsonl.gz     图像路径、源帧编号、设备时间戳和主机接收时间
-  wrist_rgb.mp4       单 D435i RGB，H.264 / libx264，CRF 20；逐帧时间戳另存 frames.jsonl
+  episode.mcap       Zstd 无损压缩的机械臂状态与 RGB 帧索引
+  wrist_rgb.mp4       单 D435i RGB，H.264 / libx264，CRF 20；逐帧时间索引保存在 MCAP
 ```
+
+MCAP 使用 `/robot/state`（完整原始 JSON 状态）和 `/camera/wrist/rgb/index`（视频帧号、相机设备时间及主机接收时间）两个主题。`log_time` / `publish_time` 用录制开始时的墙钟与单调钟差值映射到 Unix 纳秒；原始单调时间仍完整保留在消息里，回放和训练对齐继续使用它。并不声称相机硬件曝光同步。
+
+`episode.json` 是最终生命周期、结果及完整性标记的权威来源；MCAP 内保存开始录制时的元数据快照。视频为旁置文件，传输时保留整个 episode 目录，不能只拷贝 MCAP。当前不录制深度。旧 JSONL / JSONL.gz 与 PNG / MP4 数据继续兼容，可用 `[recording].record_format = "jsonl"` 显式选择旧格式。
+
+网页顶部「实时 / 回放」共用主三维场景、RGB 卡片和位置/速度/力矩面板。时间轴支持定位、暂停、0.25× / 0.5× / 1× / 2×；力矩窗口为播放时刻之前 5 秒，暂停时冻结，跳转时重建。缺失字段显示 `—`，缺失 RGB 保留占位，深度默认折叠。实际关节/夹爪速度直接读取反馈；末端线速度与角速度由同一末端坐标系的 URDF 雅可比计算。实时机械臂连接与 Quest 控制状态独立显示，网页回放不发送机械臂运动命令。当前网页回放的数据接口仍由遥操采集会话提供。
 
 每条状态明确区分：
 

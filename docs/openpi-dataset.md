@@ -5,11 +5,10 @@
 ## 本地压缩记录
 
 - `datasets/.raw/<episode>/episode.json`：任务、结果、配置及完整性。
-- `states.jsonl.gz`：机器人逐周期状态、请求动作和原始精确时间戳，gzip 无损压缩。
-- `frames.jsonl.gz`：每帧设备/主机时间戳及视频帧索引，gzip 无损压缩。
+- `episode.mcap`：机器人逐周期状态、请求动作，以及每帧设备/主机时间戳和视频帧索引，Zstd 无损压缩。
 - `wrist_rgb.mp4`：640×480、30 FPS、H.264/libx264 CRF 20，不重新编码。
 
-每条结束后压缩 JSONL；回读并核对 SHA256 后才替换未压缩文件。旧的未压缩 JSONL、PNG episode 仍可读取。机器人采样保持 240 Hz，遥操处理 90 Hz。时间戳精度不变；相机主机接收时间并不等于曝光时间，设备未硬件同步。
+新录制使用 MCAP 分块写入并在结束时写索引；视频保持旁置 MP4，完整目录一同打包。旧的 JSONL / JSONL.gz、PNG episode 仍可读取，导出器自动识别格式。机器人采样保持 240 Hz，遥操处理 90 Hz。时间戳精度不变；相机主机接收时间并不等于曝光时间，设备未硬件同步。
 
 ## 任务打包与服务器转换
 
@@ -25,12 +24,11 @@ datasets/任务名_时间-编号.zip
     episodes/
       <episode>/
         episode.json
-        states.jsonl.gz
-        frames.jsonl.gz
+        episode.mcap
         wrist_rgb.mp4
 ```
 
-直接上传 ZIP。其内部 JSONL 已 gzip 压缩、MP4 已 H.264 压缩，ZIP 只封装不重复压缩。包内都是实际文件，不依赖本机符号链接。包含本轮所有已停止录制条目，丢弃、失败和中断条目连同原始标记一并上传，由服务器筛选；生成后进行 ZIP CRC 校验。状态记录在 `datasets/.raw/tasks/<任务名>/package-status.json`。失败保留原始记录，临时包不会当成成功产物。
+直接上传 ZIP。其内部 MCAP 已 Zstd 压缩（旧条目为 gzip JSONL）、MP4 已 H.264 压缩，ZIP 只封装不重复压缩。包内都是实际文件，不依赖本机符号链接。包含本轮所有已停止录制条目，丢弃、失败和中断条目连同原始标记一并上传，由服务器筛选；生成后进行 ZIP CRC 校验。状态记录在 `datasets/.raw/tasks/<任务名>/package-status.json`。失败保留原始记录，临时包不会当成成功产物。
 
 服务器无需安装 QuestArmTeleop 项目。Linux 上准备好 `uv` 和 FFmpeg 共享库后：
 

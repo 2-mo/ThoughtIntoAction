@@ -59,6 +59,7 @@ class Scene:
         gripper_max = load_config().get("telemetry", {}).get("gripper_torque_max_nm")
         if gripper_max is not None and (not np.isfinite(gripper_max) or gripper_max <= 0):
             raise ValueError("Invalid gripper display torque limit")
+        self._manifest["velocity_limits"] = robot.model.velocityLimit.tolist()
         self._manifest["torque_limits"] = [*robot.model.effortLimit.tolist(), gripper_max]
         reference = np.zeros(6)
         self._manifest["reference"] = {"sequence": 0, "actual": self._pose(reference),
@@ -85,13 +86,13 @@ class Scene:
                         set_enabled(data.get("enabled"))
                     else:
                         action = data.get("action")
-                        if action not in ("load_last", "load", "play", "pause", "seek"):
+                        if action not in ("load_last", "load", "play", "pause", "seek", "speed"):
                             raise ValueError("Only web review controls are supported")
                         from robot_core.project import load_config, resolve_path
                         from robot_core.session_protocol import request
                         command = "collection.replay_previous" if action == "load_last" else "collection.replay_episode" if action == "load" else "replay.control"
                         request(resolve_path(load_config()["runtime"]["socket"]), command,
-                                action=action, position_s=data.get("position_s"), episode_id=data.get("episode_id"), timeout=5)
+                                action=action, position_s=data.get("position_s"), speed=data.get("speed"), episode_id=data.get("episode_id"), timeout=5)
                     content = json.dumps({"ok": True}).encode()
                 except (OSError, ValueError, RuntimeError, TypeError) as exc:
                     content = json.dumps({"error": str(exc)}).encode()
@@ -118,7 +119,11 @@ class Scene:
                         if frame:
                             if frame["model_hash"] != owner.robot.metadata()["urdf_sha256"]:
                                 raise ValueError("回放与网页模型不一致")
-                            with owner._lock: frame["pose"] = owner._pose(owner.robot.joints(frame["q"]))
+                            with owner._lock:
+                                frame["pose"] = owner._pose(owner.robot.joints(frame["q"]))
+                                target = frame.get("target_q")
+                                frame["target_pose"] = owner._pose(owner.robot.joints(target)) if target is not None else None
+                                frame["eef_velocity"] = owner._velocity(frame["q"], frame.get("actual_vel"))
                     except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
                         payload = {"error": str(exc)}
                     content = json.dumps(payload, allow_nan=False).encode()
@@ -219,6 +224,9 @@ class Scene:
         gripper = gripper_data(packet.get("gripper"))
         torque = torque_data(packet.get("actual_torque"))
         grip_torque = scalar_torque(packet.get("gripper_actual_torque"))
+        velocity = torque_data(packet.get("actual_vel"))
+        target_velocity = torque_data(packet.get("target_vel"))
+        grip_velocity = scalar_torque(packet.get("gripper_actual_vel"))
         stream_id, source = packet["stream_id"], packet["source"]
         if not isinstance(stream_id, str) or not stream_id or not isinstance(source, dict):
             raise ValueError("Invalid robot state source")
@@ -247,9 +255,21 @@ class Scene:
                 self._state["gripper"] = gripper
                 self._state["actual_torque"] = torque
                 self._state["gripper_actual_torque"] = grip_torque
+                self._state.update(actual_vel=velocity, target_vel=target_velocity,
+                                   gripper_actual_vel=grip_velocity, eef_velocity=self._velocity(actual, velocity))
 
     def _paths_without_history(self):
         return {name: value for name, value in self._paths.items() if name != "playback_path"}
+
+    def _velocity(self, q, velocity):
+        if velocity is None:
+            return None
+        import pinocchio as pin
+        jacobian = pin.computeFrameJacobian(self.robot.model, self._data, np.asarray(q),
+                                            self.robot.frame, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)
+        twist = jacobian @ np.asarray(velocity)
+        return {"linear": twist[:3].tolist(), "angular": twist[3:].tolist(),
+                "speed": float(np.linalg.norm(twist[:3])), "angular_speed": float(np.linalg.norm(twist[3:]))}
 
     def _pose(self, q):
         import pinocchio as pin

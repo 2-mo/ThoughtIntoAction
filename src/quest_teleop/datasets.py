@@ -32,7 +32,15 @@ def load_episode(path):
     manifest = json.loads((root / "episode.json").read_text())
     if not isinstance(manifest, dict) or manifest.get("schema_version") != 1 or manifest.get("kind") != "quest_teleop_episode":
         raise ValueError("Unknown episode schema")
-    return root, manifest, read_jsonl(root / "states.jsonl"), read_jsonl(root / "frames.jsonl")
+    storage = manifest.get("record_storage", {}).get("format", "jsonl")
+    if storage == "mcap":
+        from .mcap_io import read_records
+        states, frames = read_records(root / "episode.mcap")
+    elif storage == "jsonl":
+        states, frames = read_jsonl(root / "states.jsonl"), read_jsonl(root / "frames.jsonl")
+    else:
+        raise ValueError("Unknown record storage")
+    return root, manifest, states, frames
 
 
 def image_path(root, relative):

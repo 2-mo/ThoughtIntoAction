@@ -122,18 +122,22 @@ class LocalPublisher:
             self._error = exc
             self._ready.set()
 
-    def update(self, actual, target=None, *, gripper=None, actual_torque=None, gripper_actual_torque=None):
+    def update(self, actual, target=None, *, gripper=None, actual_torque=None, gripper_actual_torque=None, actual_vel=None, target_vel=None, gripper_actual_vel=None):
         actual, target = joint_pair(actual, target)
         gripper = gripper_data(gripper)
         actual_torque = torque_data(actual_torque)
         gripper_actual_torque = scalar_torque(gripper_actual_torque)
+        actual_vel = torque_data(actual_vel)
+        target_vel = torque_data(target_vel)
+        gripper_actual_vel = scalar_torque(gripper_actual_vel)
         with self._lock:
             if self.closed:
                 raise RuntimeError("State publisher is closed")
             self._sequence += 1
             self._state = {"sequence": self._sequence, "actual": actual, "target": target,
                            "sample_monotonic_ns": time.monotonic_ns(), "gripper": gripper, "actual_torque": actual_torque,
-                           "gripper_actual_torque": gripper_actual_torque}
+                           "gripper_actual_torque": gripper_actual_torque, "actual_vel": actual_vel,
+                           "target_vel": target_vel, "gripper_actual_vel": gripper_actual_vel}
 
     def path(self, name, points, color):
         data = path_data(points, color)
@@ -163,7 +167,7 @@ class NullPublisher:
     def __init__(self, robot, source=None):
         pass
 
-    def update(self, actual, target=None, *, gripper=None, actual_torque=None, gripper_actual_torque=None):
+    def update(self, actual, target=None, *, gripper=None, actual_torque=None, gripper_actual_torque=None, actual_vel=None, target_vel=None, gripper_actual_vel=None):
         pass
 
     def path(self, name, points, color):

@@ -1,6 +1,7 @@
 """Bounded, asynchronous raw episodes. No hardware imports or motor commands."""
 
 from datetime import datetime
+from contextlib import ExitStack
 import json
 from pathlib import Path
 import queue
@@ -13,11 +14,16 @@ from robot_core.storage import save_json
 
 
 class EpisodeWriter:
-    def __init__(self, root, metadata, task, *, queue_size=128, rgb_video=False, video_crf=20, compress_records=False):
+    def __init__(self, root, metadata, task, *, queue_size=128, rgb_video=False, video_crf=20, compress_records=False, record_format="jsonl"):
         if not isinstance(task, str) or not task.strip() or len(task) > 2000:
             raise ValueError("Provide a task description (1..2000 characters)")
         if queue_size < 1:
             raise ValueError("Writer queue must be positive")
+        if record_format not in {"jsonl", "mcap"}:
+            raise ValueError("Unknown record format")
+        self.record_format = record_format
+        if record_format == "mcap":
+            from .mcap_io import RecordWriter  # Fail before creating an episode if dependency is missing.
         task_name = re.sub(r"[^\w\-]+", "_", task.strip(), flags=re.UNICODE).strip("_.")[:48] or "task"
         self.id = f"{task_name}_{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}"
         self.path = Path(root) / self.id
@@ -39,6 +45,8 @@ class EpisodeWriter:
                          "id": self.id, "task": task.strip(), "lifecycle": "recording",
                          "outcome": "unknown", "started_unix_ns": time.time_ns(),
                          "started_monotonic_ns": time.monotonic_ns(), **metadata}
+        self.manifest["record_storage"] = {"format": record_format, "file": "episode.mcap" if record_format == "mcap" else None}
+        self.manifest["depth_recorded"] = False
         self.manifest["rgb_storage"] = {"format": "mp4" if rgb_video else "png", "codec": "libx264" if rgb_video else None, "crf": video_crf if rgb_video else None}
         save_json(self.path / "episode.json", self.manifest)
         self.thread = threading.Thread(target=self._write, name="episode-writer", daemon=True)
@@ -69,7 +77,15 @@ class EpisodeWriter:
         import cv2
         video = None
         try:
-            with (self.path / "states.jsonl").open("w") as states, (self.path / "frames.jsonl").open("w") as frames:
+            with ExitStack() as stack:
+                records = None
+                if self.record_format == "mcap":
+                    from .mcap_io import RecordWriter
+                    stream = stack.enter_context((self.path / "episode.mcap").open("wb"))
+                    records = RecordWriter(stream, self.manifest)
+                else:
+                    states = stack.enter_context((self.path / "states.jsonl").open("w"))
+                    frames = stack.enter_context((self.path / "frames.jsonl").open("w"))
                 last_flush = time.monotonic()
                 while not self.stop_event.is_set() or not self.queue.empty():
                     try:
@@ -90,14 +106,24 @@ class EpisodeWriter:
                             row["image"] = f"wrist_rgb/{self.counts['frame']:06d}.png"
                             if not cv2.imwrite(str(self.path / row["image"]), payload["image"], [cv2.IMWRITE_PNG_COMPRESSION, 1]):
                                 raise OSError("Cannot write RGB image")
-                        frames.write(json.dumps(row, allow_nan=False) + "\n")
+                        if records is None:
+                            frames.write(json.dumps(row, allow_nan=False) + "\n")
                     else:
-                        states.write(json.dumps(payload, allow_nan=False) + "\n")
+                        row = payload
+                        if records is None:
+                            states.write(json.dumps(row, allow_nan=False) + "\n")
+                    if records is not None:
+                        records.write(kind, row, self.counts[kind])
                     self.counts[kind] += 1
                     if time.monotonic() - last_flush > 1:
-                        states.flush()
-                        frames.flush()
+                        if records is None:
+                            states.flush()
+                            frames.flush()
+                        else:
+                            stream.flush()
                         last_flush = time.monotonic()
+                if records is not None:
+                    records.finish()
             if video is not None:
                 video.close()
                 video = None
@@ -131,7 +157,7 @@ class EpisodeWriter:
         if self.thread.is_alive():
             # Never claim completion while a writer can still modify the episode.
             raise RuntimeError("Writer is still finalizing; episode remains incomplete")
-        if self.compress_records and not self.error:
+        if self.compress_records and self.record_format == "jsonl" and not self.error:
             from .compressed_io import compress_jsonl
             try:
                 for name in ("states.jsonl", "frames.jsonl"):
