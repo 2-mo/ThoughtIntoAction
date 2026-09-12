@@ -39,7 +39,11 @@ if ((DRY_RUN)); then
 fi
 command -v slcand >/dev/null
 PRIVILEGED=()
-if ((EUID != 0)); then PRIVILEGED=(sudo); fi
+if ((EUID != 0)); then
+    printf '需要管理员权限，将 USB-CAN 设备 %s 创建为通信接口 %s 并启用。\n' "$CAN_DEVICE" "$CAN_INTERFACE"
+    printf '这一步仅准备通信接口，不会使能电机。若 sudo 提示密码，请输入当前 Ubuntu 用户的登录密码（输入时不显示字符）。\n'
+    PRIVILEGED=(sudo)
+fi
 "${PRIVILEGED[@]}" slcand -o -f -s8 "$CAN_DEVICE" "$CAN_INTERFACE"
 # slcand creates the interface asynchronously.
 for ((attempt=0; attempt<30; attempt++)); do
