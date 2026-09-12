@@ -1,6 +1,6 @@
 # 共享机械臂场景
 
-`view-arm` / `启动仿真.sh` 单独创建 `robot_simulation.scene.Scene`，订阅通用机械臂状态并服务本机只读网页。机械臂服务与独立数据回放使用 `telemetry.local` 发布数据，不创建或关闭场景；显示无需区分输入方式。详见 [独立监看](../../../docs/monitoring.md)。
+`view-arm` / `scripts/viewer/启动仿真.sh` 单独创建 `robot_simulation.scene.Scene`，订阅通用机械臂状态并服务本机只读网页。机械臂服务与独立数据回放使用 `telemetry.local` 发布数据，不创建或关闭场景；显示无需区分输入方式。详见 [独立监看](../../../docs/monitoring.md)。
 
 显示处理参考桌面备份 `arx5_test/src/frontend/src/features/scene/runtime.ts` 的 `createLinkMaterial`、RoomEnvironment、灯光和木纹工作台。只迁移显示处理及有来源记录的纹理；没有复制其硬编码 `JOINT_SPECS`、旧 STL、D405 安装偏移、夹爪网格形变、伺服操作或网页控制逻辑。夹爪保留当前 URDF 静态几何；工作台仅为示意，不参与碰撞判断。此实现不依赖、也不改动 Desktop 工程。
 

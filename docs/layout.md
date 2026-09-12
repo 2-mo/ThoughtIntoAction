@@ -14,7 +14,7 @@ QuestArmTeleop/
 ├── run.sh                    统一命令入口
 ├── 启动机械臂服务.sh         独立设备通信，默认真机阻尼待机
 ├── 启动遥操.sh               唤醒 Quest 并启动 presets 遥操
-├── 启动仿真.sh               独立三维监看，不启动控制
+├── 网页控制.sh               网页启停、状态与相机开关
 ├── src/                      按能力组织的 Python 实现
 ├── scripts/                  安装、设备准备、诊断和 Quest 工具
 ├── configs/                  共享默认、本机覆盖和命令档位

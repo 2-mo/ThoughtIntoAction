@@ -82,7 +82,7 @@ OpenPI 上游固定 LeRobot revision `0cf864870cf29f4738d3ade893e6fd13fbd7cdb5`�
 按任务导出：
 
 ```bash
-./导出训练数据.sh --source datasets/.raw --task '把杯子放入盒子' --fps 30 --skip-invalid --output datasets/lerobot/cup_task
+./scripts/datasets/导出训练数据.sh --source datasets/.raw --task '把杯子放入盒子' --fps 30 --skip-invalid --output datasets/lerobot/cup_task
 ```
 
 默认拒绝不完整、已丢弃、失败、丢帧、时序间断、混合模型或包含预设/回放的 episode；明确使用 `--skip-invalid` 可以跳过，并在 `meta/quest_export.json` 查看每条拒绝原因。`unknown` 表示未经成功标注，不等于成功演示；训练前应筛选任务完成质量。工具不覆盖已有导出目录。

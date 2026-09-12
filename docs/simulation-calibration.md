@@ -11,7 +11,7 @@
 ./run.sh arm-service --backend simulated
 
 # 终端 2：只读监看。
-./启动仿真.sh
+./scripts/viewer/启动仿真.sh
 
 # 终端 3：选择一种虚拟控制。
 ./run.sh control-arm

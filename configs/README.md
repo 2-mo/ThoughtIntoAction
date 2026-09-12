@@ -16,7 +16,7 @@
 
 profile 的命令参数排在用户额外参数之前，后者可以覆盖前者。profile 不允许设置 `actuate`，真机动作需入口或命令显式启用。配置读取和 `--print-command` 不初始化设备。
 
-`virtual-arm` profile 配置虚拟控制客户端（`control-arm`）的输入与轨迹参数，初始 `q` 在 `arm-service --backend simulated --q ...` 设置。真机遥操使用 `presets` / `collection` profile。三维监看单独运行 `view-arm` / `启动仿真.sh`。
+`virtual-arm` profile 配置虚拟控制客户端（`control-arm`）的输入与轨迹参数，初始 `q` 在 `arm-service --backend simulated --q ...` 设置。真机遥操使用 `presets` / `collection` profile。三维监看单独运行 `view-arm` / `scripts/viewer/启动仿真.sh`。
 
 `[arm_service]` 集中定义服务后端、RPC socket、频率、速度/软限位、SDK preview 和夹爪参数。`[robot]` 保留 CAN 与 URDF。服务端先读取本机覆盖，再应用 `arm-service` 的命令行参数。控制端显式传入的速度覆盖服务默认速度；未传速度时才使用服务默认值。CAN、SDK preview 等其他硬件参数仍由服务配置管理。
 

@@ -22,4 +22,4 @@
 
 共享基础、机械臂控制、标定与独立仿真现已从 `quest_teleop` 拆为 `src/` 下的并列包，见 [源码分层](../src/README.md)。五次轨迹、通用运动执行与 X5 适配器集中到 `robot_control`；采集源码指纹覆盖全部 `src/`。控制参数与原始数据格式不变，Python 内部导入使用新包路径。
 
-主链路通过 `configs/plugins.toml` 选择机械臂、输入、状态输出、显示和相机。设备服务、控制与监看现为独立进程：`启动仿真.sh` / `view-arm` 只订阅状态，`control-arm` 负责虚拟控制，真机继续使用 presets 入口；控制通过本机 RPC 连接 `robot_control.service`，服务通过 `robot_core.telemetry` 向监看持续发布反馈。旧 `simulate` 命令及 simulation profile 已移除，不保留转发别名。详见 [机械臂监看](monitoring.md)。
+主链路通过 `configs/plugins.toml` 选择机械臂、输入、状态输出、显示和相机。设备服务、控制与监看现为独立进程：`scripts/viewer/启动仿真.sh` / `view-arm` 只订阅状态，`control-arm` 负责虚拟控制，真机继续使用 presets 入口；控制通过本机 RPC 连接 `robot_control.service`，服务通过 `robot_core.telemetry` 向监看持续发布反馈。旧 `simulate` 命令及 simulation profile 已移除，不保留转发别名。详见 [机械臂监看](monitoring.md)。

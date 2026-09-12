@@ -7,15 +7,15 @@
 在项目根目录执行：
 
 ```bash
-bash 启动Pi05真机.sh
+bash scripts/inference/启动Pi05真机.sh
 ```
 
 默认任务：把蓝色方块放到它后方、远离机械臂的白色区域。加载模型一次后自动连接机械臂服务、到达共用预抓取位，然后连续运行 **60 秒**。每轮拍摄新图像，预测 50 步、执行前 10 步（30 Hz），再拍摄重规划。关节和夹爪都由预测驱动；Ctrl+C 停止并保持，不回零。模型约一分钟加载完成后才开始定位和连续运行计时。
 
 ```bash
-bash 启动Pi05真机.sh --seconds 120
+bash scripts/inference/启动Pi05真机.sh --seconds 120
 # 可选：任务、关节速度上限和每次执行步数
-bash 启动Pi05真机.sh --prompt 'Pick up the blue cube and place it in the white area.' --speed 0.3 --chunk-steps 10
+bash scripts/inference/启动Pi05真机.sh --prompt 'Pick up the blue cube and place it in the white area.' --speed 0.3 --chunk-steps 10
 ```
 
 默认关节速度请求上限 0.3 rad/s、加速度 0.5 rad/s²、jerk 2 rad/s³，目标相对实际关节最大超前 0.08 rad。输出先裁剪到带 0.05 rad 余量的关节范围，再限制超前量。夹爪目标限定为设备允许宽度，最大变化率 0.03 m/s；实际接触后的力矩保持由已有机械臂服务处理。模型推理等待期间服务减速，客户端持续更新控制租约，不重复播放旧动作块。
@@ -178,10 +178,10 @@ PYTHONPATH=src:tests .venv/bin/python -m unittest discover -s src/zero-shot -p '
 
 ```bash
 # 结束本项目策略进程，机械臂低速回到六关节零位并保持
-bash 机械臂回零.sh
+bash scripts/arm/机械臂回零.sh
 
 # 只结束策略并保持当前位置，不回零
-bash 停止Pi05.sh
+bash scripts/inference/停止Pi05.sh
 ```
 
 正常运行时先用 Ctrl+C。终端无响应时用上述独立入口：先给策略控制进程 SIGTERM，让其执行停止保持；仍无响应时仅结束本项目匹配的 Python 策略/推理进程，并等待控制租约释放后重新建立保持。不会使用 `killall python`，不会终止机械臂服务、相机服务或其他任务。

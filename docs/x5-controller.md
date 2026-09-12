@@ -24,7 +24,7 @@ input 插件：quest → XrClient；idle → 离线未激活输入
 
 参数解析在 `src/quest_teleop/cli.py`，启动器直接运行该模块。Python 调用方直接使用 `X5TeleopController`，旧文件转发和类名别名已移除。无预设基线的会话元数据类名为 `X5TeleopController`，主入口记录 `PresetSingleX5Controller`，控制参数和数据 schema 不变。
 
-`control-arm --input quest` 组合主 presets 控制器与虚拟后端，真机继续用现有 presets 入口。控制端只连接服务，不创建设备后端、状态发布器或三维场景；`启动仿真.sh` / `view-arm` 独立订阅与渲染，控制端退出或重启不会关闭监看。旧 `simulate` 命令已移除。历史 `teleop` / `teleop-dry-run` 保留独立实现，官方 X5 实验入口选用 `arx2025` 插件。官方 SDK 的真机位置执行禁用仍有效。主采集入口继续用 `--enable-session` 共享单 D435i；相机按配置中的 `driver` 加载，历史 `--enable-camera` 保留其已有采集实现。
+`control-arm --input quest` 组合主 presets 控制器与虚拟后端，真机继续用现有 presets 入口。控制端只连接服务，不创建设备后端、状态发布器或三维场景；`scripts/viewer/启动仿真.sh` / `view-arm` 独立订阅与渲染，控制端退出或重启不会关闭监看。旧 `simulate` 命令已移除。历史 `teleop` / `teleop-dry-run` 保留独立实现，官方 X5 实验入口选用 `arx2025` 插件。官方 SDK 的真机位置执行禁用仍有效。主采集入口继续用 `--enable-session` 共享单 D435i；相机按配置中的 `driver` 加载，历史 `--enable-camera` 保留其已有采集实现。
 
 默认依赖获取/检查仅要求 XRoboToolkit 与 PC-Service-Pybind 源码；`uv sync --locked` 安装主环境并构建 XR 服务绑定，移动仓库后使用 `./run.sh rebuild-xr-sdk` 修复绑定。启动器不再添加 R5 的动态库目录。两份 R5 源码都保留为 `required=false` 的参考，只有 `fetch-dependencies --all` / `check-dependencies --all` 才处理它们；新的 `.venv` 不安装 R5。
 

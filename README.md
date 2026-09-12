@@ -31,7 +31,7 @@ Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随�
 # 如需虚拟机械臂，改用：./run.sh arm-service --backend simulated
 
 # 终端 2：只读三维监看，可以先开并长期保留。
-./启动仿真.sh
+./scripts/viewer/启动仿真.sh
 
 # 终端 3：需要控制时再启动。
 ./启动遥操.sh                    # 自动唤醒 Quest，再开始遥操，显式 --actuate
@@ -47,7 +47,7 @@ Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随�
 
 机械臂服务、控制和监看独立运行。没有控制程序时，服务持续反馈，页面显示阻尼待机；控制端退出或失联后，服务清除控制权并请求阻尼，画面继续更新。关闭监看不影响控制；停止服务才会使反馈过期。切换控制方式不会重置机械臂姿态。
 
-**真机服务启动会使能电机并进入阻尼，不是被动 CAN 读取；阻尼不保证位置保持。** 服务不会自动回零。`启动仿真.sh` 只启动监看，不启动 SDK；真机服务和虚拟服务由独立命令选择。
+**真机服务启动会使能电机并进入阻尼，不是被动 CAN 读取；阻尼不保证位置保持。** 服务不会自动回零。`scripts/viewer/启动仿真.sh` 只启动监看，不启动 SDK；真机服务和虚拟服务由独立命令选择。
 
 `configs/project.toml` 的 `[arm_service]` 集中管理接口、SDK preview、速度/软限位和夹爪参数，`[telemetry]` 管理状态流。presets / collection profile 保留输入与采集设置。主控制端不再提供 `--backend`、`--telemetry` 或 CAN/SDK 配置转发。详见 [机械臂服务与监看](docs/monitoring.md) 和 [插件说明](docs/plugins.md)。
 
@@ -87,7 +87,7 @@ outputs/                 日志、构建产物、标定原图/会话/结果，�
 tests/                   不连接真机的回归检查
 ```
 
-根目录保留 `run.sh`、`启动机械臂服务.sh`、`启动遥操.sh`、`启动仿真.sh` 作为日常入口。连接准备、电量查询、Quest 唤醒分别使用 `./run.sh prepare-connections`、`./run.sh quest-battery`、`./run.sh quest-wake`。环境清单和配置留在根目录的专用文件夹；工具与实现归入 `scripts/` 和 `src/`，只维护当前入口和模块路径。具体见 [目录职责](docs/layout.md) 与 [源码分层](src/README.md)。
+根目录仅保留 `run.sh`、`启动机械臂服务.sh`、`启动遥操.sh`、`网页控制.sh` 四个日常入口。其他快捷脚本按用途放入 `scripts/inference/`、`scripts/arm/`、`scripts/datasets/` 和 `scripts/viewer/`，详见 [脚本索引](scripts/README.md)。连接准备、电量查询、Quest 唤醒分别使用 `./run.sh prepare-connections`、`./run.sh quest-battery`、`./run.sh quest-wake`。环境清单和配置留在根目录的专用文件夹；工具与实现归入 `scripts/` 和 `src/`，只维护当前入口和模块路径。具体见 [目录职责](docs/layout.md) 与 [源码分层](src/README.md)。
 
 主控制器、预设动作和 X5 反馈/命令桥接由本项目维护；XRoboToolkit 提供通用 Quest/IK/线程层。默认获取、构建与启动均不需要 R5 SDK，见 [X5 控制器说明](docs/x5-controller.md)。
 
@@ -122,13 +122,13 @@ uv sync --locked
 数据采集、虚拟演练、回放、校验与只读网页见 [采集操作说明](docs/recording.md)。无需设备即可先运行 `./run.sh session demo`，再从另一终端运行 `./run.sh monitor --port 0`。
 
 
-三维监看页已合并 D435i 腕部 RGB 预览与左右 Quest 手柄数据，保持单页布局。日常 `./启动遥操.sh` 默认开启采集会话（不自动录制），`./启动仿真.sh` 打开统一监看。详细数据来源及断流行为见 [监看说明](docs/monitoring.md)。
+三维监看页已合并 D435i 腕部 RGB 预览与左右 Quest 手柄数据，保持单页布局。日常 `./启动遥操.sh` 默认开启采集会话（不自动录制），`./scripts/viewer/启动仿真.sh` 打开统一监看。详细数据来源及断流行为见 [监看说明](docs/monitoring.md)。
 
 
 日常监看固定在 http://127.0.0.1:8081/，重启监看后刷新即可。遥操交互终端新增 `u / 3` 取消模拟佩戴：保留进程、暂停机械臂控制，由 Quest 自行息屏；`w / 1` 恢复模拟佩戴后自动等待新数据，松开 Grip/A/B/右摇杆按键后即可正常操作。
 
 
-`./启动仿真.sh` 现在同时确保独立相机服务运行，不必先启动遥操：模型立即显示，D435i 初始化后显示 RGB；真实关节反馈由机械臂服务提供。未连接机械臂服务时显示“参考姿态”，不会把模型默认姿态当作真实反馈。相机服务由监看与采集共享，关闭页面或遥操后继续运行。
+`./scripts/viewer/启动仿真.sh` 现在同时确保独立相机服务运行，不必先启动遥操：模型立即显示，D435i 初始化后显示 RGB；真实关节反馈由机械臂服务提供。未连接机械臂服务时显示“参考姿态”，不会把模型默认姿态当作真实反馈。相机服务由监看与采集共享，关闭页面或遥操后继续运行。
 
 
 `./启动遥操.sh` 默认配置并确认 USB 数据连接，使用 Rich 显示当前连接方式；未确认 USB 时不启动控制、不自动回退 Wi-Fi。首次需将 Quest 客户端服务器地址设为 `127.0.0.1` 并连接。交互终端 `p` 可刷新连接状态。

@@ -59,7 +59,7 @@ try {
       await route.abort();
     } else await route.continue();
   });
-  const monitor = start('启动仿真.sh', ['--port', '0', '--no-camera', '--no-connections']);
+  const monitor = start('scripts/viewer/启动仿真.sh', ['--port', '0', '--no-camera', '--no-connections']);
   const url = (await monitor.wait(urlPattern))[1];
   await page.goto(url);
   await page.waitForSelector('body[data-monitor-ready="true"]');
@@ -305,7 +305,7 @@ try {
   monitor.child.kill('SIGINT');
   assert.deepEqual(await monitor.result, [0, null], monitor.log());
   assert.equal(quest.child.exitCode, null, 'Closing monitor stopped controller');
-  const laterMonitor = start('启动仿真.sh', ['--port', '0', '--no-camera', '--no-connections']);
+  const laterMonitor = start('scripts/viewer/启动仿真.sh', ['--port', '0', '--no-camera', '--no-connections']);
   await page.goto((await laterMonitor.wait(urlPattern))[1]);
   monitorStopped = false;
   await page.waitForFunction(() => document.getElementById('connection').dataset.state === 'connected');

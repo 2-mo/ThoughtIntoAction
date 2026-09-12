@@ -28,7 +28,7 @@ class LauncherTests(unittest.TestCase):
         self.assertNotIn("--actuate", result["argv"])
 
     def test_monitor_shortcut_is_independent_from_control(self):
-        script = (ROOT / "启动仿真.sh").read_text()
+        script = (ROOT / "scripts/viewer/启动仿真.sh").read_text()
         self.assertIn('view-arm', script)
         self.assertNotIn('--input', script)
         result = self.preview('view-arm')

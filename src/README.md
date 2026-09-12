@@ -58,7 +58,7 @@ src/
 
 ```bash
 ./run.sh arm-service --backend simulated
-./启动仿真.sh
+./scripts/viewer/启动仿真.sh
 ./run.sh control-arm --input quest
 ./run.sh plugins
 ./run.sh handeye --help

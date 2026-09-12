@@ -60,7 +60,7 @@ if sys.argv[1:3] == ["quest-wake", "start"] and os.environ["TEST_WAKE_FAIL"] == 
         from quest_teleop.xr_visualizer.cli import HTML_PATH
         self.assertTrue(HTML_PATH.is_file())
         self.assertIn(str(ROOT / "src"), str(HTML_PATH))
-        for script in ("启动遥操.sh", "启动仿真.sh", "启动机械臂服务.sh"):
+        for script in ("启动遥操.sh", "scripts/viewer/启动仿真.sh", "启动机械臂服务.sh"):
             with self.subTest(script=script):
                 result = subprocess.run([str(ROOT / script), "--help"], cwd="/tmp",
                                         capture_output=True, text=True, timeout=30)

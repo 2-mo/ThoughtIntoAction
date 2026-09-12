@@ -2,7 +2,7 @@
 
 主环境使用 uv、Python 3.12 和项目内 `.venv`，当前支持 Linux x86_64。`run.sh` 使用 `/usr/bin/python3`（3.11+）解析配置，然后直接启动 `.venv/bin/python`，不受终端中 Conda 激活状态影响。启动不自动安装或升级依赖。
 
-独立 `view-arm` / `启动仿真.sh` 通过 Python 标准库启动 Three.js 本地服务，独立机械臂服务通过锁定的 pyzmq 发布状态。前端模块和材质随仓库保存，无需安装 Node/npm，也不依赖 CDN；浏览器需支持 WebGL 2。场景资产来源与可选浏览器测试见 [共享场景说明](../src/robot_simulation/web/README.md)。
+独立 `view-arm` / `scripts/viewer/启动仿真.sh` 通过 Python 标准库启动 Three.js 本地服务，独立机械臂服务通过锁定的 pyzmq 发布状态。前端模块和材质随仓库保存，无需安装 Node/npm，也不依赖 CDN；浏览器需支持 WebGL 2。场景资产来源与可选浏览器测试见 [共享场景说明](../src/robot_simulation/web/README.md)。
 
 ## 首次安装
 
@@ -83,7 +83,7 @@ CAN 路径在 `robot.can_device` 配置。已有接口保持原状态；接口�
 
 ## 独立机械臂服务
 
-日常先在独立终端执行 `./启动机械臂服务.sh`，再按需启动 `./启动仿真.sh` 和 `./启动遥操.sh`。仅调试虚拟机械臂时，服务改用 `./run.sh arm-service --backend simulated`，控制用 `./run.sh control-arm`。服务和监看可以在没有控制程序时保持运行。
+日常先在独立终端执行 `./启动机械臂服务.sh`，再按需启动 `./scripts/viewer/启动仿真.sh` 和 `./启动遥操.sh`。仅调试虚拟机械臂时，服务改用 `./run.sh arm-service --backend simulated`，控制用 `./run.sh control-arm`。服务和监看可以在没有控制程序时保持运行。
 
 真机服务初始化 SDK 时会使能并进入阻尼；监看和 `check-arm` 只读服务，不初始化 SDK。`check-arm --virtual` 读取虚拟服务。服务配置集中在 `[arm_service]`，RPC socket 为 `outputs/runtime/arm.sock`，状态流由 `[telemetry]` 指定。控制端关闭后服务继续反馈，失联控制权会在 0.5 秒后撤销。详细运行边界见 [机械臂服务与监看](monitoring.md)。
 
