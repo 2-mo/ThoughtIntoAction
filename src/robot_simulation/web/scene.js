@@ -123,7 +123,7 @@ async function initialize() {
   tableGeometry.translate(0, 0, -(tableThickness - 2 * tableBevel) / 2);
   const table = new THREE.Mesh(tableGeometry,
     // Light warm beige wood tone referenced from the wrist RGB camera; retain a matte grain.
-    new THREE.MeshStandardMaterial({ color: 0xc4b39f, map: textures[0], normalMap: textures[1],
+    new THREE.MeshStandardMaterial({ color: 0xe3d5c3, map: textures[0], normalMap: textures[1],
       normalScale: new THREE.Vector2(0.15, 0.15), roughnessMap: textures[2], roughness: 0.9, metalness: 0 }));
   table.position.set(0.42, 0, -tableThickness / 2);
   table.receiveShadow = true;
