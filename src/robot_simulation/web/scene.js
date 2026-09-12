@@ -25,9 +25,9 @@ async function initialize() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.1;
+  renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x191b1e);
@@ -36,7 +36,8 @@ async function initialize() {
   const pmrem = new THREE.PMREMGenerator(renderer);
   const environmentTarget = pmrem.fromScene(environment, 0.04);
   scene.environment = environmentTarget.texture;
-  scene.environmentIntensity = 0.72;
+  scene.environmentIntensity = 0.6;
+  scene.environmentRotation.x = Math.PI / 2;
   pmrem.dispose();
   environment.dispose();
 
@@ -64,24 +65,34 @@ async function initialize() {
   });
   resize.observe(canvas.parentElement);
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x171717, 2.9));
-  const key = new THREE.DirectionalLight(0xffffff, 3.4);
-  key.position.set(0.45, -0.55, 1.2);
+  // Z-up studio lighting: restrained ambient fill preserves shape and wood highlights.
+  const ambient = new THREE.HemisphereLight(0xeaf0f7, 0x34302c, 0.85);
+  ambient.position.set(0, 0, 1);
+  scene.add(ambient);
+  const key = new THREE.DirectionalLight(0xfff1df, 3.2);
+  key.position.set(-0.35, -0.65, 1.5);
+  key.target.position.set(0.2, 0, 0.15);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
-  Object.assign(key.shadow.camera, { near: 0.05, far: 4, left: -1.5, right: 1.5, top: 1.5, bottom: -1.5 });
-  key.shadow.bias = -0.00025;
-  key.shadow.normalBias = 0.002;
-  scene.add(key);
-  const fill = new THREE.DirectionalLight(0xa9b8b2, 1.05);
-  fill.position.set(-0.75, 0.45, 0.45);
+  Object.assign(key.shadow.camera, { near: 0.1, far: 4, left: -1.1, right: 1.1, top: 1.1, bottom: -1.1 });
+  // PCFShadowMap honors radius; the tighter frustum keeps base contact shadows defined.
+  key.shadow.radius = 2.5;
+  key.shadow.bias = -0.00008;
+  key.shadow.normalBias = 0.0008;
+  scene.add(key, key.target);
+  const fill = new THREE.DirectionalLight(0xdbe7ff, 0.55);
+  fill.position.set(-0.65, 0.45, 0.65);
   scene.add(fill);
+  const rim = new THREE.DirectionalLight(0xf2f5ff, 0.9);
+  rim.position.set(0.65, 0.7, 1.1);
+  rim.target.position.set(0, 0, 0.25);
+  scene.add(rim, rim.target);
 
   const ground = new THREE.GridHelper(4, 80, 0x505258, 0x303237);
   ground.rotation.x = Math.PI / 2;
   ground.position.z = -0.043;
   ground.material.transparent = true;
-  ground.material.opacity = 0.32;
+  ground.material.opacity = 0.18;
   scene.add(ground);
   const axes = new THREE.Group();
   const baseAxes = new THREE.AxesHelper(0.115);
