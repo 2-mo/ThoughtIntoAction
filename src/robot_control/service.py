@@ -10,6 +10,7 @@ import selectors
 import signal
 import socket
 import stat
+import subprocess
 import sys
 import time
 import uuid
@@ -437,6 +438,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="arm-service", description=__doc__)
     parser.add_argument("--interactive", action=argparse.BooleanOptionalAction, default=False,
                         help="显示带常驻快捷键栏的机械臂 TUI")
+    parser.add_argument("--prepare-can", action=argparse.BooleanOptionalAction, default=False,
+                        help="真机启动前准备 CAN 接口，必要时通过 sudo 请求密码")
     parser.add_argument("--backend", default=defaults["backend"], help="Arm plugin with service_device capability")
     parser.add_argument("--socket", default=str(service_path()))
     parser.add_argument("--endpoint", help="Local telemetry endpoint")
@@ -465,9 +468,18 @@ def main(argv=None):
         parser.error("gripper_open_limit_m must be positive and no greater than gripper_width")
     if spec.hardware and args.q is not None:
         parser.error("--q is a virtual initialization setting")
+    if args.prepare_can and spec.hardware:
+        result = subprocess.run([
+            "bash", str(resolve_path("scripts/setup/can_up.sh")),
+            "--interface", args.can_port,
+            "--device", str(resolve_path(config["robot"]["can_device"])),
+        ])
+        if result.returncode:
+            parser.exit(1, "CAN 接口准备失败，机械臂服务未启动。请检查 USB-CAN 连接及 sudo 权限。\n")
     if args.interactive:
         from .console import run_console
-        return run_console(args, spec.hardware, list(sys.argv[1:] if argv is None else argv))
+        return run_console(args, spec.hardware,
+                           [*list(sys.argv[1:] if argv is None else argv), "--no-prepare-can"])
     robot = RobotModel(args.urdf)
     q = robot.joints(args.q or [0, 1.5, 1.45, -1.52, 0, 0]) if not spec.hardware else None
     def interrupted(*_):

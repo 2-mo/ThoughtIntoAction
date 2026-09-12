@@ -85,6 +85,8 @@ CAN 路径在 `robot.can_device` 配置。已有接口保持原状态；接口�
 
 日常先在独立终端执行 `./启动机械臂服务.sh`，再按需启动 `./scripts/viewer/启动仿真.sh` 和 `./启动遥操.sh`。仅调试虚拟机械臂时，服务改用 `./run.sh arm-service --backend simulated`，控制用 `./run.sh control-arm`。服务和监看可以在没有控制程序时保持运行。
 
+`启动机械臂服务.sh` 会在进入交互控制台前自动准备 CAN 接口，必要时在当前终端提示输入 sudo 密码；已有接口保持原状，准备失败则停止启动。`--help` 和虚拟后端跳过准备，可用 `--no-prepare-can` 显式关闭。
+
 真机服务初始化 SDK 时会使能并进入阻尼；监看和 `check-arm` 只读服务，不初始化 SDK。`check-arm --virtual` 读取虚拟服务。服务配置集中在 `[arm_service]`，RPC socket 为 `outputs/runtime/arm.sock`，状态流由 `[telemetry]` 指定。控制端关闭后服务继续反馈，失联控制权会在 0.5 秒后撤销。详细运行边界见 [机械臂服务与监看](monitoring.md)。
 
 
