@@ -56,6 +56,15 @@
         <p class="hint">箭头指向前端，短柱指向上方。三个模型仅比较朝向，位置已分开展示。拖动可一起转动视角。</p>
         <p class="hint">手柄按当前方向映射转换到基座；目标包含按下 Grip 时的姿态偏置，两者不必重合。</p>
       </section>
+      <section class="display-panel"><div class="toggles">
+        <label><input id="show-target" type="checkbox" checked>目标姿态</label>
+        <label><input id="show-path" type="checkbox" checked>轨迹</label>
+        <label><input id="show-table" type="checkbox" checked>工作台</label>
+        <label><input id="show-axes" type="checkbox" checked>坐标轴</label>
+        </div>
+      </section>
+      <section class="operation-note"><div class="runtime-line"><span id="state-source">等待机械臂状态</span><span id="loop-rates" title="近一秒实测 / 配置频率；不是电机内部伺服频率。">IK — Hz · 服务 — Hz</span></div>
+        <p class="timing-row"><span title="监看端向本机机械臂服务发出只读查询并收到应答的往返时间，不是 CAN 或电机动作延迟。"><span>机械臂 RTT</span><b id="arm-latency">未测</b></span><span title="持续 ADB 通道到 USB 头显的回显往返时间，排除建连时间；不代表 XR 协议处理或动作延迟。"><span>Quest USB RTT</span><b id="input-latency">未测</b></span></p><span id="model-id" hidden></span></section>
       </section>
       <div class="telemetry-group"><section class="positions-panel"><h2 class="position-heading">关节 / 夹爪 <span class="position-legend"><i></i>实际 <i class="target"></i>目标</span></h2><div id="joints"></div><div id="gripper" class="gripper-row" aria-label="夹爪开度">
         <span>夹爪</span><svg viewBox="0 0 160 32" role="img" aria-label="夹爪开合示意"><path class="gripper-guide" d="M20 7H140 M80 4V29"/><g class="gripper-placeholder"><path d="M52 9V26H60 M108 9V26H100"/></g><g id="gripper-target"></g><g id="gripper-actual"></g></svg>
@@ -67,16 +76,8 @@
         <div id="motion-diagnostics" class="metric-grid"><div title="IK 相邻目标的最大关节步长"><span>IK 步长</span><b>—</b></div><div title="目标与实际位置的最大关节偏差"><span>积压</span><b>—</b></div><div title="规划指令与实际位置的最大关节偏差"><span>跟踪</span><b>—</b></div></div>
         <span id="motion-joints" class="hint" tabindex="0">关节快照（悬停查看）</span>
       </details>
-      <section class="motor-panel"><h2>电机反馈 <span>电流 A · 温度 °C</span></h2><div class="motor-table" role="table" aria-label="关节与夹爪电机反馈"><div class="motor-row motor-head" role="row"><span>电机</span><span>电流</span><span title="EC 电机温度 / DM MOS 温度">温度</span><span>转子温度</span><span>电压 V</span><span>故障码</span><span>反馈</span></div><div id="motor-feedback" role="rowgroup"></div></div></section>
-      <section class="display-panel"><div class="toggles">
-        <label><input id="show-target" type="checkbox" checked>目标姿态</label>
-        <label><input id="show-path" type="checkbox" checked>轨迹</label>
-        <label><input id="show-table" type="checkbox" checked>工作台</label>
-        <label><input id="show-axes" type="checkbox" checked>坐标轴</label>
-        </div>
-      </section>
-      <section class="operation-note"><div class="runtime-line"><span id="state-source">等待机械臂状态</span><span id="loop-rates" title="近一秒实测 / 配置频率；不是电机内部伺服频率。">IK — Hz · 服务 — Hz</span></div>
-        <p class="timing-row"><span title="监看端向本机机械臂服务发出只读查询并收到应答的往返时间，不是 CAN 或电机动作延迟。"><span>机械臂 RTT</span><b id="arm-latency">未测</b></span><span title="持续 ADB 通道到 USB 头显的回显往返时间，排除建连时间；不代表 XR 协议处理或动作延迟。"><span>Quest USB RTT</span><b id="input-latency">未测</b></span></p><span id="model-id" hidden></span></section>
+      <section class="motor-panel"><h2>电机反馈 <span>±30 A · 0–100 °C</span></h2><div class="motor-table" role="table" aria-label="关节与夹爪电机反馈"><div class="motor-row motor-head" role="row"><span>电机</span><span>电流</span><span title="EC 电机温度 / DM MOS 温度">温度</span><span>转子温度</span><span>电压 V</span><span>故障码</span><span>反馈</span></div><div id="motor-feedback" role="rowgroup"></div></div></section>
+
       </div>
     </aside>
 

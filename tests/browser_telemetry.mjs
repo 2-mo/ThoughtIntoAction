@@ -11,6 +11,9 @@ try {
   const html = (await readFile(new URL('index.html', root), 'utf8')).replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '').replace(/<link\b[^>]*>/g, '');
   await page.setContent(html);
   await page.addStyleTag({path:new URL('scene.css', root).pathname});
+  const hands = (await readFile(new URL('sensors.js', root), 'utf8')).split('function clearInput')[0];
+  await page.addScriptTag({type:'module', content:hands + `
+renderHand('left', null); renderHand('right', null);`});
   await page.evaluate(() => {
     window.fixture = {stream:{status:'waiting'}, actual:null};
     window.fetch = async url => ({ok:true, json:async () => url.includes('model') ?
@@ -40,6 +43,10 @@ try {
   assert.equal(await page.locator('#motor-feedback .motor-row').nth(3).getAttribute('data-state'), 'fault');
   assert.equal(await page.locator('#motor-feedback .motor-row').nth(3).locator('b').first().textContent(), '—');
   assert.equal(await page.locator('#motor-feedback .motor-row').nth(6).locator('b').first().textContent(), '—');
+  assert.equal(await page.locator('#motor-feedback .motor-row').first().locator('.motor-track i').nth(1).evaluate(e => e.style.width), '32%');
+  assert.equal(await page.locator('#motor-feedback .motor-row').nth(3).locator('.motor-track i').first().isVisible(), false);
+  assert.equal(await page.locator('.input-panel #show-table').count(), 1);
+  assert.equal(await page.locator('.input-panel #arm-latency').count(), 1);
   await page.evaluate(() => {window.fixture.stream.sequence++; window.fixture.actual_torque[0] = 2;});
   await page.waitForFunction(() => document.querySelector('.torque-line').getAttribute('d').includes('L'));
   await page.waitForFunction(() => document.querySelector('.velocity-line.actual').getAttribute('d').includes('L'));
@@ -70,6 +77,7 @@ try {
     if (overlap) console.log(await page.evaluate(() => [...document.querySelectorAll('.telemetry-group > section')].map(s => ({name:s.className,height:s.clientHeight,scroll:s.scrollHeight,top:s.getBoundingClientRect().top,bottom:s.getBoundingClientRect().bottom})))) ;
     await page.screenshot({path:new URL(`../outputs/logs/telemetry-layout-${width}.png`,import.meta.url).pathname});
     assert.equal(overlap, false, `Telemetry content overlaps at ${width}x${height}`);
+    assert.equal(await page.locator('.input-panel').evaluate(e => e.scrollHeight > e.clientHeight + 1), false, 'Upper-right controls must remain visible');
     if (width >= 1200) assert.equal(await page.evaluate(() => {
       const group = document.querySelector('.telemetry-group');
       return document.documentElement.scrollHeight > innerHeight + 1 || group.scrollHeight > group.clientHeight + 1;

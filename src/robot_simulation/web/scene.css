@@ -626,3 +626,49 @@ aside > .input-panel { grid-row:2 !important; }
   .telemetry-group > .display-panel { grid-column:1; grid-row:6; }
   .telemetry-group > .operation-note { grid-column:2; grid-row:5; }
 }
+
+/* Status and scene controls belong with the compact upper-right controls. */
+.input-panel > .display-panel, .input-panel > .operation-note { flex:none; padding:0; border:0; background:none; }
+.input-panel > .display-panel { margin-top:5px; }
+.input-panel .toggles { display:flex; flex-wrap:wrap; gap:5px 12px; }
+.input-panel .toggles label { display:flex; align-items:center; gap:3px; font-size:10px; color:#a6b3bb; }
+.input-panel .toggles input { margin:0; accent-color:#7ba7ab; }
+.input-panel .operation-note { margin-top:5px; font-size:10px; }
+.input-panel .runtime-line { display:flex; justify-content:space-between; gap:3px 8px; }
+.input-panel .timing-row { display:flex; flex-wrap:wrap; gap:6px 16px; margin:4px 0 0; }
+.input-panel .timing-row > span { display:flex; gap:6px; align-items:center; }
+.input-panel .timing-row b { font-weight:500; color:#b8c9d1; }
+.input-panel #orientation-canvas { max-height:90px; }
+.motor-row { grid-template-columns:22px repeat(3,minmax(0,1fr)); gap:3px 8px; padding:4px 3px; }
+.motor-head > span:nth-child(n+5) { display:none; }
+.motor-cell { min-width:0; display:flex; flex-direction:column; gap:3px; }
+.motor-cell > b { line-height:12px; }
+.motor-track { display:block; height:5px; position:relative; border-radius:2px; background:#90aab712; overflow:hidden; }
+.motor-track.bipolar::after { content:''; position:absolute; left:50%; height:100%; width:1px; background:#a2bdc655; }
+.motor-track i { display:block; position:absolute; height:100%; background:#8db9c2; }
+.motor-cell:nth-child(3) i { background:#bdad85; }
+.motor-cell:nth-child(4) i { background:#bdad8588; }
+.motor-detail { font-size:9px; line-height:11px; color:#85949c; }
+.motor-detail:nth-child(5) { grid-column:2; }
+.motor-detail:nth-child(5)::before { content:'V '; opacity:.6; }
+.motor-detail:nth-child(6)::before { content:'故障 '; opacity:.6; }
+.motor-row[data-state="fault"] .motor-detail { color:#d29b89; }
+@media(max-width:1100px), (max-height:650px) {
+  main { grid-template-rows:66px 310px auto; }
+}
+.motor-row { line-height:12px; padding:3px; gap:2px 8px; }
+.motor-row > span:first-child { align-self:start; }
+@media(max-height:800px) { .motor-row { padding-block:2px; } }
+.input-panel .controller-shell { padding:6px 8px; }
+.input-panel .controller-meter { margin-top:3px; }
+.input-panel > .orientation-panel { min-height:92px; }
+@media(max-width:1100px), (max-height:650px) { main { grid-template-rows:66px 360px auto; } }
+.input-panel .meters { display:flex; gap:12px; }
+.input-panel .controller-meter { flex:1; gap:4px; }
+.input-panel #button-response { flex:none; line-height:14px; margin:3px 0; }
+@media(max-height:800px) {
+  .input-panel .hold-ring { width:30px; height:30px; }
+  .input-panel .controller-key, .input-panel .controller-stick { width:24px; height:24px; }
+  .input-panel .key-unit > .controller-key, .input-panel .key-unit > .controller-stick { margin:3px; }
+  .input-panel .controller-stick i { top:5px; left:5px; }
+}

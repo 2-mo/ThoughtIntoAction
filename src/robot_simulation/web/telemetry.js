@@ -25,7 +25,7 @@ const torqueRows = [...jointRows, null].map((_, index) => {
 const motorRows = Array.from({length: 7}, (_, i) => {
   const row = document.createElement('div');
   row.className = 'motor-row'; row.setAttribute('role', 'row');
-  row.innerHTML = `<span>${i < 6 ? `J${i + 1}` : '夹爪'}</span>${'<b>—</b>'.repeat(6)}`;
+  row.innerHTML = `<span>${i < 6 ? `J${i + 1}` : '夹爪'}</span>${Array.from({length:3}, (_, c) => `<span class="motor-cell"><b>—</b><span class="motor-track${c === 0 ? ' bipolar' : ''}"><i hidden></i></span></span>`).join('')}${'<b class="motor-detail">—</b>'.repeat(3)}`;
   byId('motor-feedback').append(row);
   return row;
 });
@@ -42,6 +42,13 @@ function showMotors(live) {
       if (column < 4) cell.textContent = fresh && finite(numbers[column]) ? numbers[column].toFixed(column === 0 ? 3 : 1) : '—';
       else if (column === 4) cell.textContent = Number.isInteger(motor?.fault_code) ? String(motor.fault_code) : '—';
       else cell.textContent = motor?.valid === true ? '有效' : motor?.valid === false ? '无效' : '—';
+    });
+    row.querySelectorAll('.motor-track i').forEach((bar, column) => {
+      const value = numbers[column];
+      bar.hidden = !fresh || !finite(value);
+      const end = column === 0 ? 50 + Math.max(-1, Math.min(1, value / 30)) * 50 : Math.max(0, Math.min(100, value));
+      bar.style.left = `${column === 0 ? Math.min(50, end) : 0}%`;
+      bar.style.width = `${column === 0 ? Math.abs(end - 50) : end}%`;
     });
     row.title = !motor ? '暂无电机反馈' : `CAN ID ${motor.motor_id} · ${motor.motor_type || ''} · ${motor.feedback_status}；— 表示未提供反馈`;
   });
