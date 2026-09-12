@@ -93,7 +93,7 @@ async function initialize() {
 
   // A visual work surface only. No physical table transform or camera extrinsic is assumed.
   const textureLoader = new THREE.TextureLoader();
-  const textures = await Promise.all(['diff', 'nor_gl', 'rough'].map(async kind => {
+  const textures = await Promise.all(['diff', 'nor_gl'].map(async kind => {
     const texture = await textureLoader.loadAsync(`/textures/oak_veneer_01/oak_veneer_01_${kind}_2k.jpg`);
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -118,13 +118,20 @@ async function initialize() {
   outline.closePath();
   const tableGeometry = new THREE.ExtrudeGeometry(outline, {
     depth: tableThickness - 2 * tableBevel, bevelEnabled: true,
-    bevelThickness: tableBevel, bevelSize: tableBevel, bevelSegments: 3, curveSegments: 12, steps: 1,
+    bevelThickness: tableBevel, bevelSize: tableBevel, bevelSegments: 5, curveSegments: 20, steps: 1,
   });
   tableGeometry.translate(0, 0, -(tableThickness - 2 * tableBevel) / 2);
-  const table = new THREE.Mesh(tableGeometry,
-    // Light warm beige wood tone referenced from the wrist RGB camera; retain a matte grain.
-    new THREE.MeshStandardMaterial({ color: 0xe3d5c3, map: textures[0], normalMap: textures[1],
-      normalScale: new THREE.Vector2(0.15, 0.15), roughnessMap: textures[2], roughness: 0.9, metalness: 0 }));
+  // A pale satin veneer: subtle pores, even roughness and a soft protective finish.
+  const tabletopMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0xe7dfd3, map: textures[0], normalMap: textures[1],
+    normalScale: new THREE.Vector2(0.045, 0.045), roughness: 0.62, metalness: 0,
+    clearcoat: 0.16, clearcoatRoughness: 0.55,
+  });
+  // A quiet matching edge avoids stretching the top grain down the thin side wall.
+  const edgeMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0xc5b397, roughness: 0.72, metalness: 0, clearcoat: 0.08, clearcoatRoughness: 0.65,
+  });
+  const table = new THREE.Mesh(tableGeometry, [tabletopMaterial, edgeMaterial]);
   table.position.set(0.42, 0, -tableThickness / 2);
   table.receiveShadow = true;
   scene.add(table);
