@@ -23,6 +23,8 @@ renderHand('left', null); renderHand('right', null);`});
   await page.addScriptTag({type:'module', content:(await readFile(new URL('telemetry.js', root), 'utf8')).replace('./display-state.js', shared)});
   await page.waitForFunction(() => document.querySelectorAll('.torque-row').length === 7);
   assert.equal(await page.locator('#joints .position-row').count(), 6);
+  assert.equal(await page.locator('details.diagnostics-panel').count(), 0);
+  assert.equal(await page.locator('#motion-diagnostics').isVisible(), true);
   assert.equal(await page.locator('.gripper-placeholder').isVisible(), true);
   assert.equal(await page.locator('.torque-line').first().getAttribute('d'), '');
   await page.evaluate(() => {
