@@ -77,7 +77,7 @@ class RecordedEpisode:
                 'target_q': submission.get('pos'), 'target_gripper_m': submission.get('gripper_pos'),
                 'gripper_max': self.meta.get('control', {}).get('gripper_width_m', .082),
                 'torque_history': history, 'path_points': self.path_points[:index + 1:stride],
-                'record_format': self.meta.get('record_storage', {}).get('format', 'jsonl'),
+                'record_format': 'mcap',
                 'depth_recorded': self.meta.get('depth_recorded', False),
                 'episode': self.meta['id'], 'duration_s': self.duration, 'position_s': seconds,
                 'sample_index': index, 'sample_count': len(self.states),

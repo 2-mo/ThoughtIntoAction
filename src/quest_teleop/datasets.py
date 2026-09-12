@@ -12,34 +12,15 @@ from robot_core.storage import save_json
 from .video import media_path, read_frame
 
 
-def read_jsonl(path):
-    rows = []
-    from .compressed_io import open_jsonl
-    with open_jsonl(path) as stream:
-        for line, text in enumerate(stream, 1):
-            try:
-                row = json.loads(text)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"{path.name}:{line}: invalid/truncated JSON") from exc
-            if not isinstance(row, dict):
-                raise ValueError(f"{path.name}:{line}: expected object")
-            rows.append(row)
-    return rows
-
-
 def load_episode(path):
     root = Path(path).expanduser().resolve()
     manifest = json.loads((root / "episode.json").read_text())
     if not isinstance(manifest, dict) or manifest.get("schema_version") != 1 or manifest.get("kind") != "quest_teleop_episode":
         raise ValueError("Unknown episode schema")
-    storage = manifest.get("record_storage", {}).get("format", "jsonl")
-    if storage == "mcap":
-        from .mcap_io import read_records
-        states, frames = read_records(root / "episode.mcap")
-    elif storage == "jsonl":
-        states, frames = read_jsonl(root / "states.jsonl"), read_jsonl(root / "frames.jsonl")
-    else:
-        raise ValueError("Unknown record storage")
+    if manifest.get("record_storage", {}).get("format") != "mcap":
+        raise ValueError("Only MCAP episodes are supported")
+    from .mcap_io import read_records
+    states, frames = read_records(root / "episode.mcap")
     return root, manifest, states, frames
 
 

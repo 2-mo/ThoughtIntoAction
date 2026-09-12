@@ -73,9 +73,7 @@ table_z_m = 0.0
 table_clearance_m = 0.0
 
 [recording]
-record_format = "mcap" # 状态与 RGB 帧索引；视频保留为旁置 MP4
 package_on_task_end = true
-compress_records = true
 rgb_video = true
 video_crf = 20
 queue_size = 1024
@@ -91,3 +89,7 @@ host = "127.0.0.1"
 training_location = "H800"
 # This records the existing checkpoint format; no inference backend is installed.
 checkpoint_format = "lerobot"
+
+[viewer_service]
+port = 18081
+camera = true

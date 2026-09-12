@@ -21,4 +21,4 @@
 
 这些开关不控制机械臂电机，也不改变 USB 头显追踪和广播设置。
 `viewer_service.socket` / `port` / `camera` 可在本地配置中覆盖，默认为
-`outputs/runtime/viewer.sock`、`8081` 和 `true`；camera 表示启动网页时确保相机服务存在，不强制重新开启已关闭的采集。
+`outputs/runtime/viewer.sock`、`18081` 和 `true`；camera 表示启动网页时确保相机服务存在，不强制重新开启已关闭的采集。

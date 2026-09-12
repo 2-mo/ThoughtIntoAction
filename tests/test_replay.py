@@ -1,3 +1,4 @@
+from mcap_fixture import write_records
 import json
 from pathlib import Path
 import tempfile
@@ -23,12 +24,12 @@ class ReplayTests(unittest.TestCase):
         (self.root / 'episode.json').write_text(json.dumps(self.meta))
         self.rows = [{'host_monotonic_ns': 1_000_000_000 + i * 1_000_000_000,
                       'actual_pos': [i * .1, 0, 0, 0, 0, 0], 'gripper_actual_pos': .04 - i * .01} for i in range(2)]
-        (self.root / 'states.jsonl').write_text('\n'.join(map(json.dumps, self.rows)))
+        write_records(self.root, states=self.rows)
         frames = []
         for i in range(2):
             cv2.imwrite(str(self.root / f'{i}.png'), np.full((16, 16, 3), i * 200, dtype=np.uint8))
             frames.append({'host_received_monotonic_ns': 1_000_000_000 + i * 1_000_000_000, 'image': f'{i}.png'})
-        (self.root / 'frames.jsonl').write_text('\n'.join(map(json.dumps, frames)))
+        write_records(self.root, frames=frames)
 
     def test_readonly_review_video_and_joints_follow_same_clock(self):
         data = RecordedEpisode(self.root)
@@ -59,7 +60,7 @@ class ReplayTests(unittest.TestCase):
         frames = [{"host_received_monotonic_ns": row["host_monotonic_ns"],
                    "video": "wrist_rgb.mp4", "video_frame_index": i, "video_pts_s": float(i)}
                   for i, row in enumerate(self.rows)]
-        (self.root / "frames.jsonl").write_text("\n".join(map(json.dumps, frames)))
+        write_records(self.root, frames=frames)
         replay = WebReplay(RecordedEpisode(self.root))
         replay.control("pause")
         replay.control("seek", 0.)
@@ -77,7 +78,7 @@ class ReplayTests(unittest.TestCase):
             with self.assertRaises(ValueError): RecordedEpisode(self.root)
         (self.root / 'episode.json').write_text(json.dumps(self.meta))
         self.rows[1]['host_monotonic_ns'] = self.rows[0]['host_monotonic_ns']
-        (self.root / 'states.jsonl').write_text('\n'.join(map(json.dumps, self.rows)))
+        write_records(self.root, states=self.rows)
         with self.assertRaises(ValueError): RecordedEpisode(self.root)
 
     def test_session_replays_only_saved_previous_and_blocks_active_recording(self):
@@ -142,7 +143,7 @@ class ReplayTests(unittest.TestCase):
         for i, row in enumerate(self.rows):
             row['actual_pos'] = list(start)
             row['actual_pos'][0] += i * .03
-        (self.root / 'states.jsonl').write_text('\n'.join(map(json.dumps, self.rows)))
+        write_records(self.root, states=self.rows)
         replay = RobotReplay(RecordedEpisode(self.root))
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:

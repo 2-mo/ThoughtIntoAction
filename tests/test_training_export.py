@@ -1,4 +1,6 @@
 """Offline raw H264, exact clocks and 50Hz state / 30FPS observation alignment."""
+from mcap_fixture import write_records
+from quest_teleop.mcap_io import read_records
 import json
 from pathlib import Path
 import tempfile
@@ -26,7 +28,7 @@ class TrainingExportTests(unittest.TestCase):
             result = writer.stop(timeout=35)
             self.assertEqual(result['lifecycle'], 'complete')
             self.assertTrue(writer.id.startswith('拿_杯子_'))
-            frames = [json.loads(s) for s in (writer.path/'frames.jsonl').read_text().splitlines()]
+            _, frames = read_records(writer.path/'episode.mcap')
             self.assertEqual([f['host_received_monotonic_ns'] for f in frames], timestamps)
             self.assertEqual([f['video_frame_index'] for f in frames], list(range(6)))
             self.assertEqual(frames[0]['device_timestamp_ms'], 123.125)
@@ -52,8 +54,7 @@ class TrainingExportTests(unittest.TestCase):
                     'outcome':'unknown', 'counts':{'state':11,'frame':7}, 'id':'sample','task':'pick',
                     'camera':{'width':64,'height':48,'fps':30}}
             (root/'episode.json').write_text(json.dumps(meta))
-            for name, rows in [('states',states),('frames',frames)]:
-                (root/(name+'.jsonl')).write_text(''.join(json.dumps(r)+'\n' for r in rows))
+            write_records(root, states=states, frames=frames)
             _, rows, report = prepare_episode(root)
             self.assertEqual(len(rows), 11)
             self.assertGreater(report['repeated_images'], 0)
@@ -65,7 +66,7 @@ class TrainingExportTests(unittest.TestCase):
             self.assertEqual([row[4]['host_monotonic_ns'] for row in every_row], [row['host_monotonic_ns'] for row in states])
             self.assertEqual(rows[1][3]['image'], '0.png')  # 20ms must not use the 33ms image.
             states[5]['requested_pos'] = None
-            (root/'states.jsonl').write_text(''.join(json.dumps(r)+'\n' for r in states))
+            write_records(root, states=states)
             with self.assertRaises((TypeError, ValueError)):
                 prepare_episode(root)
 

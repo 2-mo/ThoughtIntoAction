@@ -53,8 +53,7 @@ def main():
         delta_arrays.append(action_chunks(state, action, args.horizon).reshape(-1, 7))
         included.append({'episode': str(root.resolve()), 'outcome': meta['outcome'], 'anchors': len(state),
                          'files_sha256': {f.name: hashlib.sha256(f.read_bytes()).hexdigest()
-                          for f in root.iterdir() if f.name in ('episode.mcap', 'episode.json', 'states.jsonl', 'states.jsonl.gz',
-                                                               'frames.jsonl', 'frames.jsonl.gz')}})
+                          for f in root.iterdir() if f.name in ('episode.mcap', 'episode.json')}})
         print(f'统计 {len(included)} 条 / {sum(len(x) for x in state_arrays)} 个图像锚点', flush=True)
     if not included:
         raise ValueError('No valid episodes: ' + str(rejected))

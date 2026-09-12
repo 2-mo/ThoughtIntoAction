@@ -51,7 +51,7 @@ function render() {
   el('replay-video-empty').textContent = f ? '该条未录制 RGB' : '等待回放数据';
   if (pixels) el('replay-video').src = `data:${f.image_mime || 'image/jpeg'};base64,${pixels}`;
   else el('replay-video').removeAttribute('src');
-  el('replay-video-status').textContent = f ? '录制 RGB · ' + (f.record_format || 'jsonl').toUpperCase() : '录制 RGB';
+  el('replay-video-status').textContent = f ? '录制 RGB · ' + 'MCAP' : '录制 RGB';
   el('replay-video-status').title = '视频按接收时间与机械臂样本对齐；未录制深度';
 }
 async function poll() {

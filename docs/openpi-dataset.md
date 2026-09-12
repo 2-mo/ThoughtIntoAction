@@ -8,7 +8,7 @@
 - `episode.mcap`：机器人逐周期状态、请求动作，以及每帧设备/主机时间戳和视频帧索引，Zstd 无损压缩。
 - `wrist_rgb.mp4`：640×480、30 FPS、H.264/libx264 CRF 20，不重新编码。
 
-新录制使用 MCAP 分块写入并在结束时写索引；视频保持旁置 MP4，完整目录一同打包。旧的 JSONL / JSONL.gz、PNG episode 仍可读取，导出器自动识别格式。机器人采样保持 240 Hz，遥操处理 90 Hz。时间戳精度不变；相机主机接收时间并不等于曝光时间，设备未硬件同步。
+新录制使用 MCAP 分块写入并在结束时写索引；视频保持旁置 MP4，完整目录一同打包。录制、回放和训练导出统一使用 MCAP，不读取旧 JSONL / JSONL.gz episode。机器人采样保持 240 Hz，遥操处理 90 Hz。时间戳精度不变；相机主机接收时间并不等于曝光时间，设备未硬件同步。
 
 ## 任务打包与服务器转换
 
@@ -28,7 +28,7 @@ datasets/任务名_时间-编号.zip
         wrist_rgb.mp4
 ```
 
-直接上传 ZIP。其内部 MCAP 已 Zstd 压缩（旧条目为 gzip JSONL）、MP4 已 H.264 压缩，ZIP 只封装不重复压缩。包内都是实际文件，不依赖本机符号链接。包含本轮所有已停止录制条目，丢弃、失败和中断条目连同原始标记一并上传，由服务器筛选；生成后进行 ZIP CRC 校验。状态记录在 `datasets/.raw/tasks/<任务名>/package-status.json`。失败保留原始记录，临时包不会当成成功产物。
+直接上传 ZIP。其内部 MCAP 已 Zstd 压缩、MP4 已 H.264 压缩，ZIP 只封装不重复压缩。包内都是实际文件，不依赖本机符号链接。包含本轮所有已停止录制条目，丢弃、失败和中断条目连同原始标记一并上传，由服务器筛选；生成后进行 ZIP CRC 校验。状态记录在 `datasets/.raw/tasks/<任务名>/package-status.json`。失败保留原始记录，临时包不会当成成功产物。
 
 服务器无需安装 QuestArmTeleop 项目。Linux 上准备好 `uv` 和 FFmpeg 共享库后：
 
@@ -42,7 +42,7 @@ bash 转换为LeRobot.sh --skip-invalid --output /path/to/lerobot_dataset
 
 首次运行自动下载 CPU 导出依赖，需要网络；环境位于包内 `tools/outputs/envs/lerobot-export`，与遥操环境隔离。默认读取包内 `episodes/`，输出包内 `lerobot_dataset/`，路径不依赖终端当前目录。`tools/convert.sh` 是兼容入口。可用 `LEROBOT_EXPORT_PYTHON=/path/to/python` 复用已安装的固定版本环境。`--help` 无需安装环境即可查看。
 
-导出器直接读取 .jsonl.gz，无需单独解压 JSONL。最终生成一个含 meta/data/videos 的 LeRobot 数据集。暂停恢复保持同一任务；程序退出不会自动恢复任务，原始记录仍可手动打包。现有包和输出目录不会自动覆盖。
+导出器直接读取 episode.mcap 中的状态与帧索引。最终生成一个含 meta/data/videos 的 LeRobot 数据集。暂停恢复保持同一任务；程序退出不会自动恢复任务，原始记录仍可手动打包。现有包和输出目录不会自动覆盖。
 
 ### 转换进度与速度
 

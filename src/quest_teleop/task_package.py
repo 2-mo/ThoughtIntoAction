@@ -3,7 +3,6 @@ import hashlib
 import json
 from pathlib import Path
 import zipfile
-from .compressed_io import compress_jsonl
 from robot_core.storage import save_json
 
 
@@ -33,9 +32,6 @@ def finalize_task(raw_root, episode_ids, output, fps):
             if run_id is not None and meta.get("task_run_id") != run_id:
                 raise ValueError("Mixed task runs")
             run_id = meta.get("task_run_id")
-            for name in ("states.jsonl", "frames.jsonl"):
-                if (source / name).is_file():
-                    compress_jsonl(source / name)
             members = sorted(file for file in source.rglob("*") if file.is_file())
             for file in members:
                 if not file.resolve().is_relative_to(source):
@@ -65,7 +61,7 @@ def finalize_task(raw_root, episode_ids, output, fps):
                 for file in sorted((PROJECT_ROOT / folder).rglob("*")):
                     if file.is_file() and "__pycache__" not in file.parts:
                         package.write(file, output.name + "/tools/" + str(file.relative_to(PROJECT_ROOT)))
-            for filename in ("export_lerobot.py", "export_video.py", "export_decode.py", "multirate.py", "compressed_io.py", "video.py", "mcap_io.py"):
+            for filename in ("export_lerobot.py", "export_video.py", "export_decode.py", "multirate.py", "video.py", "mcap_io.py"):
                 package.write(PROJECT_ROOT / "src/quest_teleop" / filename,
                               output.name + "/tools/src/quest_teleop/" + filename)
             package.writestr(output.name + "/tools/src/quest_teleop/__init__.py", "")
@@ -108,8 +104,6 @@ Do not treat unknown as success. Decide selection on the server; preserve the or
 - manifest.json: episode IDs, outcomes, lifecycle, counts, and SHA256/size for every episode file.
 - episodes/<id>/episode.json: original task, camera calibration, robot model/control settings.
 - episode.mcap: robot snapshots and RGB frame indices, lossless Zstd; keep the media files alongside it.
-- states.jsonl.gz (legacy): ALL robot samples and diagnostic fields; lossless gzip.
-- frames.jsonl.gz (legacy): ALL frame timestamps and indices.
 - wrist_rgb.mp4: original 640x480, 30 FPS H264 CRF20; never expanded to 240 FPS.
 - tools/: bundled conversion code, dependency setup, and OpenPI adapter snapshot.
 - 转换为LeRobot.sh: runnable conversion entry; paths are relative to the script, not your terminal.

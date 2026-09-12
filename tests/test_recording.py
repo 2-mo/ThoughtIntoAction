@@ -1,6 +1,8 @@
 """Exercise real recording/IPC/validation with fake feedback and RGB; no CAN access."""
 
 import copy
+from mcap_fixture import write_records
+from quest_teleop.mcap_io import read_records
 import json
 from pathlib import Path
 import subprocess
@@ -104,7 +106,7 @@ class SessionTests(unittest.TestCase):
         self.config["runtime"]["socket"] = str(self.root / "session.sock")
         self.config["paths"].update(dataset_dir=str(self.root / "data"), log_dir=str(self.root / "logs"))
         self.config["cameras"]["wrist_rgb"].update(serial="fake", width=32, height=24, fps=30)
-        self.config["recording"].update(min_free_bytes=0, min_duration_s=.15, compress_records=False)
+        self.config["recording"].update(min_free_bytes=0, min_duration_s=.15)
         self.robot = RobotModel()
         self.camera = FakeCamera("fake", 32, 24, 30)
         self.session = TeleopSession(self.config, self.robot.metadata(),
@@ -353,16 +355,15 @@ class SessionTests(unittest.TestCase):
         self.assertFalse(self.session.socket_path.exists())
 
     def test_validation_detects_corruption_and_preserves_original_data(self):
-        self.config["recording"]["record_format"] = "jsonl"
         root = self.record_episode()
-        frame_path = root / "frames.jsonl"
-        rows = frame_path.read_text().splitlines()
-        rows[1] = rows[0]
-        frame_path.write_text("\n".join(rows) + "\n")
+        _, frames = read_records(root / "episode.mcap")
+        frames[1] = frames[0]
+        write_records(root, frames=frames)
+        content = (root / "episode.mcap").read_bytes()
         report = validate_episode(root, settings=self.config["recording"], robot=self.robot)
         self.assertFalse(report["valid"])
         self.assertTrue(any("Repeated" in error or "Non-increasing" in error for error in report["errors"]))
-        self.assertEqual(frame_path.read_text(), "\n".join(rows) + "\n")
+        self.assertEqual((root / "episode.mcap").read_bytes(), content)
 
     def test_unknown_and_read_only_outcomes_cannot_be_training_eligible(self):
         root = self.record_episode(outcome="unknown")

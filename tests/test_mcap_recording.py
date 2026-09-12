@@ -15,7 +15,7 @@ class McapRecordingTests(unittest.TestCase):
     def test_roundtrip_video_replay_training_and_clock(self):
         with tempfile.TemporaryDirectory() as folder:
             writer = EpisodeWriter(folder, {'robot': RobotModel(eef='eef_link').metadata(),
-                'camera': {'width':64, 'height':48, 'fps':30}}, 'MCAP 测试', rgb_video=True, record_format='mcap')
+                'camera': {'width':64, 'height':48, 'fps':30}}, 'MCAP 测试', rgb_video=True)
             start = writer.manifest['started_monotonic_ns']
             for i in range(3):
                 stamp = start + i * 33_333_333

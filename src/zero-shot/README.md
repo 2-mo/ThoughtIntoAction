@@ -48,7 +48,7 @@ bash src/zero-shot/run.sh --image /path/to/wrist.png \
   --prompt 'Pick up the blue cube and place it in the white area.'
 ```
 
-`--state` 顺序为 joint1…joint6（rad）和实际夹爪宽度（m）。`--frames` 为原始 `frames.jsonl[.gz]` 中从 0 开始的行号。图像只匹配其接收时间之前最新状态，超过 100 ms 则拒绝，不用未来状态。输入图像由 BGR 转 RGB，模型自行保持比例缩放与填边。
+`--state` 顺序为 joint1…joint6（rad）和实际夹爪宽度（m）。`--frames` 为`episode.mcap` 中 RGB 索引主题从 0 开始的消息序号。图像只匹配其接收时间之前最新状态，超过 100 ms 则拒绝，不用未来状态。输入图像由 BGR 转 RGB，模型自行保持比例缩放与填边。
 
 ## 结果与解读
 

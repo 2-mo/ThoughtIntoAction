@@ -16,12 +16,6 @@ LEROBOT_REVISION = '0cf864870cf29f4738d3ade893e6fd13fbd7cdb5'
 FEATURE_NAMES = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6', 'gripper_m']
 
 
-def read_rows(path):
-    from .compressed_io import open_jsonl
-    with open_jsonl(path) as stream:
-        return [json.loads(line) for line in stream if line.strip()]
-
-
 def load_episode(path, max_gap_s=.1):
     """Read and validate one episode; do not retain all episodes in memory."""
     meta = json.loads((path / 'episode.json').read_text())
@@ -31,14 +25,10 @@ def load_episode(path, max_gap_s=.1):
         raise ValueError('Episode is not complete or is discarded/failed')
     if meta.get('error') or any(meta.get('dropped', {}).values()):
         raise ValueError('Writer error or dropped samples')
-    storage = meta.get('record_storage', {}).get('format', 'jsonl')
-    if storage == 'mcap':
-        from .mcap_io import read_records
-        states, images = read_records(path / 'episode.mcap')
-    elif storage == 'jsonl':
-        states, images = read_rows(path / 'states.jsonl'), read_rows(path / 'frames.jsonl')
-    else:
-        raise ValueError('Unknown record storage')
+    if meta.get('record_storage', {}).get('format') != 'mcap':
+        raise ValueError('Only MCAP episodes are supported')
+    from .mcap_io import read_records
+    states, images = read_records(path / 'episode.mcap')
     if any(meta.get('counts', {}).get(k) != n for k, n in [('state', len(states)), ('frame', len(images))]):
         raise ValueError('Manifest counts disagree with stored records')
     clocks = [np.array([r[k] for r in rows], dtype=np.int64) for rows, k in

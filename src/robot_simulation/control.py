@@ -40,7 +40,7 @@ def command(action):
             folder = resolve_path(load_config()['paths']['log_dir'])
             folder.mkdir(parents=True, exist_ok=True)
             with (folder / 'viewer-service.log').open('ab') as log:
-                child = subprocess.Popen([str(PROJECT_ROOT / 'run.sh'), 'view-arm', '--camera' if load_config().get('viewer_service', {}).get('camera', True) else '--no-camera', '--port', str(load_config().get('viewer_service', {}).get('port', 8081)), '--managed'],
+                child = subprocess.Popen([str(PROJECT_ROOT / 'run.sh'), 'view-arm', '--camera' if load_config().get('viewer_service', {}).get('camera', True) else '--no-camera', '--port', str(load_config().get('viewer_service', {}).get('port', 18081)), '--managed'],
                     stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
             deadline = time.monotonic() + 15
             while info is None and time.monotonic() < deadline and child.poll() is None:

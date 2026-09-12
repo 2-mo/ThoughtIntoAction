@@ -8,6 +8,7 @@ import threading
 from robot_core.model import DEFAULT_URDF, RobotModel
 from robot_core.telemetry import StateSubscriber, endpoint
 from robot_core.plugins import Registry
+from robot_core.project import load_config, resolve_path
 
 
 def main(argv=None):
@@ -15,7 +16,7 @@ def main(argv=None):
     parser.add_argument("--urdf", default=str(DEFAULT_URDF))
     parser.add_argument("--eef", default="link6")
     parser.add_argument("--endpoint", help="Local state publisher endpoint; defaults to project telemetry config")
-    parser.add_argument("--port", type=int, default=0, help="Browser HTTP port (0 chooses a free port)")
+    parser.add_argument("--port", type=int, default=load_config()["viewer_service"]["port"], help="Browser HTTP port (default 18081; 0 chooses a free port)")
     parser.add_argument("--viewer", default="web", help="Display plugin; independent of controllers")
     parser.add_argument("--camera", action=argparse.BooleanOptionalAction, default=False, help="Ensure independent shared RGB service is running")
     parser.add_argument("--connections", action=argparse.BooleanOptionalAction, default=True, help="Read-only arm-service and USB RTT probes")
@@ -28,7 +29,6 @@ def main(argv=None):
     def interrupted(*_):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, interrupted)
-    from robot_core.project import load_config, resolve_path
     from .connections import LegacyGripperFeedback
     legacy_gripper = LegacyGripperFeedback(resolve_path(load_config()["arm_service"]["socket"]))
     subscriber = None
@@ -47,7 +47,6 @@ def main(argv=None):
                 return {"url": scene.url, "pid": os.getpid()}
             control_server = LocalServer(socket_path(), dispatch)
         if args.connections and hasattr(scene, "connection_probe"):
-            from robot_core.project import load_config, resolve_path
             from .connections import ConnectionProbe
             scene.connection_probe = ConnectionProbe(resolve_path(load_config()["arm_service"]["socket"]))
         if args.camera:
