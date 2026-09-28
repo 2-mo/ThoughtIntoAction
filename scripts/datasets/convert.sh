@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
-SOURCE="$ROOT/datasets"
-OUTPUT="$ROOT/datasets/lerobot/x5_$(date +%Y%m%d-%H%M%S)"
+SOURCE="$HOME/work/data/quest_x5"
+OUTPUT="$HOME/work/data/quest_x5/lerobot/x5_$(date +%Y%m%d-%H%M%S)"
 if [[ -f "$ROOT/../manifest.json" && -d "$ROOT/../episodes" ]]; then
     SOURCE="$ROOT/../episodes"
     OUTPUT="$ROOT/../lerobot_dataset"
