@@ -1,0 +1,7 @@
+schema_version = 1
+name = "arx-televr"
+url = "https://github.com/GZF123/arx-televr.git"
+commit = "cd557afbb9ec280df2d9e12e1582219b85ee1a53"
+imported_on = "2026-09-29"
+files = "UPSTREAM_FILES.json"
+patches = "LOCAL_PATCHES.json"

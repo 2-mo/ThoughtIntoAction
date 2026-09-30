@@ -135,6 +135,13 @@ class PluginTests(unittest.TestCase):
         controller._input_name = "another_pose_source"
         controller.rotation_frame = "base"
         controller._control_enabled = True
+        # This focused fixture bypasses __init__; initialize published state too.
+        controller._table_plane = Mock(minimum_z=None)
+        controller.R_headset_world = np.eye(3)
+        controller._ik_rate = Mock()
+        controller._ik_rate.snapshot.return_value = {}
+        controller._rotation_alignment = {}
+        controller.effector_task = {}
         controller._publish_runtime()
         self.assertEqual(controller._session.publish.call_args.args[0]["source"], "another_pose_source")
 

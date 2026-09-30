@@ -1,0 +1,33 @@
+runtime/*
+!runtime/README.md
+outputs/*
+!outputs/README.md
+calibrations/*
+!calibrations/README.md
+datasets/*
+!datasets/README.md
+worktrees/
+.venv
+.venv-web
+.venv-handeye
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.DS_Store
+
+# Local third-party reference projects and generated build assets.
+reference_projects/
+
+# Large local weights stay untracked; browser models are versioned.
+weights/*
+!weights/browser/
+!weights/browser/**
+assets/cache/
+src/frontend/dist/
+src/frontend/node_modules/
+src/frontend/playwright-report/
+src/frontend/test-results/
+
+# Local UI/debug captures.
+Snipaste_*.png

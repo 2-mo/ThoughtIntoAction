@@ -25,7 +25,6 @@ def capture(args, robot, plan=None):
     import cv2
     from robot_core.project import load_config
     from robot_core.plugins import Registry
-    from .arm import CalibrationArm
     from .session import Session
     config = load_config()
     spec = target_spec(args.marker_size_m, args.marker_id)
@@ -49,8 +48,10 @@ def capture(args, robot, plan=None):
             if plan is not None:
                 # Validate visibility before even creating the arm controller.
                 detector.detect(camera.read()["image"])
-            print("Calibration leases arm-service and owns RGB. Initial arm mode: damping.", flush=True)
-            arm = stack.enter_context(CalibrationArm(robot))
+            plugin = 'arx' if args.runtime else 'legacy'
+            options = {'directory': args.runtime, 'manual': plan is None} if args.runtime else {}
+            print(f"Calibration arm plugin: {plugin}; initial mode: {'hold' if args.runtime and plan else 'free-drive'}.", flush=True)
+            arm = stack.enter_context(Registry().create('calibration_arm', plugin, robot=robot, **options))
             session = Session(output, robot, camera.metadata, spec)
             if plan is not None:
                 session.data["plan"] = plan
@@ -93,6 +94,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--urdf", default=str(DEFAULT_URDF))
     parser.add_argument("--eef", default="link6")
+    parser.add_argument('--runtime', type=Path, help='Use the model and command gateway of this arx run')
     commands = parser.add_subparsers(dest="command", required=True)
     marker = commands.add_parser("marker", help="Generate a printable SVG; measure the printed black square")
     marker.add_argument("--marker-size-m", type=float, required=True)
@@ -118,6 +120,9 @@ def main(argv=None):
     solver.add_argument("session")
     solver.add_argument("--output", help="Default: result.json beside session.json")
     args = parser.parse_args(argv)
+    if args.runtime:
+        parameters = read_json(args.runtime / 'parameters.json')
+        args.urdf = str(Path(parameters['model']['xml_path']).with_suffix('.urdf'))
     robot = RobotModel(args.urdf, args.eef)
     if args.command == "marker":
         path = Path(args.output)

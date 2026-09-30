@@ -5,7 +5,7 @@ from pathlib import Path
 import pickle
 import zipfile
 
-DEFAULT_CHECKPOINT = Path('/home/r2/work/models/checkpoint/2500')
+DEFAULT_CHECKPOINT = Path('/home/r2/work/checkpoints/2500')
 ROOT = Path(__file__).resolve().parents[2]
 OPENPI_REVISION = '215abfb217dbac7d5f1273282331b9b1866c0479'
 OPENPI = ROOT/'outputs/inference'/('openpi-'+OPENPI_REVISION)
@@ -50,7 +50,7 @@ def inspect_checkpoint(path):
             'openpi_revision': OPENPI_REVISION}
 
 
-DEFAULT_JAX_CHECKPOINT = Path('/home/r2/work/models/checkpoint/blue_cube_jax_v1')
+DEFAULT_JAX_CHECKPOINT = Path('/home/r2/work/checkpoints/blue_cube_jax_v1')
 
 
 def inspect_jax_checkpoint(path, horizon=15):

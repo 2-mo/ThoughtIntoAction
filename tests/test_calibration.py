@@ -337,7 +337,8 @@ class SharedBackendTests(unittest.TestCase):
             backend = OfficialX5HardwareAdapter(
                 can_port="offline-test-submit", actuate=False, preview_time_s=.03,
                 gripper_open_readout=-3.4, gripper_width=.082, control_rate_hz=50,
-                max_joint_speed_rad_s=.15, joint_soft_limit_margin_rad=.05, gripper_force_hold=False)
+                max_joint_speed_rad_s=.15, joint_soft_limit_margin_rad=.05, gripper_force_hold=False,
+                gripper_open_limit_m=.077)
             try:
                 backend.actuate = True
                 backend.set_joint_positions(state.pos().copy() + .01)

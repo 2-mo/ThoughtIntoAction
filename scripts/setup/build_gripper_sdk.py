@@ -5,6 +5,7 @@ outputs/build/arx-gripper/deps/usr/include. Links the installed wheel libraries.
 Does not import a controller or access CAN.
 """
 from pathlib import Path
+import argparse
 import shutil
 import subprocess
 import sys
@@ -24,11 +25,20 @@ def replace(file, old, new):
 
 
 def main():
+    global BUILD, SOURCE
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--build-dir', type=Path, default=BUILD)
+    parser.add_argument('--source-archive', type=Path, help='Pinned git archive supplied by the repository')
+    parser.add_argument('--headers', type=Path, help='Extracted development include directory')
+    parser.add_argument('--patch-header', type=Path, default=ROOT / 'src/robot_control/gripper_turns.h')
+    args = parser.parse_args()
+    BUILD = args.build_dir.resolve()
+    SOURCE = BUILD / 'source'
     SOURCE.mkdir(parents=True, exist_ok=True)
-    archive = subprocess.check_output(["git", "-C", str(ROOT / "third_party/arx5-sdk"),
-                                       "archive", "8c797d5"])
+    archive = args.source_archive.read_bytes() if args.source_archive else subprocess.check_output(
+        ["git", "-C", str(ROOT / "third_party/arx5-sdk"), "archive", "8c797d5"])
     subprocess.run(["tar", "-x", "-C", str(SOURCE)], input=archive, check=True)
-    shutil.copy2(ROOT / "src/robot_control/gripper_turns.h", SOURCE / "include/app/gripper_turns.h")
+    shutil.copy2(args.patch_header, SOURCE / "include/app/gripper_turns.h")
     replace("include/app/config.h", "    double gripper_open_readout;",
             "    double gripper_open_readout;\n    bool gripper_startup_turns = false;")
     replace("include/app/controller_base.h", '#include "app/common.h"',
@@ -66,7 +76,9 @@ def main():
     includes = subprocess.check_output([sys.executable, "-m", "pybind11", "--includes"], text=True).split()
     output = SOURCE / "python" / ("arx5_interface" + sysconfig.get_config_var("EXT_SUFFIX"))
     temporary = output.with_name(output.name + ".building")
-    headers = BUILD / "deps/usr/include"
+    headers = args.headers.resolve() if args.headers else BUILD / "deps/usr/include"
+    if not (headers / 'eigen3/Eigen/Core').is_file():
+        raise RuntimeError('Missing SDK development headers; see docs/gripper-startup.md')
     command = ["g++", "-O1", "-shared", "-std=c++17", "-fPIC", "-pthread", "-DFMT_HEADER_ONLY",
                '-DSDK_ROOT="' + str(SOURCE) + '"', *includes,
                "-I" + str(SOURCE / "include"), "-I" + str(headers), "-I" + str(headers / "eigen3"),

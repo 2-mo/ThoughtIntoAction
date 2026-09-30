@@ -1,0 +1,7 @@
+mapping:
+  position_scale: 1.0
+  rotation_scale: 1.0
+  axes:
+    robot_x: {source: input_x, sign: 1}
+    robot_y: {source: input_y, sign: 1}
+    robot_z: {source: input_z, sign: 1}

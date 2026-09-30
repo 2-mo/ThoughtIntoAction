@@ -1,0 +1,722 @@
+{
+  "apps/console/README.md": {
+    "import_sha256": "617d0f6f618538d5bcc5b5dbe49eecabf1b15832d630de773cda551ef48ca78b",
+    "reason": "Document consolidated environment setup, asset locations and operation commands.",
+    "sha256": "5d864a7c3594a99a17166ff8133a87d58a94e6f45c875a9c68ba5d3d30348def"
+  },
+  "apps/console/playwright.config.ts": {
+    "import_sha256": "cf8bc3a5e684f6adae45ff4d13546e22d33d2c95b129fce4bad50edefcd6547a",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "9ad0e0ce4cf337de63c61e1645dcfcbe16df147e450dd640395501b7d84e0057"
+  },
+  "apps/console/vite.config.ts": {
+    "import_sha256": "cb5bbb0ada85fe1a7d4bfadd870237b2a0661bea6eb95969f92f8b911cd04cbd",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "d4953c24e5a5db0b69dcae09fdefcdefe17becc6394ae6ed8d880f348556ae69"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/current.json": {
+    "import_sha256": "a3b32d26661ff63e9de4e3d7127ab2c142ab66fcb74337fdf6169a08c39cd49a",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "302a4f629cefdc41a0c12a34098b7842f74c69df52f9c4663245104b1ac48c62"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/enabled.json": {
+    "import_sha256": "7a533c4fd5acf5556d0a84593f0ea0c8588fa2a24ac00989bc98d3d6d71474c4",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "2890a3a2c52edf2e9337c375fc06bd9e68a0b23618e22f083a3dcec108e90b65"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/eye_in_hand.json": {
+    "import_sha256": "a6e010a9b035fd3452c91dff074d428184df3d464d2412cdebafe037f84dcf19",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "41a0cf68ecf0043ec8c853550da55460dafd1eaee7a2a0bef500dab88567796a"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/eye_to_hand.json": {
+    "import_sha256": "0fae2c42de9728e4779b7a0c818681fa03daeae256b6cc2ebc6399083e0d458c",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "92ec016ffb640f8e2b7ac6142322f293e6a97fa13f6e79d7f1bff352c91d9feb"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-031203/samples.json": {
+    "import_sha256": "a30ad09664880b159377506abd990575fd0e020cf7303746771731e7887be56b",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "dc0086d42f5c249621e149864bcb816ad5ade2fb58721f521ab4f621b4b20774"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-031255/samples.json": {
+    "import_sha256": "aa14c2c1ff56032dd5d432f0c1acb7715e00280cb06565c3e7878c033f813ff6",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "dc190ef0c33f21256850d3947df3bd45b8d8a2e96cec147c361edf723cb619fa"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-032151/samples.json": {
+    "import_sha256": "e0968b86ead80cbc065545472a0f830a71541b494324162e79fa0434bd6f391a",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "9c5efb620ff3b9c48f82f07bed8e518e5de1c999c50fe483aa9641decc0a595a"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-032221/samples.json": {
+    "import_sha256": "e0968b86ead80cbc065545472a0f830a71541b494324162e79fa0434bd6f391a",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "9c5efb620ff3b9c48f82f07bed8e518e5de1c999c50fe483aa9641decc0a595a"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-032311/samples.json": {
+    "import_sha256": "e0968b86ead80cbc065545472a0f830a71541b494324162e79fa0434bd6f391a",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "9c5efb620ff3b9c48f82f07bed8e518e5de1c999c50fe483aa9641decc0a595a"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-032844/samples.json": {
+    "import_sha256": "5c8cc315525a4f8b5612a938a45bd0b8fd984469246bcb222ac4bfdb4b9d43c9",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "0c2dbf87f72766676fd917ed716e36b003a2b539f171508d9fc03c8073605bd8"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-033605/samples.json": {
+    "import_sha256": "c76f839ed6f2062a9e6304def6a62aabdcd37ea3f1d1f3e81a99d302038676f7",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "5aee00ad089796870e7da8c4f286251172589aef8bcfe5a246dccc64879bd530"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-040903/samples.json": {
+    "import_sha256": "86bfa5b27fae01f51ecd1130ad443cbd65e0d4d0830ac16381be4a79dfd55c17",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "45870e8c076b15bfcebeda369410fe5efad43e6fccb78d8140c0bfaf5c07ceee"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-041738/samples.json": {
+    "import_sha256": "423ae8edc5d37971a3ef6ad33abeed5895d312f5ceaa4d7b631a2bbedd2cf891",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "a7f3135d9b72d07514764e7ac384abf99502554decffe48d5af9892bac48b0c8"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-041823/samples.json": {
+    "import_sha256": "423ae8edc5d37971a3ef6ad33abeed5895d312f5ceaa4d7b631a2bbedd2cf891",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "a7f3135d9b72d07514764e7ac384abf99502554decffe48d5af9892bac48b0c8"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-042116/samples.json": {
+    "import_sha256": "fb3db6347b779b8254d7797345ed2522aec7af5b6ef636850a60cc6be1c03d67",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "eb0ddce3f0caca6e1eb4ef8da50695c9039b6005df834a7093d3828d35baa093"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-042205/samples.json": {
+    "import_sha256": "423ae8edc5d37971a3ef6ad33abeed5895d312f5ceaa4d7b631a2bbedd2cf891",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "a7f3135d9b72d07514764e7ac384abf99502554decffe48d5af9892bac48b0c8"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-043048/samples.json": {
+    "import_sha256": "c5b30dd6c9777f371cf7bef7c9ac7af9c3e438f1da4a2a5e33a55e1ebdeb845b",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "3c279106ddc50378e6c78bb37e633f194ddd3a6d1b1f05df24deb734ae18f2d4"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-044840/samples.json": {
+    "import_sha256": "423ae8edc5d37971a3ef6ad33abeed5895d312f5ceaa4d7b631a2bbedd2cf891",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "a7f3135d9b72d07514764e7ac384abf99502554decffe48d5af9892bac48b0c8"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-045134/samples.json": {
+    "import_sha256": "423ae8edc5d37971a3ef6ad33abeed5895d312f5ceaa4d7b631a2bbedd2cf891",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "a7f3135d9b72d07514764e7ac384abf99502554decffe48d5af9892bac48b0c8"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-045215/samples.json": {
+    "import_sha256": "423ae8edc5d37971a3ef6ad33abeed5895d312f5ceaa4d7b631a2bbedd2cf891",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "a7f3135d9b72d07514764e7ac384abf99502554decffe48d5af9892bac48b0c8"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-050231/samples.json": {
+    "import_sha256": "fd2b3bc3ca8ca450b0223e4eb920aaa7c410a0caa4a921863cf6c5a415d6b2db",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "1697691997ab844e63f8d44d00e0f6682b399e19b04eb67faa1c5f8672beca1b"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-052420/result.json": {
+    "import_sha256": "13fc7fafef46a954aac7d2a5285c3a890b9b67cc5c7a7512a1da850d985385c1",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "7c24e9c6ba6c1e89281b0b7411bad59734b67990dd4a8fb25289d205bc2d01db"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-052420/samples.json": {
+    "import_sha256": "ce558e3c94ba7373b7a3292a0e3a447372ef0c750ae751af34558b79f551c631",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "fcd2baa10a92214d725fee9dc11529bdd3b9121aa9401c3c15d8488741a94c28"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-211345/result.json": {
+    "import_sha256": "04dbe82d3dc8124f383f8f41de48939efb5dd39dba9f8503fcf3bfe9242f0945",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "fd5c940a8e8ad8192cf4fc7b558774e631aac97dbc5d7a501147d08bc53fcbd2"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260723-211345/samples.json": {
+    "import_sha256": "9937eaa2e912b013037d701ef38bdde16f93bfcfa4742491225de73c45bb949a",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "272ea680500067243a309c75d78d7147af4594023187a5656da713cba6a29d99"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260728-204559/samples.json": {
+    "import_sha256": "b3194b2cea0d4a9bf3b58cbb0094d76a35703b04f603dc9392eed31f20d248d1",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "d6b0fcff5a28a6107ef633fbbad055edad1ae94b99e86a42a49c9f802853697d"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260728-204650/samples.json": {
+    "import_sha256": "b3194b2cea0d4a9bf3b58cbb0094d76a35703b04f603dc9392eed31f20d248d1",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "d6b0fcff5a28a6107ef633fbbad055edad1ae94b99e86a42a49c9f802853697d"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260728-204741/samples.json": {
+    "import_sha256": "def8fc9aa2fff3d04c4b5b7542d84ca19c28a70226960312ed3cd0913647a714",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "a1bdc6d1cf6e95e48001b9bd6903299ea7171df35e34e2fa37781d407ca72c30"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260728-205220/samples.json": {
+    "import_sha256": "b3194b2cea0d4a9bf3b58cbb0094d76a35703b04f603dc9392eed31f20d248d1",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "d6b0fcff5a28a6107ef633fbbad055edad1ae94b99e86a42a49c9f802853697d"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260728-211042/samples.json": {
+    "import_sha256": "def8fc9aa2fff3d04c4b5b7542d84ca19c28a70226960312ed3cd0913647a714",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "a1bdc6d1cf6e95e48001b9bd6903299ea7171df35e34e2fa37781d407ca72c30"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260728-211557/samples.json": {
+    "import_sha256": "def8fc9aa2fff3d04c4b5b7542d84ca19c28a70226960312ed3cd0913647a714",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "a1bdc6d1cf6e95e48001b9bd6903299ea7171df35e34e2fa37781d407ca72c30"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260728-212759/samples.json": {
+    "import_sha256": "0426f8cd70a8998979f14cfa4f875356c8c50aae4812228a0bb65cfabe226487",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "e97e08f7f54be1834c275fa7d329dfc14eb9bbe5d4b86f4112b0df93623d62cf"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260728-213630/samples.json": {
+    "import_sha256": "b55943b81622cb69362741798085212729239fc1a10b26a9270959c9dc957a19",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "6513b088a8cda67dce75b40bac60446550454e525492920af213a92972a9a3df"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-005514/samples.json": {
+    "import_sha256": "d427563e60c30132cb7a71b78fd14cb9c6caa842cd1cfe219834418dd591d4cd",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "356ff0c18a004519a3a53979b51bb725d3d1abfa084bd82e9ea78e1ea0b1ee74"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-012554/samples.json": {
+    "import_sha256": "d427563e60c30132cb7a71b78fd14cb9c6caa842cd1cfe219834418dd591d4cd",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "356ff0c18a004519a3a53979b51bb725d3d1abfa084bd82e9ea78e1ea0b1ee74"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-013536/samples.json": {
+    "import_sha256": "63c04096ebdb8b8f42a0de8fc9f792a01dfc662aeb9785730d034e6bc554a588",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "5940ab81c2daaf78d25f79b91a64b132a348b3905b7a752e3345aa6af137ab68"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-014821/samples.json": {
+    "import_sha256": "7bebd9234672510025d9300469a3b987071051e31666ae6632921c396929533d",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "fe34192f9338d3b582a86992e00bf4a71aa5046dcc5b3be28124ba560a431299"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-015157/samples.json": {
+    "import_sha256": "af48d6c37934313cc54668be7f8587db7c34655fd9de5fe4258fa8dfc90eea4d",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "9e52b03670fd1b2fcfb07653c9e42ae392dd5ebbba46fe0092cdc336ef21fc58"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-021115/samples.json": {
+    "import_sha256": "7c097cbf5daa13f09efb5774a27955f677bc99d3e4a4befadb7d3ae38bbe4032",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "949807ef345a4e5927fef28b26f7f302f2ee5dac80df24c6e8f199d1a3f3f714"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-030945/samples.json": {
+    "import_sha256": "db6e582e40d98536f00e6bb2e2b0353754cb3d037aba4442c6b534f5431a7785",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "49a1d43ccb7241fbea588ebf91953580c8b517c75c9dd1d474a0d215e3771424"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-031624/samples.json": {
+    "import_sha256": "fa5856295eaf5fcfd075d3adcde1933f25803ebb70aa6e5c12d92f8eaabbe02e",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "376af21fc3f1dafdd9269c258688762b6ad3a2ab7fb30c4d48826fa014d7f5a2"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-033458/samples.json": {
+    "import_sha256": "a4262ba2b703dff5bbb388ba316936d19edf79e39d67a63402f4fb3583a1b740",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "2e63377779de7ec06e35c7e0088474e01fb655cb0bacc9cfe67107cddea7fc87"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-041546/samples.json": {
+    "import_sha256": "9b6c731096cb8bac83bfeaba34e095a90796371abb0a3fcbd100212cc483cbfb",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "b255a61c0d033e4d580aff10c92afaf3576c3e91e2dd1cc1ef4625fcfef095ef"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-044932/samples.json": {
+    "import_sha256": "85a638da8d272a9650ce8a3edbb2fe2b114b8f517d37e3684faf331252cfea41",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "049b16913a41e4a5daf31b668df2151d5d127130f4d0d8209eb671b43547dc44"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-052818/samples.json": {
+    "import_sha256": "b3b784577a1c51454034057c26f81882dc1378422339bbc847b0219db6ad2bc4",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "df9b18e76250f1d455b0e03977f62449ec6312168e0f9c61660da6c36d4283d1"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-061631/samples.json": {
+    "import_sha256": "7f27fd777b8c6a0c967e7b910c6a5f8ce33610838854f3e15f4d4771ca8f55c6",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "8d8da4224cdfcb92002938d5e7731c83c735079ffdcac0c2a3004a4a281a8cf3"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-061707/samples.json": {
+    "import_sha256": "7f27fd777b8c6a0c967e7b910c6a5f8ce33610838854f3e15f4d4771ca8f55c6",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "8d8da4224cdfcb92002938d5e7731c83c735079ffdcac0c2a3004a4a281a8cf3"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-062432/samples.json": {
+    "import_sha256": "7b1480be52f06b688c17d8af8aeb98b3ad1ce861e96e506ddacb09be3c021b02",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "7ce1bc3c80c764061663fb73468bce19caba3bc88b1701fc5da920b03c5fcbf9"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-063835/samples.json": {
+    "import_sha256": "53ebdca832251c340c627e997f9cf137f01a0082124f259f4746a647e5f27b85",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "74f65c33ed96a6858c0632d20ecd851833d0aff27eced9810173656340cde6c0"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-064535/samples.json": {
+    "import_sha256": "33734e51efc65ce2b3876beda8b7e3b8a2b8296c41bbc72583311fb6c80cbb70",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "ab39809fed8c5c94fad8bff9533dc8017214ef651fe15be56029b78ebb9c1188"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-064556/samples.json": {
+    "import_sha256": "f00b60bbea04f06fcddda61003dca4d52899ff81c2bcec500ab46e629cc4b4c9",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "7a2102f90be21e1af0a1c20e083045de8eff92457de2d69d21be6f7a492771d8"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-075508/samples.json": {
+    "import_sha256": "449c9e1af378182dc072e036f10588cb5b621faefd8b254985549aec2401483e",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "895b1d3ecb99c5fa476b0edbfe78cc3d425224f8230d7e7d0ddaba2ab0345317"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-084540/samples.json": {
+    "import_sha256": "26b09116e507dba7a9c3184badebc8a7f975ec376b8e4323eef5c42d6e66f420",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "efa3d699bd9a2c45060532fd62b9fbc6967486df6b3bc4a2767f2d21a6bfec8d"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-084553/samples.json": {
+    "import_sha256": "d63df811716115d9219816e64c145dabc895ab6254d6f88b717f8c11ff7d65e9",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "279290721519dfccfefe9f66c748f2e3f2e8140f0f8ab24e7aa4bdaaa00c3974"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-085513/samples.json": {
+    "import_sha256": "7cf68cadc19434dc8dea83755992a9f4e883b5e4ffbcb0db9617450799849dcc",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "5281acd10eb8c16f6a791662f7dda8ceb77dfad541eaf37a177eed0cceaef7ac"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-085557/result.json": {
+    "import_sha256": "b7d2417c1340cb0e1794030eff3e8ec432eaed8cf47e67c1ab8377933f75ccc6",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "555c875d40b3f6088e05fb83744a796c35f65fe0c7a7bf461a557fe5cfafe7e7"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-085557/samples.json": {
+    "import_sha256": "903f4c5e450493881fdb1ce23405fcf720d03fefe77696d85c20230e229877b6",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "de0f05073520cf480cd456c656a476d3542aa70742472605b4f85b503a0dcfd6"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-220729/result.json": {
+    "import_sha256": "a6e010a9b035fd3452c91dff074d428184df3d464d2412cdebafe037f84dcf19",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "41a0cf68ecf0043ec8c853550da55460dafd1eaee7a2a0bef500dab88567796a"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-220729/samples.json": {
+    "import_sha256": "8228f2662895efc1211446eb53a0ee093668dd52fcfbf17aba5ed4aeba97ea48",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "e039cccb653738b414f3d7d6aaf8dfa3de18a9819ace0137c11955340d0aad3a"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-222023/result.json": {
+    "import_sha256": "0fae2c42de9728e4779b7a0c818681fa03daeae256b6cc2ebc6399083e0d458c",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "92ec016ffb640f8e2b7ac6142322f293e6a97fa13f6e79d7f1bff352c91d9feb"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/sessions/20260729-222023/samples.json": {
+    "import_sha256": "301289d64c3a333654d6829714622093c7b86d55a0bf1d36e550970cdfbc1023",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "f58af20a4549bc546772f4531055a86d09d9c6cc733ed1b3e1799cbe5257acde"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/targets/aruco_id0.json": {
+    "import_sha256": "4b9bc4b805aba78b93450a17e56e52384ab7f62176f9b2846fc0b5325f02a7d2",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "8a5cc7c023fbce1bd8d364156ab98fc79d8b3bd70d54adf1632a1c6b0e6b4b6e"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/targets/charuco.json": {
+    "import_sha256": "8db3ddea6b6abdfb0a49603ef2eaa7dae057d4f9dc7ae5fce821e688be91c756",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "256fca69039047d3b8b6340745c37d63ea7d7b6fff34fed9de55263cc097b55b"
+  },
+  "calibrations/arx_motion/hand-eye/eye-to-hand/validation.json": {
+    "import_sha256": "63ec8e5aa7c77933739c6882b8cd48e76016b88b0d8e2d692a943b73505f2880",
+    "reason": "Relocate historic session/target paths to the migrated calibration archive; original bytes retained in source snapshot.",
+    "sha256": "b194491df61cac65e1fa7ae1aa2f55362c487020cbfd486fe9be1b3c2639ca2b"
+  },
+  "configs/phone/robots/arx5.yaml": {
+    "import_sha256": "3ca5959b917d08ddc24df1d75c323c32e08abf5ef560be7054235d43c55279b6",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "5b085d46449b6316a49e21d76bbf5f10005887cd0b4d827ae41ec2320a552320"
+  },
+  "configs/rebot/rebotarm.yaml": {
+    "import_sha256": "e121cc3cadef980852bd6b997d8cc8b3a78bd30636550c702f6796669e7ce953",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "8402499ca38427875c2def8bfe82be64e350d4bd906762087ddc623a4055e85d"
+  },
+  "configs/rebot/rebotarm_dm.yaml": {
+    "import_sha256": "b3206610abd4618c5a1cecfc04abeecb2fef7f6b5b66dbc02e3a2de5c2b95dfb",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "4983b36c9ee4401b829caa7abb1f498d66f9a4e13ad65515a8f0d5374a5b5cf7"
+  },
+  "configs/rebot/rebotarm_rs.yaml": {
+    "import_sha256": "810cd5f11291d3c8eae9add24d50ffa2f58d19c18e2bd1d7d73eb7da50833dfb",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "ea078f124478bd33bdb938c5c0c55fa917b3ac5b7dede157eb65f48a244788fe"
+  },
+  "examples/rebot/0x01damiao_test.py": {
+    "import_sha256": "32dc4346d8596fc7ff1ecf6598d0ed6b2634b22e05bf293674efed8f39b95782",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "22146db689eb451d28b074987ed84fa91cc2ff3d1a7364c6fc10916e8a0ef905"
+  },
+  "examples/rebot/0x01rs06_test.py": {
+    "import_sha256": "6ef4a7894036b74d747f5bb633c8b1973481ffcfd5d6b036e042313b1c2503ac",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "07ef57775b0c67331470c8fc924f371c770d349212c3eb95c5ba701e791dd9c7"
+  },
+  "examples/rebot/10_gravity_compensation_lock.py": {
+    "import_sha256": "9ac140d4b80bf89ebe0294e9be5744479b9f0d901f101536f35ac4ec9f2148aa",
+    "reason": "Use local imports; scale integral by dt while preserving original 500 Hz gain.",
+    "sha256": "d9a06fb4b7441645c3dfa59605e0340bd10c450456165f7b06e869e66e2600eb"
+  },
+  "examples/rebot/2_zero_and_read.py": {
+    "import_sha256": "3518b948fb450d278c87f2fe2196e7e18adb5317c0d42cec90b7081d0793b5ac",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "e092f9c5c863eb5d7bb742cd161889e6a289b5992c4f353df2f479290df2914b"
+  },
+  "examples/rebot/3_mit_control.py": {
+    "import_sha256": "22b8e2e9dd4e7b883e5846fce7dbda199c9d4ef7a9425afe9acbde3eec5c52d3",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "e7484091df97b1227eb0c6d0bdd6d76cab5416afaa3181c7f963b8cb7deb342e"
+  },
+  "examples/rebot/4_pos_vel_control.py": {
+    "import_sha256": "575ad5cbc1ed456dd391aa104a7f2f8549ff3788a2d3bc844e2c35ddf824154a",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "6d38f9c9b15974a39f1505f97e9811f3d9acaee9f0e17eb54700b5e1867d71a5"
+  },
+  "examples/rebot/5_fk_test.py": {
+    "import_sha256": "705adbbd727266dbd97e86c6f9b5cc87a9f5ba7371e925ef1349356b8b2f9b4d",
+    "reason": "Relocate module/config/asset references into the single repository. Import Path for the relocated source bootstrap.",
+    "sha256": "a5223d47cf85e1f132e5b6c1886e6874823acd4bb0aee5acf1b6b70050b9b2c2"
+  },
+  "examples/rebot/6_ik_test.py": {
+    "import_sha256": "b14aa99908f7bc270088598c931b9d8637866ebc837662fb622b9b1139805b9a",
+    "reason": "Relocate module/config/asset references into the single repository. Import Path for the relocated source bootstrap.",
+    "sha256": "58e81bfbd66b169765008f822a1b687311c228384eb8d6891391311b03036e26"
+  },
+  "examples/rebot/7_arm_ik_control.py": {
+    "import_sha256": "f70dbcc0cf52e42ff94df0effb543c4aa53c1097fd8d618c9e56bdd29b2de835",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "d8d7bb9a88c78c8d743b6a28876bf4c23f849074d3613470d0717c0ceef145b1"
+  },
+  "examples/rebot/8_arm_traj_control.py": {
+    "import_sha256": "1407e5bd10046399c5c2df6374622db0a7d8e849ecbd4826ee94a2a2c7454ca8",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "2a57016a76772abcb57e5d3203b0a8ec4da480d7e0e07664b89ccec7c59c25bd"
+  },
+  "examples/rebot/9_gravity_compensation.py": {
+    "import_sha256": "38c71229c4f88486af81e165d816a0981d82ea63b2cc163e63242735f1051ff3",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "b2a52ab3e6c28e28177da823ab7758ee6d218fe19ef809bacc9eda5faede934c"
+  },
+  "examples/rebot/sim/fk_sim.py": {
+    "import_sha256": "95098b87e503bbf67f9b3ad9f96dfeaab0443ff22f53ba1fd79da5eece90493c",
+    "reason": "Relocate module/config/asset references into the single repository. Resolve the colocated visualizer for direct script and package execution.",
+    "sha256": "58b8acf741216a574fc51c50099fecf195fdb2208587b97054ecc64e9af9ad49"
+  },
+  "examples/rebot/sim/ik_sim.py": {
+    "import_sha256": "056e70dfac79de9b4de5753ef2b2e01687afb483abd457d4a894fd64ea59ff0f",
+    "reason": "Relocate module/config/asset references into the single repository. Resolve the colocated visualizer for direct script and package execution.",
+    "sha256": "fcb8c498cb3a0f3ca133d84dec98ffeaca795c47b2191c71e1f2cd405f81210b"
+  },
+  "examples/rebot/sim/traj_sim.py": {
+    "import_sha256": "b9bf87d13b1a95dc5caa4d5deb6519eef94ed555290550a395a304361520c454",
+    "reason": "Relocate module/config/asset references into the single repository. Resolve the colocated visualizer for direct script and package execution.",
+    "sha256": "d2b6deefb1d9b5e4309835505184cec10d496d07bb1f96f7fcf56414a75aebe4"
+  },
+  "examples/rebot/sim/visualizer.py": {
+    "import_sha256": "9a715e3127a6bb2f906ae3e46a381d649ba6bcd37c2ee3e02933a361fa6ce606",
+    "reason": "Use local models; provide MeshCat PointsGeometry with 3xN trajectory positions. Update visualizer import example to the consolidated location.",
+    "sha256": "e1134c205c790a6d840b1541c92d1f9f6e2ef36064fd2d8155913351a046d792"
+  },
+  "scripts/phone/generate_golden.py": {
+    "import_sha256": "85b5149fe426de63f965365cdbb3b4b3777aa52a9eb46015146cdd863a89e030",
+    "reason": "Resolve protocol fixture output from the consolidated repository root.",
+    "sha256": "ca2e68848cb0398bd71a9010ec0e16fba0f4604c26ddf64196043c1ccf542754"
+  },
+  "src/arx5_backend/features/camera/service.py": {
+    "import_sha256": "857b8b822b1c2fa669d2142fceaacde8f500eaa4a485c30915d891a3ecb3c048",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "60088585b45a625d47ca0bf050bf83c0dccebf2f29f349e9963ba7e57b25d449"
+  },
+  "src/arx5_backend/kernel/control.py": {
+    "import_sha256": "779a80fd8412293c2a20c506d389ce1b07e66a8a92e5dfb8a8ec2dbddf64ff74",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "a6e7160100c6dfbcd0b0fa93ad73057cb8b50d2fb8db192b77dae99b7e456f28"
+  },
+  "src/arx5_control/__init__.py": {
+    "import_sha256": "46747a4c44564a5ab0619a4b14787210755a266bbb91b2e30b0e6f2f2aa685b4",
+    "reason": "Lazy public exports so selecting offline algorithms does not import hardware SDKs.",
+    "sha256": "475b057c7b84ad3875e46d001339b1a40470ce670384e62579fbc35d7b264aad"
+  },
+  "src/arx5_control/controller.py": {
+    "import_sha256": "58a50a639ef2e8d0252b636476e9cd85de837cf80e49c8b8600675fbbff57047",
+    "reason": "Share the native arx device lease; relocate B601 config and reconnect through the same ownership boundary.",
+    "sha256": "518797bf64d6223bb2d9464552c08d875f231dae0d66747aeee8774a30443c78"
+  },
+  "src/arx5_paths.py": {
+    "import_sha256": "282cb12a283729ffcd57d596791b86c64d414dcef42d36b0a0390a489a425b29",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "8b7898d6c8cfbb24526e9a93dcbea6237a38ab034abb274ac73a9c7d7eec4fe5"
+  },
+  "src/arx_tools/camera_webrtc_supervisor.sh": {
+    "import_sha256": "aa41248cb986cde59d240da073189146b9a113089070c1caf3558dfedb2fe6b0",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "9fef0978a5238f3283693c2bbc88fca8cd10d6746511debd6a12884fbe0f5842"
+  },
+  "src/arx_tools/frontend_runtime.sh": {
+    "import_sha256": "e201dc0386490c97705d56ebb0fde55aec04be1d13df4e798603e3b75bbf7181",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "c4be68afbda385f96d8ff239d8f4d31bc112342702a135f8b3e3d88cd98e8fd0"
+  },
+  "src/arx_tools/project_env.sh": {
+    "import_sha256": "1cb84fc3457332dd27fa36ef729e149cfbfff6ce9806f94f8603b4eeecef6209",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "977b6cc157f4f1f535a69746fef1053ddda29001b482580d5c294b5b695667e1"
+  },
+  "src/arx_tools/vision.sh": {
+    "import_sha256": "f95860f556d36307a9c77aacf10afd11ea7479e1de50ef85481249129127d7df",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "d2d1f7e69d04e12e12d623bcbbb615baef8e389a004e1ebcd7d881a916099cc2"
+  },
+  "src/arx_tools/web.sh": {
+    "import_sha256": "fda4b9dd2f3a082f9f97a215df937b94539a70a4c146c832596a643cf47a17f5",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "7d8d3f28b9447ed2085b4ad1ba35619a4f3c505cd9df55d00749ce0146cc8621"
+  },
+  "src/arx_tools/web_lan.sh": {
+    "import_sha256": "3748c83feb0d3505bb6b3c407f711297e7df28c868cef8cdcb282a6503eb247e",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "48e4137e715f4b6c44f17da0e9feda13d06edb305bbc9b1199cea1da849ba864"
+  },
+  "src/arx_tools/web_restart.sh": {
+    "import_sha256": "36821e74903d57040553a86852f9baa58eb256d647153f7aab9df61cc35d3ebb",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "345dabe178031d63968a2cdf2b7a0add00598dfbad12df604f7fa9ddf3c2ae17"
+  },
+  "src/experiments/cube_pick_rotate_place/perception.py": {
+    "import_sha256": "bde47c5d8f7292260f9f13e774ea935cf8d50dad6a469c9dd81572738f397cf4",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "98a8cde0f79838bfdec49fec2456d7d57563fb570038733279d5f3ae503a9e67"
+  },
+  "src/gr_zeroshot/cli.py": {
+    "import_sha256": "3a9e681df2b3465dd48a7b7ade7388bd28d0bf4b2d8e89e3797efc44e4a0ddad",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "438e8849bd522e4cc2ba68f7941f6f526e9a88962e1d7fd91f313061d223b64b"
+  },
+  "src/isaac_groot_data_collection/automated_stack_probe.py": {
+    "import_sha256": "c51eaaaf103d162be89abae37fe0958078f1b4d92d57e78ce9c01e1c2f23e533",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "31df43794c29b08357987ac7783bdd820e86d1e50a4824502328ff863367af1c"
+  },
+  "src/isaac_groot_data_collection/exporter.py": {
+    "import_sha256": "e662e8b3776487b4f04f5e316cb15a4053faf510661fe7a5e1d0fab39f0ddee1",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "176e9464d4b2da82cc9f273c797b109451503334a0a609312e27b09d75497502"
+  },
+  "src/reBotArm_control_py/__init__.py": {
+    "import_sha256": "ecf948178e8eab67c72fc5f941f049a3911ab5212ab2b4bf44adc15d59ad2d04",
+    "reason": "Lazy public exports so selecting offline algorithms does not import hardware SDKs.",
+    "sha256": "a09ddaf42d4f50c9768a15155c284aa07fd4d9aefc8568225f72ea9429ee0d0e"
+  },
+  "src/reBotArm_control_py/actuator/rebotarm.py": {
+    "import_sha256": "858978208410dd930f3dc000016e80a1ad8ce338423675697695c92e41a46de5",
+    "reason": "Share the native arx device lease; relocate B601 config and reconnect through the same ownership boundary.",
+    "sha256": "8c0058a3895ffd109ad1916a788ce5ab09b062a8f6fded77ff8317ba71ddba3b"
+  },
+  "src/reBotArm_control_py/dynamics/robot_model.py": {
+    "import_sha256": "27ff5310f95c753adcd553f41eeb011bcedf4863530321a1bcb8d9f8b9ff2a87",
+    "reason": "Read gravity as the Pinocchio NumPy linear vector.",
+    "sha256": "bd39ce6fc0beed326c6028663f0b4527c2151b7f7839b4f982183f1281088023"
+  },
+  "src/reBotArm_control_py/kinematics/robot_model.py": {
+    "import_sha256": "804d64a8eb552975af9536fe4186b7c5f45872b11b54c6339c1421357154fb3b",
+    "reason": "Use local B601 models/config; index limits by model idx_q rather than joint ID.",
+    "sha256": "ef49d0545d052c0617e0df45ed4368ba503c1d15d817b8afa956270b47214571"
+  },
+  "src/reBotArm_control_py/trajectory/sampler.py": {
+    "import_sha256": "d089847f77cdf96bd46cf4f2be4db02de64ca804038b6bd7a3d8732892c9fd49",
+    "reason": "Correct trapezoid peak velocity so progress is continuous, monotone and bounded by [0,1].",
+    "sha256": "9ef21651e948ef4752bc78525a9ad22ab3bed361921a12628313a85928b23305"
+  },
+  "src/robot_teleop/__init__.py": {
+    "import_sha256": "729c92a0a096fa7f73ac33671e4c74d50223dbe13d165286898d275963e46a53",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "1fc1abca6a054c858ea78e035488aa123eaa446c6b7998544fa7c72bb8ed275e"
+  },
+  "src/robot_teleop/cli.py": {
+    "import_sha256": "011c594a57c93e2e6e2c2474aad0fedf65fc509cf98757c2a8d0003229a9283e",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "9cf60a0521cc7bceeed2b48aab58bab43b233e2a1918fab56ec1cef149b06c8f"
+  },
+  "src/robot_teleop/registry.py": {
+    "import_sha256": "b4051a8c9de4ff829db18c0f671773fa51a331b701ccb0687a7ff5695dc2124d",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "a43e5d89ed5f4f32b4c88f3feb0859e1a60850fc32051e9cadf02688704e0223"
+  },
+  "src/robot_teleop/robots/arx5.py": {
+    "import_sha256": "c92f09071fd789c4d5dd0549003d2b69ca593b57dc27602e7560a3745e4c26d8",
+    "reason": "Share the native arx device lease; relocate B601 config and reconnect through the same ownership boundary.",
+    "sha256": "bbd83e8db1ff42eaac39059b708dd3a7fcd82d98d1255ada498673c6cf862e45"
+  },
+  "src/robot_teleop/runtime/debug_dashboard.py": {
+    "import_sha256": "b089d0430a0a8937ca14a4684c649edbb78d878841e1abcd15d50177fb9038c9",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "f3651ba435e3871228a8a1e9280ada1367a435c02d06f77be0bcecb2cec32016"
+  },
+  "src/robot_teleop/tools/arx5_state_readiness.py": {
+    "import_sha256": "dc0b7d3c719206150f5ebab4032df952951d7c2764d36a9593ac22d756b0fcee",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "70d1246db08bdbc0bf99979a56f6ac71e64f53c5eb6fba844e8e034edb2def38"
+  },
+  "src/robot_teleop/tools/phase3_mock_session.py": {
+    "import_sha256": "b1ea0143d138b069312e0f0a03fb334355d8540054994eb62bc05679dcd4b7f2",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "7c73f36e47c0dec14c00fd6ab0751b638715fc900712140e1e4df6b8c483b87f"
+  },
+  "src/robot_teleop/tools/phase3_mock_validation.py": {
+    "import_sha256": "3d885ed212fb013200977ca760de7a2ac4422347a12466a3cacd7f2400210e84",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "060b8bda7ccda477430d625b41a2c40346279939ab7cbc85411b19b2c27893f4"
+  },
+  "src/robot_teleop/tools/phase4_ghost_review.py": {
+    "import_sha256": "cde6cbd3b58a74f929a86f97593b8fc5fd087381dff2c1bd32e43efe067d6f2a",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "447e13fed6d5a428bd9d28fef094ced225c69d7bb4bd11ea53b26d0d772c54c6"
+  },
+  "src/robot_teleop/tools/phase4_kinematics_check.py": {
+    "import_sha256": "dcc44cbcdefb79118c6d7b4bfe7ed2cf81f1e44bb4d789ce35ab187b6a648ea0",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "6c87843f47e3f28233b3b7cb972a018d28825eb6fb53095d6492df3f55e220f2"
+  },
+  "src/robot_teleop/tools/phase5_hold_current.py": {
+    "import_sha256": "d057226bd4434793a207caf9e55cc7fe55cb0226e6da8b636ac3ccbb12b34a28",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "17e1fa78fddd7f006ab0234d763985a2ae0bfbb254a472ca50116224f0c35881"
+  },
+  "src/robot_teleop/tools/phase5_motion_preflight.py": {
+    "import_sha256": "c04cb92b0b3d7c2bbae51ca9dad229aee312dc350eed5759535d886272f888e5",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "c6f7c4bcd3eaa7ee1e92a42186190c8f93fcc7f32611e5f5a6cb139a8efabd90"
+  },
+  "src/robot_teleop/tools/phase5_safe_stop.py": {
+    "import_sha256": "eaab0f03dcf98f1de53201e203204104f3eccee551784f60b90f771735f198ad",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "1146f79a8ec3bed690b0a76b9a7ef6f44e6b35568d3ae62ce567b76ef1381ddb"
+  },
+  "src/robot_teleop/tools/phase5_safety_contract.py": {
+    "import_sha256": "6a8eb227f0305a4356e49016fa7ee5240fd5d5a4ebdc4e819a644467101f0ef1",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "79fe2bf1fcc595e52a43422a6dd9106d9dccaa391d21c7e9b93434244a3f2d16"
+  },
+  "src/robot_teleop/tools/phase5_sdk_model_check.py": {
+    "import_sha256": "dff2509b4c46d7748ac26d8a32542d1a7fd93153c8c0c43f3bd5aea39fd7e211",
+    "reason": "Relocate module/config/asset references into the single repository.",
+    "sha256": "5395d3feff491be868cf729a433a699ea683f0b0f4903e9f258bd14fb9b8f3d6"
+  },
+  "tests/migrated/arx_motion/test_command_catalog.py": {
+    "import_sha256": "a8dd0bbd427e7e6f3f0438981820c4bc00e8f8f07656842545642298e8b56d41",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "e5e81f03389e9b118f850b5dcb537ebe9ba3d9bfb1663f54a3f85809f6cc9b03"
+  },
+  "tests/migrated/arx_motion/test_cube_candidate_stability.py": {
+    "import_sha256": "1e343f46ad8c7b02187b3970c628540af0fc5034008e25f93f317562844cbb8e",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "fab08d2ca3ab2ca23485389f284dcc6c5579434e62398457dbcf483f93b111ab"
+  },
+  "tests/migrated/arx_motion/test_cube_completion_safety.py": {
+    "import_sha256": "4a08552f2618dc647b1b643126511b07ca0a569edcde018a1e607de6da8eaea0",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "4007222fc97ed992c86ecf1dcce8b189fd5a747588cadd274f771501555d5326"
+  },
+  "tests/migrated/arx_motion/test_cube_stack_planner.py": {
+    "import_sha256": "ad6b9d4a14fe7f312ba28b784b28850c3f1167b45c982ef8f2855fe7e8f8988d",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "5566be207f947c83d4b80862aadcf3c682dab53319ea44f625ae047168928a5c"
+  },
+  "tests/migrated/arx_motion/test_gr_zeroshot.py": {
+    "import_sha256": "cb1f2eeeeb76ec1a76f103f37b61b084b33f2ef13b47e2dc5b023da54f8193b3",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "6dff2595db20043cb6615ae008e187c84dae6885dac5938060ba48e29cdbd875"
+  },
+  "tests/migrated/arx_motion/test_web_motion_limits.py": {
+    "import_sha256": "e8f5c33f6816f97199c47f9fd88efa8d175860a64f573701855504b512232b3b",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "f6c7f7a463187213c8803d357e92bacec525b58bdb237d1855dc0c10dac6f8e6"
+  },
+  "tests/migrated/arx_motion/test_websocket_adapter.py": {
+    "import_sha256": "eba115eab161405987c04ed70923ab4876375c4a7a29599734b3f461b40c5489",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "591caf132bb06f1cb76ebff315eeff919f8504471a1dc77500b158b3595afe87"
+  },
+  "tests/migrated/phone/integration/test_arkit_udp_to_mock.py": {
+    "import_sha256": "1a04141effbd589c997ebfd8f4eb1a897da4502e1c15bc8c5870dea7ff1787fe",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "8d5808acec854da14a8d7e97f4e1ecaeded63298e541bbf3b2fb3319505cc270"
+  },
+  "tests/migrated/phone/integration/test_cli.py": {
+    "import_sha256": "366df761c4c1f3d63405526e3dd9e3935f313dece63e0322c7f471569f0fa660",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "3c9ee6d21fece202cbacdcc9bdc4b1431d8a2a0a85d043c2c9aeeadd77f8dde7"
+  },
+  "tests/migrated/phone/integration/test_phase4_pinocchio.py": {
+    "import_sha256": "a5f7c7271632996262869d6ca6f7d5c8f0501c497bb1bbd274cb12d76e13557e",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "03324afe9d2e333ce3b485dc91592534f384de94fa4407ebb439a160da2641d5"
+  },
+  "tests/migrated/phone/integration/test_phase5_motion_preflight.py": {
+    "import_sha256": "a95bf3e16babe88e494f7588f68e2be6cec7436bacd58a3dcb23ae05be92545e",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "54cb40807769e769de5463bb59b7b34a5ee6ed27655aef7dd8f8ff14ec6d4f10"
+  },
+  "tests/migrated/phone/test_architecture.py": {
+    "import_sha256": "c7b27c905d9e6efededc3db4ed3c2247efef5521c3abf683ec6b79c9378a9f6d",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "1c7c19833e08975223df4e804aa2042af103eb4332536a806406de66f56df46a"
+  },
+  "tests/migrated/phone/unit/test_arx5_state_readiness.py": {
+    "import_sha256": "f714d6df5efcf137be115e1204169f2d9ee2582e2e243fb6668dcfbde6babcfe",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "0a2bf152563f33b9e1a03c6389fe5de68b071aedf3b19aa8cca2f9d43723a572"
+  },
+  "tests/migrated/phone/unit/test_config.py": {
+    "import_sha256": "89804fd4337e6d5635cce536363ceab9abc0f7e33cdd45431b4fb2eabe25abaf",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "b83d7fb2be402aff93959e8cef22ab76a43118da063f9417b646ce77a41c1acf"
+  },
+  "tests/migrated/phone/unit/test_kinematics.py": {
+    "import_sha256": "b3fc143abccf7cb768ce739382f2cda8573fe29a8f3a35f4cd65fd7ce69ff9fa",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "7b9f94bd0847a9c306a6b5c4a54db9ab08ad2cfcc58987aaddd68f1adc4e4336"
+  },
+  "tests/migrated/phone/unit/test_phase4_ghost_review.py": {
+    "import_sha256": "4fe6076544ea4e53a4a410417589042cbf4a9cfa0bcdfa5f648f0769fd96f7ef",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "46274b4d535b2f663731739042f8862325fe04a19ec74df837973bf58b93d92b"
+  },
+  "tests/migrated/phone/unit/test_phase5_hold_current.py": {
+    "import_sha256": "9e2df3ffbd4d163832c7013280849eba31a7eef5f584d43e31986d05b8e7664f",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "0c5e1e75c3acd52c66a849b701c892b337b1a10d19bc71f6e732175d108650d5"
+  },
+  "tests/migrated/phone/unit/test_phase5_safe_stop.py": {
+    "import_sha256": "7b016b2161cd6661195506945468e273527ac868efdd5651d8c9242d98d2b7e1",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "ba1968a6ff402493b3cb5b6e6b5e2ec5a930235058b2599e1942f24823da5f3b"
+  },
+  "tests/migrated/phone/unit/test_phase5_safety_contract.py": {
+    "import_sha256": "3fe55e1ce814045c74b61537ba1469f45b6d99f95459f97c10a7693cc24a624f",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "7c50c14cfc0ae9ae34f4919f616c93b86ad7b12034d1bcad6ca3a6718f0db846"
+  },
+  "tests/migrated/phone/unit/test_phase5_sdk_model_check.py": {
+    "import_sha256": "20c334dcd36621ff70976603cebe25993afc3e0b975229c4c22a18aa0075eb32",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "ceed503d86edf3a7fddd3ae91864ac9cc877edf6c7fdb518537ac3d31f76633a"
+  },
+  "tests/migrated/phone/unit/test_registry.py": {
+    "import_sha256": "7abd6c02c316944c87e85f234dd91539f3e2fa36bdb281d90c65774c726e95ac",
+    "reason": "Use migrated package/config paths; preserve upstream behavior checks. Update stale catalog/park expectations to the imported current implementation.",
+    "sha256": "aba1f738b99b5c711b3e8395b352cc8f9e550f32d2ab3aee4f249801c2a4ca6f"
+  }
+}

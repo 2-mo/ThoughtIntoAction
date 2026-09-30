@@ -1,0 +1,12 @@
+input:
+  type: arkit
+  implemented: true
+  protocol_major: 1
+  quaternion_order: xyzw
+  capabilities:
+    pose_6dof: true
+    linear_velocity: true
+    angular_velocity: true
+    analog_gripper: true
+    haptics: true
+    dual_hand: false

@@ -38,3 +38,4 @@ factory = "robot_core.telemetry:NullPublisher"
 [camera.realsense]
 factory = "robot_core.camera_client:SharedCamera"
 hardware = true
+capabilities = ["shared-service", "rgb", "intrinsics"]

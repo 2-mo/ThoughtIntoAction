@@ -25,7 +25,7 @@ def rows(directory, name):
 
 def episode_observations(directory, indices):
     import numpy as np
-    from quest_teleop.video import read_frame
+    from episode_io.video import read_frame
 
     meta = json.loads((directory / 'episode.json').read_text())
     if meta.get('lifecycle') != 'complete':

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "robot": "arx.sim",
+  "source": "phone.arkit",
+  "camera": "synthetic",
+  "phone": {
+    "bind_host": "127.0.0.1",
+    "port": 5005,
+    "mapping": "phone_tool"
+  },
+  "controller": "arx.joint_target"
+}

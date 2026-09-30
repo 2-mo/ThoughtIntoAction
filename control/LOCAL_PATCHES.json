@@ -1,0 +1,67 @@
+{
+  "arx5_vr/app.py": {
+    "upstream_sha256": "373649b5156fba6fc1fca16088cefdea858c7ba3e0159507e6bb192c4fab0c53",
+    "sha256": "535f71022d811e7954c816462f540fcc28ea2acf43c980a2746da60e6637afb2",
+    "reason": "Explicit device/routing/ingress composition and dependency heartbeat; independent failed components withdraw only dependent ownership; native unmanaged baseline preserved."
+  },
+  "arx5_vr/runtime.py": {
+    "upstream_sha256": "86c7bc2b98ac74f011bb61ef5081770de6342e976f0640e090cb288bd1efc95b",
+    "sha256": "8f161b352110edda3b49ab6410cc88d8790529184aab56d3c941e3c034fd3612",
+    "reason": "Drain telemetry after backend shutdown; keep per-run process cleanup."
+  },
+  "arx5_vr/worker.py": {
+    "upstream_sha256": "f2114216d81d8eaa24f895a8d328cec73dba2674260c46a7e0ff1409d1ed8554",
+    "sha256": "871bed328577db52baf3a779ccae3159d908c2cfc4cc324bbbd9ce91577f174f",
+    "reason": "Managed gateway consumes registered ingresses without device names; optional controller injection, telemetry and shared CAN lease; native unmanaged baseline preserved."
+  },
+  "arx5_vr/real.py": {
+    "upstream_sha256": "1a17549508ab4cfb2368a245ace8f4aa1d5cf224ff18d7e0a63f4c3f8048af89",
+    "sha256": "7199e8a6f24a447d3f848dd14c73f8e6575b4fb55192b7cc2b468f555b39aabd",
+    "reason": "Actual SDK submission timestamps and opt-in local gripper startup correction; unmodified IK and gains."
+  },
+  "arx5_vr/sim.py": {
+    "upstream_sha256": "f69cba4060b4fb5334080b2a22e63aaf489076cd1cc32763e33fada52c24f9a8",
+    "sha256": "ad41ebf28d11a5fd8c063f3f95f2f787851a7f341f61ac132289a0f9af83ed79",
+    "reason": "Simulation command application timestamps and the same controller_factory injection point as RealBackend; default controller/dynamics preserved."
+  },
+  "arx5_vr/recording.py": {
+    "upstream_sha256": "362d90330125b1b5ed36d4eb5f13aafba421f191d3d2ae36df9b33f7e75b875f",
+    "sha256": "83e0057e5c3c8edf4186026bbd6198479bfe2d42781f35e1b9919d0d0fcec522",
+    "reason": "Fingerprint integration and shared sources; optional controller-specific IK diagnostics do not couple injected target controllers to arx internals."
+  },
+  "pyproject.toml": {
+    "upstream_sha256": "2f23fb2a1fa8539682c94d1f92cb3dd5d7ed0a1baa873e85eac12d21d2ca92eb",
+    "sha256": "a430b19ce2a7e8ae82bbedc56f394849bd265ebac1ff2ea54c50a750bf2c9a1c",
+    "reason": "Isolated optional pybind11 SDK build dependency."
+  },
+  "uv.lock": {
+    "upstream_sha256": "f9bd365d24358ec6954307b56b168adf7389148d49e122f7bd28edef25090de0",
+    "sha256": "f5da30029098550456aa65155feca23f240e38bd8dd3ec83abfe8333c16f62fd",
+    "reason": "Lock the optional SDK build group."
+  },
+  "scripts/package_release.py": {
+    "upstream_sha256": "725219ecacc2dc0c79f3eb67897b3f8c8afd851c7966ba28ba271dfe5d23ef41",
+    "sha256": "9dc034d70d489c552c50ef08e6d8b2a053b660dc94aef32b453b0b5f42b4c23c",
+    "reason": "Include integration adapters, shared pure Python contracts/motion math, SDK source and provenance in portable packages."
+  },
+  "scripts/self_test.py": {
+    "upstream_sha256": "86848cb1cfb3b2502b83bcf489766c0e5866e4478d188afc4c6ef040f841ceae",
+    "sha256": "41babc44d6bce52d3f0bc8c3ca7965269a188fd7536dcdda88e53d7f84288ddd",
+    "reason": "Run offline integration boundary checks alongside upstream checks."
+  },
+  "arx5_vr/model.py": {
+    "upstream_sha256": "0b6432917cc5334bbd1a6cad5eb0b11aaf332f475e2746979ef254572810e72f",
+    "sha256": "27b54cc6e7cff8a01fa77f979f943f48b0ea77689450fc93038922e6eb090092",
+    "reason": "Handle plugin joint targets and owner reference resets; unchanged native pose IK path."
+  },
+  "arx5_vr/types.py": {
+    "upstream_sha256": "36466f32635d7007710c9de9975a7f579dfa81bba7acfb528a2e0d7e0ff33434",
+    "sha256": "ffd920c716c38d766c4b0efb1b9f991139db6ba483540cd02c917aa4f7e382f7",
+    "reason": "Optional typed joint target, per-command bound and reference reset for plugin operations; native defaults preserved."
+  },
+  "arx5_vr/ipc/__init__.py": {
+    "upstream_sha256": "cc751c0a37cd9aa65bdf6febdc4b8a84f0fb9229bf401dd1d39b2505de1edddd",
+    "sha256": "1448ca591886dd9fa5d7b6152852c617b97ecfddb12fbf0e02493f4231b7febb",
+    "reason": "Optional command/feedback ports separate managed ingress from the always-on feedback bus; default RobotBridge behavior unchanged, read-only viewer remains available for phone/CLI."
+  }
+}

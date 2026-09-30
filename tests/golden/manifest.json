@@ -1,0 +1,123 @@
+{
+  "messages": {
+    "estop_reset_ack_v1.bin": {
+      "fields": {
+        "client_time_ns": "0x5152535455565758",
+        "flags": "0x00000000",
+        "packet_type": 7,
+        "sequence": "0xd0d1d2d3",
+        "session_id": "0x50607080",
+        "source_type": 1
+      },
+      "sha256": "97e139c8dfd912bae15757d23526b3a1e8d4a08378c2147a9dccc8e07ac3f136",
+      "size": 36
+    },
+    "estop_reset_request_v1.bin": {
+      "fields": {
+        "client_time_ns": "0x5152535455565758",
+        "flags": "0x00000000",
+        "packet_type": 6,
+        "sequence": "0xd0d1d2d3",
+        "session_id": "0x50607080",
+        "source_type": 1
+      },
+      "sha256": "bc76a53168c526370f16ef13ad1821cf5ac7b023ea7577a581de38a767346ac5",
+      "size": 36
+    },
+    "ping_v1.bin": {
+      "fields": {
+        "client_time_ns": "0x1112131415161718",
+        "flags": "0x00000000",
+        "packet_type": 2,
+        "sequence": "0xaabbccdd",
+        "session_id": "0x50607080",
+        "source_type": 1
+      },
+      "sha256": "9c9bb04480e7f63d205853d01ada34e9715a0dc2a4e3b7dd7a7428225dd06a10",
+      "size": 36
+    },
+    "pong_v1.bin": {
+      "fields": {
+        "client_time_ns": "0x1112131415161718",
+        "flags": "0x00000000",
+        "packet_type": 3,
+        "sequence": "0xaabbccdd",
+        "server_receive_time_ns": "0x2122232425262728",
+        "server_send_time_ns": "0x3132333435363738",
+        "session_id": "0x50607080",
+        "source_type": 1
+      },
+      "sha256": "46f37f16ac364490e5cd3a9b1722ea67eb4c735a27f87a6d54c75cbf580f249e",
+      "size": 52
+    },
+    "pose_v1.bin": {
+      "fields": {
+        "angular_velocity": [
+          -0.125,
+          0.25,
+          -0.5
+        ],
+        "client_time_ns": "0x0102030405060708",
+        "flags": "0x000000f7",
+        "gripper": 0.75,
+        "linear_velocity": [
+          0.125,
+          -0.25,
+          0.5
+        ],
+        "packet_type": 1,
+        "position": [
+          0.25,
+          -0.5,
+          1.0
+        ],
+        "quaternion_xyzw": [
+          0.5,
+          0.5,
+          0.5,
+          -0.5
+        ],
+        "sequence": "0x10203040",
+        "session_id": "0x50607080",
+        "source_type": 1,
+        "tracking_state": 2
+      },
+      "sha256": "57036f8da2874c1b49824392a1b7bfcf6ffcb18a7bbf57fe10f17a31167f93f4",
+      "size": 96
+    },
+    "settings_ack_v1.bin": {
+      "fields": {
+        "client_time_ns": "0x4142434445464748",
+        "flags": "0x00000000",
+        "packet_type": 5,
+        "position_scale": 0.75,
+        "rotation_scale": 0.5,
+        "sequence": "0x0a0b0c0d",
+        "session_id": "0x50607080",
+        "source_type": 1
+      },
+      "sha256": "03809470a9444af9811c8500a75bcd49e565f0018922ba26d4bc2006c14f7b3a",
+      "size": 44
+    },
+    "settings_v1.bin": {
+      "fields": {
+        "client_time_ns": "0x4142434445464748",
+        "flags": "0x00000000",
+        "packet_type": 4,
+        "position_scale": 0.75,
+        "rotation_scale": 0.5,
+        "sequence": "0x0a0b0c0d",
+        "session_id": "0x50607080",
+        "source_type": 1
+      },
+      "sha256": "557554ba16a99b49b45d95330d4adfe5e5cead13dc649139748bb01d5d24199e",
+      "size": 44
+    }
+  },
+  "protocol": {
+    "byte_order": "little-endian",
+    "major": 1,
+    "minor": 1,
+    "quaternion_order": "xyzw"
+  }
+}

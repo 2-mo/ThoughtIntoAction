@@ -1,6 +1,6 @@
 # Copy to local.toml; this file contains examples, not shared device identities.
 [paths]
-dataset_dir = "~/work/datasets/quest_x5"
+dataset_dir = "~/work/data/quest_x5"
 checkpoint_dir = "~/work/models/pi05_base"
 installer_dir = "~/work/installers/QuestArmTeleop"
 

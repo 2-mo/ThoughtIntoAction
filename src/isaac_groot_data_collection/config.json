@@ -1,0 +1,44 @@
+{
+  "dataset_id": "arx5_blue_on_white_overfit_v2",
+  "batch_id": "20260803-124800_blue-on-white-overfit-v2",
+  "task_instruction": "Stack the blue cube on top of the white cube.",
+  "task_display": "把蓝色方块叠放到白色方块上",
+  "source_color": "blue",
+  "target_color": "white",
+  "cube_edge_m": 0.03,
+  "target_accepted_episodes": 1,
+  "cameras": {
+    "exterior_rgb": {
+      "width": 1280,
+      "height": 720,
+      "fps": 30,
+      "video_crf": 12,
+      "exposure_us": 8000,
+      "gain": 64,
+      "white_balance_k": 4500
+    },
+    "wrist_rgb": {
+      "width": 1280,
+      "height": 720,
+      "fps": 30,
+      "video_crf": 12,
+      "exposure_us": 10000,
+      "gain": 32,
+      "white_balance_k": 4500
+    }
+  },
+  "sampling": {
+    "arm_rate_hz": 100,
+    "minimum_episode_seconds": 3.0,
+    "maximum_episode_seconds": 90.0,
+    "action_horizon": 16
+  },
+  "validation": {
+    "maximum_state_alignment_ms": 25.0,
+    "maximum_state_alignment_p99_ms": 15.0,
+    "maximum_camera_alignment_p99_ms": 20.0,
+    "maximum_video_gap_ms": 67.0,
+    "maximum_frame_drop_fraction": 0.01,
+    "minimum_still_seconds": 0.5
+  }
+}

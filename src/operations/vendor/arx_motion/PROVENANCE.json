@@ -1,0 +1,12 @@
+{
+  "repository": "arx5_test",
+  "commit": "a18d6b67906e450411d56e3d0fd08fd18a01675c",
+  "snapshot": "working tree",
+  "files": {
+    "profiles.py": "560b4df3cef2cf69ca357ed3348b7e8d4aa6d52a6d27eb41cc72fd4d93302f4f",
+    "geometry.py": "aa0b4fff13c1aa3bd952b0ae486ab2b033ec0e7ffdeba28e89e04c59611a94fa",
+    "interpolation.py": "16e46ccbece2febbb82663fc454a0adbc5f3bffca925ac0f9bf74480ec7d33cc",
+    "limits.py": "a7ee6282afeccc13e211cb66e40fdb8767ce8ec0c95c10cdedcdab86486c8ed5",
+    "contracts.py": "51ff2766c811396adf991720218851f049e549311591d846228c2abb7f7a71ad"
+  }
+}

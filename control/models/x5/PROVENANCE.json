@@ -1,0 +1,46 @@
+{
+  "variant": "AC one / ARX X5 2025",
+  "tcp": "tcp_link; fixed transform from tool.json",
+  "sources": [
+    {
+      "source": "/home/ubuntu/\u6587\u6863/ChatGPT/arxx5_vr/.venv/lib/python3.10/site-packages/arx5_interface/models/X5.urdf",
+      "sha256": "b5b9ae1ad8eeb0c20b3bbf631b09194c87d48eb046c526a1b8697aa5ab3fd673",
+      "bundled": "x5_2025.source.urdf"
+    },
+    {
+      "source": "/home/ubuntu/Github/ARX_ac/arx5-sdk/models/meshes/X5/base_link.STL",
+      "sha256": "ce4a722664700af1dc76cf6174b885f97967a0930c5f67779562fbb3b7bb418a",
+      "bundled": "meshes/base_link.STL"
+    },
+    {
+      "source": "/home/ubuntu/Github/ARX_ac/arx5-sdk/models/meshes/X5/link1.STL",
+      "sha256": "5c4c74d459c2d2e49a4246208659ac41f5942d163394712039670aa3b8eee049",
+      "bundled": "meshes/link1.STL"
+    },
+    {
+      "source": "/home/ubuntu/Github/ARX_ac/arx5-sdk/models/meshes/X5/link2.STL",
+      "sha256": "2824cb02a5a4e029894ba1fb7a620f7d643355171ca0bdfee4475932bfbbd0f8",
+      "bundled": "meshes/link2.STL"
+    },
+    {
+      "source": "/home/ubuntu/Github/ARX_ac/arx5-sdk/models/meshes/X5/link3.STL",
+      "sha256": "dcd492ebdd522245cf0962d390d3665142a4425dcb3b727a99d3c9eb4953bac8",
+      "bundled": "meshes/link3.STL"
+    },
+    {
+      "source": "/home/ubuntu/Github/ARX_ac/arx5-sdk/models/meshes/X5/link4.STL",
+      "sha256": "a1744299ccde9be510cb9415051dadf09677895e410acb062f275cb5ee4e7e33",
+      "bundled": "meshes/link4.STL"
+    },
+    {
+      "source": "/home/ubuntu/Github/ARX_ac/arx5-sdk/models/meshes/X5/link5.STL",
+      "sha256": "3bb540bb30ff468653f384bb8387b37e195e0f1578d1e17f32a620101322a46e",
+      "bundled": "meshes/link5.STL"
+    },
+    {
+      "source": "/home/ubuntu/Github/ARX_ac/arx5-sdk/models/meshes/X5/link6.STL",
+      "sha256": "1105bf55921cffce9bd189342ad2a59946484ef20aad02db0c0f5224d5892698",
+      "bundled": "meshes/link6.STL"
+    }
+  ]
+}

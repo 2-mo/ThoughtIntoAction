@@ -20,6 +20,7 @@ def finalize_task(raw_root, episode_ids, output, fps):
         if not episode_ids or len(set(episode_ids)) != len(episode_ids):
             raise ValueError("Expected nonempty unique episode IDs")
         run_id = None
+        schema = None
         for episode_id in episode_ids:
             if Path(episode_id).name != episode_id or episode_id in (".", ".."):
                 raise ValueError("Invalid episode id")
@@ -27,6 +28,10 @@ def finalize_task(raw_root, episode_ids, output, fps):
             if not source.is_relative_to(raw_root):
                 raise ValueError("Episode path escapes raw root")
             meta = json.loads((source / "episode.json").read_text())
+            version = meta.get('schema_version', 1)
+            if version not in (1, 2) or schema is not None and version != schema:
+                raise ValueError('Unsupported/mixed episode schemas; action definitions must remain separate')
+            schema = version
             if meta.get("lifecycle") == "recording":
                 raise ValueError("Stop the active recording before packing: " + episode_id)
             if run_id is not None and meta.get("task_run_id") != run_id:
@@ -43,7 +48,8 @@ def finalize_task(raw_root, episode_ids, output, fps):
         manifest = {"format": "quest-task-archive", "version": 2, "recording_rate_hz": fps,
                     "task_run_id": run_id, "episodes": episodes, "files": {},
                     "selection_policy": "all task episodes; no outcome/lifecycle filtering",
-                    "camera_fps": 30, "conversion_layout": "aligned30_raw240_v1",
+                    "camera_fps": 30, "schema_version": schema,
+                    "conversion_layout": "aligned30_raw240_v1" if schema == 1 else "aligned30_raw250_v2",
                     "timestamp_note": "int64 host monotonic ns; RGB receipt is not exposure; device clock is separate"}
         archive.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as package:
@@ -65,6 +71,15 @@ def finalize_task(raw_root, episode_ids, output, fps):
                 package.write(PROJECT_ROOT / "src/quest_teleop" / filename,
                               output.name + "/tools/src/quest_teleop/" + filename)
             package.writestr(output.name + "/tools/src/quest_teleop/__init__.py", "")
+            # The portable converter must carry the extracted storage package;
+            # compatibility shims alone would work only inside this checkout.
+            for module in ('episode_io', 'dataset_tools', 'observations', 'component_api'):
+                for file in sorted((PROJECT_ROOT / 'src' / module).glob('*.py')):
+                    package.write(file, output.name + '/tools/src/' + module + '/' + file.name)
+            package.writestr(output.name + '/tools/src/robot_core/__init__.py', '')
+            package.write(PROJECT_ROOT / 'src/robot_core/storage.py', output.name + '/tools/src/robot_core/storage.py')
+            for registry in ('configs/plugins.toml', 'control/config/components.json'):
+                package.write(PROJECT_ROOT / registry, output.name + '/tools/' + registry)
             write_executable(package, output.name + "/tools/convert.sh",
                 "#!/usr/bin/env bash\nset -euo pipefail\n"
                 'ROOT="$(cd -- "$(dirname -- "$0")" && pwd)"\n'

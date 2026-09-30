@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "robot": "arx.real",
+  "source": "quest",
+  "camera": "realsense",
+  "native": {
+    "device": "arx.quest",
+    "routing": "arx.native",
+    "ingress": "arx.native",
+    "channel": "native"
+  },
+  "controller": "arx.joint_target"
+}

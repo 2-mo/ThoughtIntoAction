@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "robot": "arx.real",
+  "source": "cli",
+  "camera": "realsense",
+  "controller": "arx.joint_target"
+}

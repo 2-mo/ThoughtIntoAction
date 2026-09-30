@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" shape-rendering="crispEdges">
+  <!-- Full-bleed voxel world: phone controls robot arm -->
+  <rect width="1024" height="576" fill="#83c8d5"/>
+  <rect width="1024" height="64" fill="#a8dce0"/>
+  <rect x="64" y="160" width="160" height="64" fill="#e1f1ec"/>
+  <rect x="128" y="96" width="64" height="64" fill="#e1f1ec"/>
+  <rect x="192" y="224" width="128" height="64" fill="#e1f1ec"/>
+  <rect x="640" y="96" width="192" height="64" fill="#e1f1ec"/>
+  <rect x="704" y="160" width="192" height="64" fill="#e1f1ec"/>
+  <rect x="832" y="224" width="64" height="64" fill="#e1f1ec"/>
+  <path d="M0 448h128v-64h64v64h64v64h64v-128h64v64h64v128h64v-64h64v64h64v-128h64v64h64v64h64v-64h64v128H0z" fill="#5d97aa"/>
+  <rect y="512" width="1024" height="64" fill="#4f7d82"/>
+
+  <rect y="576" width="1024" height="64" fill="#8cb554"/>
+  <rect y="640" width="1024" height="384" fill="#684832"/>
+  <rect y="640" width="1024" height="64" fill="#567f3f"/>
+  <rect x="0" y="768" width="128" height="64" fill="#7c563b"/>
+  <rect x="384" y="704" width="128" height="64" fill="#7c563b"/>
+  <rect x="128" y="896" width="128" height="64" fill="#593d2d"/>
+  <rect x="448" y="832" width="128" height="64" fill="#593d2d"/>
+  <rect x="896" y="768" width="128" height="64" fill="#7c563b"/>
+  <rect x="768" y="896" width="128" height="64" fill="#593d2d"/>
+  <rect x="64" y="576" width="64" height="64" fill="#b0cf62"/>
+  <rect x="448" y="576" width="64" height="64" fill="#b0cf62"/>
+  <rect x="896" y="576" width="64" height="64" fill="#b0cf62"/>
+
+  <!-- Phone controller -->
+  <rect x="64" y="160" width="320" height="576" fill="#15252d"/>
+  <rect x="96" y="128" width="256" height="64" fill="#243b44"/>
+  <rect x="96" y="192" width="256" height="512" fill="#263a42"/>
+  <rect x="128" y="224" width="192" height="288" fill="#31778d"/>
+  <rect x="160" y="256" width="128" height="128" fill="#6cc8d3"/>
+  <rect x="160" y="256" width="64" height="64" fill="#c8f1ef"/>
+  <rect x="224" y="320" width="64" height="64" fill="#2b6881"/>
+  <rect x="128" y="448" width="192" height="64" fill="#24586a"/>
+  <rect x="160" y="544" width="64" height="64" fill="#b7c7c6"/>
+  <rect x="128" y="576" width="128" height="64" fill="#7f9191"/>
+  <rect x="160" y="544" width="64" height="64" fill="#e1eee8"/>
+  <rect x="256" y="544" width="32" height="32" fill="#ffca62"/>
+  <rect x="256" y="608" width="32" height="32" fill="#ffca62"/>
+  <rect x="160" y="672" width="96" height="32" fill="#4d656b"/>
+  <rect x="192" y="160" width="64" height="16" fill="#8db4ba"/>
+
+  <!-- Pixel radio signal from controller to arm -->
+  <rect x="416" y="256" width="32" height="32" fill="#ffca62"/>
+  <rect x="448" y="224" width="32" height="32" fill="#ffca62"/>
+  <rect x="480" y="192" width="32" height="32" fill="#ffca62"/>
+  <rect x="512" y="224" width="32" height="32" fill="#ffca62"/>
+  <rect x="544" y="256" width="32" height="32" fill="#ffca62"/>
+  <rect x="448" y="320" width="32" height="32" fill="#f09a3e"/>
+  <rect x="480" y="352" width="32" height="32" fill="#f09a3e"/>
+  <rect x="512" y="384" width="32" height="32" fill="#f09a3e"/>
+
+  <!-- Industrial robot base -->
+  <rect x="576" y="800" width="384" height="128" fill="#1b292d"/>
+  <rect x="608" y="768" width="320" height="64" fill="#31464a"/>
+  <rect x="672" y="704" width="192" height="96" fill="#6f8283"/>
+  <rect x="704" y="704" width="128" height="32" fill="#b7c4be"/>
+  <rect x="608" y="928" width="64" height="64" fill="#142125"/>
+  <rect x="864" y="928" width="64" height="64" fill="#142125"/>
+
+  <!-- Shoulder, lower arm, and elbow -->
+  <rect x="640" y="608" width="192" height="160" fill="#1b292d"/>
+  <rect x="672" y="608" width="128" height="128" fill="#708485"/>
+  <rect x="704" y="640" width="64" height="64" fill="#e3a33d"/>
+  <rect x="704" y="640" width="32" height="32" fill="#ffce69"/>
+  <path d="M640 640h96v-64h64v-64h96v96h-64v64h-64v64h-64v64h-96z" fill="#1b292d"/>
+  <path d="M672 640h64v-64h64v-32h64v64h-64v64h-64v64h-64z" fill="#73898b"/>
+  <path d="M736 640h64v-64h32v64h-64v64h-32z" fill="#b7c4be"/>
+  <rect x="736" y="448" width="160" height="160" fill="#1b292d"/>
+  <rect x="768" y="480" width="96" height="96" fill="#6e8385"/>
+  <rect x="800" y="512" width="64" height="64" fill="#e3a33d"/>
+  <rect x="800" y="512" width="32" height="32" fill="#ffce69"/>
+
+  <!-- Upper arm and gripper holding a voxel -->
+  <path d="M768 512h64v-64h32v-64h64v96h-32v64h-64v64h-64z" fill="#1b292d"/>
+  <path d="M800 512h32v-64h64v-32h32v64h-32v64h-64v32h-32z" fill="#718789"/>
+  <path d="M832 448h64v-32h32v64h-64v64h-32z" fill="#b7c4be"/>
+  <path d="M832 352h64v-64h96v64h32v128h-64v-64h-64v64h-64z" fill="#1b292d"/>
+  <path d="M864 352h32v-32h64v32h32v64h-64v-32h-64z" fill="#829697"/>
+  <path d="M832 448h64v64h96v-64h32v128h-64v-32h-64v32h-64z" fill="#1b292d"/>
+  <path d="M864 480h32v32h64v-32h32v64h-64v-32h-64z" fill="#829697"/>
+  <rect x="928" y="384" width="64" height="64" fill="#df8d36"/>
+  <rect x="928" y="384" width="32" height="32" fill="#ffbe5a"/>
+</svg>

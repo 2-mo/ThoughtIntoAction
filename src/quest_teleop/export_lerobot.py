@@ -27,7 +27,7 @@ def load_episode(path, max_gap_s=.1):
         raise ValueError('Writer error or dropped samples')
     if meta.get('record_storage', {}).get('format') != 'mcap':
         raise ValueError('Only MCAP episodes are supported')
-    from .mcap_io import read_records
+    from episode_io.mcap_io import read_records
     states, images = read_records(path / 'episode.mcap')
     if any(meta.get('counts', {}).get(k) != n for k, n in [('state', len(states)), ('frame', len(images))]):
         raise ValueError('Manifest counts disagree with stored records')
@@ -50,7 +50,7 @@ def load_episode(path, max_gap_s=.1):
         requested = state.get('requested_monotonic_ns')
         if type(requested) is not int or requested > state['host_monotonic_ns']:
             raise ValueError('Missing/noncausal integer action timestamp')
-    from .video import media_path
+    from episode_io.video import media_path
     checked, video_indices = set(), {}
     for frame in images:
         reference = frame.get('video', frame.get('image', ''))
@@ -107,7 +107,7 @@ def prepare_episode(path, fps=50, max_gap_s=.1, preserve_samples=False):
     return meta, selected, report
 
 
-def prepare_camera_episode(path):
+def prepare_schema1_camera_episode(path):
     from .multirate import camera_rows
     meta, states, frames, _ = load_episode(path)
     if meta['camera']['fps'] != 30:
@@ -126,6 +126,11 @@ def prepare_camera_episode(path):
     return meta, rows, report, states
 
 
+def prepare_camera_episode(path):
+    from dataset_tools.exporters import for_episode
+    return for_episode(path).prepare(path)
+
+
 def export(source, output, repo_id, task=None, fps=30, skip_invalid=False, preserve_samples=False,
            video_threads=None, video_preset='veryfast', progress=True,
            decoder='torchcodec', decode_workers=0, decode_batch_size=32):
@@ -138,7 +143,7 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False, prese
         raise ValueError('decode_workers must be nonnegative and decode_batch_size positive')
     started = time.perf_counter()
     from tqdm import tqdm
-    from .multirate import save_robot_sidecar
+    from dataset_tools.exporters import for_episode
     from lerobot.common.datasets.lerobot_dataset import LeRobotDataset, CODEBASE_VERSION
     from .export_video import StreamingVideoWriter
     from .export_decode import BatchFrameReader
@@ -149,17 +154,22 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False, prese
         raise ValueError('Output already exists; choose a new directory')
     paths = [source] if (source/'episode.json').is_file() else sorted(p.parent for p in source.glob('*/episode.json'))
     plans, rejected, robot, shape = [], [], None, None
+    adapter = None
     for path in tqdm(paths, desc='检查数据', unit='条', disable=not progress, dynamic_ncols=True):
         try:
             if task is not None and json.loads((path/'episode.json').read_text()).get('task') != task:
                 continue
             meta, rows, report, raw_states = prepare_camera_episode(path)
+            current_adapter = for_episode(path)
+            if adapter is not None and current_adapter.identity != adapter.identity:
+                raise ValueError('Mixed episode schemas/action definitions; export separately')
             current_shape = (meta['camera']['height'], meta['camera']['width'], 3)
             if robot is not None and meta['robot'] != robot:
                 raise ValueError('Mixed robot models/control frames; export separately')
             if shape is not None and current_shape != shape:
                 raise ValueError('Mixed image resolutions; export separately')
             robot, shape = meta['robot'], current_shape
+            adapter = current_adapter
             plans.append((path, report))
             del rows, raw_states
         except (ValueError, KeyError, TypeError, OSError) as exc:
@@ -188,7 +198,7 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False, prese
                 if report != expected_report or meta['robot'] != robot:
                     raise ValueError('Source changed during export')
                 bar.set_description(f'保存原始状态 {episode_index+1}/{len(plans)}')
-                save_robot_sidecar(staging / 'robot' / f'episode_{episode_index:06d}.npz', raw_states)
+                adapter.save_sidecar(staging / 'robot' / f'episode_{episode_index:06d}.npz', raw_states)
                 video_path = staging / dataset.meta.get_video_file_path(episode_index, 'observation.images.wrist')
                 writer = StreamingVideoWriter(video_path, shape, len(rows), fps, video_preset, video_threads)
                 dataset.image_writer = writer
@@ -211,10 +221,11 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False, prese
                 writer, dataset.image_writer = None, None
                 del rows, raw_states
         manifest = {'lerobot_revision': LEROBOT_REVISION, 'fps': fps, 'robot': robot,
-                    'layout': 'aligned30_raw240_v1', 'action_fps': 30, 'raw_robot_fps': 240,
+                    'layout': adapter.layout, 'action_fps': 30, 'raw_robot_fps': adapter.raw_hz,
+                    'episode_schema': adapter.identity[0], 'action_definition': adapter.identity[1],
                     'sidecar': 'robot/episode_{episode_index:06d}.npz',
                     'state': 'actual joints (rad) + actual gripper width (m)',
-                    'action': 'requested absolute joints (rad) + requested gripper width (m)',
+                    'action': adapter.identity[1] + ' (rad, m)',
                     'alignment': 'one observation per real RGB frame; causal robot state; exact clocks and all robot samples in sidecar',
                     'camera': '30 FPS, no repeated images; original resolution; H264 CRF20 GOP2',
                     'conversion': {'video_preset': video_preset, 'video_threads': video_threads,

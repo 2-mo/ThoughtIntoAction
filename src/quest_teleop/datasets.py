@@ -9,7 +9,7 @@ import numpy as np
 
 from robot_core.model import RobotModel
 from robot_core.storage import save_json
-from .video import media_path, read_frame
+from episode_io.video import media_path, read_frame
 
 
 def load_episode(path):
@@ -19,7 +19,7 @@ def load_episode(path):
         raise ValueError("Unknown episode schema")
     if manifest.get("record_storage", {}).get("format") != "mcap":
         raise ValueError("Only MCAP episodes are supported")
-    from .mcap_io import read_records
+    from episode_io.mcap_io import read_records
     states, frames = read_records(root / "episode.mcap")
     return root, manifest, states, frames
 

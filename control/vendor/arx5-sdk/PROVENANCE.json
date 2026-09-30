@@ -1,0 +1,7 @@
+{
+  "url": "https://github.com/real-stanford/arx5-sdk",
+  "commit": "8c797d55b47817eb0765f76039767d45fe6f1c9c",
+  "archive_sha256": "3e57a1fb9fb06325a23f8a4ad93110c954ef980df2c122f4caa584606a1ac735",
+  "gripper_turns_sha256": "b996a841acb1f14100084e5019293b0600a192e06352a364afd837da0581da1a",
+  "patch_source": "src/robot_control/gripper_turns.h"
+}

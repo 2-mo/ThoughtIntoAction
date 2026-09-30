@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "robot": "arx.sim",
+  "source": "cli",
+  "camera": "synthetic",
+  "controller": "arx.joint_target"
+}

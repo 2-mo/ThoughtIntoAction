@@ -1,0 +1,28 @@
+{
+  "operator_to_base": [[1, 0, 0], [0, -1, 0], [0, 0, 1]],
+  "workspace": {
+    "minimum_m": [0.15, -0.35, 0.0],
+    "maximum_m": [0.65, 0.35, 0.55],
+    "soft_boundary_m": 0.03
+  },
+  "profiles": {
+    "fine": {
+      "translation_gain": 0.5,
+      "rotation_gain": 0.6,
+      "tcp_linear_velocity_m_s": 0.03,
+      "tcp_angular_velocity_rad_s": 0.35,
+      "joint_velocity_rad_s": 1.5,
+      "joint_acceleration_rad_s2": 0.30,
+      "joint_jerk_rad_s3": 1.0
+    },
+    "fast": {
+      "translation_gain": 1.0,
+      "rotation_gain": 1.0,
+      "tcp_linear_velocity_m_s": 0.10,
+      "tcp_angular_velocity_rad_s": 0.80,
+      "joint_velocity_rad_s": 3.5,
+      "joint_acceleration_rad_s2": 0.70,
+      "joint_jerk_rad_s3": 3.0
+    }
+  }
+}

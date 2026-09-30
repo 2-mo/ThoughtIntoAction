@@ -1,0 +1,9 @@
+input:
+  type: mock
+  capabilities:
+    pose_6dof: true
+    linear_velocity: false
+    angular_velocity: false
+    analog_gripper: true
+    haptics: false
+    dual_hand: false

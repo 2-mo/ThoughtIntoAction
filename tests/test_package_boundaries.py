@@ -23,6 +23,20 @@ sys.meta_path.insert(0, ForbiddenImport())
 
 
 class PackageBoundaryTests(unittest.TestCase):
+    def test_collection_and_storage_without_control_or_quest(self):
+        self.probe(
+            {'quest_teleop', 'robot_control', 'arx5_vr', 'iceoryx2', 'arx5_interface',
+             'xrobotoolkit_python', 'pyrealsense2'},
+            '''
+            from episode_io.recording import EpisodeWriter
+            from episode_io.mcap_io import RecordWriter
+            from collection.capture import capture
+            from dataset_tools.runtime_v2 import load_episode
+            from runtime_client import RuntimeReader
+            from observations.runtime_alignment import align
+            ''',
+        )
+
     def probe(self, forbidden, source):
         env = {**os.environ, "PYTHONPATH": os.pathsep.join(map(str, (
             ROOT / "src", ROOT / "third_party/XRoboToolkit-Teleop-Sample-Python")))}

@@ -7,9 +7,9 @@ import time
 import numpy as np
 
 from .datasets import load_episode, image_path
-from .mcap_io import read_topics, TOPICS
+from episode_io.mcap_io import read_topics, TOPICS
 from copy import deepcopy
-from .video import media_path, read_frame
+from episode_io.video import media_path, read_frame
 from robot_core.model import RobotModel
 from robot_core.project import load_config, resolve_path
 

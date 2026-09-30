@@ -35,3 +35,15 @@ cd ../../../..
 不要求给机械臂断电或预先闭合夹爪。首次实机启动仍需观察开度读数与实物一致。
 
 只读抓包工具：`python scripts/diagnostics/gripper_startup.py --seconds 60`。
+
+## arx 独立环境
+
+`control/` 使用 Python 3.10，不能加载根目录 Python 3.12 的扩展。先按上文提取开发头文件，再执行：
+
+```bash
+./run.sh control build-sdk
+# 自定义头文件位置：
+./run.sh control build-sdk --headers /path/to/usr/include
+```
+
+构建从仓库内 `control/vendor/arx5-sdk/source.tar` 解包固定源码，验证来源哈希，并使用同一份跨圈补丁。产物位于 `control/build/arx-gripper/source/python/`；不会覆盖根目录的旧 SDK 产物。`control start --backend real` 验证补丁版本后才启动 arx；原 `control/start_real.sh` 仍是上游基线入口，不包含本机启动器的补丁检查。日常使用根目录 `./run.sh control ...`。本轮已完成编译、数学回归和假 SDK 检查，未完成真机开度验收。

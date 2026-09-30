@@ -36,7 +36,9 @@ class MonitorSensorTests(unittest.TestCase):
                     self.assertEqual(calls, [{"command": "monitor"}])
                     with self.assertRaises(HTTPError) as error:
                         http.open(Request(scene.url + "api/sensors", data=b'{}'))
-                    self.assertEqual(error.exception.code, 501)
+                    # The server supports POST for review/camera routes; the
+                    # read-only sensor endpoint has no POST route.
+                    self.assertEqual(error.exception.code, 404)
                     self.assertEqual(len(calls), 1)
                 finally:
                     server.close()

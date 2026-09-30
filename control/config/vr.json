@@ -1,0 +1,10 @@
+{
+  "sdk_library": "/opt/apps/roboticsservice/SDK/x64/libPXREARobotSDK.so",
+  "base_yaw_deg": 0.0,
+  "grip_threshold": 0.7,
+  "position_scale": [
+    1.0,
+    1.0,
+    1.0
+  ]
+}

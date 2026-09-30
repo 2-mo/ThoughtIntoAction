@@ -1,0 +1,118 @@
+{
+  "robot": {
+    "model": "X5",
+    "interface": "can0",
+    "gripper_gain_scale": 1.0,
+    "gripper_open_readout": -3.4
+  },
+  "camera": {
+    "serial": "239222300444",
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "warmup_frames": 30
+  },
+  "hand_camera": {
+    "serial": "230322274781",
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "warmup_frames": 30
+  },
+  "web_preview": {
+    "width": 640,
+    "fps": 30,
+    "jpeg_quality": 55
+  },
+  "scene_hint": {
+    "camera": {
+      "position_mm": [
+        900,
+        0,
+        205
+      ]
+    }
+  },
+  "target": {
+    "type": "aruco",
+    "dictionary": "DICT_4X4_50",
+    "marker_id": 0,
+    "marker_length_m": 0.1
+  },
+  "collection": {
+    "output_root": "calibrations/hand-eye/eye-to-hand",
+    "frames_per_burst": 20,
+    "bursts_per_pose": 3,
+    "burst_interval_s": 0.25,
+    "min_valid_frames": 12,
+    "min_valid_ratio": 0.5,
+    "max_reprojection_error_px": 1.5,
+    "max_translation_std_m": 0.0015,
+    "max_rotation_std_deg": 0.35,
+    "hold_during_sample": true,
+    "hold_settle_s": 1.2,
+    "max_joint_velocity_rad_s": 0.025,
+    "max_transient_joint_velocity_rad_s": 0.065,
+    "max_settle_joint_drift_deg": 0.15,
+    "max_joint_drift_deg": 0.15,
+    "max_eef_drift_m": 0.001,
+    "max_eef_rotation_drift_deg": 0.2,
+    "settle_timeout_s": 8.0,
+    "settle_poll_s": 0.1
+  },
+  "automatic": {
+    "open_width_m": 0.012,
+    "pregrasp_width_m": 0.007,
+    "closing_torque_nm": 0.3,
+    "minimum_width_m": 0.002,
+    "settle_s": 0.65,
+    "speed": 1.0,
+    "return_to_reference_after_complete": true,
+    "target_valid_samples": 20,
+    "d405_minimum_unique_poses": 6,
+    "handeye_joint_limit_margin_deg": 0.1,
+    "d405_joint_margin_deg": 0.1,
+    "d405_max_center_joint_delta_deg": 30.0,
+    "d405_center_j4_margin_deg": 4.0,
+    "d405_center_min_depth_m": 0.2,
+    "d405_center_max_depth_m": 1.7,
+    "d405_center_image_bound": 0.42,
+    "d405_center_max_tilt_deg": 62.0,
+    "center_search_max_trials": 16,
+    "center_search_probe_frames": 4,
+    "center_search_min_visible_frames": 2,
+    "center_search_max_reprojection_error_px": 1.5,
+    "max_poses": 48,
+    "max_pose_attempts": 72,
+    "quality_check_interval": 3,
+    "validation_pose_count": 6,
+    "validation_max_attempts": 12,
+    "review_extra_samples": 4,
+    "quality_targets": {
+      "translation_rms_mm": 3.0,
+      "rotation_rms_deg": 1.0,
+      "stability_translation_rms_mm": 3.0,
+      "stability_rotation_rms_deg": 1.0,
+      "bootstrap_translation_p95_mm": 2.0,
+      "bootstrap_rotation_p95_deg": 0.6
+    },
+    "validation_targets": {
+      "translation_rms_mm": 3.0,
+      "rotation_rms_deg": 1.0,
+      "translation_p95_mm": 4.0,
+      "rotation_p95_deg": 1.25
+    },
+    "initial_target_timeout_s": null,
+    "motion_settle_s": 2.0
+  },
+  "quality": {
+    "min_samples": 12,
+    "min_translation_span_m": 0.04,
+    "min_rotation_span_deg": 20.0,
+    "min_rotation_axis_rank": 2,
+    "max_outlier_fraction": 0.2,
+    "bootstrap_iterations": 240,
+    "bootstrap_seed": 20260729,
+    "bootstrap_min_success_ratio": 0.9
+  }
+}
