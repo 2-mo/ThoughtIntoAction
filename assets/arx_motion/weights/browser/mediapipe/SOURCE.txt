@@ -1,0 +1,5 @@
+MediaPipe Tasks Vision models
+Version: @mediapipe/tasks-vision 0.10.35
+Runtime bundle and WASM files: https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/
+Pose Heavy source: https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task
+Hand source: https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task

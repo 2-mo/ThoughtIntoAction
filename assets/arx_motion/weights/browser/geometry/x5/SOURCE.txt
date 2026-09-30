@@ -1,0 +1,4 @@
+Source: https://github.com/real-stanford/arx5-sdk/tree/8ccbf0aa8d4288f2721c41a735e5ac4c389bb13b/models/meshes/X5
+Revision: 8ccbf0aa8d4288f2721c41a735e5ac4c389bb13b
+Files: base_link.STL, link1.STL, link2.STL, link3.STL, link4.STL, link5.STL, link6.STL
+License: https://github.com/real-stanford/arx5-sdk/blob/8ccbf0aa8d4288f2721c41a735e5ac4c389bb13b/LICENSE

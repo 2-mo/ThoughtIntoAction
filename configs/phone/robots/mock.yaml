@@ -1,0 +1,4 @@
+robot:
+  type: mock
+  control_rate_hz: 200
+  joint_count: 6

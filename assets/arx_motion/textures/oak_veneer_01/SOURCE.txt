@@ -1,0 +1,9 @@
+Asset: Oak Veneer 01
+Source: https://polyhaven.com/a/oak_veneer_01
+Author: Jenelle van Heerden
+License: CC0 1.0 Universal
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Files:
+- oak_veneer_01_diff_2k.jpg
+- oak_veneer_01_nor_gl_2k.jpg
+- oak_veneer_01_rough_2k.jpg

@@ -1,0 +1,22 @@
+{
+  "schema_version": 2,
+  "parent_link": "link6",
+  "tcp_link": "tcp_link",
+  "calibration_status": "sdk_nominal",
+  "tcp_xyz": [
+    0.145,
+    0.0,
+    0.0
+  ],
+  "tcp_rpy": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "base_link": "base_link",
+  "tool_sha256": "58b3d6715e1df1c515ea062a4a1d74ef71a98968497d2b1c7560c1179e49ac66",
+  "sha256": {
+    "x5_2025.urdf": "6886972322c97aa7c1f365eb467e613edd4ec25730d53646798652d86fe2b1e6",
+    "x5_2025.xml": "3e4977971109eac31a76ac625395f3938c752c4c1644a51b34c4182295d7b162"
+  }
+}

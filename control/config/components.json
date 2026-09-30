@@ -1,0 +1,204 @@
+{
+  "robot": {
+    "arx.sim": {
+      "factory": "adapters.backends:simulation",
+      "runtime": "control",
+      "simulation_only": true,
+      "capabilities": [
+        "feedback",
+        "cartesian",
+        "joint",
+        "gripper",
+        "free-drive"
+      ]
+    },
+    "arx.real": {
+      "factory": "adapters.backends:hardware",
+      "runtime": "control",
+      "hardware": true,
+      "capabilities": [
+        "feedback",
+        "cartesian",
+        "joint",
+        "gripper",
+        "free-drive"
+      ]
+    }
+  },
+  "vr": {
+    "arx.quest": {
+      "factory": "adapters.composition:QuestDevice",
+      "runtime": "control",
+      "capabilities": [
+        "pose",
+        "input",
+        "tracking",
+        "xr-basis"
+      ]
+    },
+    "arx.demo": {
+      "factory": "adapters.composition:DemoDevice",
+      "runtime": "control",
+      "simulation_only": true,
+      "capabilities": [
+        "pose",
+        "input",
+        "tracking"
+      ]
+    }
+  },
+  "source": {
+    "phone.arkit": {
+      "factory": "inputs.phone:PhoneController",
+      "capabilities": [
+        "pose",
+        "clutch",
+        "recenter",
+        "gripper",
+        "lease"
+      ]
+    },
+    "cli": {
+      "factory": "inputs.idle:IdleSource",
+      "capabilities": [
+        "joint",
+        "cartesian",
+        "preview",
+        "execute",
+        "cancel"
+      ]
+    },
+    "quest": {
+      "factory": "inputs.idle:NativeSession",
+      "capabilities": [
+        "lease",
+        "native-ingress"
+      ]
+    }
+  },
+  "calibration_arm": {
+    "arx": {
+      "factory": "handeye_calibration.arx_arm:ArxCalibrationArm",
+      "capabilities": [
+        "snapshot",
+        "joint",
+        "hold",
+        "free-drive"
+      ]
+    },
+    "legacy": {
+      "factory": "handeye_calibration.arm:CalibrationArm",
+      "capabilities": [
+        "snapshot",
+        "joint",
+        "hold",
+        "free-drive"
+      ]
+    }
+  },
+  "exporter": {
+    "schema1": {
+      "factory": "dataset_tools.exporters:Schema1",
+      "capabilities": [
+        "lerobot-v2.1",
+        "raw-sidecar"
+      ]
+    },
+    "schema2": {
+      "factory": "dataset_tools.exporters:Schema2",
+      "capabilities": [
+        "lerobot-v2.1",
+        "raw-sidecar",
+        "independent-action-clock"
+      ]
+    }
+  },
+  "mapping": {
+    "phone_tool": {
+      "factory": "inputs.phone:phone_tool",
+      "capabilities": [
+        "relative-pose",
+        "tool"
+      ]
+    },
+    "phone_base": {
+      "factory": "inputs.phone:phone_base",
+      "capabilities": [
+        "relative-pose",
+        "base"
+      ]
+    }
+  },
+  "input": {
+    "arkit": {
+      "factory": "inputs.phone:PhoneInput",
+      "capabilities": [
+        "pose",
+        "sequence",
+        "settings-ack",
+        "ping-pong"
+      ]
+    }
+  },
+  "camera": {
+    "synthetic": {
+      "factory": "robot_core.synthetic_camera:SyntheticCamera",
+      "simulation_only": true,
+      "capabilities": [
+        "rgb",
+        "stream-identity"
+      ]
+    }
+  },
+  "planner": {
+    "arx.basic": {
+      "factory": "adapters.commands:MotionPlanner",
+      "runtime": "control",
+      "capabilities": [
+        "movej",
+        "movel",
+        "home",
+        "jog",
+        "sampled-derivative-bounds"
+      ]
+    }
+  },
+  "routing": {
+    "arx.native": {
+      "factory": "adapters.composition:NativeRouting",
+      "runtime": "control",
+      "capabilities": [
+        "coordinator",
+        "relative-pose",
+        "gripper",
+        "mode-ack",
+        "permit",
+        "health"
+      ]
+    }
+  },
+  "ingress": {
+    "arx.native": {
+      "factory": "adapters.sources:NativeIngress",
+      "runtime": "control",
+      "capabilities": [
+        "candidate",
+        "handover",
+        "freshness",
+        "dependency-health"
+      ]
+    }
+  },
+  "controller": {
+    "arx.joint_target": {
+      "factory": "arx5_vr.model:JointTargetController",
+      "runtime": "control",
+      "capabilities": [
+        "joint",
+        "cartesian",
+        "home",
+        "free-drive"
+      ]
+    }
+  }
+}

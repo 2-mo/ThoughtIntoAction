@@ -16,7 +16,7 @@ from x5_mapping import SCHEMA, action_chunks
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--source', type=Path, default=ROOT / 'datasets/.raw')
+    p.add_argument('--source', type=Path, default=Path.home() / 'work/data/quest_x5/.raw')
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--horizon', type=int, default=50, help='Must match base checkpoint chunk_size')
     args = p.parse_args()

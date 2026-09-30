@@ -1,0 +1,349 @@
+{
+  "trajectory": {
+    "ruckig": {
+      "factory": "component_plugins.factories:offline_ruckig",
+      "runtime": "analysis",
+      "capabilities": [
+        "joint",
+        "blend",
+        "q-dq-ddq",
+        "jerk-limits"
+      ]
+    },
+    "clik": {
+      "factory": "component_plugins.factories:clik",
+      "runtime": "rebot",
+      "capabilities": [
+        "jacobian",
+        "tracking",
+        "limits"
+      ]
+    }
+  },
+  "path": {
+    "cartesian": {
+      "factory": "component_plugins.factories:cartesian_path",
+      "runtime": "analysis",
+      "capabilities": [
+        "line",
+        "arc",
+        "quaternion-slerp"
+      ]
+    },
+    "se3_geodesic": {
+      "factory": "component_plugins.factories:se3_path",
+      "runtime": "rebot",
+      "capabilities": [
+        "linear",
+        "min-jerk",
+        "trapezoid",
+        "se3"
+      ]
+    }
+  },
+  "collision": {
+    "tcp": {
+      "factory": "component_plugins.factories:tcp_collision",
+      "runtime": "analysis",
+      "capabilities": [
+        "sphere",
+        "aabb",
+        "swept-path"
+      ]
+    },
+    "links": {
+      "factory": "component_plugins.factories:link_collision",
+      "runtime": "analysis",
+      "capabilities": [
+        "coal",
+        "self-collision",
+        "environment"
+      ]
+    }
+  },
+  "kinematic_analysis": {
+    "jacobian": {
+      "factory": "component_plugins.factories:jacobian",
+      "runtime": "analysis",
+      "capabilities": [
+        "singularity",
+        "scale"
+      ]
+    },
+    "rebot": {
+      "factory": "component_plugins.factories:rebot_kinematics",
+      "runtime": "rebot",
+      "capabilities": [
+        "fk",
+        "ik",
+        "model"
+      ]
+    }
+  },
+  "calibration_solver": {
+    "eye_in_hand": {
+      "factory": "component_plugins.factories:eye_in_hand",
+      "runtime": "analysis",
+      "capabilities": [
+        "T_eef_camera",
+        "validation"
+      ]
+    },
+    "eye_to_hand": {
+      "factory": "component_plugins.factories:eye_to_hand",
+      "runtime": "analysis",
+      "capabilities": [
+        "T_base_camera",
+        "validation"
+      ]
+    }
+  },
+  "calibration_quality": {
+    "handeye": {
+      "factory": "component_plugins.factories:calibration_quality",
+      "runtime": "analysis",
+      "capabilities": [
+        "validate",
+        "enable",
+        "disable"
+      ]
+    }
+  },
+  "tool_profiles": {
+    "payload": {
+      "factory": "component_plugins.factories:payload",
+      "runtime": "analysis",
+      "capabilities": [
+        "mass",
+        "center-of-mass",
+        "named-profiles"
+      ]
+    }
+  },
+  "calibration_data": {
+    "gripper": {
+      "factory": "component_plugins.factories:gripper_calibration",
+      "runtime": "analysis",
+      "capabilities": [
+        "width",
+        "model-identity"
+      ]
+    }
+  },
+  "task_planner": {
+    "cube_stack": {
+      "factory": "component_plugins.factories:cube_stack",
+      "runtime": "analysis",
+      "capabilities": [
+        "pick",
+        "transfer",
+        "place",
+        "stack"
+      ]
+    },
+    "cube_pick_place": {
+      "factory": "component_plugins.factories:cube_pick_place",
+      "runtime": "analysis",
+      "capabilities": [
+        "grasp",
+        "rotate",
+        "place"
+      ]
+    }
+  },
+  "dataset_export": {
+    "groot_v21": {
+      "factory": "component_plugins.factories:groot_export",
+      "runtime": "analysis",
+      "capabilities": [
+        "dual-rgb",
+        "rot6d",
+        "measured-next-state",
+        "lerobot-v2.1"
+      ]
+    }
+  },
+  "dataset_validator": {
+    "groot": {
+      "factory": "component_plugins.factories:groot_validation",
+      "runtime": "analysis",
+      "capabilities": [
+        "timestamps",
+        "alignment",
+        "quality"
+      ]
+    }
+  },
+  "episode_store": {
+    "groot": {
+      "factory": "component_plugins.factories:groot_collection",
+      "runtime": "analysis",
+      "capabilities": [
+        "accept",
+        "reject",
+        "raw-episode"
+      ]
+    }
+  },
+  "policy": {
+    "groot": {
+      "factory": "component_plugins.factories:groot_policy",
+      "runtime": "analysis",
+      "capabilities": [
+        "model-server",
+        "async-inference"
+      ]
+    }
+  },
+  "policy_actions": {
+    "groot": {
+      "factory": "component_plugins.factories:groot_actions",
+      "runtime": "analysis",
+      "capabilities": [
+        "chunk",
+        "schedule",
+        "preview"
+      ]
+    }
+  },
+  "checkpoint": {
+    "groot": {
+      "factory": "component_plugins.factories:groot_checkpoint",
+      "runtime": "analysis",
+      "capabilities": [
+        "modality",
+        "complete-shards"
+      ]
+    }
+  },
+  "dynamics": {
+    "pinocchio": {
+      "factory": "component_plugins.factories:rebot_dynamics",
+      "runtime": "rebot",
+      "capabilities": [
+        "inverse",
+        "forward",
+        "gravity",
+        "inertia",
+        "energy",
+        "derivatives"
+      ]
+    }
+  },
+  "input": {
+    "mock": {
+      "factory": "robot_teleop.inputs.mock:MockInputSource",
+      "runtime": "workstation",
+      "capabilities": [
+        "push",
+        "pose",
+        "deterministic"
+      ],
+      "simulation_only": true
+    },
+    "replay": {
+      "factory": "robot_teleop.inputs.replay:ReplayInputSource",
+      "runtime": "workstation",
+      "capabilities": [
+        "playback",
+        "injected-clock",
+        "pose"
+      ]
+    }
+  },
+  "transport": {
+    "mock": {
+      "factory": "robot_teleop.transports.mock:MockTransport",
+      "runtime": "workstation",
+      "capabilities": [
+        "deterministic",
+        "no-network"
+      ],
+      "simulation_only": true
+    }
+  },
+  "test_robot": {
+    "mock": {
+      "factory": "robot_teleop.robots.mock:MockRobotBackend",
+      "runtime": "workstation",
+      "capabilities": [
+        "feedback",
+        "fault-injection"
+      ],
+      "simulation_only": true
+    }
+  },
+  "servo_algorithm": {
+    "ruckig_joint": {
+      "factory": "robot_teleop.controllers.ruckig_servo:RuckigJointServo",
+      "runtime": "analysis",
+      "capabilities": [
+        "joint",
+        "brake"
+      ]
+    },
+    "ruckig_cartesian": {
+      "factory": "robot_teleop.controllers.cartesian_ruckig:CartesianRuckigServo",
+      "runtime": "analysis",
+      "capabilities": [
+        "cartesian",
+        "ik-continuity",
+        "brake"
+      ]
+    }
+  },
+  "kinematics": {
+    "phone_pinocchio": {
+      "factory": "robot_teleop.kinematics.pinocchio:PinocchioKinematics",
+      "runtime": "analysis",
+      "capabilities": [
+        "fk",
+        "ik",
+        "jacobian"
+      ]
+    },
+    "motion_pinocchio": {
+      "factory": "arx5_control.motion.pinocchio_backend:PinocchioKinematics",
+      "runtime": "analysis",
+      "capabilities": [
+        "fk",
+        "jacobian"
+      ]
+    }
+  },
+  "perception": {
+    "rgb_cube": {
+      "factory": "arx_tools.rgb_cube_detector:RgbCubeDetector",
+      "runtime": "analysis",
+      "capabilities": [
+        "rgb",
+        "cube",
+        "tracking"
+      ]
+    }
+  },
+  "device": {
+    "rebot_dm": {
+      "factory": "component_plugins.factories:rebot_dm",
+      "runtime": "rebot",
+      "capabilities": [
+        "joint-groups",
+        "mit",
+        "position-velocity",
+        "gripper"
+      ],
+      "hardware": true
+    },
+    "rebot_rs": {
+      "factory": "component_plugins.factories:rebot_rs",
+      "runtime": "rebot",
+      "capabilities": [
+        "joint-groups",
+        "mit",
+        "position-velocity",
+        "gripper"
+      ],
+      "hardware": true
+    }
+  }
+}

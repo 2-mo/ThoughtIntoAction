@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
-SOURCE="$ROOT/datasets"
-OUTPUT="$ROOT/datasets/lerobot/x5_$(date +%Y%m%d-%H%M%S)"
+SOURCE="$HOME/work/data/quest_x5"
+OUTPUT="$HOME/work/data/quest_x5/lerobot/x5_$(date +%Y%m%d-%H%M%S)"
 if [[ -f "$ROOT/../manifest.json" && -d "$ROOT/../episodes" ]]; then
     SOURCE="$ROOT/../episodes"
     OUTPUT="$ROOT/../lerobot_dataset"
@@ -29,7 +29,7 @@ EOF
 fi
 PYTHON="${LEROBOT_EXPORT_PYTHON:-$ROOT/outputs/envs/lerobot-export/bin/python}"
 if [[ -z "${LEROBOT_EXPORT_PYTHON:-}" ]]; then
-    if [[ ! -x "$PYTHON" ]] || ! "$PYTHON" -c 'import numpy, av, tqdm; import importlib.util; assert all(importlib.util.find_spec(name) for name in ("lerobot", "torchcodec"))' >/dev/null 2>&1; then
+    if [[ ! -x "$PYTHON" ]] || ! "$PYTHON" -c 'import numpy, av, tqdm, mcap, zstandard; import importlib.util; assert all(importlib.util.find_spec(name) for name in ("lerobot", "torchcodec"))' >/dev/null 2>&1; then
         printf '首次运行：准备 LeRobot 转换环境，下载依赖可能需要几分钟。\n' >&2
         bash "$ROOT/scripts/datasets/setup_export.sh"
     fi

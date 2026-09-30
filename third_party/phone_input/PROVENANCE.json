@@ -1,0 +1,190 @@
+{
+  "repository": "robot-teleop",
+  "commit": "864d6501a3eeef99b7facdc8f592d80e0ff52843",
+  "snapshot": "working tree including local changes",
+  "files": {
+    "apps/ios/README.md": {
+      "sha256": "764569084592e5cbdedb58f6b1a427e8fdf9616a257506543ec730297e888120"
+    },
+    "apps/ios/RobotTeleop/App/AppModel.swift": {
+      "sha256": "e47da3d12b58487a8b521e54c916f5e798722f6e1ad00bd2724209cff11b02af"
+    },
+    "apps/ios/RobotTeleop/App/ControlStateStore.swift": {
+      "sha256": "8f3eedf69abb67df06a4f61a2968da7d35de0b4c64fed7ea91b9f60bcb429e1c"
+    },
+    "apps/ios/RobotTeleop/App/RobotTeleopApp.swift": {
+      "sha256": "fe2367307558622c62031fbb01cacba5c467a1c17654fc7a347a956f68ceea34"
+    },
+    "apps/ios/RobotTeleop/App/TeleopCoordinator.swift": {
+      "sha256": "da4dc1010f91c6910aeb2cf1e4aebd703855f36f10e6ba0db7353144c373448e"
+    },
+    "apps/ios/RobotTeleop/Protocol/ClockSync.swift": {
+      "sha256": "b2e785338d92bd3fbed44f650828a2c06c9dbb054eff6b2da11e7dbe28b6452d"
+    },
+    "apps/ios/RobotTeleop/Protocol/PacketCodec.swift": {
+      "sha256": "53aa9a92c55df827e273eeb10bc560b523e5c59566a3eae649e789050bcc08d5"
+    },
+    "apps/ios/RobotTeleop/Protocol/ProtocolModels.swift": {
+      "sha256": "39b27c3b9a6889eb8e1843cd24a6648e934cd83f78039ffa0ff17c8f25842614"
+    },
+    "apps/ios/RobotTeleop/Resources/AppIcon.svg": {
+      "sha256": "552f550828f53a6a420d375518a6ca518370f2410b4f08814fcbe58a2375042f"
+    },
+    "apps/ios/RobotTeleop/Resources/Assets.xcassets/AppIcon.appiconset/Contents.json": {
+      "sha256": "1dbb810c797c4eaa99036deb154c3239e35c6707ad9355784bae7629557a1662"
+    },
+    "apps/ios/RobotTeleop/Resources/Assets.xcassets/AppIcon.appiconset/Icon-1024.png": {
+      "sha256": "2d27b6780ce80e33ce5c3f81e8f8f73ecc20ebf35156a09de419e1f1ab3da9f4"
+    },
+    "apps/ios/RobotTeleop/Resources/Assets.xcassets/AppIcon.appiconset/Icon-20@2x.png": {
+      "sha256": "f6aac25c0a35f7ae0a18daeb8414f9e05586973db555933512a99c2df5f5c134"
+    },
+    "apps/ios/RobotTeleop/Resources/Assets.xcassets/AppIcon.appiconset/Icon-20@3x.png": {
+      "sha256": "c372d79ec4a004ef4595bd03c201a5bb962da5e64dc3a7c570d126d5f82f8254"
+    },
+    "apps/ios/RobotTeleop/Resources/Assets.xcassets/AppIcon.appiconset/Icon-29@2x.png": {
+      "sha256": "38ebf9cd93fa70ab654a713faa645cf68954c2c9add82acd871acfb153266eaf"
+    },
+    "apps/ios/RobotTeleop/Resources/Assets.xcassets/AppIcon.appiconset/Icon-29@3x.png": {
+      "sha256": "c6d63dc35833711ad8afa9f0a6e8ccba8a1cae78a6bdd33ec61be0f5f901c306"
+    },
+    "apps/ios/RobotTeleop/Resources/Assets.xcassets/AppIcon.appiconset/Icon-40@2x.png": {
+      "sha256": "70ba5a7b6f4cb26ec130be48c291d53d71a4778e1b6c10fa57fc69f04651eb01"
+    },
+    "apps/ios/RobotTeleop/Resources/Assets.xcassets/AppIcon.appiconset/Icon-40@3x.png": {
+      "sha256": "65b0e045c19c25dbebd28302e98830fa82c0c4d979f1feca18ebb5617383fbf8"
+    },
+    "apps/ios/RobotTeleop/Resources/Assets.xcassets/AppIcon.appiconset/Icon-60@2x.png": {
+      "sha256": "65b0e045c19c25dbebd28302e98830fa82c0c4d979f1feca18ebb5617383fbf8"
+    },
+    "apps/ios/RobotTeleop/Resources/Assets.xcassets/AppIcon.appiconset/Icon-60@3x.png": {
+      "sha256": "2f5dfdbeb432f7624adf197c9e7c52dd1609ebc9657139454ae354f4941792f9"
+    },
+    "apps/ios/RobotTeleop/Resources/Assets.xcassets/Contents.json": {
+      "sha256": "0fd49ba3c3585c709678e0046a821c3c60685ec7063720d30d3a3448be3a208b"
+    },
+    "apps/ios/RobotTeleop/Resources/Info.plist": {
+      "sha256": "5bc2dc2da73239984ddce8b1c59424138c43f5d0bfa0d6425243158eab4c9ded"
+    },
+    "apps/ios/RobotTeleop/RobotTeleop.xcodeproj/project.pbxproj": {
+      "sha256": "866cae6ca404245bc42e684ed6d473f2a7bce413eee7ee1ab4fea7bbecb39aa6"
+    },
+    "apps/ios/RobotTeleop/RobotTeleop.xcodeproj/xcshareddata/xcschemes/RobotTeleop.xcscheme": {
+      "sha256": "07e1b872cf91b38d44d71dcfed7f8e2da9e6a2f61cb3560d0004558bf32bc141"
+    },
+    "apps/ios/RobotTeleop/Tests/ClockSyncTests.swift": {
+      "sha256": "e606124790e2ec9e10c17b0520a9b5b5fd332267617e40ea95b861965e0deba3"
+    },
+    "apps/ios/RobotTeleop/Tests/ControlStateTests.swift": {
+      "sha256": "591a2d8bc0c426c27acc15aa9008a80169ed0094c35240b5e8e8b0c4894e20f2"
+    },
+    "apps/ios/RobotTeleop/Tests/CoordinatorTests.swift": {
+      "sha256": "14976ce1d53f9a78443e526e6a6a38db0c4aa797da7b7817ac767f21e1919ada"
+    },
+    "apps/ios/RobotTeleop/Tests/PacketCodecTests.swift": {
+      "sha256": "fa04460d7693752b6b8a98de5cebfc497f44f199ff2133b9fb5696c48d4a4efd"
+    },
+    "apps/ios/RobotTeleop/Tests/ProviderTests.swift": {
+      "sha256": "3264401b7c7a304efe9d7ddc06ae571edad42899d46f6162a2b296d2a504d1c5"
+    },
+    "apps/ios/RobotTeleop/Tests/RobotTeleopUITests.swift": {
+      "sha256": "133e52aa5cdcc414a898994f33569fc49deaa7a2523585093c3f1e3e00657a82"
+    },
+    "apps/ios/RobotTeleop/Tracking/ARKitPoseProvider.swift": {
+      "sha256": "a0b4550558098a8508b768efc710ab12a38b943f35e5d196f6ac65349b52d66c"
+    },
+    "apps/ios/RobotTeleop/Tracking/PoseProvider.swift": {
+      "sha256": "cf4fe660d208998abac4047e609573e343f8ccaeb4712da874aacc4eb89bbcac"
+    },
+    "apps/ios/RobotTeleop/Tracking/SimulatedPoseProvider.swift": {
+      "sha256": "ed81f878d0350f14c98a8392abd686baa75c285369202fe48ffaa1bfae2b50f2"
+    },
+    "apps/ios/RobotTeleop/Transport/DatagramTransport.swift": {
+      "sha256": "13c35d7c5a2a7cdbb0b70cab4f01e70ee297538f2625e6ac3dbd56b8db6f0dbb"
+    },
+    "apps/ios/RobotTeleop/Transport/UDPClient.swift": {
+      "sha256": "28e7209ad28d6fe71753a82ec2ec37b068d9465d6997441f14cff11464e6c3a9"
+    },
+    "apps/ios/RobotTeleop/UI/ControlComponents.swift": {
+      "sha256": "3afa4c5f40e08dfb53f056e6700e7d3d85aabc665af4675104667a6d3594c342"
+    },
+    "apps/ios/RobotTeleop/UI/ControlView.swift": {
+      "sha256": "3bc138c8b8b355b7c2e11d5894ad92f793eb752e65704095c85d67d959b9f098"
+    },
+    "apps/ios/RobotTeleop/UI/StatusStrip.swift": {
+      "sha256": "3d5ad2cdef9b4d242a9f13312a7fb3c1d79d42fe45f00dc11c59cc6cb1eb0de3"
+    },
+    "src/robot_teleop/core/capabilities.py": {
+      "sha256": "b56c52589124bbe35451d7183f16d241c3c921b99784a1fbd0e3893dbfb604fd"
+    },
+    "src/robot_teleop/core/frames.py": {
+      "sha256": "bc34e4760557345b7825e6d9d7a9921eb20cb79fa3386a78c0ecdfd1fb7a7758"
+    },
+    "src/robot_teleop/core/mapping.py": {
+      "sha256": "99bf86a3f24be8898a8e3cfde5c11c19d0ef90023380884d94f69dbe1a91459a"
+    },
+    "src/robot_teleop/core/models.py": {
+      "sha256": "393b90efc8cd2ef9f54f2c81d60bcb29552d6fecd44d448ab06d7ebf559630ee"
+    },
+    "src/robot_teleop/core/ports.py": {
+      "sha256": "3f56a519e962c0986fa6f1f6f80909dc1ccf865ac4785d0f2985b3bc4e3736bb"
+    },
+    "src/robot_teleop/inputs/arkit.py": {
+      "sha256": "5db1522bd54e91e268574c432a08f119fbf01dfc06eab90c0847564a12d37217"
+    },
+    "src/robot_teleop/policies/relative_pose.py": {
+      "sha256": "7bef13a0580d8bf993c4ed30e18aa21afa89badd08e09599c340f50e47889137"
+    },
+    "src/robot_teleop/protocol/__init__.py": {
+      "sha256": "7b9bd315430ed61729e7748a03745f1a4965000662364c090ad8674ccae353c1"
+    },
+    "src/robot_teleop/protocol/clock_sync.py": {
+      "sha256": "3b7717d447ab63fb62cf46caf5680531e3bc7819b7bb6930c19b9b6f945ede2f"
+    },
+    "src/robot_teleop/protocol/flags.py": {
+      "sha256": "188bea416153c4ef402f87613933e3ddd147dd705f584e272276cf7bd4bf23d3"
+    },
+    "src/robot_teleop/protocol/golden.py": {
+      "sha256": "75c546f009d691fcbb20f12fb70db11f8a51270a59d25b2cdcb2c84914d83b1b"
+    },
+    "src/robot_teleop/protocol/packet.py": {
+      "sha256": "a8771c100cbbbf6bddad141356633d8e4ff34872454ef1fa219609a403beed2f"
+    },
+    "src/robot_teleop/protocol/sequence.py": {
+      "sha256": "a5ca14c809be1662e9da02041ccb2556ccfa921626b87cc60c76bfd434c03ecb"
+    },
+    "src/robot_teleop/protocol/version.py": {
+      "sha256": "77dd060bce332c6d9c409bd197a91fa8538467a4c0a0de230d23f1220db79a32"
+    },
+    "src/robot_teleop/transports/udp.py": {
+      "sha256": "166ef188102b78cac88f3f37e2aa831f6054bda23095a27ad90060ebe2b49c29"
+    },
+    "tests/golden/estop_reset_ack_v1.bin": {
+      "sha256": "97e139c8dfd912bae15757d23526b3a1e8d4a08378c2147a9dccc8e07ac3f136"
+    },
+    "tests/golden/estop_reset_request_v1.bin": {
+      "sha256": "bc76a53168c526370f16ef13ad1821cf5ac7b023ea7577a581de38a767346ac5"
+    },
+    "tests/golden/manifest.json": {
+      "sha256": "5ca359384b20ae9fe72ccf9958be9f9ae2fdc29fe8d6be6e822b3a0f322ab944"
+    },
+    "tests/golden/ping_v1.bin": {
+      "sha256": "9c9bb04480e7f63d205853d01ada34e9715a0dc2a4e3b7dd7a7428225dd06a10"
+    },
+    "tests/golden/pong_v1.bin": {
+      "sha256": "46f37f16ac364490e5cd3a9b1722ea67eb4c735a27f87a6d54c75cbf580f249e"
+    },
+    "tests/golden/pose_v1.bin": {
+      "sha256": "57036f8da2874c1b49824392a1b7bfcf6ffcb18a7bbf57fe10f17a31167f93f4"
+    },
+    "tests/golden/settings_ack_v1.bin": {
+      "sha256": "03809470a9444af9811c8500a75bcd49e565f0018922ba26d4bc2006c14f7b3a"
+    },
+    "tests/golden/settings_v1.bin": {
+      "sha256": "557554ba16a99b49b45d95330d4adfe5e5cead13dc649139748bb01d5d24199e"
+    },
+    "tests/golden/test_golden_vectors.py": {
+      "sha256": "6542b4330a5f9c948bc398cc0728f369f4f993cfaebbbe34023237824cd91bc1"
+    }
+  }
+}

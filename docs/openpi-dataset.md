@@ -4,7 +4,7 @@
 
 ## 本地压缩记录
 
-- `datasets/.raw/<episode>/episode.json`：任务、结果、配置及完整性。
+- `~/work/data/quest_x5/.raw/<episode>/episode.json`：任务、结果、配置及完整性。
 - `episode.mcap`：机器人逐周期状态、请求动作，以及每帧设备/主机时间戳和视频帧索引，Zstd 无损压缩。
 - `wrist_rgb.mp4`：640×480、30 FPS、H.264/libx264 CRF 20，不重新编码。
 
@@ -15,7 +15,7 @@
 例如采集 110 条：A 开始/保存每条，长按右摇杆 1 秒结束任务，得到：
 
 ```text
-datasets/任务名_时间-编号.zip
+~/work/data/quest_x5/任务名_时间-编号.zip
   任务名_时间-编号/
     manifest.json       # 格式版本、任务条目、文件大小和 SHA256
     README.md           # 字段、单位、时间戳、筛选、服务器转换和训练说明
@@ -28,7 +28,7 @@ datasets/任务名_时间-编号.zip
         wrist_rgb.mp4
 ```
 
-直接上传 ZIP。其内部 MCAP 已 Zstd 压缩、MP4 已 H.264 压缩，ZIP 只封装不重复压缩。包内都是实际文件，不依赖本机符号链接。包含本轮所有已停止录制条目，丢弃、失败和中断条目连同原始标记一并上传，由服务器筛选；生成后进行 ZIP CRC 校验。状态记录在 `datasets/.raw/tasks/<任务名>/package-status.json`。失败保留原始记录，临时包不会当成成功产物。
+直接上传 ZIP。其内部 MCAP 已 Zstd 压缩、MP4 已 H.264 压缩，ZIP 只封装不重复压缩。包内都是实际文件，不依赖本机符号链接。包含本轮所有已停止录制条目，丢弃、失败和中断条目连同原始标记一并上传，由服务器筛选；生成后进行 ZIP CRC 校验。状态记录在 `~/work/data/quest_x5/.raw/tasks/<任务名>/package-status.json`。失败保留原始记录，临时包不会当成成功产物。
 
 服务器无需安装 QuestArmTeleop 项目。Linux 上准备好 `uv` 和 FFmpeg 共享库后：
 
@@ -80,7 +80,7 @@ OpenPI 上游固定 LeRobot revision `0cf864870cf29f4738d3ade893e6fd13fbd7cdb5`�
 按任务导出：
 
 ```bash
-./scripts/datasets/导出训练数据.sh --source datasets/.raw --task '把杯子放入盒子' --fps 30 --skip-invalid --output datasets/lerobot/cup_task
+./scripts/datasets/导出训练数据.sh --source ~/work/data/quest_x5/.raw --task '把杯子放入盒子' --fps 30 --skip-invalid --output ~/work/data/quest_x5/lerobot/cup_task
 ```
 
 默认拒绝不完整、已丢弃、失败、丢帧、时序间断、混合模型或包含预设/回放的 episode；明确使用 `--skip-invalid` 可以跳过，并在 `meta/quest_export.json` 查看每条拒绝原因。`unknown` 表示未经成功标注，不等于成功演示；训练前应筛选任务完成质量。工具不覆盖已有导出目录。
@@ -111,9 +111,9 @@ OpenPI 使用标准 LeRobot 动作加载器：训练 state/action 与图像统�
 
 ```bash
 python /home/r2/work/code/QuestArmTeleop/integrations/openpi/run.py \
-  /path/to/openpi /home/r2/work/code/QuestArmTeleop/datasets/lerobot/cup_task norm
+  /path/to/openpi /home/r2/work/data/quest_x5/lerobot/cup_task norm
 python /home/r2/work/code/QuestArmTeleop/integrations/openpi/run.py \
-  /path/to/openpi /home/r2/work/code/QuestArmTeleop/datasets/lerobot/cup_task train --exp-name=cup_x5
+  /path/to/openpi /home/r2/work/data/quest_x5/lerobot/cup_task train --exp-name=cup_x5
 ```
 
 包装入口在运行时注册 `pi05_quest_x5`，无需手改 OpenPI 配置文件。首次会在项目 `outputs/openpi-datasets/local/quest_x5` 建立导出数据集链接；切换数据集时明确调整链接，入口不会静默覆盖。训练以 `pi05_base` 权重初始化，需要下载模型和合适 GPU。本项目尚未执行完整 π0.5 训练或真机策略推理；数据能加载不代表训练效果已经验证。

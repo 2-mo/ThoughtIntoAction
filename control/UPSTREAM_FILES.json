@@ -1,0 +1,238 @@
+{
+  ".env.example": {
+    "executable": false,
+    "sha256": "d8fdb8733cf07281ea15bf4d633529f312a82e59b68fd4b38cf80bbfba2ca27f"
+  },
+  ".gitignore": {
+    "executable": false,
+    "sha256": "6bbe0500021e3db481e4a6eebdfaeff5aef2d7f66cd239e02552702383bb6bb4"
+  },
+  ".python-version": {
+    "executable": false,
+    "sha256": "7a41a41354ab8049091ef1a00253ca00567f5a1d3f9aef5502c0b4b5ce9ae707"
+  },
+  "LICENSE": {
+    "executable": false,
+    "sha256": "48bcd35ee1d46a12c2253b949b2c3b22f05ae998c2aef515f99f4852c5d16850"
+  },
+  "README.md": {
+    "executable": false,
+    "sha256": "df5d0a1403ed0fbb3421915c7454d06d1f8a5ae5df31d872b2d715a5f51d4dec"
+  },
+  "arx5_vr/__init__.py": {
+    "executable": false,
+    "sha256": "39541c9668f3672163ad7fecae0894fd918c515dfe6caf154d162ab866606302"
+  },
+  "arx5_vr/__main__.py": {
+    "executable": false,
+    "sha256": "9bcafad3a92ce378f49429063aa3daf6a8aabeb102439f8a1e8bc0bf44b80d1f"
+  },
+  "arx5_vr/app.py": {
+    "executable": false,
+    "sha256": "373649b5156fba6fc1fca16088cefdea858c7ba3e0159507e6bb192c4fab0c53"
+  },
+  "arx5_vr/demo.py": {
+    "executable": false,
+    "sha256": "942075bad9c3603544f395ef4b21560003544dad51946f7219257b2cdd9e302b"
+  },
+  "arx5_vr/ipc/__init__.py": {
+    "executable": false,
+    "sha256": "cc751c0a37cd9aa65bdf6febdc4b8a84f0fb9229bf401dd1d39b2505de1edddd"
+  },
+  "arx5_vr/ipc/services.py": {
+    "executable": false,
+    "sha256": "0a65422d3005ffafcb7036483f875750d66c2d75108e8e33ff3f5da83d129a5f"
+  },
+  "arx5_vr/ipc/types.py": {
+    "executable": false,
+    "sha256": "5fcb11fc3480e26518d10d86ecb4a802dee60235f870436e6e5326d4d057f10e"
+  },
+  "arx5_vr/model.py": {
+    "executable": false,
+    "sha256": "0b6432917cc5334bbd1a6cad5eb0b11aaf332f475e2746979ef254572810e72f"
+  },
+  "arx5_vr/native_config.py": {
+    "executable": false,
+    "sha256": "786ae598c32f9906c449d437d4a8609fe5c01fca6f38ce8284fdd007dbd38247"
+  },
+  "arx5_vr/real.py": {
+    "executable": false,
+    "sha256": "1a17549508ab4cfb2368a245ace8f4aa1d5cf224ff18d7e0a63f4c3f8048af89"
+  },
+  "arx5_vr/recording.py": {
+    "executable": false,
+    "sha256": "362d90330125b1b5ed36d4eb5f13aafba421f191d3d2ae36df9b33f7e75b875f"
+  },
+  "arx5_vr/runtime.py": {
+    "executable": false,
+    "sha256": "86c7bc2b98ac74f011bb61ef5081770de6342e976f0640e090cb288bd1efc95b"
+  },
+  "arx5_vr/settings.py": {
+    "executable": false,
+    "sha256": "5982047749a8deed4e4e83c533ef34042640f5ba28cffe7d05b1762097e71a6b"
+  },
+  "arx5_vr/sim.py": {
+    "executable": false,
+    "sha256": "f69cba4060b4fb5334080b2a22e63aaf489076cd1cc32763e33fada52c24f9a8"
+  },
+  "arx5_vr/types.py": {
+    "executable": false,
+    "sha256": "36466f32635d7007710c9de9975a7f579dfa81bba7acfb528a2e0d7e0ff33434"
+  },
+  "arx5_vr/viewer.py": {
+    "executable": false,
+    "sha256": "ae1add7dcde28b017d4a40649a91ad2360cb401c1cbea863176dcb6aecf0f63c"
+  },
+  "arx5_vr/worker.py": {
+    "executable": false,
+    "sha256": "f2114216d81d8eaa24f895a8d328cec73dba2674260c46a7e0ff1409d1ed8554"
+  },
+  "check.sh": {
+    "executable": true,
+    "sha256": "ef54be7ad73f50f1528439f90182bb09bf5156c488a43afca70cc7ff61bd4b2c"
+  },
+  "config/robot.json": {
+    "executable": false,
+    "sha256": "518c0676b510508d0901f6198a583c1ad1e95e7391a7c07a95af393f7230b8dd"
+  },
+  "config/tool.json": {
+    "executable": false,
+    "sha256": "58b3d6715e1df1c515ea062a4a1d74ef71a98968497d2b1c7560c1179e49ac66"
+  },
+  "config/vr.json": {
+    "executable": false,
+    "sha256": "dd08daa04f563e71b1dfd3206a9ae821be56c1838b087ff562d54233ba73dc91"
+  },
+  "docs/INTERFACES.md": {
+    "executable": false,
+    "sha256": "c3719decd058e7ef97ab0c2429a67d769f92d61d7cdeb3d31d85740b2b598278"
+  },
+  "docs/VALIDATION.md": {
+    "executable": false,
+    "sha256": "00c30e04d642638983b9a28f002750574a42def2f23ecb037b05e1231bbc3f52"
+  },
+  "doctor.sh": {
+    "executable": true,
+    "sha256": "b6eb0396b0fbac9773d83427a9c8c15fc9aa7c9722e50f894a21e825fcc51ce9"
+  },
+  "models/x5/LICENSE-ARX_X5": {
+    "executable": false,
+    "sha256": "11b6d7cd3c80b5eda4974f4fde6c08ec4c142bd9cb66f1b854974c25dab9cf22"
+  },
+  "models/x5/PROVENANCE.json": {
+    "executable": false,
+    "sha256": "36f587797571f92019ca5073f7f16d5236fee79dfda675589cd294c6c2fe5795"
+  },
+  "models/x5/UPSTREAM.json": {
+    "executable": false,
+    "sha256": "379d00a27b9c652fc5e57ac949020d2442eef326148540ffc3a56d3ed00d5abc"
+  },
+  "models/x5/meshes/base_link.STL": {
+    "executable": false,
+    "sha256": "ce4a722664700af1dc76cf6174b885f97967a0930c5f67779562fbb3b7bb418a"
+  },
+  "models/x5/meshes/link1.STL": {
+    "executable": false,
+    "sha256": "5c4c74d459c2d2e49a4246208659ac41f5942d163394712039670aa3b8eee049"
+  },
+  "models/x5/meshes/link2.STL": {
+    "executable": false,
+    "sha256": "2824cb02a5a4e029894ba1fb7a620f7d643355171ca0bdfee4475932bfbbd0f8"
+  },
+  "models/x5/meshes/link3.STL": {
+    "executable": false,
+    "sha256": "dcd492ebdd522245cf0962d390d3665142a4425dcb3b727a99d3c9eb4953bac8"
+  },
+  "models/x5/meshes/link4.STL": {
+    "executable": false,
+    "sha256": "a1744299ccde9be510cb9415051dadf09677895e410acb062f275cb5ee4e7e33"
+  },
+  "models/x5/meshes/link5.STL": {
+    "executable": false,
+    "sha256": "3bb540bb30ff468653f384bb8387b37e195e0f1578d1e17f32a620101322a46e"
+  },
+  "models/x5/meshes/link6.STL": {
+    "executable": false,
+    "sha256": "1105bf55921cffce9bd189342ad2a59946484ef20aad02db0c0f5224d5892698"
+  },
+  "models/x5/x5_2025.model.json": {
+    "executable": false,
+    "sha256": "fdbd5d568be6308ddaf28e5ccab5fd5a69bcebd55a4c029183d8285c6f54c01f"
+  },
+  "models/x5/x5_2025.source.urdf": {
+    "executable": false,
+    "sha256": "b5b9ae1ad8eeb0c20b3bbf631b09194c87d48eb046c526a1b8697aa5ab3fd673"
+  },
+  "models/x5/x5_2025.urdf": {
+    "executable": false,
+    "sha256": "6886972322c97aa7c1f365eb467e613edd4ec25730d53646798652d86fe2b1e6"
+  },
+  "models/x5/x5_2025.xml": {
+    "executable": false,
+    "sha256": "3e4977971109eac31a76ac625395f3938c752c4c1644a51b34c4182295d7b162"
+  },
+  "native/README.md": {
+    "executable": false,
+    "sha256": "529445dfe27111b15c2144e2328ac40cd76ce898f42c3030dd8426d576a59e8a"
+  },
+  "native/SHA256SUMS": {
+    "executable": false,
+    "sha256": "de8935e88675dc772c7369888709b13b6738b104985557003839bc654f05bf6c"
+  },
+  "native/bin/rollio-device-xrobot": {
+    "executable": true,
+    "sha256": "6d1d2fd36019f28f5726a8a6f175a8ab49311130bd263af35524d29bbab1d53e"
+  },
+  "native/bin/rollio-teleop-router": {
+    "executable": true,
+    "sha256": "5dd46fec5cbc0e9101c621b496bc4eaa3d198e9a1e18b12db9b44a8dbdd1af6a"
+  },
+  "native/rollio-source.tar.gz": {
+    "executable": false,
+    "sha256": "1e5dceeab5cdb08c9fcc078031dd7e11c8f2c5ae10ef12fb82542b612a293f02"
+  },
+  "pyproject.toml": {
+    "executable": false,
+    "sha256": "2f23fb2a1fa8539682c94d1f92cb3dd5d7ed0a1baa873e85eac12d21d2ca92eb"
+  },
+  "scripts/build_model.py": {
+    "executable": false,
+    "sha256": "76baa51a4803f52b1a41519d7d6ad0e133c165ec6e60e9ab9de42c8ff2637d14"
+  },
+  "scripts/check_portable.py": {
+    "executable": false,
+    "sha256": "62690ac33f5cf23bd290befe22be27cf4ba25880a91d39016d173592d96c8799"
+  },
+  "scripts/check_real_offline.py": {
+    "executable": false,
+    "sha256": "f365078e9645ff0bbcc3db9eff9967f938a04f4269a16cbd8d4247b56fd7b828"
+  },
+  "scripts/package_release.py": {
+    "executable": false,
+    "sha256": "725219ecacc2dc0c79f3eb67897b3f8c8afd851c7966ba28ba271dfe5d23ef41"
+  },
+  "scripts/self_test.py": {
+    "executable": false,
+    "sha256": "86848cb1cfb3b2502b83bcf489766c0e5866e4478d188afc4c6ef040f841ceae"
+  },
+  "setup.sh": {
+    "executable": true,
+    "sha256": "cc3b503a5cca39686b659bef2cea8b7a03f7cdf83fcd0aae0790c7834ee92948"
+  },
+  "start_demo.sh": {
+    "executable": true,
+    "sha256": "76a8c000c66e379d5f1f2d6c4b4e48a6cd8e44de04abed6822285bfc242fa0f5"
+  },
+  "start_real.sh": {
+    "executable": true,
+    "sha256": "b2d600a1d295072602197398349294e9a7ed1e897b95b31a89cfaa8bb01b3f2f"
+  },
+  "start_sim.sh": {
+    "executable": true,
+    "sha256": "31d1f98354023e3142f5fbdc94193d0379e65eb0b86b382f4e4851cfc7c61075"
+  },
+  "uv.lock": {
+    "executable": false,
+    "sha256": "f9bd365d24358ec6954307b56b168adf7389148d49e122f7bd28edef25090de0"
+  }
+}

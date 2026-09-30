@@ -12,4 +12,4 @@
 
 项目自己的 X5 控制器位于 `src/quest_teleop/`，已脱离上游 R5 控制器和 SDK；迁入代码的来源与许可见 [X5 控制器说明](../docs/x5-controller.md)。
 
-历史设计参考包括 `arx5_test` 的采集/异步推理设计和 `reBotArm_control_py` 的运动学/轨迹分层。本项目无需访问这些备份，构建和运行不依赖它们；不迁移旧 URDF、设备参数或标定结果。
+`arx5_test`、`reBotArm_control_py`、`robot-teleop` 的源码、配置、模型和工具已集中迁入本仓库，三个原目录已退役。完整原工作树仅作为恢复副本存放于 `archives/migration/originals/`，不参与运行。实际入口、控制边界和验证结果见 [合并后的使用与维护](../docs/consolidated-components.md)，逐文件来源见 `migration/manifest.json`。原生 Quest 链路继续复用 arx；部分迁入操作保留独立控制器，通过统一设备锁协调使用。机器人专属 URDF、网格和标定参数随各组件维护，不作为 X5 默认值。

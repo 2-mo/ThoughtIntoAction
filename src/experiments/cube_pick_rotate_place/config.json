@@ -1,0 +1,50 @@
+{
+  "interface": "can0",
+  "calibration_path": "calibrations/hand-eye/eye-to-hand/enabled.json",
+  "cube_edge_mm": 30.0,
+  "camera": {
+    "serial": "239222300444",
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "warmup_frames": 20
+  },
+  "table": {
+    "center_x_mm": 450.0,
+    "center_y_mm": -700.0,
+    "top_z_mm": 0.0,
+    "width_mm": 2000.0,
+    "depth_mm": 1000.0,
+    "yaw_deg": 90.0
+  },
+  "perception": {
+    "required_samples": 15,
+    "maximum_frames": 90,
+    "minimum_confidence": 0.72,
+    "minimum_size_mm": 20.0,
+    "maximum_size_mm": 48.0,
+    "maximum_xy_rms_mm": 4.0,
+    "maximum_yaw_rms_deg": 7.0,
+    "maximum_depth_residual_mm": 20.0,
+    "depth_patch_radius_px": 1
+  },
+  "motion": {
+    "rotation_deg": 45.0,
+    "place_offset_x_mm": 0.0,
+    "place_offset_y_mm": 0.0,
+    "approach_height_mm": 90.0,
+    "lift_height_mm": 90.0,
+    "tcp_z_offset_mm": 0.0,
+    "minimum_initial_clearance_mm": 80.0,
+    "pregrasp_width_mm": 80.0,
+    "precontact_width_mm": 44.0,
+    "release_width_mm": 80.0,
+    "gripper_duration_s": 1.5,
+    "closing_torque_nm": 0.24,
+    "minimum_gripper_width_mm": 22.0,
+    "gripper_timeout_s": 5.0,
+    "contact_hold_s": 0.6,
+    "settle_s": 0.4,
+    "velocity_scale": 0.28
+  }
+}

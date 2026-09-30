@@ -4,6 +4,7 @@ from contextlib import closing
 import signal
 import threading
 import time
+import uuid
 
 from .camera import RealSenseCamera
 from .camera_client import socket_path
@@ -89,12 +90,15 @@ class CameraFeed:
             try:
                 import cv2
                 with closing(DeviceLease("camera:" + options["serial"])), RealSenseCamera(options["serial"], options["width"], options["height"], options["fps"]) as camera:
-                    self.metadata = camera.metadata
+                    # A reconnect starts a new stream even when device frame numbers repeat.
+                    stream_id = uuid.uuid4().hex
+                    self.metadata = {**camera.metadata, "stream_id": stream_id}
                     last_preview = 0
                     while not stop.is_set():
                         frame = camera.read()
                         image = frame["image"]
                         self.frame = {**{k: v for k, v in frame.items() if k not in ("image", "depth_image", "depth_scale_m")},
+                                      "stream_id": stream_id,
                                       "bgr_base64": base64.b64encode(image.tobytes()).decode("ascii")}
                         self.error = None
                         if time.monotonic() - last_preview >= .2:

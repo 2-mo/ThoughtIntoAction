@@ -73,7 +73,7 @@
 
 ## 保存内容
 
-默认实际数据位置为 `paths.dataset_dir`，本机是 `/home/r2/work/code/QuestArmTeleop/datasets/`。新采集原始备份位于 `.raw/`；结束任务后生成 `任务名_时间-编号.zip`，上传服务器后转换为 LeRobot：
+默认实际数据位置为 `paths.dataset_dir`，本机是 `/home/r2/work/data/quest_x5/`。新采集原始备份位于 `.raw/`；结束任务后生成 `任务名_时间-编号.zip`，上传服务器后转换为 LeRobot：
 
 ```text
 .raw/<episode-id>/

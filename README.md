@@ -1,8 +1,29 @@
 # QuestArmTeleop
 
+中文 [一屏架构图](docs/architecture/index.html)：在浏览器打开即可总览控制源、arx 核心、机械臂、相机和数据流，支持点击部件、全屏与高清海报导出。插件与命令、目录和整理建议保留在 [详细导览](docs/architecture/explorer.html)；离线使用与更新方法见 [导览说明](docs/architecture/README.md)。
+
+`arx5_test`、`reBotArm_control_py`、`robot-teleop` 已集中迁入本仓库，三个原位置无需保留。算法、设备、标定、相机、数据与操作入口见 [合并后的组件说明](docs/consolidated-components.md)；统一入口为 `./run.sh components list`。默认 Quest 遥操继续使用 arx 原生链路。完整原工作树保存在本仓库 `archives/migration/originals/`，仅作恢复归档。
+
 Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随、Trigger 控制夹爪、任务开启后 A 预抓取并开始采集、B 保存／长按回 Home、右摇杆左开始／右暂停／上作废上一条／按下长按结束清零；Grip 可取消预设动作。
 
 已整理目录、依赖和启动配置，支持独立运动学仿真、单腕部 D435i 手眼标定，以及主遥操进程内的原始 episode 采集。命令行/脚本为主，网页只读监看。本机 π0.5 与 LeRobot 导出尚未接入；H800 只负责训练。
+
+## arx 控制架构迁移（新增入口）
+
+完整 arx-televr 已导入 `control/`，原 Quest 输入、原生路由、IK 与 250 Hz 设备循环优先复用。机械臂、VR、控制源、映射、规划、相机、标定适配器和导出器通过注册表装配；所有代码都在本仓库内。控制使用独立 Python 3.10 环境，工作台与手机协议使用 Python 3.12。
+
+```bash
+./run.sh control verify
+./run.sh workbench plugins
+./run.sh workbench validate --profile sim-manual
+./run.sh workbench start --profile sim-manual --headless
+# 手机 + 合成相机组合：
+./run.sh workbench start --profile sim-phone --headless --record-task "手机检查"
+```
+
+启动日志给出 `control/run/<目录>`。另一个终端用 `motion --run <目录>` 做预览、MoveJ/MoveL、点动、夹爪、示教和自由拖动；`phone --run <目录>` 接手机，`handeye --runtime <目录>` 使用 arx 自动标定适配。采集通过只读流独立运行，新 schema 2 已能导出 LeRobot v2.1，保持反馈与命令独立时间及原始 sidecar。
+
+手机、多源控制、标定适配和新数据导出的基本链路已通过离线/仿真验证。真实 Quest、iPhone、RealSense 和 CAN 现场验收尚未进行；旧采集按键、任务页面、回放和策略执行仍保留原入口。**arx 真机启动会使能并回 Home，退出请求 SDK 阻尼。** 使用说明见 [插件工作台](docs/plugin-workbench.md)，证据与当前边界见 [实施记录](docs/arx-runtime-implementation.md)，设计依据见 [架构方案](docs/arx-runtime-redesign.md)。
 
 ## 日常启动
 
@@ -95,7 +116,7 @@ tests/                   不连接真机的回归检查
 
 ```text
 ~/work/models/pi05_base/            现有 LeRobot 格式权重
-~/work/datasets/quest_x5/            规划的数据集目录
+~/work/data/quest_x5/                共享采集数据集目录
 ~/work/installers/QuestArmTeleop/   APK/DEB 安装包
 ```
 

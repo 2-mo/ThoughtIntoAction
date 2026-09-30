@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPTS_DIR="$ROOT_DIR/src/scripts"
+CONTROL_PYTHON="$ROOT_DIR/.venv/bin/python"
+WEB_PYTHON="$ROOT_DIR/.venv-web/bin/python"
+HANDEYE_PYTHON="$ROOT_DIR/.venv-handeye/bin/python"
+export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
+COMMAND="${1:-help}"
+if (($#)); then
+  shift
+fi
+cd "$ROOT_DIR"
+
+need_control_python() {
+  if [[ ! -x "$CONTROL_PYTHON" ]]; then
+    echo "缺少控制环境：$CONTROL_PYTHON" >&2
+    echo "执行：UV_PROJECT_ENVIRONMENT=.venv uv sync --only-group control" >&2
+    exit 1
+  fi
+}
+
+need_handeye_python() {
+  if [[ ! -x "$HANDEYE_PYTHON" ]]; then
+    echo "缺少手眼标定环境：$HANDEYE_PYTHON" >&2
+    echo "执行：UV_PROJECT_ENVIRONMENT=.venv-handeye uv sync --only-group handeye" >&2
+    exit 1
+  fi
+}
+
+need_web_python() {
+  if [[ ! -x "$WEB_PYTHON" ]]; then
+    echo "缺少视觉环境：$WEB_PYTHON" >&2
+    echo "执行：UV_PROJECT_ENVIRONMENT=.venv-web uv sync --only-group web" >&2
+    exit 1
+  fi
+}
+
+show_help() {
+  cat <<'EOF'
+ARX X5 项目入口
+
+  ./arx5 can-up          恢复或检查 USB-CAN；接口不存在时会请求 sudo
+  ./arx5 can-restart     强制重启当前 can0 的 slcand
+  ./arx5 can-status      显示 CAN 状态与错误计数
+  ./arx5 state           读取机械臂状态，不主动运动
+  ./arx5 control         启动长驻交互控制终端
+  ./arx5 test-gripper    位置控制夹爪开闭测试
+  ./arx5 test-force      位置张开 + 限扭矩闭合测试
+  ./arx5 calibrate-payload  示教并自动采集末端工具/新增负载数据
+  ./arx5 calibrate-hand-eye  D405/D455 双相机手眼标定
+  ./arx5 d405-benchmark     探测 D405 原生 RGB 档位；可选实测性能
+  ./arx5 web             启动手动控制网页、控制服务和视觉桥
+  ./arx5 web-lan         通过局域网 HTTPS 直接访问，无需 SSH 隧道
+  ./arx5 web-tailnet     只通过 Tailscale HTTPS 访问（推荐）
+  ./arx5 web-restart     停止记录的网页服务后重新启动 Tailscale 网页
+  ./arx5 vision          启动 D455 预览页面和只读数据桥
+  ./arx5 groot-status    显示 GR00T 原始 episode 采集进度
+  ./arx5 groot-export    导出已接受 episode，并用 GR00T 生成统计和验收
+  ./arx5 groot-validate  用 GR00T 官方加载器复验已导出的数据集
+  ./arx5 zeroshot        使用最新 ARX5 微调权重进行任务描述交互控制
+  ./arx5 test            运行不连接硬件的单元测试
+  ./arx5 help            显示本帮助
+
+额外参数会原样传给对应脚本，例如：
+  ./arx5 can-up --device /dev/ttyACM0
+  ./arx5 test-force --dry-run
+  ./arx5 calibrate-payload --help
+  ./arx5 calibrate-payload profiles
+  ./arx5 calibrate-hand-eye generate-target
+  ./arx5 d405-benchmark
+  ./arx5 d405-benchmark --benchmark
+EOF
+}
+
+case "$COMMAND" in
+  can-up)
+    exec "$SCRIPTS_DIR/can_up.sh" "$@"
+    ;;
+  can-restart)
+    exec "$SCRIPTS_DIR/can_up.sh" --force "$@"
+    ;;
+  can-status)
+    exec "$SCRIPTS_DIR/can_up.sh" --status "$@"
+    ;;
+  state)
+    need_control_python
+    exec "$CONTROL_PYTHON" -B -m scripts.show_state "$@"
+    ;;
+  control)
+    need_control_python
+    exec "$CONTROL_PYTHON" -B -m scripts.control_cli "$@"
+    ;;
+  test-gripper)
+    need_control_python
+    exec "$CONTROL_PYTHON" -B -m scripts.gripper_position_test "$@"
+    ;;
+  test-force)
+    need_control_python
+    exec "$CONTROL_PYTHON" -B -m scripts.gripper_force_test "$@"
+    ;;
+  calibrate-payload)
+    need_control_python
+    exec "$CONTROL_PYTHON" -B -m scripts.calibrate_payload "$@"
+    ;;
+  calibrate-hand-eye)
+    need_handeye_python
+    exec "$HANDEYE_PYTHON" -B -m hand_eye_calibration "$@"
+    ;;
+  d405-benchmark)
+    need_handeye_python
+    exec "$HANDEYE_PYTHON" -B -m scripts.d405_profile_benchmark "$@"
+    ;;
+  vision)
+    exec "$SCRIPTS_DIR/vision.sh" "$@"
+    ;;
+  web)
+    exec "$SCRIPTS_DIR/web.sh" "$@"
+    ;;
+  web-lan)
+    exec "$SCRIPTS_DIR/web_lan.sh" "$@"
+    ;;
+  web-tailnet)
+    exec "$SCRIPTS_DIR/web_tailnet.sh" "$@"
+    ;;
+  web-restart)
+    exec "$SCRIPTS_DIR/web_restart.sh" "$@"
+    ;;
+  groot-status)
+    need_control_python
+    exec "$CONTROL_PYTHON" -B -m isaac_groot_data_collection.cli \
+      status "$@"
+    ;;
+  groot-export)
+    need_web_python
+    exec "$WEB_PYTHON" -B -m isaac_groot_data_collection.cli \
+      export "$@"
+    ;;
+  groot-validate)
+    need_web_python
+    exec "$WEB_PYTHON" -B -m isaac_groot_data_collection.cli \
+      validate-dataset "$@"
+    ;;
+  zeroshot)
+    need_handeye_python
+    exec "$HANDEYE_PYTHON" -B "$ROOT_DIR/src/gr-zeroshot/main.py" "$@"
+    ;;
+  test)
+    need_handeye_python
+    exec "$HANDEYE_PYTHON" -B -m unittest discover -s tests -v "$@"
+    ;;
+  help|-h|--help)
+    show_help
+    ;;
+  *)
+    echo "未知命令：$COMMAND" >&2
+    show_help >&2
+    exit 2
+    ;;
+esac

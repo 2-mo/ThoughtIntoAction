@@ -1,0 +1,6 @@
+{
+  "profiles.py": {
+    "sha256": "c07fa3ee40fd86a5e67bdbc0cd4e7922691fc45379f5c82e258145a088427022",
+    "reason": "Use positive real cube root arithmetic on Python 3.10, where math.cbrt is unavailable; derivative formula unchanged."
+  }
+}

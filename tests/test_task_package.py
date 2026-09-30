@@ -1,7 +1,10 @@
 import hashlib
 import json
+import os
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
 import unittest
 import zipfile
 
@@ -35,5 +38,21 @@ class TaskPackageTests(unittest.TestCase):
                 self.assertEqual(package.read("pick_place/episodes/episode/episode.mcap"), content)
                 self.assertEqual(package.read("pick_place/episodes/episode/wrist_rgb.mp4"),
                                  b"unchanged encoded RGB")
+                package.extractall(root / 'unpacked')
+            bundle = root / 'unpacked/pick_place'
+            probe = subprocess.run([sys.executable, '-B', '-c',
+                'from pathlib import Path; from episode_io.mcap_io import read_records; '
+                'from quest_teleop.export_lerobot import load_episode; '
+                'from quest_teleop.export_decode import BatchFrameReader; '
+                'assert len(read_records(Path("episodes/episode/episode.mcap"))[0]) == 1'],
+                cwd=bundle, env={**os.environ, 'PYTHONPATH': str(bundle / 'tools/src')},
+                capture_output=True, text=True, timeout=20)
+            self.assertEqual(probe.returncode, 0, probe.stderr)
+            meta_path = source / 'episode.json'
+            meta = json.loads(meta_path.read_text())
+            meta['schema_version'] = 99
+            meta_path.write_text(json.dumps(meta))
+            with self.assertRaisesRegex(ValueError, 'Unsupported/mixed'):
+                finalize_task(root / '.raw', ['episode'], root / 'wrong_converter', 250)
             with self.assertRaises(FileExistsError):
                 finalize_task(root / ".raw", ["episode"], root / "pick_place", 240)

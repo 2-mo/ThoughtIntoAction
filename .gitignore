@@ -220,6 +220,15 @@ __marimo__/
 # External checkouts are pinned in dependencies.lock.toml.
 /third_party/*
 !/third_party/README.md
+!/third_party/phone_input/
+!/third_party/migration/
+
+# Preserved originals are recovery snapshots, never an import or build source.
+/archives/
+/calibrations/
+**/node_modules/
+**/.venv*/
+**/test-results/
 
 # Machine configuration, generated output and locally installed dependencies.
 /configs/local.toml

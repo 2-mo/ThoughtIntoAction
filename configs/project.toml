@@ -7,7 +7,7 @@ arm_sdk_python = "outputs/build/arx-gripper/source/python"
 
 [paths]
 log_dir = "outputs/logs"
-dataset_dir = "datasets"
+dataset_dir = "~/work/data/quest_x5"
 checkpoint_dir = "~/work/models/pi05_base"
 installer_dir = "~/work/installers/QuestArmTeleop"
 

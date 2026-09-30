@@ -1,6 +1,6 @@
 # 使用微调后的 π0.5 控制 X5
 
-默认权重：`/home/r2/work/models/checkpoint/2500`。这是 OpenPI PyTorch 训练到第 2500 步的 checkpoint，不是 JAX 参数目录，也不是 LeRobot 的 `from_pretrained` 包。
+默认权重：`/home/r2/work/checkpoints/2500`。这是 OpenPI PyTorch 训练到第 2500 步的 checkpoint，不是 JAX 参数目录，也不是 LeRobot 的 `from_pretrained` 包。
 
 ## 启动
 
@@ -85,10 +85,10 @@ PYTHONPATH=src/infer_after_sft outputs/envs/pi05-sft/bin/python -m unittest disc
 bash src/infer_after_sft/setup_jax.sh
 bash src/infer_after_sft/run_jax.sh
 # 指定权重目录或 step 目录
-bash src/infer_after_sft/run_jax.sh --checkpoint ~/work/models/checkpoint/blue_cube_jax_v1/15000
+bash src/infer_after_sft/run_jax.sh --checkpoint ~/work/checkpoints/blue_cube_jax_v1/15000
 ```
 
-默认使用 `~/work/models/checkpoint/blue_cube_jax_v1` 下数字最大的、含 `params/_METADATA` 的 step，目前为 15000。原生恢复 Orbax `params`，严格校验模型参数树和形状，读取该 step 自带的 X5 统计；不加载 `train_state`。JAX/CUDA 运行在独立环境 `outputs/envs/pi05-jax`，不修改 PyTorch 环境。
+默认使用 `~/work/checkpoints/blue_cube_jax_v1` 下数字最大的、含 `params/_METADATA` 的 step，目前为 15000。原生恢复 Orbax `params`，严格校验模型参数树和形状，读取该 step 自带的 X5 统计；不加载 `train_state`。JAX/CUDA 运行在独立环境 `outputs/envs/pi05-jax`，不修改 PyTorch 环境。
 
 这个 Orbax checkpoint 未保存训练配置，因此使用项目 X5 适配器的 PI05 配置：32 维模型动作、15 步 horizon、200 token、6 个关节增量和绝对夹爪宽度。如果训练时改了 horizon，使用 `--jax-horizon N`；horizon 不能从权重形状可靠推断，必须与训练一致。每块执行步数仍由 `--chunk-steps` 控制，默认 10。
 

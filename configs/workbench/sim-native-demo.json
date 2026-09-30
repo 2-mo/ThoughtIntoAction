@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "robot": "arx.sim",
+  "controller": "arx.joint_target",
+  "source": "quest",
+  "source_options": {
+    "source": "quest"
+  },
+  "native": {
+    "device": "arx.demo",
+    "routing": "arx.native",
+    "ingress": "arx.native",
+    "channel": "native"
+  },
+  "camera": "synthetic"
+}

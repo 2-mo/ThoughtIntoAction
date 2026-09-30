@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "robot-teleop"
+version = "0.1.0"
+description = "Low-latency, device-independent robot teleoperation framework"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "2-mo" }]
+dependencies = [
+  "PyYAML>=6.0.2,<7",
+]
+
+[project.optional-dependencies]
+# Offline model checks only. These packages never belong in core or start a
+# hardware SDK; production backend wiring remains a later phase.
+kinematics = [
+  "pin==4.1.0",
+]
+# ARX5 control dependencies are optional and platform-scoped. The vendor wheel
+# currently publishes Linux x86_64 binaries; keeping the marker here lets the
+# Mac/iOS development environment resolve the project without the SDK.
+arx5 = [
+  "arx5-interface==0.1.3; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "pin==4.1.0",
+  "ruckig==0.19.4",
+]
+
+[project.scripts]
+robot-teleop = "robot_teleop.cli:main"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.17,<2",
+  "pytest>=8.4,<10",
+  "pytest-cov>=6.2,<8",
+  "ruff>=0.12,<1",
+  "types-PyYAML>=6.0.12,<7",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/robot_teleop"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "PT", "RUF", "SIM", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["robot_teleop"]
+mypy_path = "src"
+warn_unreachable = true

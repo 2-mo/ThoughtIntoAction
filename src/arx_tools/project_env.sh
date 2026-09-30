@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+ARX5_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ARX5_SCRIPTS_DIR="$ARX5_PROJECT_ROOT/src/arx_tools"
+export ARX5_PROJECT_ROOT ARX5_SCRIPTS_DIR
+export PYTHONPATH="$ARX5_PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"

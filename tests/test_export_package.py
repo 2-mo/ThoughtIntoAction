@@ -11,6 +11,7 @@ from unittest.mock import patch
 import zipfile
 
 import numpy as np
+from mcap_fixture import write_records
 
 from quest_teleop.task_package import finalize_task
 from quest_teleop.export_decode import BatchFrameReader
@@ -47,8 +48,7 @@ def make_episode(root, name, count=120, png=False):
         outcome='success', task_run_id='test-run', counts=dict(state=len(states), frame=count),
         id=name, task='pick cup', robot={'model': 'x5'}, camera=dict(width=64, height=48, fps=30))
     (path/'episode.json').write_text(json.dumps(meta))
-    for name, rows in [('states', states), ('frames', frames)]:
-        (path/(name+'.jsonl')).write_text(''.join(json.dumps(row)+'\n' for row in rows))
+    write_records(path, states=states, frames=frames)
     return path, states, frames
 
 
@@ -70,6 +70,47 @@ class SequentialReaderTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('lerobot'), 'requires scripts/datasets/setup_export.sh environment')
 class PortableExportTests(unittest.TestCase):
+    def test_runtime_schema2_portable_export_preserves_independent_clocks(self):
+        from episode_io.runtime_episode import RuntimeEpisodeWriter
+        from test_runtime_collection import tick
+        from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+        from quest_teleop.export_lerobot import export
+        import time
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            descriptor = {'runtime_id':'test', 'backend':'sim', 'parameters':{'model':{'manifest':{'model':'fixture'}}}}
+            camera = {'stream_id':'rgb', 'fps':30, 'height':48, 'width':64}
+            writer = RuntimeEpisodeWriter(root/'raw',descriptor,'independent clocks',camera)
+            origin = time.monotonic_ns()
+            for i in range(80):
+                row = tick(i,origin+i*4_000_000)
+                row.update(version=2, source='phone', owner_epoch=1, source_sequence=i, operation_id='')
+                writer.add_tick(row)
+                if i % 8 == 0:
+                    writer.add_frame({'image':np.zeros((48,64,3),np.uint8), 'stream_id':'rgb',
+                        'host_received_monotonic_ns':origin+i*4_000_000+3_000_000, 'frame_number':i//8})
+            writer.close('duration')
+            archive = finalize_task(root/'raw',[writer.path.name],root/'runtime task',250)
+            with zipfile.ZipFile(archive) as package:
+                package.extractall(root/'unpacked')
+            bundle = root/'unpacked/runtime task'
+            env = {**os.environ,'LEROBOT_EXPORT_PYTHON':sys.executable,'PYTHONPATH':''}
+            done = subprocess.run(['bash',str(bundle/'转换为LeRobot.sh'),'--decoder','opencv','--decode-workers','0'],
+                cwd=root, env=env, capture_output=True, text=True, timeout=90)
+            self.assertEqual(done.returncode,0,done.stdout+done.stderr)
+            output = bundle/'lerobot_dataset'
+            manifest = json.loads((output/'meta/quest_export.json').read_text())
+            self.assertEqual(manifest['layout'],'aligned30_raw250_v2')
+            loaded = LeRobotDataset('local/quest_x5',root=output,video_backend='pyav')
+            self.assertEqual(len(loaded),10)
+            self.assertGreater(loaded[0]['source.action_monotonic_ns'].item(), loaded[0]['source.state_monotonic_ns'].item())
+            with np.load(output/'robot/episode_000000.npz') as raw:
+                np.testing.assert_array_equal(raw['command_timestamp_ns']-raw['feedback_timestamp_ns'],2_000_000)
+                self.assertEqual(len(raw['raw_ticks_json']),80)
+            make_episode(root/'raw','legacy',count=4,png=True)
+            with self.assertRaisesRegex(ValueError,'Mixed episode schemas'):
+                export(root/'raw',root/'mixed','local/test',progress=False,decoder='opencv',decode_workers=0)
+
     def test_batched_decoders_preserve_exact_pixels_and_order_across_processes(self):
         with tempfile.TemporaryDirectory() as directory:
             path, _, frames = make_episode(Path(directory), 'video', count=41)

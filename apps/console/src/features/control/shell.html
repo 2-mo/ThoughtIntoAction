@@ -1,0 +1,607 @@
+<main>
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Manual control</p>
+          <h2>手动控制</h2>
+        </div>
+        <p>连接后默认为自由阻尼；左下角模式选择决定动作完成后的控制状态。<a id="grootCollectionLink" href="/collection">进入 GR00T 数据采集</a></p>
+      </div>
+
+      <section class="arm-toolbar card" aria-label="机械臂操作">
+        <div class="arm-action-group" role="group" aria-label="参考姿态">
+          <button id="setReferenceButton" disabled aria-label="记录当前姿态为参考" title="记录当前姿态为参考"><i class="fa-solid fa-bookmark" aria-hidden="true"></i><span>设参考</span></button>
+          <button id="parkButton" disabled aria-label="预览并执行回参考" title="预览并执行回参考"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i><span>回参考</span></button>
+        </div>
+        <div class="arm-action-group automation-actions" role="group" aria-label="机械臂自动任务">
+          <button id="cubePickButton" type="button" title="需要稳定检测到方块并连接机械臂"><i class="fa-solid fa-hand" aria-hidden="true"></i><span>抓取方块</span></button>
+          <button id="cubeMoveButton" type="button" title="抓取后点选另一个方块作为目标" disabled><i class="fa-solid fa-arrows-up-down-left-right" aria-hidden="true"></i><span>移动方块</span></button>
+          <button id="cubePlaceButton" type="button" title="移动到目标上方后放下方块" disabled><i class="fa-solid fa-cubes-stacked" aria-hidden="true"></i><span>放下方块</span></button>
+          <button id="cubeHomeButton" type="button" title="放置完成后预览回零轨迹" disabled><i class="fa-solid fa-house" aria-hidden="true"></i><span>回零位</span></button>
+          <button id="cubeStackButton" type="button" title="将当前选中方块自动叠放到最近的另一个稳定方块上" disabled><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span>一键叠放</span></button>
+        </div>
+        <div class="arm-action-group safety-actions" role="group" aria-label="故障与紧急操作">
+          <button id="clearFaultButton" disabled aria-label="清除故障" title="清除故障"><i class="fa-solid fa-wrench" aria-hidden="true"></i><span>清故障</span></button>
+          <button id="emergencyButton" class="danger" disabled aria-label="立即进入紧急阻尼" title="立即进入紧急阻尼"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i><span>急停</span></button>
+        </div>
+      </section>
+
+      <section class="manual-workspace">
+        <div class="manual-main">
+          <section class="robot-console card" aria-labelledby="robotConsoleTitle">
+            <div class="robot-stage">
+              <canvas id="robotCanvas" tabindex="0" aria-label="ARX X5 三维姿态预览"></canvas>
+              <!-- Transparent by design: the low-poly loading skeleton behind it
+                   reports progress, so this layer only blocks input and captions. -->
+              <div id="robotModelLoading" class="robot-model-loading">
+                <p id="robotModelLoadingText" class="robot-model-loading-text" aria-live="polite">正在加载官方 X5 模型…</p>
+              </div>
+              <div class="robot-stage-tools">
+                <button id="robotResetViewButton" type="button" title="重新初始化 3D 仿真渲染器，不刷新控制页面"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i><span>重载仿真</span></button>
+                <button id="tableCalibrationButton" type="button" aria-controls="tableCalibrationPanel" aria-expanded="false" title="编辑桌面标定"><i class="fa-solid fa-table-cells-large" aria-hidden="true"></i><span>桌面</span></button>
+                <button id="cameraCalibrationButton" type="button" aria-controls="cameraCalibrationPanel" aria-expanded="false" title="编辑 D455 外参"><i class="fa-solid fa-video" aria-hidden="true"></i><span>相机</span></button>
+                <button id="lightCalibrationButton" type="button" aria-controls="lightCalibrationPanel" aria-expanded="false" title="编辑主光源"><i class="fa-solid fa-sun" aria-hidden="true"></i><span>光源</span></button>
+                <button id="robotSyncPreviewButton" type="button" disabled><i class="fa-solid fa-xmark" aria-hidden="true"></i>取消预览</button>
+              </div>
+              <section id="tableCalibrationPanel" class="table-calibration-panel" aria-label="桌面标定" hidden>
+                <div class="table-calibration-heading">
+                  <strong><i class="fa-solid fa-ruler-combined" aria-hidden="true"></i>桌面标定</strong>
+                  <button id="tableCalibrationClose" type="button" aria-label="关闭桌面标定" title="关闭"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                </div>
+                <div class="table-calibration-grid">
+                  <label><span>长 mm</span><input id="tableWidthMm" type="number" inputmode="decimal" min="300" max="4000" step="1" /></label>
+                  <label><span>进深 mm</span><input id="tableDepthMm" type="number" inputmode="decimal" min="200" max="3000" step="1" /></label>
+                  <label><span>厚 mm</span><input id="tableThicknessMm" type="number" inputmode="decimal" min="5" max="200" step="1" /></label>
+                  <label><span>Yaw °</span><input id="tableYawDeg" type="number" inputmode="decimal" min="-180" max="180" step="0.1" /></label>
+                  <label><span>X mm</span><input id="tablePositionXmm" type="number" inputmode="decimal" min="-3000" max="3000" step="0.5" /></label>
+                  <label><span>Y mm</span><input id="tablePositionYmm" type="number" inputmode="decimal" min="-3000" max="3000" step="0.5" /></label>
+                  <label><span>Z mm</span><input id="tablePositionZmm" type="number" inputmode="decimal" min="-1000" max="2000" step="0.5" /></label>
+                </div>
+                <div class="table-calibration-actions">
+                  <button id="tableFocusButton" type="button"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>聚焦</button>
+                  <button id="tableAutoAlignButton" type="button" title="使用独立桌边标注对齐 3D 桌面"><i class="fa-solid fa-cube" aria-hidden="true"></i>桌边对齐</button>
+                  <button id="tableCalibrationReset" type="button"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i>默认</button>
+                </div>
+                <small id="tableAutoAlignStatus" class="table-auto-align-status" aria-live="polite"></small>
+              </section>
+              <section id="cameraCalibrationPanel" class="table-calibration-panel camera-calibration-panel" aria-label="D455 相机外参" hidden>
+                <div class="table-calibration-heading">
+                  <strong title="单帧估算仅作为手眼标定初值"><i class="fa-solid fa-camera" aria-hidden="true"></i>D455 外参</strong>
+                  <button id="cameraCalibrationClose" type="button" aria-label="关闭相机外参" title="关闭"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                </div>
+                <div class="table-calibration-grid camera-calibration-grid">
+                  <label><span>X mm</span><input id="cameraPositionXmm" type="number" inputmode="decimal" min="-3000" max="3000" step="0.5" /></label>
+                  <label><span>Y mm</span><input id="cameraPositionYmm" type="number" inputmode="decimal" min="-3000" max="3000" step="0.5" /></label>
+                  <label><span>Z mm</span><input id="cameraPositionZmm" type="number" inputmode="decimal" min="-1000" max="3000" step="0.5" /></label>
+                  <label><span>Roll °</span><input id="cameraRollDeg" type="number" inputmode="decimal" min="-180" max="180" step="0.1" /></label>
+                  <label><span>Pitch °</span><input id="cameraPitchDeg" type="number" inputmode="decimal" min="-89" max="89" step="0.1" /></label>
+                  <label><span>Yaw °</span><input id="cameraYawDeg" type="number" inputmode="decimal" min="-180" max="180" step="0.1" /></label>
+                </div>
+                <div class="table-calibration-actions camera-calibration-actions">
+                  <button id="cameraFocusButton" type="button"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>聚焦</button>
+                  <button id="cameraViewButton" type="button"><i class="fa-solid fa-eye" aria-hidden="true"></i>相机视角</button>
+                  <button id="cameraCalibrationReset" type="button" title="恢复正对机械臂的默认外参"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i>默认布局</button>
+                </div>
+              </section>
+              <section id="lightCalibrationPanel" class="table-calibration-panel light-calibration-panel" aria-label="主光源" hidden>
+                <div class="table-calibration-heading">
+                  <strong><i class="fa-solid fa-sun" aria-hidden="true"></i>主光源</strong>
+                  <button id="lightCalibrationClose" type="button" aria-label="关闭光源设置" title="关闭"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                </div>
+                <div class="table-calibration-grid light-calibration-grid">
+                  <label><span>X mm</span><input id="lightPositionXmm" type="number" inputmode="decimal" min="-4000" max="4000" step="10" /></label>
+                  <label><span>Y mm</span><input id="lightPositionYmm" type="number" inputmode="decimal" min="-4000" max="4000" step="10" /></label>
+                  <label><span>Z mm</span><input id="lightPositionZmm" type="number" inputmode="decimal" min="100" max="5000" step="10" /></label>
+                  <label><span>强度</span><input id="lightIntensity" type="number" inputmode="decimal" min="0.2" max="8" step="0.1" /></label>
+                </div>
+                <div class="table-calibration-actions light-calibration-actions">
+                  <button id="lightCalibrationReset" type="button"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i>默认</button>
+                </div>
+              </section>
+              <div class="shortcut-dock stage-shortcuts" aria-label="快捷键提示">
+                <span class="shortcut-dock-label" title="快捷键" aria-hidden="true"><i class="fa-regular fa-keyboard"></i></span>
+                <div class="shortcut-items">
+                  <span class="shortcut-item" title="立即停止运动并进入阻尼"><kbd>Space</kbd><span>急停</span></span>
+                  <span class="shortcut-item" title="切换控制方式"><kbd>M</kbd><span>模式</span></span>
+                  <span class="shortcut-item" title="显示或隐藏 TCP 平移箭头与旋转环"><kbd>V</kbd><span>TCP</span></span>
+                  <span class="shortcut-item" title="按住 D 张开，按住 F 闭合"><kbd>D/F</kbd><span>夹爪</span></span>
+                  <span class="shortcut-item" title="回到参考姿态"><kbd>N</kbd><span>参考</span></span>
+                </div>
+              </div>
+              <div id="targetEditBadge" class="target-edit-badge" hidden>目标就绪</div>
+              <div class="stage-legend-row">
+                <div class="trajectory-legend" aria-label="轨迹颜色">
+                  <span><i class="trajectory-pending" aria-hidden="true"></i>待执行</span>
+                  <span><i class="trajectory-executed" aria-hidden="true"></i>已执行</span>
+                </div>
+                <div class="axis-legend" aria-label="坐标轴颜色">
+                  <span class="axis-x">X</span><span class="axis-y">Y</span><span class="axis-z">Z</span>
+                </div>
+              </div>
+            </div>
+
+            <aside class="robot-joint-panel">
+              <div>
+                <p class="eyebrow">3D motion control</p>
+                <h2 id="robotConsoleTitle">末端与关节控制</h2>
+                <p class="robot-help">末端目标使用基座坐标系；先编辑目标，再预览验证，最后明确执行。关节模式可点击连杆或圆环选择。所有预览都不会立即移动真机。外观来自
+                  <a href="https://github.com/real-stanford/arx5-sdk/tree/main/models" target="_blank" rel="noreferrer">上游 X5 模型</a>。
+                </p>
+              </div>
+
+              <div id="robotControlModes" class="robot-control-modes binary-segment" data-selected="xyz" aria-label="运动控制方式">
+                <button type="button" data-mode="xyz" class="selected"><i class="fa-solid fa-up-down-left-right" aria-hidden="true"></i>XYZ 末端</button>
+                <button type="button" data-mode="joint"><i class="fa-solid fa-sliders" aria-hidden="true"></i>单关节</button>
+                <button type="button" data-mode="hand"><i class="fa-solid fa-hand" aria-hidden="true"></i>Hand</button>
+              </div>
+
+              <div id="motionSpeedControl" class="motion-speed" title="100% 对应硬件速度上限；其余档位按比例缩放">
+                <i class="motion-speed-icon fa-solid fa-gauge-high" aria-hidden="true"></i>
+                <span class="motion-speed-selector">
+                  <span class="motion-speed-ticks" aria-hidden="true">
+                    <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                  </span>
+                  <input id="motionSpeed" type="range" min="0" max="9" step="1" value="5"
+                         aria-label="机械臂速度百分比" />
+                </span>
+                <output id="motionSpeedValue" for="motionSpeed">10%</output>
+              </div>
+
+              <div id="xyzControlPane" class="robot-control-pane xyz-control-pane">
+                <label class="servo-toggle" title="开启后拖动末端会直接跟随机械臂，松开鼠标即平滑停车">
+                  <input id="cartesianServoEnabled" type="checkbox" />
+                  <span><strong><i class="fa-solid fa-wave-square" aria-hidden="true"></i>实时伺服</strong><small>拖动即跟手</small></span>
+                </label>
+                <section class="xyz-control-group xyz-position-group" aria-labelledby="xyzPositionTitle">
+                  <div class="xyz-control-group-heading">
+                    <strong id="xyzPositionTitle"><i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>位置</strong>
+                    <span>基座坐标系 · mm</span>
+                  </div>
+                  <div class="xyz-coordinate-readout">
+                    <div><span>当前</span><strong id="xyzCurrent">—</strong></div>
+                  </div>
+
+                  <div class="xyz-input-grid" aria-label="基座坐标系目标位置，单位毫米">
+                    <label><span class="axis-x-text">目标 X</span><input id="xyzDeltaX" type="number" inputmode="decimal" step="0.1" value="0.0" /></label>
+                    <label><span class="axis-y-text">目标 Y</span><input id="xyzDeltaY" type="number" inputmode="decimal" step="0.1" value="0.0" /></label>
+                    <label><span class="axis-z-text">目标 Z</span><input id="xyzDeltaZ" type="number" inputmode="decimal" step="0.1" value="0.0" /></label>
+                  </div>
+
+                  <div id="xyzQuickMoves" class="xyz-quick-moves" aria-label="位置微调">
+                    <button type="button" data-axis="x" data-delta="-5">X −5</button>
+                    <button type="button" data-axis="x" data-delta="5">X ＋5</button>
+                    <button type="button" data-axis="y" data-delta="-5">Y −5</button>
+                    <button type="button" data-axis="y" data-delta="5">Y ＋5</button>
+                    <button type="button" data-axis="z" data-delta="-5">Z −5</button>
+                    <button type="button" data-axis="z" data-delta="5">Z ＋5</button>
+                  </div>
+                </section>
+
+                <div class="target-orientation-panel" aria-label="目标夹爪姿态">
+                  <div class="target-orientation-heading">
+                    <span><i class="fa-solid fa-rotate" aria-hidden="true"></i>姿态</span>
+                    <strong id="targetEditingState">空闲</strong>
+                  </div>
+                  <div class="approach-readout" aria-label="进近方向，基座坐标系单位向量">
+                    <span>进近</span>
+                    <output id="targetApproachX">—</output>
+                    <output id="targetApproachY">—</output>
+                    <output id="targetApproachZ">—</output>
+                  </div>
+                  <label class="target-roll-input" title="沿夹爪局部进近轴进行额外微调">Roll °
+                    <input id="targetRollDeg" type="number" inputmode="decimal" step="0.1" value="0.0" />
+                  </label>
+                  <div class="target-quaternion-readout">
+                    <span>四元数 · XYZW</span>
+                    <output id="targetQuaternion">—</output>
+                  </div>
+                </div>
+
+                <section class="xyz-control-group xyz-execution-group" aria-labelledby="xyzTrajectoryTitle">
+                  <div class="xyz-control-group-heading">
+                    <strong id="xyzTrajectoryTitle"><i class="fa-solid fa-route" aria-hidden="true"></i>轨迹与执行</strong>
+                  </div>
+                  <div id="xyzPathModes" class="xyz-path-modes binary-segment" data-selected="smooth" aria-label="XYZ 执行轨迹">
+                    <button type="button" data-path-mode="smooth" class="selected" aria-pressed="true"
+                            title="关节空间 Ruckig 限跃度轨迹，末端路径为平滑曲线">
+                      <i class="fa-solid fa-bezier-curve" aria-hidden="true"></i>平滑曲线
+                    </button>
+                    <button type="button" data-path-mode="linear" aria-pressed="false"
+                            title="保持末端姿态并严格沿笛卡尔直线执行">
+                      <i class="fa-solid fa-minus" aria-hidden="true"></i>末端直线
+                    </button>
+                  </div>
+                  <div class="xyz-preview-actions">
+                    <button id="xyzClearButton" type="button"><i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>当前</button>
+                    <button id="xyzPreviewButton" type="button" disabled><i class="fa-solid fa-eye" aria-hidden="true"></i>预览 XYZ</button>
+                    <button id="xyzExecuteButton" type="button" class="primary" disabled><i class="fa-solid fa-play" aria-hidden="true"></i>执行预览</button>
+                  </div>
+                  <p id="xyzStatus" class="xyz-status" aria-live="polite"></p>
+                </section>
+              </div>
+
+              <div id="jointControlPane" class="robot-control-pane joint-control-pane" hidden>
+                <div id="robotJointButtons" class="robot-joint-buttons" aria-label="选择关节">
+                  <button type="button" data-joint="1">J1</button>
+                  <button type="button" data-joint="2">J2</button>
+                  <button type="button" data-joint="3">J3</button>
+                  <button type="button" data-joint="4">J4</button>
+                  <button type="button" data-joint="5">J5</button>
+                  <button type="button" data-joint="6">J6</button>
+                </div>
+
+                <div class="robot-joint-readout">
+                  <div><span>当前</span><strong id="robotJointActual">—°</strong></div>
+                  <div><span>预览目标</span><strong id="robotJointTarget">—°</strong></div>
+                  <div><span>变化</span><strong id="robotJointDelta">—°</strong></div>
+                </div>
+
+                <div id="jointDial" class="joint-dial" role="slider" tabindex="0"
+                     aria-label="关节预览角度" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0">
+                  <div class="joint-dial-track"></div>
+                  <div id="jointDialNeedle" class="joint-dial-needle"></div>
+                  <div class="joint-dial-center"><strong id="jointDialLabel">J1</strong><span>拖动旋转</span></div>
+                </div>
+
+                <div id="robotJointNudges" class="robot-joint-nudges">
+                  <button type="button" data-delta="-5" disabled>−5°</button>
+                  <button type="button" data-delta="-1" disabled>−1°</button>
+                  <button type="button" data-delta="1" disabled>＋1°</button>
+                  <button type="button" data-delta="5" disabled>＋5°</button>
+                </div>
+
+                <label class="robot-target-input">
+                  精确目标角度
+                  <input id="robotJointTargetInput" type="number" step="0.5" disabled />
+                </label>
+                <p id="robotJointLimit" class="robot-joint-limit">连接机械臂后显示软件关节范围。</p>
+
+                <div class="robot-preview-actions">
+                  <button id="robotPreviewResetButton" type="button" disabled><i class="fa-solid fa-rotate-left" aria-hidden="true"></i>恢复当前姿态</button>
+                  <button id="robotExecuteButton" type="button" class="primary" disabled><i class="fa-solid fa-play" aria-hidden="true"></i>执行预览</button>
+                </div>
+                <p id="robotPreviewStatus" class="robot-preview-status" aria-live="polite">3D 模型仅显示，尚未连接机械臂。</p>
+
+                <details class="advanced-joints">
+                  <summary><i class="fa-solid fa-sliders" aria-hidden="true"></i>六关节调试</summary>
+                  <div class="joint-heading">
+                    <div>
+                      <h2>六关节滑块与逐关节复位</h2>
+                      <p>用于精确排查；拖动滑块并松手后执行。</p>
+                    </div>
+                    <label>
+                      微调步长
+                      <select id="jointStep">
+                        <option value="1">1°</option>
+                        <option value="3" selected>3°</option>
+                        <option value="5">5°</option>
+                        <option value="10">10°</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div id="jointGrid" class="joint-grid"></div>
+                </details>
+              </div>
+
+              <div id="handControlPane" class="robot-control-pane hand-control-pane" hidden>
+                <div class="hand-control-status">
+                  <i class="fa-solid fa-hand" aria-hidden="true"></i>
+                  <span>手势遥操作</span>
+                  <strong id="robotHandState">未启用</strong>
+                </div>
+              </div>
+
+              <section id="gripperControlPane" class="gripper-tool" aria-label="夹爪控制">
+                <div class="gripper-tool-heading">
+                  <span class="gripper-tool-label"><i class="fa-solid fa-arrows-left-right-to-line" aria-hidden="true"></i>夹爪</span>
+                  <strong id="gripperActual">— mm</strong>
+                  <small id="gripperReference">参考 — mm</small>
+                </div>
+                <div class="gripper-tool-popover">
+                  <div class="position-control">
+                    <label for="gripperWidth">预张开 <span id="gripperWidthValue">40 mm</span></label>
+                    <input id="gripperWidth" type="range" min="0" max="88" step="1" value="40" />
+                    <button id="gripperMoveButton" disabled><i class="fa-solid fa-arrows-left-right" aria-hidden="true"></i>定位</button>
+                    <div class="gripper-position-actions">
+                      <div id="gripperQuick" class="gripper-quick">
+                        <button data-width="20" disabled>20</button>
+                        <button data-width="40" disabled>40</button>
+                        <button data-width="88" disabled>全开</button>
+                      </div>
+                      <button id="gripperResetButton" disabled title="关闭夹爪"><i class="fa-solid fa-hand" aria-hidden="true"></i>关闭</button>
+                    </div>
+                  </div>
+                  <div class="force-control">
+                    <label>扭矩 N·m
+                      <input id="gripperTorque" type="number" min="0.05" max="0.25" step="0.01" value="0.15" />
+                    </label>
+                    <label>最小 mm
+                      <input id="gripperMinimum" type="number" min="0" max="88" step="1" value="0" />
+                    </label>
+                    <button id="gripperForceButton" disabled><i class="fa-solid fa-hand-fist" aria-hidden="true"></i>限扭矩夹取</button>
+                  </div>
+                  <section class="gripper-calibration" aria-label="夹爪零点校准">
+                    <label class="gripper-calibration-confirm">
+                      <input id="gripperCalibrationSafetyConfirm" type="checkbox" />
+                      <span>六轴已有支撑；夹爪周围无人、无物体，实体急停可用</span>
+                    </label>
+                    <div class="gripper-calibration-actions">
+                      <button id="gripperCalibrationStart" type="button">引导校准零点</button>
+                      <button id="gripperCalibrationClosedButton" type="button" hidden>已完全闭合</button>
+                      <button id="gripperCalibrationOpenButton" type="button" hidden>已完全张开</button>
+                      <button id="gripperCalibrationCancelButton" type="button" hidden>取消</button>
+                    </div>
+                    <p id="gripperCalibrationMessage" class="gripper-calibration-message" aria-live="polite">断开机械臂后可进行夹爪零点校准。</p>
+                  </section>
+                </div>
+                <p id="gripperHint" class="gripper-hint" aria-live="polite"></p>
+              </section>
+            </aside>
+          </section>
+
+        </div>
+      </section>
+
+      <aside class="vision-dock" aria-label="视觉预览">
+        <section class="vision-toolbar" aria-label="视觉控制">
+          <label class="vision-pose-switch" data-mode="off" title="人体与手部姿态识别；选择要跟踪的手，中间关闭识别">
+            <span class="pose-mode-label pose-mode-left"><i class="fa-solid fa-hand" aria-hidden="true"></i>左手</span>
+            <span class="pose-mode-label pose-mode-off"><i class="fa-solid fa-person-slash" aria-hidden="true"></i><span>关闭</span></span>
+            <span class="pose-mode-label pose-mode-right"><i class="fa-solid fa-hand" aria-hidden="true"></i>右手</span>
+            <span class="pose-mode-indicator" aria-hidden="true"></span>
+            <input id="poseSideSwitch" type="range" min="-1" max="1" step="1" value="0" aria-label="人体与手部姿态识别关闭；向左选择左手，向右选择右手" />
+          </label>
+          <button id="cameraToggleButton" class="primary" aria-pressed="false" title="开启相机"><i class="fa-solid fa-video" aria-hidden="true"></i><span>开启</span></button>
+          <button id="cubePerceptionButton" type="button" aria-pressed="false" title="开启方块感知"><i class="fa-solid fa-cubes" aria-hidden="true"></i><span>方块</span></button>
+          <button id="cubeRoiButton" type="button" aria-pressed="false" title="绘制方块识别工作区"><i class="fa-solid fa-draw-polygon" aria-hidden="true"></i><span>区域</span></button>
+          <button id="cubeRoiVisibilityButton" type="button" aria-pressed="true" title="隐藏工作区显示，不影响检测"><i class="fa-solid fa-eye" aria-hidden="true"></i><span>显示</span></button>
+          <button id="tableEdgeEditButton" type="button" aria-pressed="false" title="单独标注桌面远边和右边"><i class="fa-solid fa-ruler" aria-hidden="true"></i><span>桌边</span></button>
+        </section>
+
+        <div class="vision-tool-shell" data-vision-tool="gesture">
+          <div id="visionToolModes" class="vision-tool-modes binary-segment" data-selected="gesture" aria-label="视觉工具">
+            <button type="button" data-vision-tool="gesture" class="selected" aria-pressed="true"><i class="fa-solid fa-hand" aria-hidden="true"></i>手势控制</button>
+            <button type="button" data-vision-tool="handeye" aria-pressed="false"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>手眼标定</button>
+          </div>
+
+          <section class="workspace">
+          <div class="viewer camera-grid card">
+            <div class="camera-view">
+              <video id="rgbVideo" autoplay muted playsinline></video>
+              <span class="camera-label">外部 D455 · RGB</span>
+              <img id="handeyePreview" alt="手眼标定安全中心实时引导" hidden />
+              <canvas id="overlay"></canvas>
+              <canvas id="cubeOverlay" aria-label="RGB 方块检测叠加层"></canvas>
+              <div id="handPoseBadge" class="hand-pose-badge off" aria-live="polite" hidden>
+                <i class="fa-solid fa-hand" aria-hidden="true"></i>
+                <span>手部姿态：关闭</span>
+              </div>
+              <div id="cubeRoiEditor" class="cube-roi-editor" role="toolbar" aria-label="工作区编辑" hidden>
+                <span class="cube-roi-hint">逐点圈出方块检测工作区</span>
+                <button id="cubeRoiUndo" type="button" aria-label="撤销上一个顶点" title="撤销上一个顶点"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>
+                <button id="cubeRoiCommit" type="button" aria-label="完成工作区" title="完成工作区" disabled><i class="fa-solid fa-check" aria-hidden="true"></i></button>
+                <button id="cubeRoiCancel" type="button" aria-label="取消绘制" title="取消绘制"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                <button id="cubeRoiClear" type="button" aria-label="清除手动工作区" title="清除手动工作区，恢复自动桌面区域"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+              </div>
+              <div id="tableEdgeEditor" class="cube-roi-editor table-edge-editor" role="toolbar" aria-label="桌边标注" hidden>
+                <span class="cube-roi-hint" title="虚线会越过圆角，按两段直边的延长方向对齐理论角点">黄标注 / 青投影 · 延长线避开圆角</span>
+                <button id="tableEdgeUndo" type="button" aria-label="撤销桌边点" title="撤销上一个桌边点"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>
+                <button id="tableEdgeCommit" type="button" aria-label="完成桌边标注" title="保存两条桌边" disabled><i class="fa-solid fa-check" aria-hidden="true"></i></button>
+                <button id="tableEdgeCancel" type="button" aria-label="取消桌边标注" title="取消桌边标注"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                <button id="tableEdgeClear" type="button" aria-label="清除桌边标注" title="清除独立桌边标注"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+              </div>
+              <div id="handeyeGuide" class="handeye-guide" hidden>
+                <span id="handeyeGuideMessage">正在识别标定板</span>
+                <small id="handeyeGuideMetrics"></small>
+              </div>
+            </div>
+            <div class="camera-view">
+              <video id="depthVideo" autoplay muted playsinline></video>
+              <span class="camera-label">外部 D455 · 深度</span>
+              <canvas id="depthCubeOverlay" aria-label="深度工作区与方块叠加层"></canvas>
+              <div id="depthUnavailable" class="depth-unavailable" role="status" hidden>
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                <strong>深度暂不可用</strong>
+                <small id="depthUnavailableMessage">正在自动恢复</small>
+              </div>
+              <span id="depthHoverMarker" class="depth-hover-marker" aria-hidden="true" hidden></span>
+              <span id="depthHoverTooltip" class="depth-hover-tooltip" hidden></span>
+            </div>
+            <div class="camera-view">
+              <video id="eyeInHandVideo" autoplay muted playsinline></video>
+              <span class="camera-label">眼在手 D405 · RGB</span>
+            </div>
+            <div class="camera-view">
+              <video id="eyeInHandDepthVideo" autoplay muted playsinline></video>
+              <span class="camera-label">眼在手 D405 · 深度</span>
+            </div>
+            <div id="emptyState" class="empty-state">开启摄像头查看 D455 与眼在手 D405</div>
+          </div>
+
+          </section>
+
+          <section id="handTeleoperationPanel" class="hand-teleoperation-panel" data-state="disabled">
+            <div class="hand-camera-view">
+              <video id="handCameraVideo" autoplay muted playsinline></video>
+              <canvas id="handCameraOverlay" aria-label="手部关键点叠加层"></canvas>
+              <div id="handCameraStatus" class="hand-camera-status" data-kind="idle" role="status">
+                <i class="fa-solid fa-video" aria-hidden="true"></i>
+                <span id="handCameraStatusText">Mac 摄像头未启用</span>
+                <button id="handCameraStart" type="button"><i class="fa-solid fa-video" aria-hidden="true"></i>启用 Mac 摄像头</button>
+              </div>
+            </div>
+            <div class="hand-teleoperation-controls">
+              <label class="servo-toggle hand-teleoperation-toggle">
+                <input id="teleoperationEnabled" type="checkbox" />
+                <span><strong><i class="fa-solid fa-wave-square" aria-hidden="true"></i>机械臂跟随</strong><small id="teleoperationState">未启用</small></span>
+              </label>
+              <div id="teleoperationProfile" class="binary-segment" data-selected="fine" aria-label="跟随速度">
+                <button type="button" data-profile="fine" class="selected" aria-pressed="true">精细</button>
+                <button type="button" data-profile="fast" aria-pressed="false">快速</button>
+              </div>
+              <div class="hand-teleoperation-fields">
+                <label>张开宽度 mm<input id="teleoperationOpenWidth" type="number" min="0" max="88" step="1" value="40" /></label>
+                <label>闭合扭矩 N·m<input id="teleoperationClosingTorque" type="number" min="0.05" max="0.25" step="0.01" value="0.15" /></label>
+              </div>
+              <dl class="hand-teleoperation-metrics">
+                <div><dt>帧率</dt><dd id="teleoperationFps">—</dd></div>
+                <div><dt>推理</dt><dd id="teleoperationInferenceMs">—</dd></div>
+                <div><dt>往返</dt><dd id="teleoperationRttMs">—</dd></div>
+                <div><dt>目标龄</dt><dd id="teleoperationTargetAgeMs">—</dd></div>
+                <div><dt>伺服周期</dt><dd id="teleoperationServoPeriodMs">—</dd></div>
+              </dl>
+            </div>
+          </section>
+
+          <section id="handeyeCalibrationPanel" class="handeye-calibration-overlay" hidden>
+          <section class="handeye-calibration-dialog" role="dialog" aria-labelledby="handeyeCalibrationTitle">
+            <div class="handeye-calibration-heading">
+              <div>
+                <span class="eyebrow">Calibration</span>
+                <strong id="handeyeCalibrationTitle"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>手眼标定</strong>
+              </div>
+              <div class="handeye-dialog-status">
+                <span id="handeyeCalibrationStage">未开始</span>
+              </div>
+            </div>
+            <label class="handeye-safety-check">
+              <input id="handeyeSafetyConfirm" type="checkbox" />
+              <span>D405 模式：标定板已固定桌面；D455 模式：标定板可安全放入夹爪；所选相机可见、工作区无障碍且实体急停已准备好</span>
+            </label>
+            <label class="handeye-return-reference">
+              <input id="handeyeReturnReference" type="checkbox" checked />
+              <span>完成验证、移除标定板后自动回网页参考位（夹爪保持张开）</span>
+            </label>
+            <div class="handeye-calibration-actions">
+              <button id="handeyeD405Start" type="button" title="只标定夹爪上的 D405；标定板固定在桌面"><i class="fa-solid fa-camera" aria-hidden="true"></i>仅标定 D405</button>
+              <button id="handeyeD455Start" type="button" title="只标定外部 D455；无需先标定 D405"><i class="fa-solid fa-camera" aria-hidden="true"></i>仅标定 D455</button>
+              <button id="handeyeCalibrationStart" type="button" class="primary" title="连续标定 D405 与 D455；标定板：DICT_4X4_50 · ID 0 · 100 mm"><i class="fa-solid fa-play" aria-hidden="true"></i>连续标定两相机</button>
+              <button id="handeyeCalibrationCancel" type="button" class="quiet" hidden><i class="fa-solid fa-house" aria-hidden="true"></i>取消并回零</button>
+            </div>
+            <div id="handeyeCalibrationConfirmActions" class="handeye-calibration-confirm-actions" hidden>
+              <button id="handeyeD405ReadyButton" type="button" class="primary" hidden><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>D405 起始姿态已就绪</button>
+              <button id="handeyeBoardReadyButton" type="button" hidden><i class="fa-solid fa-grip-lines" aria-hidden="true"></i>标定板已放入夹爪</button>
+              <button id="handeyeCenterReadyButton" type="button" hidden><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>开始 D455 自动采样</button>
+              <button id="handeyeRunButton" type="button" class="primary" hidden><i class="fa-solid fa-play" aria-hidden="true"></i>确认执行预览轨迹</button>
+              <button id="handeyeManualHomeButton" type="button" hidden><i class="fa-solid fa-house" aria-hidden="true"></i>回零位</button>
+              <button id="handeyeManualSampleButton" type="button" class="primary" hidden><i class="fa-solid fa-camera" aria-hidden="true"></i>手动补采当前姿态</button>
+              <button id="handeyeManualDoneButton" type="button" class="primary" hidden><i class="fa-solid fa-check" aria-hidden="true"></i>完成并求解</button>
+              <button id="handeyeReviewMoreButton" type="button" hidden title="将本轮独立验证样本纳入下一次拟合，再采 4 个高信息差异化姿态，并使用全新独立姿态复评"><i class="fa-solid fa-plus" aria-hidden="true"></i>纳入评审样本，再采 4 组</button>
+              <button id="handeyeReviewAcceptButton" type="button" class="primary" hidden><i class="fa-solid fa-check" aria-hidden="true"></i>采用当前评审结果</button>
+              <button id="handeyeRemoveButton" type="button" hidden><i class="fa-solid fa-hand" aria-hidden="true"></i>已托住，张开夹爪</button>
+            </div>
+            <div class="handeye-calibration-progress"><span id="handeyeCalibrationProgress">双相机自动采样</span><b id="handeyeCalibrationResult">尚无结果</b></div>
+            <section class="handeye-validation-tool" aria-label="手眼标定验证">
+              <div class="handeye-validation-heading">
+                <strong><i class="fa-solid fa-shield-halved" aria-hidden="true"></i>结果验证与启用</strong>
+                <span id="handeyeValidationStage">未验证</span>
+              </div>
+              <div class="handeye-validation-actions">
+                <button id="handeyeValidateButton" type="button"><i class="fa-solid fa-magnifying-glass-chart" aria-hidden="true"></i>验证缓存结果</button>
+                <button id="handeyeEnableButton" type="button" class="primary" disabled><i class="fa-solid fa-toggle-on" aria-hidden="true"></i>启用结果</button>
+                <button id="handeyeDisableButton" type="button" class="quiet" hidden><i class="fa-solid fa-toggle-off" aria-hidden="true"></i>停用</button>
+              </div>
+              <p id="handeyeValidationMessage" class="handeye-validation-message">验证通过后才会用于小方块坐标转换。</p>
+            </section>
+            <section id="handeyeQualityPanel" class="handeye-quality" aria-label="实时标定误差" hidden>
+              <div class="handeye-quality-heading"><strong>实时误差评估</strong><span id="handeyeQualityStatus">等待有效样本</span></div>
+              <div id="handeyeQualityMetrics" class="handeye-quality-metrics"></div>
+              <p id="handeyeQualityMessage" class="handeye-quality-message"></p>
+            </section>
+            <p id="handeyeCalibrationMessage" class="handeye-calibration-message">可单独标定 D405 或 D455；连续模式才会依次完成两台相机。</p>
+          </section>
+          </section>
+        </div>
+      </aside>
+
+      <footer class="app-statusbar" aria-label="系统状态栏">
+        <div class="statusbar-left">
+          <div class="arm-status-control">
+            <button id="armConnectButton" type="button" class="arm-connection-status pending primary" aria-label="连接机械臂" title="连接机械臂；当前状态：未连接">
+              <i class="fa-solid fa-robot" aria-hidden="true"></i><span>连接</span>
+            </button>
+            <div id="armModeSwitch" class="arm-status-mode-switch" role="group" aria-label="机械臂控制策略" hidden>
+              <button id="dampingModeButton" type="button" data-arm-mode="damping" disabled><span>自由阻尼</span></button>
+              <button id="activeModeButton" type="button" data-arm-mode="active" disabled><span>关节位置</span></button>
+            </div>
+          </div>
+          <span id="controlMessage" class="control-message info">
+            先连接机械臂；默认自由阻尼，动作完成模式由左侧状态栏选择。
+          </span>
+        </div>
+        <div class="statusbar-right">
+          <div class="statusbar-cluster statusbar-cluster-motion" aria-label="机械臂运行指标">
+            <span class="statusbar-metric activity-status" title="当前动作：空闲" aria-hidden="true"><i class="fa-solid fa-circle-notch fa-spin activity-spinner" aria-hidden="true"></i><b id="controlBusy">空闲</b></span>
+            <details id="payloadCalibrationTool" class="payload-calibration-tool">
+              <summary id="payloadMetric" class="statusbar-metric payload-metric" title="查看负载档案与重新标定">
+                <i class="fa-solid fa-weight-hanging" aria-hidden="true"></i><b id="payloadWeight">0 g</b><i class="fa-solid fa-chevron-up payload-chevron" aria-hidden="true"></i>
+              </summary>
+              <div class="payload-calibration-panel">
+                <div class="payload-calibration-heading">
+                  <strong><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i>负载标定</strong>
+                  <span id="payloadCalibrationStage">缓存档案可复用</span>
+                </div>
+                <label class="payload-profile-field">
+                  档案名
+                  <input id="payloadCalibrationProfile" type="text" maxlength="48" value="payload" autocomplete="off" spellcheck="false" />
+                </label>
+                <div class="payload-calibration-actions">
+                  <button id="payloadFixedButton" type="button" title="刚性安装的 D455、工具或支架"><i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i><span>固定负载</span></button>
+                  <button id="payloadGraspedButton" type="button" title="夹爪抓取的物体"><i class="fa-solid fa-hand" aria-hidden="true"></i><span>夹取物体</span></button>
+                  <button id="payloadSafetyButton" type="button" hidden><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>已确认安全，连接</span></button>
+                  <button id="payloadSafetyBackButton" type="button" class="quiet" hidden><i class="fa-solid fa-arrow-left" aria-hidden="true"></i><span>返回</span></button>
+                </div>
+                <div id="payloadCalibrationConfirmActions" class="payload-calibration-confirm-actions" hidden>
+                  <button id="payloadCenterReadyButton" type="button" hidden><i class="fa-solid fa-crosshairs" aria-hidden="true"></i><span>中心已就位</span></button>
+                  <button id="payloadRunButton" type="button" hidden><i class="fa-solid fa-play" aria-hidden="true"></i><span>开始采集</span></button>
+                  <button id="payloadReleaseButton" type="button" hidden><i class="fa-solid fa-unlock" aria-hidden="true"></i><span>已托住，释放夹爪</span></button>
+                  <button id="payloadCancelButton" type="button" class="quiet"><i class="fa-solid fa-xmark" aria-hidden="true"></i><span>取消</span></button>
+                </div>
+                <p id="payloadCalibrationMessage" class="payload-calibration-message">空载基线已缓存；选择负载类型开始。</p>
+              </div>
+            </details>
+            <span class="statusbar-metric feedback-metric" title="机械臂反馈延迟"><i class="fa-solid fa-clock" aria-hidden="true"></i><b id="feedbackAge">—</b></span>
+          </div>
+          <div class="statusbar-cluster statusbar-cluster-services" aria-label="运行依赖状态">
+            <span id="robotModelStatus" class="pill pending" title="3D 模型状态" aria-label="3D 模型状态"><i class="fa-solid fa-cubes" aria-hidden="true"></i><span>模型加载中</span></span>
+            <span id="modelStatus" class="pill pending" title="视觉模型状态" aria-label="视觉模型状态"><i class="fa-solid fa-eye" aria-hidden="true"></i><span>视觉模型未加载</span></span>
+            <span id="cameraStatus" class="pill pending" title="主机相机状态" aria-label="主机相机状态"><i class="fa-solid fa-video" aria-hidden="true"></i><span>相机已停止</span></span>
+          </div>
+          <div class="statusbar-cluster statusbar-cluster-perception" aria-label="视觉识别指标">
+            <span id="visualRuntimeMetric" class="statusbar-metric visual-runtime-metric" title="视觉识别已关闭" data-status-tooltip-panel tabindex="0"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i><b id="fps">—</b><span class="visual-runtime-details" aria-label="视觉识别详情"><span><small>推理</small><b id="poseLatency">—</b></span><span><small>人体</small><b id="poseMetric">—</b></span><span><small>手部</small><b id="handMetric">—</b></span><span><small>捏合</small><b id="pinchMetric">—</b></span></span></span>
+            <span class="statusbar-metric cube-status" data-state="idle" title="未检测到方块" aria-label="未检测到方块">
+              <i class="fa-solid fa-cube cube-state-icon" aria-hidden="true"></i>
+              <span id="cubeColorSwatch" class="cube-color-swatch" hidden aria-hidden="true"></span>
+              <span id="cubeCandidateMetric" class="cube-candidate-metric" hidden></span>
+              <i id="cubePositionIcon" class="fa-solid fa-location-crosshairs cube-position-icon" hidden aria-hidden="true"></i>
+              <b id="cubeMetric" hidden></b>
+            </span>
+          </div>
+          <details class="status-details">
+            <summary title="系统详情与连接设置" aria-label="系统详情与连接设置">
+              <i class="fa-solid fa-circle-info" aria-hidden="true"></i><span>详情</span>
+            </summary>
+            <div class="status-details-panel">
+              <div class="status-endpoints">
+                <label>
+                  控制 WebSocket
+                  <input id="controlUrl" value="" />
+                </label>
+                <label>
+                  数据桥 WebSocket
+                  <input id="bridgeUrl" value="ws://localhost:8765/api/v1/vision/landmarks" />
+                </label>
+              </div>
+              <dl>
+                <div><dt>模式</dt><dd id="controlMode">未连接</dd></div>
+                <div><dt>关节增益</dt><dd id="armGain">—</dd></div>
+                <div><dt>夹爪增益</dt><dd id="gripperGain">—</dd></div>
+                <div><dt>夹爪扭矩</dt><dd id="gripperTorqueActual">—</dd></div>
+                <div><dt>负载档案</dt><dd id="payloadProfile">空载</dd></div>
+                <div><dt>估计质量</dt><dd id="payloadMass">0 g</dd></div>
+              </dl>
+              <p>地址会根据当前页面自动选择 ws/wss 并继承配对令牌。</p>
+            </div>
+          </details>
+        </div>
+      </footer>
+</main>

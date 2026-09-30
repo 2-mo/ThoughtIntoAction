@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "name": "parallel_gripper_tip_midpoint",
+  "parent_link": "link6",
+  "tcp_link": "tcp_link",
+  "tcp_xyz": [0.145, 0.0, 0.0],
+  "tcp_rpy": [0.0, 0.0, 0.0],
+  "calibration_status": "sdk_nominal",
+  "payload": {
+    "mass_kg": 0.0,
+    "com_xyz": [0.0, 0.0, 0.0],
+    "inertia": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  }
+}

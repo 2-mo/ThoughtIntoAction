@@ -43,6 +43,12 @@ MAINTENANCE_COMMANDS = {
     "check-camera": "diagnostics/check_camera.py",
 }
 MODULE_COMMANDS = {
+    "collect": "collection.capture",
+    "workbench": "workstation.workbench",
+    "component-source": "workstation.source",
+    "phone": "inputs.phone",
+    "motion": "operations.cli",
+    "runtime-data": "dataset_tools.runtime_v2",
     "quest-calibrate": "quest_teleop.frame_calibration",
     "camera-service": "robot_core.camera_service",
     "viewer-control": "robot_simulation.control",
@@ -63,6 +69,7 @@ MODULE_COMMANDS = {
     "doctor": "quest_teleop.diagnostics",
     "monitor": "quest_teleop.runtime.monitor",
 }
+BOOTSTRAP_COMMANDS = {"control": "workstation.control", "components": "component_plugins.cli"}
 HARDWARE_COMMANDS = {
     "test-joint", "test-joint-2025", "teleop", "teleop-dry-run",
     "teleop-x5-2025", "arm-service",
@@ -99,6 +106,11 @@ def resolve_python(config: dict) -> Path:
 def build_command(command: str, arguments: list[str], config: dict) -> tuple[list[str], dict]:
     env = os.environ.copy()
     env["QUEST_TELEOP_LOG_DIR"] = str(resolve_path(config["paths"]["log_dir"]))
+    if command in BOOTSTRAP_COMMANDS:
+        # This dispatcher uses only the standard library. It selects the control
+        # environment before the legacy launcher can inject Python 3.12 SDK paths.
+        env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+        return [sys.executable, "-B", "-m", BOOTSTRAP_COMMANDS[command], *arguments], env
     env["QUEST_CAN_PORT"] = config["robot"]["can_port"]
     env["QUEST_CAN_DEVICE"] = config["robot"]["can_device"]
     env["QUEST_CAMERA_SERIAL"] = config["cameras"]["wrist_rgb"]["serial"]
@@ -112,6 +124,13 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
         return [sys.executable, "-B", str(PROJECT_ROOT / "scripts/setup/dependencies.py"), *extra, *arguments], env
 
     python = resolve_python(config)
+    if (command in {"collect", "runtime-data", "workbench", "phone", "motion", "component-source"}
+            or command == "handeye" and any(arg == '--runtime' or arg.startswith('--runtime=') for arg in arguments)):
+        # Independent components use the gateway; they do not load legacy SDK extensions.
+        env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+        for key in ('PYTHONHOME', 'LD_LIBRARY_PATH'):
+            env.pop(key, None)
+        return [str(python), "-B", "-m", MODULE_COMMANDS[command], *arguments], env
     prefix = python.parent.parent
     # The multi-robot upstream distribution is not installed; load the pinned source.
     paths = [PROJECT_ROOT / "src", PROJECT_ROOT / "third_party/XRoboToolkit-Teleop-Sample-Python"]
@@ -172,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", help="Local TOML override (relative to the repository)")
     parser.add_argument("--profile", help="Profile name in configs/profiles, or TOML path")
     parser.add_argument("--print-command", action="store_true", help="Print resolved arguments; do not execute")
-    parser.add_argument("command", nargs="?", choices=sorted(PYTHON_COMMANDS | SHELL_COMMANDS | MAINTENANCE_COMMANDS | MODULE_COMMANDS))
+    parser.add_argument("command", nargs="?", choices=sorted(PYTHON_COMMANDS | SHELL_COMMANDS | MAINTENANCE_COMMANDS | MODULE_COMMANDS | BOOTSTRAP_COMMANDS))
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     config = load_config(args.config)
@@ -184,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
     command = args.command or profile.get("command") or config["default_command"]
     if profile.get("command", command) != command:
         raise ValueError(f"Profile is for {profile['command']}, not {command}")
-    if command not in PYTHON_COMMANDS | SHELL_COMMANDS | MAINTENANCE_COMMANDS | MODULE_COMMANDS:
+    if command not in PYTHON_COMMANDS | SHELL_COMMANDS | MAINTENANCE_COMMANDS | MODULE_COMMANDS | BOOTSTRAP_COMMANDS:
         raise ValueError(f"Unknown command: {command}")
     if "actuate" in profile.get("arguments", {}):
         raise ValueError("Profiles must not enable actuation; pass --actuate explicitly")

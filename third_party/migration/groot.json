@@ -1,0 +1,18 @@
+{
+  "source_commit": "fa1a6dfe5bf4d1b354470ebf4445903600e2bdcf",
+  "source_status": "",
+  "destination": "third_party/Isaac-GR00T",
+  "snapshot": "archives/migration/originals/arx5_test/reference_projects/Isaac-GR00T",
+  "patches": {
+    "pyproject.toml": {
+      "source_sha256": "a451af4cf723cc58b710a2f6f3a12a8d7f03850a39cc5ba420a18fcc20e2a3d0",
+      "sha256": "9f68403b3117e79465d692d95f8b9b51ccfda9373ea01789674c3f6780f401f9",
+      "reason": "Make TensorRT deployment libraries optional; retain all versions and provide a separate groot-tensorrt setup command."
+    },
+    "uv.lock": {
+      "source_sha256": "0d67d3b0dd41b28375bbc2351eefc9e064cbad2d1c40682a52b97fc625a60f19",
+      "sha256": "a66002362f23f74457669cfcdf05abe35119fbbc0af0d3d2d9b56825ed0ee829",
+      "reason": "Make TensorRT deployment libraries optional; retain all versions and provide a separate groot-tensorrt setup command."
+    }
+  }
+}

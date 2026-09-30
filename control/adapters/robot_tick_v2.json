@@ -1,0 +1,187 @@
+{
+  "version": 2,
+  "size": 1168,
+  "alignment": 8,
+  "fields": {
+    "version": {
+      "offset": 0,
+      "size": 4
+    },
+    "size": {
+      "offset": 4,
+      "size": 4
+    },
+    "runtime_id": {
+      "offset": 8,
+      "size": 48
+    },
+    "sequence": {
+      "offset": 56,
+      "size": 8
+    },
+    "dropped": {
+      "offset": 64,
+      "size": 8
+    },
+    "flags": {
+      "offset": 72,
+      "size": 4
+    },
+    "phase": {
+      "offset": 76,
+      "size": 4
+    },
+    "mode": {
+      "offset": 80,
+      "size": 4
+    },
+    "gripper_mode": {
+      "offset": 84,
+      "size": 4
+    },
+    "command_mode": {
+      "offset": 88,
+      "size": 4
+    },
+    "command_gripper_mode": {
+      "offset": 92,
+      "size": 4
+    },
+    "tick_ns": {
+      "offset": 96,
+      "size": 8
+    },
+    "feedback_read_ns": {
+      "offset": 104,
+      "size": 8
+    },
+    "feedback_received_ns": {
+      "offset": 112,
+      "size": 8
+    },
+    "command_started_ns": {
+      "offset": 120,
+      "size": 8
+    },
+    "command_submitted_ns": {
+      "offset": 128,
+      "size": 8
+    },
+    "sdk_readback_ns": {
+      "offset": 136,
+      "size": 8
+    },
+    "completed_ns": {
+      "offset": 144,
+      "size": 8
+    },
+    "q": {
+      "offset": 152,
+      "size": 48
+    },
+    "dq": {
+      "offset": 200,
+      "size": 48
+    },
+    "pose": {
+      "offset": 248,
+      "size": 56
+    },
+    "gripper_width": {
+      "offset": 304,
+      "size": 8
+    },
+    "pose_target": {
+      "offset": 312,
+      "size": 56
+    },
+    "joint_goal": {
+      "offset": 368,
+      "size": 48
+    },
+    "sent_q": {
+      "offset": 416,
+      "size": 48
+    },
+    "sent_dq": {
+      "offset": 464,
+      "size": 48
+    },
+    "kp": {
+      "offset": 512,
+      "size": 48
+    },
+    "kd": {
+      "offset": 560,
+      "size": 48
+    },
+    "feedforward": {
+      "offset": 608,
+      "size": 48
+    },
+    "gripper_target": {
+      "offset": 656,
+      "size": 8
+    },
+    "gripper_kp": {
+      "offset": 664,
+      "size": 8
+    },
+    "gripper_kd": {
+      "offset": 672,
+      "size": 8
+    },
+    "ik_residual": {
+      "offset": 680,
+      "size": 8
+    },
+    "ik_converged": {
+      "offset": 688,
+      "size": 4
+    },
+    "ik_rejections": {
+      "offset": 692,
+      "size": 4
+    },
+    "ik_partial_solutions": {
+      "offset": 696,
+      "size": 4
+    },
+    "sdk_q": {
+      "offset": 704,
+      "size": 48
+    },
+    "sdk_dq": {
+      "offset": 752,
+      "size": 48
+    },
+    "sdk_torque": {
+      "offset": 800,
+      "size": 48
+    },
+    "sdk_gripper_target": {
+      "offset": 848,
+      "size": 8
+    },
+    "error": {
+      "offset": 856,
+      "size": 192
+    },
+    "source": {
+      "offset": 1048,
+      "size": 32
+    },
+    "owner_epoch": {
+      "offset": 1080,
+      "size": 8
+    },
+    "source_sequence": {
+      "offset": 1088,
+      "size": 8
+    },
+    "operation_id": {
+      "offset": 1096,
+      "size": 72
+    }
+  }
+}

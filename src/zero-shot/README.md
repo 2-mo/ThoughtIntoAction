@@ -33,7 +33,7 @@ bash scripts/inference/启动Pi05真机.sh --prompt 'Pick up the blue cube and p
 ```bash
 bash src/zero-shot/setup.sh
 bash src/zero-shot/run.sh \
-  --episode datasets/.raw/X5_遥操采集_20260911-035453-87d1b692 \
+  --episode ~/work/data/quest_x5/.raw/X5_遥操采集_20260911-035453-87d1b692 \
   --frames 0 30 60 \
   --prompt 'Pick up the blue cube and place it in the white area.'
 ```
@@ -132,7 +132,7 @@ PYTHONPATH=src:tests .venv/bin/python -m unittest discover -s src/zero-shot -p t
   --output outputs/zero-shot-assets/x5_quantiles_h50.json
 ```
 
-本机该文件已经生成。计算器拒绝覆盖已有文件；重新计算时选择新文件名。读取 `datasets/.raw`，复用支持当前压缩记录格式的训练导出加载器检查完整性、时间戳、动作与图像引用，并校验 URDF/关节范围。排除丢弃、失败、非驱动记录和少于 50 个锚点的 episode。包含 `unknown` 条目仅用于实验统计，不能当作成功演示。
+本机该文件已经生成。计算器拒绝覆盖已有文件；重新计算时选择新文件名。读取 `~/work/data/quest_x5/.raw`，复用支持当前压缩记录格式的训练导出加载器检查完整性、时间戳、动作与图像引用，并校验 URDF/关节范围。排除丢弃、失败、非驱动记录和少于 50 个锚点的 episode。包含 `unknown` 条目仅用于实验统计，不能当作成功演示。
 
 每个真实图像选此前最新状态/请求动作，形成约 30 Hz 的锚点。每个锚点取后续 50 个动作，六关节都减去该锚点的实际关节角，夹爪保持绝对值；episode 尾部重复最后动作，绝不跨 episode。50 步对应这份基座的 chunk_size（约 1.67 秒），与现有微调配置的 15 步不同。由此分别计算状态和动作 q01/q99；文件记录来源哈希、单位、URDF、纳入/排除原因与样本量。
 

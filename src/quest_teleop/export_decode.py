@@ -6,7 +6,7 @@ import multiprocessing
 
 import numpy as np
 
-from .video import SequentialFrameReader, media_path
+from episode_io.video import SequentialFrameReader, media_path
 
 
 class RGBBatchDecoder:
