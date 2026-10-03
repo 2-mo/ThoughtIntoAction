@@ -83,7 +83,7 @@ class Scene:
                     if not isinstance(data, dict): raise ValueError("Expected object")
                     if urlsplit(self.path).path == "/api/camera":
                         from robot_core.camera_control import set_enabled
-                        set_enabled(data.get("enabled"))
+                        set_enabled(data.get("enabled"), camera_id=data.get("camera_id"))
                     else:
                         action = data.get("action")
                         if action not in ("load_last", "load", "play", "pause", "seek", "speed"):
@@ -151,8 +151,8 @@ class Scene:
                         camera = request(socket_path(), "monitor", timeout=.3)
                         payload.update(camera)
                         payload.pop("error", None)
-                    except (OSError, ValueError, RuntimeError):
-                        pass
+                    except (OSError, ValueError, RuntimeError) as exc:
+                        payload["camera_error"] = f"相机服务未连接：{exc}"
                     payload["connections"] = owner.connection_probe.snapshot() if owner.connection_probe else {}
                     content = json.dumps(payload, allow_nan=False).encode()
                     mime = "application/json"
@@ -253,6 +253,7 @@ class Scene:
                 self._paths = paths
                 self.update(actual, target)
                 self._state["motor_diagnostics"] = packet.get("motor_diagnostics")
+                self._state["command_details"] = packet.get("command_details")
                 self._state["gripper"] = gripper
                 self._state["actual_torque"] = torque
                 self._state["gripper_actual_torque"] = grip_torque

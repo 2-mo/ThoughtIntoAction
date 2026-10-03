@@ -11,3 +11,38 @@ can_device = "/dev/arx_r5"
 [cameras.wrist_rgb]
 serial = "REPLACE_WITH_CAMERA_SERIAL"
 hand_eye_calibrated = false
+
+# Optional second camera. Enable after replacing the serial with check-camera output.
+[cameras.exterior_rgb]
+label = "外部相机"
+enabled = false
+driver = "realsense"
+model = "D435"
+serial = ""
+width = 640
+height = 480
+fps = 30
+
+# Enable both devices above before opting into dual-camera recording.
+# [recording]
+# camera_ids = ["wrist_rgb", "exterior_rgb"]
+
+# Optional shared RGB profile, applied to every camera on service startup/reconnect.
+# Exposure is in 100 microsecond units for D435/D435i RGB (167 = 16.7 ms).
+# Manual exposure/white balance should be chosen for the installation's lighting.
+# [camera_service.color]
+# enable_auto_white_balance = 0
+# white_balance = 5500
+# enable_auto_exposure = 0
+# exposure = 167
+# gain = 32
+# brightness = 0
+# contrast = 50
+# saturation = 64
+# gamma = 300
+# hue = 0
+# sharpness = 50
+# backlight_compensation = 0
+# power_line_frequency = 1 # 50 Hz; 2 = 60 Hz, 3 = auto
+# auto_exposure_priority = 0
+# Per-camera overrides can be set in [cameras.<name>.color].

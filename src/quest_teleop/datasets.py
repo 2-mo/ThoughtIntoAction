@@ -10,6 +10,9 @@ import numpy as np
 from robot_core.model import RobotModel
 from robot_core.storage import save_json
 from episode_io.video import media_path, read_frame
+from episode_io.cameras import camera_metadata
+from episode_io.mcap_io import read_camera_records
+from episode_io.quality import inspect_camera, nearest_skew
 
 
 def load_episode(path):
@@ -65,6 +68,10 @@ def validate_episode(path, *, settings=None, robot=None, check_images=True):
             errors.append("Manifest counts differ from stored rows")
         if len(states) < 2 or len(frames) < 2:
             raise ValueError("Need at least two robot samples and two RGB frames")
+        cameras = camera_metadata(meta)
+        _, camera_frames = read_camera_records(root / 'episode.mcap')
+        if set(camera_frames) - set(cameras):
+            errors.append('Undeclared camera channels')
         state_time = np.array([s["host_monotonic_ns"] for s in states], dtype=np.int64)
         frame_time = np.array([s["host_received_monotonic_ns"] for s in frames], dtype=np.int64)
         started, stopped = meta["started_monotonic_ns"], meta.get("stopped_monotonic_ns", 0)
@@ -144,37 +151,33 @@ def validate_episode(path, *, settings=None, robot=None, check_images=True):
             elif (state_time[index] - progress_host) / 1e9 > settings["max_state_gap_s"]:
                 errors.append("SDK feedback clock stopped advancing within the episode")
                 break
-        numbers = np.array([f["frame_number"] for f in frames], dtype=np.int64)
-        if np.any(np.diff(numbers) <= 0):
-            errors.append("Repeated/regressed source camera frames")
-        if np.any(np.diff(numbers) > 1):
-            errors.append("Missing source camera frames")
-        device_time = np.array([f["device_timestamp_ms"] for f in frames], dtype=float)
-        if not np.isfinite(device_time).all() or np.any(np.diff(device_time) <= 0):
-            errors.append("Invalid camera device timestamps")
-        if len({f["device_timestamp_domain"] for f in frames}) != 1:
-            errors.append("Camera timestamp domain changed inside episode")
-        selected = nearest_indices(state_time, frame_time)
-        skew = abs(state_time[selected] - frame_time) / 1e9
-        report["receive_time_alignment_p99_s"] = float(np.quantile(skew, .99))
-        report["receive_time_alignment_max_s"] = float(max(skew))
-        if max(skew) > settings["max_sync_skew_s"]:
-            errors.append("RGB receipt/robot sampling alignment exceeds limit")
-        report["alignment_clock"] = "host monotonic receipt/sample times, not synchronized exposure"
-        seen_images = set()
-        for row in frames:
-            image = media_path(root, row)
-            frame_key = (image, row.get("video_frame_index"))
-            if frame_key in seen_images:
-                errors.append("Multiple frames reference one image")
-            seen_images.add(frame_key)
-            if not image.is_file():
-                raise ValueError(f"Missing image: {image}")
-            if check_images:
-                import cv2
-                decoded = read_frame(root, row)
-                if decoded is None or decoded.shape != (meta["camera"]["height"], meta["camera"]["width"], 3):
-                    raise ValueError(f"Corrupt image or incorrect resolution: {image}")
+        report['cameras'] = {}
+        for camera_id, camera in cameras.items():
+            rows = camera_frames.get(camera_id, [])
+            result = inspect_camera(root, camera, rows, state_time,
+                max_gap_s=settings['max_frame_gap_s'], max_skew_s=settings['max_sync_skew_s'],
+                started=started, stopped=stopped, check_images=check_images)
+            if meta.get('camera_counts', {}).get(camera_id, len(rows)) != len(rows):
+                result['errors'].append('Manifest camera count differs from stored rows')
+            result['writer_dropped'] = meta.get('camera_dropped', {}).get(camera_id, 0)
+            if result['writer_dropped']:
+                result['errors'].append('Writer dropped camera frames')
+            result['valid'] = not result['errors']
+            report['cameras'][camera_id] = result
+            errors.extend(camera_id + ': ' + error for error in result['errors'])
+        wrist_report = report['cameras']['wrist_rgb']
+        for key in ('receive_time_alignment_p99_s', 'receive_time_alignment_max_s'):
+            report[key] = wrist_report.get(key)
+        report['alignment_clock'] = 'host monotonic receipt/sample times, not synchronized exposure'
+        report['camera_pair_alignment'] = {}
+        for camera_id, rows in camera_frames.items():
+            if camera_id == 'wrist_rgb' or not rows:
+                continue
+            skew = nearest_skew(frame_time, [f['host_received_monotonic_ns'] for f in rows])
+            report['camera_pair_alignment'][camera_id] = {
+                'reference': 'wrist_rgb', 'p99_s': float(np.quantile(skew, .99)), 'max_s': float(max(skew))}
+            if max(skew) > settings['max_sync_skew_s']:
+                errors.append(camera_id + ': Camera receipt-time alignment exceeds limit')
         if not meta["hand_eye_calibrated"]:
             warnings.append("Hand-eye uncalibrated; RGB/joint records remain usable")
         has_actions = meta["control"]["actuate"] and all(s["actuate"] for s in states) and submitted_count == len(states)
@@ -184,6 +187,7 @@ def validate_episode(path, *, settings=None, robot=None, check_images=True):
         report["training_eligible"] = not errors and has_actions and meta["outcome"] == "success"
     except (OSError, ValueError, KeyError, TypeError, OverflowError) as exc:
         errors.append(str(exc))
+    report['errors'] = list(dict.fromkeys(errors))
     return report
 
 

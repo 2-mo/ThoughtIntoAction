@@ -1,6 +1,7 @@
 """One-way local robot state stream. Publishers never depend on a viewer process."""
 
 import json
+from copy import deepcopy
 import re
 import threading
 import time
@@ -13,6 +14,15 @@ from .project import load_config
 
 SCHEMA = 1
 MAX_MESSAGE = 4_000_000
+
+
+def command_details(state):
+    """Raw SDK output and gains; absent fields stay absent for older recordings."""
+    keys = ("sdk_cmd_pos", "sdk_cmd_vel", "sdk_cmd_torque", "kp", "kd",
+            "gripper_sdk_cmd_pos", "gripper_sdk_cmd_vel", "gripper_sdk_cmd_torque",
+            "gripper_kp", "gripper_kd", "gripper_mode", "feedback_timestamp",
+            "command_timestamp", "controller_timestamp", "submission")
+    return {key: deepcopy(state[key]) for key in keys if key in state}
 
 
 def endpoint(value=None):
@@ -122,7 +132,7 @@ class LocalPublisher:
             self._error = exc
             self._ready.set()
 
-    def update(self, actual, target=None, *, gripper=None, actual_torque=None, gripper_actual_torque=None, actual_vel=None, target_vel=None, gripper_actual_vel=None, motor_diagnostics=None):
+    def update(self, actual, target=None, *, gripper=None, actual_torque=None, gripper_actual_torque=None, actual_vel=None, target_vel=None, gripper_actual_vel=None, motor_diagnostics=None, command_details=None):
         actual, target = joint_pair(actual, target)
         gripper = gripper_data(gripper)
         actual_torque = torque_data(actual_torque)
@@ -138,6 +148,7 @@ class LocalPublisher:
                            "sample_monotonic_ns": time.monotonic_ns(), "gripper": gripper, "actual_torque": actual_torque,
                            "gripper_actual_torque": gripper_actual_torque, "actual_vel": actual_vel,
                            "target_vel": target_vel, "gripper_actual_vel": gripper_actual_vel,
+                           "command_details": command_details,
                            "motor_diagnostics": {k: v for k, v in motor_diagnostics.items() if k != "events"} if isinstance(motor_diagnostics, dict) else None}
 
     def path(self, name, points, color):
@@ -168,7 +179,7 @@ class NullPublisher:
     def __init__(self, robot, source=None):
         pass
 
-    def update(self, actual, target=None, *, gripper=None, actual_torque=None, gripper_actual_torque=None, actual_vel=None, target_vel=None, gripper_actual_vel=None, motor_diagnostics=None):
+    def update(self, actual, target=None, *, gripper=None, actual_torque=None, gripper_actual_torque=None, actual_vel=None, target_vel=None, gripper_actual_vel=None, motor_diagnostics=None, command_details=None):
         pass
 
     def path(self, name, points, color):

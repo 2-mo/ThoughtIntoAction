@@ -34,7 +34,8 @@ function render() {
   const reviewing = mode === 'replay', f = replayFrame;
   panel.hidden = !reviewing;
   el('recorded-camera').hidden = !reviewing;
-  el('camera-title').textContent = reviewing ? 'D435i · 录制 RGB' : 'D435i · RGB';
+  el('camera-title').textContent = reviewing ? '相机 · 录制 RGB' : '相机 · 实时';
+  el('camera-count').hidden = reviewing;
   el('view-live').setAttribute('aria-pressed', String(!reviewing));
   el('open-replay').setAttribute('aria-pressed', String(reviewing));
   for (const id of ['replay-play', 'replay-pause', 'replay-seek', 'replay-speed']) el(id).disabled = !f;
@@ -51,6 +52,14 @@ function render() {
   el('replay-video-empty').textContent = f ? '该条未录制 RGB' : '等待回放数据';
   if (pixels) el('replay-video').src = `data:${f.image_mime || 'image/jpeg'};base64,${pixels}`;
   else el('replay-video').removeAttribute('src');
+  const exterior = f?.cameras?.exterior_rgb;
+  el('recorded-exterior').hidden = !exterior;
+  el('recorded-grid').dataset.count = exterior ? '2' : '1';
+  el('replay-exterior-video').hidden = !exterior?.image_base64;
+  el('replay-exterior-empty').hidden = !!exterior?.image_base64;
+  el('replay-exterior-empty').textContent = '该时刻无有效 RGB';
+  if (exterior?.image_base64) el('replay-exterior-video').src = `data:${exterior.image_mime || 'image/jpeg'};base64,${exterior.image_base64}`;
+  else el('replay-exterior-video').removeAttribute('src');
   el('replay-video-status').textContent = f ? '录制 RGB · ' + 'MCAP' : '录制 RGB';
   el('replay-video-status').title = '视频按接收时间与机械臂样本对齐；未录制深度';
 }
@@ -72,6 +81,7 @@ async function poll() {
 el('depth-toggle').onclick = () => {
   const on = el('depth-toggle').getAttribute('aria-pressed') !== 'true';
   el('depth-toggle').setAttribute('aria-pressed', String(on));
+  el('depth-toggle').textContent = on ? '返回 RGB' : '显示深度';
   document.body.dataset.depth = String(on);
 };
 el('replay-video').onclick = () => {
@@ -79,6 +89,7 @@ el('replay-video').onclick = () => {
   if (document.fullscreenElement) document.exitFullscreen?.();
   else wrap.requestFullscreen?.();
 };
+el('replay-exterior-video').onclick = el('replay-video').onclick;
 const timelineSize = new ResizeObserver(() => {
   panel.closest('.stage').style.setProperty('--replay-space', `${panel.getBoundingClientRect().height + 44}px`);
 });

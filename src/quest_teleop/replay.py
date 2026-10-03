@@ -11,7 +11,9 @@ from episode_io.mcap_io import read_topics, TOPICS
 from copy import deepcopy
 from episode_io.video import media_path, read_frame
 from robot_core.model import RobotModel
+from robot_core.telemetry import command_details
 from robot_core.project import load_config, resolve_path
+from episode_io.cameras import camera_metadata, camera_topic
 
 
 class RecordedEpisode:
@@ -30,6 +32,8 @@ class RecordedEpisode:
         self.times = [(t - stamps[0]) / 1e9 for t in stamps]
         self.duration = self.times[-1]
         topics = read_topics(self.root / 'episode.mcap')
+        self.cameras = camera_metadata(self.meta)
+        self.camera_frames = {key: topics.get(camera_topic(key), []) for key in self.cameras}
         self.motor_diagnostics = sorted(topics[TOPICS['diagnostics']], key=lambda d: d['host_monotonic_ns'])
         self.motor_events = sorted(topics[TOPICS['event']], key=lambda d: d['host_monotonic_ns'])
         self.motor_times = [d['host_monotonic_ns'] for d in self.motor_diagnostics]
@@ -44,7 +48,16 @@ class RecordedEpisode:
         for frame in self.frames:
             if not media_path(self.root, frame).is_file():
                 raise ValueError('录制视频有缺失图片')
-        self._image_cache = (None, None)
+        self.camera_times = {}
+        for key, frames in self.camera_frames.items():
+            times = [(f['host_received_monotonic_ns'] - stamps[0]) / 1e9 for f in frames]
+            if any(b <= a for a, b in zip(times, times[1:])):
+                raise ValueError(key + ': 视频记录时间不连续递增')
+            for frame in frames:
+                if not media_path(self.root, frame).is_file():
+                    raise ValueError(key + ': 录制视频有缺失图片')
+            self.camera_times[key] = times
+        self._image_cache = {}
         self.path_points = [model.fk(row["actual_pos"])[:3, 3].tolist() for row in self.states]
 
     def row(self, seconds):
@@ -84,24 +97,33 @@ class RecordedEpisode:
 
     def review(self, seconds):
         row, index = self.row(seconds)
-        image = None
-        if self.frames:
-            frame = max(0, min(len(self.frames) - 1, bisect_right(self.frame_times, seconds) - 1))
-            if self._image_cache[0] != frame:
+        images = {}
+        for key, frames in self.camera_frames.items():
+            frame = bisect_right(self.camera_times[key], seconds) - 1
+            item = {'label': self.cameras[key].get('label', {'wrist_rgb': '腕部相机', 'exterior_rgb': '外部相机'}.get(key, key)),
+                    'image_base64': None, 'image_mime': None, 'host_received_monotonic_ns': None}
+            images[key] = item
+            if frame < 0 or seconds - self.camera_times[key][frame] > self.meta.get('quality_limits', {}).get('max_frame_gap_s', float('inf')):
+                continue
+            cached = self._image_cache.get(key)
+            if cached is None or cached[0] != frame:
                 import cv2
-                raw = read_frame(self.root, self.frames[frame])
+                raw = read_frame(self.root, frames[frame])
                 if raw is None:
                     raise ValueError('录制视频图片损坏')
-                if 'video' in self.frames[frame]:
+                if 'video' in frames[frame]:
                     ok, buffer = cv2.imencode('.jpg', raw, [cv2.IMWRITE_JPEG_QUALITY, 90])
                     if not ok: raise ValueError('回放视频编码失败')
                     encoded = buffer.tobytes()
                 else:
-                    encoded = image_path(self.root, self.frames[frame]['image']).read_bytes()
+                    encoded = image_path(self.root, frames[frame]['image']).read_bytes()
                 if len(encoded) > 5_500_000: raise ValueError('单帧图像过大，无法通过监看接口回放')
                 mime = 'image/png' if encoded.startswith(b'\x89PNG') else 'image/jpeg'
-                self._image_cache = (frame, base64.b64encode(encoded).decode(), mime)
-            image = self._image_cache[1]
+                self._image_cache[key] = (frame, base64.b64encode(encoded).decode(), mime)
+            item.update(image_base64=self._image_cache[key][1], image_mime=self._image_cache[key][2],
+                        host_received_monotonic_ns=frames[frame]['host_received_monotonic_ns'],
+                        frame_number=frames[frame].get('frame_number'))
+        image = images['wrist_rgb']['image_base64']
         start = max(0, bisect_right(self.times, seconds - 5) - 1)
         submission = row.get('submission') or {}
         history = [{'time': self.times[i] * 1000,
@@ -111,6 +133,7 @@ class RecordedEpisode:
                    for i in range(start, index + 1)]
         stride = max(1, (index + 1) // 500)
         return {'motor_diagnostics': self.diagnostics_at(row),
+                'command_details': command_details(row),
                 'actual_vel': row.get('actual_vel'), 'target_vel': row.get('sdk_cmd_vel'),
                 'actual_torque': row.get('actual_torque'), 'gripper_actual_torque': row.get('gripper_actual_torque'),
                 'gripper_actual_vel': row.get('gripper_actual_vel'),
@@ -123,7 +146,7 @@ class RecordedEpisode:
                 'sample_index': index, 'sample_count': len(self.states),
                 'model_hash': self.meta['robot']['urdf_sha256'],
                 'q': row['actual_pos'], 'gripper_m': row['gripper_actual_pos'], 'image_base64': image,
-                'image_mime': self._image_cache[2] if image else None}
+                'image_mime': images['wrist_rgb']['image_mime'], 'cameras': images}
 
 
 class WebReplay:

@@ -1,4 +1,12 @@
 // Read-only session feed, independently polled so camera IPC never delays arm rendering.
+import {renderCameras} from './cameras.js';
+import {renderQuality} from './quality.js';
+// Keep the complete dashboard visible even in a narrow embedded browser pane.
+function fitDashboard() {
+  document.documentElement.style.setProperty('--dashboard-scale', String(Math.min(1, innerWidth / 1024)));
+}
+fitDashboard();
+window.addEventListener('resize', fitDashboard);
 const byId = (id) => document.getElementById(id);
 let closed = false;
 window.addEventListener('pagehide', () => { closed = true; });
@@ -77,7 +85,9 @@ function renderCollection(data = {}) {
   put('collection-task', recording?.task || collection?.task || '等待采集会话');
   const seconds = recording?.duration_s;
   put('collection-duration', Number.isFinite(seconds) ? Math.floor(seconds / 60).toString().padStart(2, '0') + ':' + Math.floor(seconds % 60).toString().padStart(2, '0') : '—');
-  put('collection-frames', String(recording?.counts?.frame ?? '—'));
+  const cameraCounts = recording?.camera_counts;
+  put('collection-frames', cameraCounts?.exterior_rgb !== undefined ? `${cameraCounts.wrist_rgb} / ${cameraCounts.exterior_rgb}` : String(recording?.counts?.frame ?? '—'));
+  byId('collection-frames').title = cameraCounts?.exterior_rgb !== undefined ? '腕部 / 外部实际写入帧数' : '腕部实际写入帧数';
   put('collection-samples', String(recording?.counts?.state ?? '—'));
   put('collection-episode', '当前 Episode：' + (recording?.id || '—'));
   const drops = Object.values(recording?.dropped || {}).reduce((a, b) => a + b, 0);
@@ -89,22 +99,8 @@ function renderCollection(data = {}) {
     else if (dataset.state === 'complete') put('collection-health', '可上传 · ' + dataset.episodes + ' 条 · ' + dataset.path.split('/').pop());
     else if (dataset.state === 'failed') put('collection-health', '任务打包失败：' + dataset.error);
   }
-  const result = last ? (last.lifecycle !== 'complete' ? '未完整保存' : last.outcome === 'discarded' ? '已丢弃' : '已保存') : '—';
-  put('collection-last', '上一条：' + result + (last ? ' · ' + last.id : ''));
+  renderQuality(last);
 }
-let cameraSwitchBusy = false;
-byId('camera-toggle').addEventListener('click', async () => {
-  const button = byId('camera-toggle');
-  cameraSwitchBusy = true; button.disabled = true;
-  const error = byId('camera-control-error'); error.hidden = true;
-  try {
-    const response = await fetch('/api/camera', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({enabled:button.getAttribute('aria-pressed') !== 'true'}), signal:AbortSignal.timeout(8000)});
-    const result = await response.json();
-    if (!response.ok || result.error) throw new Error(result.error || '相机开关失败');
-  } catch (exc) {error.textContent = exc.message; error.hidden = false;}
-  finally {cameraSwitchBusy = false;}
-});
 async function refresh() {
   try {
     const response = await fetch('/api/sensors', { cache: 'no-store', signal: AbortSignal.timeout(1500) });
@@ -116,12 +112,7 @@ async function refresh() {
       byId(id).textContent = !Object.hasOwn(data, 'connections') ? '需重启监看' :
         Number.isFinite(value) && value >= 0 ? value.toFixed(1) + ' ms' : '未测';
     }
-    const cameraButton = byId('camera-toggle');
-    const cameraOn = data.camera?.enabled === true;
-    cameraButton.setAttribute('aria-pressed', String(cameraOn));
-    cameraButton.disabled = cameraSwitchBusy || !!data.recording || data.camera?.switch_protocol !== 1;
-    cameraButton.textContent = cameraSwitchBusy ? '切换中' : data.recording ? '采集中' : cameraOn ? '相机开' : '相机关';
-    cameraButton.title = data.camera?.switch_protocol !== 1 ? '相机服务需要更新后才能切换' : data.recording ? '录制期间不能关闭相机' : '控制 RGB 和深度采集';
+    renderCameras(data);
     renderCollection(data);
     const safety = data.table_safety;
     byId('table-safety').hidden = !safety;
@@ -149,21 +140,6 @@ async function refresh() {
     byId('motion-diagnostics').classList.toggle('feedback-inactive', !diagnosticLive);
     byId('motion-joints').title = diagnosticLive ?
       ['q_actual', 'q_des', 'q_safe'].map(k => k + ': ' + diagnostic[k].map(v => v.toFixed(4)).join(' ')).join('\n') : '无新诊断数据';
-    const depth = data.depth_preview || {};
-    const depthLive = !data.camera?.error && depth.age_s != null && depth.age_s < .5 && depth.jpeg_base64;
-    byId('depth-image').hidden = !depthLive;
-    byId('depth-empty').hidden = !!depthLive;
-    if (depthLive) byId('depth-image').src = 'data:image/jpeg;base64,' + depth.jpeg_base64;
-    else byId('depth-image').removeAttribute('src');
-    const preview = data.preview || {};
-    const cameraLive = !data.camera?.error && preview.age_s != null && preview.age_s < .5 && preview.jpeg_base64;
-    byId('camera-image').hidden = !cameraLive;
-    byId('camera-empty').hidden = !!cameraLive;
-    if (cameraLive) byId('camera-image').src = 'data:image/jpeg;base64,' + preview.jpeg_base64;
-    else byId('camera-image').removeAttribute('src');
-    byId('camera-status').textContent = data.error || data.camera?.error ||
-      'RGB：' + (cameraLive ? '正常' : '暂无新画面') + ' · 深度：' + (depthLive ? '正常' : '暂无新画面');
-    byId('camera-status').title = byId('camera-status').textContent;
     const input = data.input;
     if (!input || input.error || data.input_error || !Number.isFinite(data.input_age_s)) {
       clearInput(data.input_error || input?.error || '等待手柄新帧');
@@ -177,29 +153,17 @@ async function refresh() {
       for (const side of ['left', 'right']) renderHand(side, hands[side], data.button_feedback || {});
       byId('button-response').textContent = data.button_feedback?.Y || '需重启遥操以显示实际按键响应和长按进度';
     }
-    if (data.camera?.enabled === false) {
-      byId('camera-empty').textContent = '相机已关闭';
-      byId('depth-empty').textContent = '深度已关闭';
-      byId('camera-status').textContent = '相机已关闭';
-    } else { byId('depth-empty').textContent = '等待深度'; }
   } catch {
     window.dispatchEvent(new CustomEvent('teleop-preview', { detail: null }));
     renderCollection();
-    byId('camera-toggle').disabled = true;
+    renderCameras({camera_error: '监看接口未连接'});
     byId('table-safety').textContent = '桌面限制状态未连接';
     byId('loop-rates').textContent = 'IK — Hz · 服务 — Hz';
     byId('arm-latency').textContent = byId('input-latency').textContent = '未测';
     byId('motion-joints').textContent = '关节快照（悬停查看）';
-    byId('depth-image').hidden = true;
-    byId('depth-image').removeAttribute('src');
-    byId('depth-empty').hidden = false;
     byId('motion-diagnostics').querySelectorAll('b').forEach(cell => { cell.textContent = '—'; });
     byId('motion-diagnostics').classList.add('feedback-inactive');
     byId('motion-joints').title = '无新诊断数据';
-    byId('camera-image').hidden = true;
-    byId('camera-image').removeAttribute('src');
-    byId('camera-empty').hidden = false;
-    byId('camera-status').textContent = '监看接口未连接';
     clearInput('未连接');
   } finally {
     if (!closed) setTimeout(refresh, document.hidden ? 1000 : 200);

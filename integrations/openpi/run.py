@@ -30,7 +30,7 @@ def main():
         raise SystemExit("Re-export with the versioned 30 FPS converter first")
     if layout.get('layout') == 'aligned30_raw250_v2' and layout.get('action_definition') != 'sent_joint_position + sent_gripper_width':
         raise SystemExit('Unsupported runtime action definition')
-    item = train_config(fps=info["fps"])
+    item = train_config(fps=info["fps"], exterior_camera='observation.images.exterior' in info['features'])
     config._CONFIGS_DICT[item.name] = item
     script = checkout/'scripts'/('compute_norm_stats.py' if command == 'norm' else 'train.py')
     sys.argv = [str(script), *(['--config-name', item.name] if command == 'norm' else [item.name]), *arguments]

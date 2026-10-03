@@ -7,6 +7,8 @@
 - `~/work/data/quest_x5/.raw/<episode>/episode.json`：任务、结果、配置及完整性。
 - `episode.mcap`：机器人逐周期状态、请求动作，以及每帧设备/主机时间戳和视频帧索引，Zstd 无损压缩。
 - `wrist_rgb.mp4`：640×480、30 FPS、H.264/libx264 CRF 20，不重新编码。
+- `exterior_rgb.mp4`：启用双相机录制时的独立外部视频，原始分辨率、30 FPS。
+- `quality.json`：每条保存后的后台完整性检查结果；质量通过不等于任务成功。
 
 新录制使用 MCAP 分块写入并在结束时写索引；视频保持旁置 MP4，完整目录一同打包。录制、回放和训练导出统一使用 MCAP，不读取旧 JSONL / JSONL.gz episode。机器人采样保持 240 Hz，遥操处理 90 Hz。时间戳精度不变；相机主机接收时间并不等于曝光时间，设备未硬件同步。
 
@@ -26,6 +28,8 @@
         episode.json
         episode.mcap
         wrist_rgb.mp4
+        exterior_rgb.mp4 # 双相机录制时存在
+        quality.json
 ```
 
 直接上传 ZIP。其内部 MCAP 已 Zstd 压缩、MP4 已 H.264 压缩，ZIP 只封装不重复压缩。包内都是实际文件，不依赖本机符号链接。包含本轮所有已停止录制条目，丢弃、失败和中断条目连同原始标记一并上传，由服务器筛选；生成后进行 ZIP CRC 校验。状态记录在 `~/work/data/quest_x5/.raw/tasks/<任务名>/package-status.json`。失败保留原始记录，临时包不会当成成功产物。
@@ -96,16 +100,21 @@ OpenPI 使用标准 LeRobot 动作加载器：训练 state/action 与图像统�
 | `observation.state` | 6 个实际关节角 rad + 实际夹爪宽度 m |
 | `action` | 6 个请求关节目标 rad + 请求夹爪宽度 m，都是绝对值 |
 | `observation.images.wrist` | 腕部 RGB 视频；RGB 解码，原采集分辨率 |
+| `observation.images.exterior` | 双相机数据的外部 RGB；旧单相机数据不补造该图像 |
+| `observation.exterior_valid` | 外部帧通过时间对齐筛选后为 true |
 | `source.state_monotonic_ns` | 所选状态的原始主机时间戳 |
 | `source.action_monotonic_ns` | 所选请求动作的原始主机时间戳 |
 | `source.rgb_monotonic_ns` | 所选图像的原始主机接收时间戳 |
+| `source.exterior_rgb_monotonic_ns` | 所选外部图像的原始 int64 主机接收时间戳 |
 | `timestamp` | LeRobot episode 内的规则训练时间，不取代上述原始时间 |
+
+双相机原始录制保留两路全部帧，不按帧号强行配对。训练导出以腕部帧为锚点，选择最近的此前外部帧，最大允许年龄默认 60 ms（使用该条的 `quality_limits.max_sync_skew_s`）；没有可用外部帧的锚点仅在导出时排除，原始文件不删除。外部帧可能重复使用，重复数、源帧数和最大年龄写入 `meta/quest_export.json` 的分相机报告；腕部锚点不重复。不同相机组合或分辨率的数据应分开导出。接收时间对齐不表示硬件曝光同步。
 
 夹持力矩模式仍由部署控制器处理：训练动作中的夹爪是位置请求，不是牛顿或电机力矩；部署时必须沿用现有接触后力矩保持逻辑。
 
 ## OpenPI π0.5
 
-已提供 `integrations/openpi/quest_x5.py` 和 `run.py`。采用单腕部相机，缺失的两路图像显式 mask；7 维 state/action 按模型标准补齐；6 关节动作转为相对当前状态的 delta，夹爪保留绝对宽度，输出逆变换回绝对关节目标。action horizon 根据 action_fps 设置为约 0.5 秒，30 Hz 动作下为 15；观测同为 30 Hz。训练读取任务文本作为 prompt。旧导出需要重新转换为 aligned30_raw240_v1 才能使用新适配器。
+已提供 `integrations/openpi/quest_x5.py` 和 `run.py`。启动器按数据集字段选择单／双相机：腕部进入 `left_wrist_0_rgb`，外部进入 `base_0_rgb`，缺失视角显式 mask；7 维 state/action 按模型标准补齐；6 关节动作转为相对当前状态的 delta，夹爪保留绝对宽度，输出逆变换回绝对关节目标。action horizon 根据 action_fps 设置为约 0.5 秒，30 Hz 动作下为 15；观测同为 30 Hz。训练读取任务文本作为 prompt。旧导出需要重新转换为 aligned30_raw240_v1 才能使用新适配器。
 
 在已经按 OpenPI 官方说明配置好的 OpenPI 环境中运行（替换 OPENPI 路径）：
 

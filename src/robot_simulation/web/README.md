@@ -2,7 +2,9 @@
 
 `view-arm` / `scripts/viewer/启动仿真.sh` 单独创建 `robot_simulation.scene.Scene`，订阅通用机械臂状态并服务本机只读网页。机械臂服务与独立数据回放使用 `telemetry.local` 发布数据，不创建或关闭场景；显示无需区分输入方式。详见 [独立监看](../../../docs/monitoring.md)。
 
-显示处理参考桌面备份 `arx5_test/src/frontend/src/features/scene/runtime.ts` 的 `createLinkMaterial`、RoomEnvironment、灯光和木纹工作台。只迁移显示处理及有来源记录的纹理；没有复制其硬编码 `JOINT_SPECS`、旧 STL、D405 安装偏移、夹爪网格形变、伺服操作或网页控制逻辑。夹爪保留当前 URDF 静态几何；工作台仅为示意，不参与碰撞判断。此实现不依赖、也不改动 Desktop 工程。
+显示处理参考桌面备份 `arx5_test/src/frontend/src/features/scene/runtime.ts` 的 `createLinkMaterial`、RoomEnvironment、灯光和木纹工作台。只迁移显示处理及有来源记录的纹理；没有复制其硬编码 `JOINT_SPECS`、旧 STL、D405 安装偏移、夹爪网格形变、伺服操作或网页控制逻辑。工作台仅为示意，不参与碰撞判断。此实现不依赖、也不改动 Desktop 工程。
+
+`gripper.js` 对本仓库 X5 `link6.STL` 校验 SHA-256 后，按原始连通部件拆出左右夹指、滑块、齿条和随动紧固件；壳体、导轨和端部止挡保留固定。所有三角面和材质保持原样。原网格指尖内侧间距约 60.286 mm，左右组件各沿网格局部 Y 轴移动开度差的一半，随后继承 URDF visual origin、scale 与手腕世界变换。该动画仅用于显示，不修改 URDF、六轴 FK 或控制数据。实际与目标开度分别驱动实体和目标虚影，夹爪单独运动也可显示虚影；回放读取录制开度。缺少开度时显示原始参考几何，非匹配 STL 保留静态显示。
 
 后端由实际传入的 `RobotModel` 构建 Pinocchio visual geometry，计算每个网格的世界矩阵（含 URDF visual origin）与末端矩阵。浏览器按 column-major 直接应用，另行应用 URDF mesh scale；不重新实现 FK、关节变换或反馈平滑。显示具有独立 FK 数据缓冲，不修改控制器数据。目标与实际重合时隐藏透明目标，避免覆盖实际材质。
 

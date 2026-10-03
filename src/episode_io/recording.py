@@ -9,6 +9,7 @@ import time
 import uuid
 
 from robot_core.storage import save_json
+from .cameras import camera_metadata
 
 
 class EpisodeWriter:
@@ -22,7 +23,11 @@ class EpisodeWriter:
         self.id = f"{task_name}_{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}"
         self.path = Path(root) / self.id
         self.path.mkdir(parents=True, exist_ok=False)
-        (self.path / "wrist_rgb").mkdir()
+        self.cameras = camera_metadata(metadata)
+        for camera_id in self.cameras:
+            (self.path / camera_id).mkdir()
+        self.camera_counts = dict.fromkeys(self.cameras, 0)
+        self.camera_dropped = dict.fromkeys(self.cameras, 0)
         self.queue = queue.Queue(maxsize=queue_size)
         self.lock = threading.Lock()
         self.stop_event = threading.Event()
@@ -50,6 +55,8 @@ class EpisodeWriter:
         """Producer only queues immutable snapshots; no compression or file IO here."""
         if kind not in self.counts:
             raise ValueError("Unknown episode record kind")
+        if kind == 'frame' and payload.get('camera_id', 'wrist_rgb') not in self.cameras:
+            raise ValueError('Frame belongs to an unconfigured recording camera')
         with self.lock:
             if not self.accepting:
                 return False
@@ -61,6 +68,8 @@ class EpisodeWriter:
                 return True
             except queue.Full:
                 self.dropped[kind] += 1
+                if kind == 'frame':
+                    self.camera_dropped[payload.get('camera_id', 'wrist_rgb')] += 1
                 self.error = "Episode writer queue overflow; data is incomplete"
                 self.accepting = False
                 self.stopped_ns = time.monotonic_ns()
@@ -69,7 +78,7 @@ class EpisodeWriter:
 
     def _write(self):
         import cv2
-        video = None
+        videos = {}
         try:
             from .mcap_io import RecordWriter
             with (self.path / "episode.mcap").open("wb") as stream:
@@ -82,16 +91,19 @@ class EpisodeWriter:
                         continue
                     if kind == "frame":
                         row = {k: v for k, v in payload.items() if k != "image"}
+                        camera_id = payload.get('camera_id', 'wrist_rgb')
+                        row['camera_id'] = camera_id
+                        index = self.camera_counts[camera_id]
                         if self.rgb_video:
-                            if video is None:
+                            if camera_id not in videos:
                                 from .video import RGBVideoWriter
-                                camera = self.manifest['camera']
-                                video = RGBVideoWriter(self.path / 'wrist_rgb.mp4', camera['width'], camera['height'], camera['fps'], self.video_crf)
-                            video.write(payload['image'])
-                            row.update(video='wrist_rgb.mp4', video_frame_index=self.counts['frame'],
-                                       video_pts_s=self.counts['frame'] / self.manifest['camera']['fps'])
+                                camera = self.cameras[camera_id]
+                                videos[camera_id] = RGBVideoWriter(self.path / f'{camera_id}.mp4', camera['width'], camera['height'], camera['fps'], self.video_crf)
+                            videos[camera_id].write(payload['image'])
+                            row.update(video=f'{camera_id}.mp4', video_frame_index=index,
+                                       video_pts_s=index / self.cameras[camera_id]['fps'])
                         else:
-                            row["image"] = f"wrist_rgb/{self.counts['frame']:06d}.png"
+                            row["image"] = f"{camera_id}/{index:06d}.png"
                             if not cv2.imwrite(str(self.path / row["image"]), payload["image"], [cv2.IMWRITE_PNG_COMPRESSION, 1]):
                                 raise OSError("Cannot write RGB image")
 
@@ -102,17 +114,20 @@ class EpisodeWriter:
                         records.write_state(row, self.counts[kind])
                         self.diagnostic_counts = dict(records.extra_counts)
                     else:
-                        records.write(kind, row, self.counts[kind])
-                    self.counts[kind] += 1
+                        records.write(kind, row, index)
+                        self.camera_counts[camera_id] += 1
+                    # Retain the legacy wrist frame count; other cameras have independent counts.
+                    if kind == 'state' or camera_id == 'wrist_rgb':
+                        self.counts[kind] += 1
                     if time.monotonic() - last_flush > 1:
                         stream.flush()
                         last_flush = time.monotonic()
                 records.finish()
-            if video is not None:
+            while videos:
+                _, video = videos.popitem()
                 video.close()
-                video = None
         except Exception as exc:
-            if video is not None:
+            for video in videos.values():
                 try:
                     video.close()
                 except Exception:
@@ -127,6 +142,7 @@ class EpisodeWriter:
                 "task": self.manifest["task"], "lifecycle": self.manifest["lifecycle"],
                 "outcome": self.manifest["outcome"],
                 "counts": dict(self.counts), "diagnostic_counts": dict(self.diagnostic_counts), "dropped": dict(self.dropped), "error": self.error,
+                "camera_counts": dict(self.camera_counts), "camera_dropped": dict(self.camera_dropped),
                 "duration_s": ((self.stopped_ns or time.monotonic_ns()) - self.manifest["started_monotonic_ns"]) / 1e9}
 
     def stop(self, outcome="unknown", *, reason=None, timeout=10):
@@ -144,6 +160,7 @@ class EpisodeWriter:
         self.manifest.update({"lifecycle": "failed" if self.error else "interrupted" if reason else "complete",
                               "outcome": outcome, "stopped_monotonic_ns": self.stopped_ns,
                               "counts": dict(self.counts), "diagnostic_counts": dict(self.diagnostic_counts), "dropped": dict(self.dropped),
+                              "camera_counts": dict(self.camera_counts), "camera_dropped": dict(self.camera_dropped),
                               "error": self.error, "stop_reason": reason})
         save_json(self.path / "episode.json", self.manifest)
         return {**self.status(), "lifecycle": self.manifest["lifecycle"], "outcome": outcome}

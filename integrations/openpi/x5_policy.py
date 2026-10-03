@@ -16,6 +16,16 @@ class X5Inputs:
                   'image': {'base_0_rgb': np.zeros_like(wrist), 'left_wrist_0_rgb': wrist,
                             'right_wrist_0_rgb': np.zeros_like(wrist)},
                   'image_mask': {'base_0_rgb': np.False_, 'left_wrist_0_rgb': np.bool_(np.asarray(data.get('wrist_valid', True)).reshape(-1)[0]), 'right_wrist_0_rgb': np.False_}}
+        if 'exterior_image' in data:
+            exterior = np.asarray(data['exterior_image'])
+            if exterior.ndim != 3:
+                raise ValueError('Expected an exterior RGB image')
+            if exterior.shape[0] == 3:
+                exterior = exterior.transpose(1, 2, 0)
+            if np.issubdtype(exterior.dtype, np.floating):
+                exterior = (np.clip(exterior, 0, 1) * 255).astype(np.uint8)
+            result['image']['base_0_rgb'] = exterior
+            result['image_mask']['base_0_rgb'] = np.bool_(np.asarray(data.get('exterior_valid', True)).reshape(-1)[0])
         if result['state'].shape != (7,): raise ValueError('X5 state must have 7 dimensions')
         if 'actions' in data: result['actions'] = np.asarray(data['actions'], dtype=np.float32)
         if 'prompt' in data: result['prompt'] = data['prompt']

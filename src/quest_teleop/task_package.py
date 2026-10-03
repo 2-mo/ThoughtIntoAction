@@ -119,7 +119,8 @@ Do not treat unknown as success. Decide selection on the server; preserve the or
 - manifest.json: episode IDs, outcomes, lifecycle, counts, and SHA256/size for every episode file.
 - episodes/<id>/episode.json: original task, camera calibration, robot model/control settings.
 - episode.mcap: robot snapshots and RGB frame indices, lossless Zstd; keep the media files alongside it.
-- wrist_rgb.mp4: original 640x480, 30 FPS H264 CRF20; never expanded to 240 FPS.
+- wrist_rgb.mp4 / exterior_rgb.mp4: independent original RGB videos; exterior exists for dual-camera episodes.
+- quality.json: post-recording integrity report; a pass does not label task success.
 - tools/: bundled conversion code, dependency setup, and OpenPI adapter snapshot.
 - 转换为LeRobot.sh: runnable conversion entry; paths are relative to the script, not your terminal.
 
@@ -163,6 +164,9 @@ Use tools/integrations/openpi/run.py with this dataset. Each training row contai
 OpenPI's STANDARD LeRobot loader reads 15 consecutive 30 Hz actions (~0.5 s) per observation.
 The robot/*.npz sidecar is an archival copy of all 240 Hz samples, NOT the training action source.
 Raw integer timestamps remain intact. No images are duplicated to 240 FPS.
+Dual-camera exports use wrist anchors and the latest preceding exterior frame within the configured
+receipt-time tolerance (60 ms by default). Exterior frames can repeat; counts and offsets are reported.
+Original archives retain every frame from both cameras. Different camera sets export separately.
 The package includes all outcomes; only the server's explicit selection determines training episodes.
 Training/inference control rate and action units must match. No hardware actuation is performed by conversion.
 """

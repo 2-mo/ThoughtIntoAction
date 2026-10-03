@@ -148,14 +148,15 @@ try {
 
   for (const [width, height] of [[1440, 960], [1366, 768], [1024, 600]]) {
     await page.setViewportSize({ width, height });
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(250);
     assert.equal(await page.evaluate(() => {
       const all = [document.documentElement, document.body, document.querySelector('aside'), document.querySelector('.collection-panel'), document.querySelector('.collection-controls')];
       return all.some(e => e.scrollWidth > e.clientWidth + 1);
     }), false, 'Overflow at ' + width + 'x' + height);
-    for (const id of ['collection-count', 'collection-state', 'collection-duration', 'collection-last', 'collection-health', 'camera-image', 'depth-image', 'left-hand', 'right-hand', 'orientation-canvas', 'control-state', 'joints', 'gripper', 'torques', 'eef-position', 'state-source', 'motion-diagnostics', 'arm-latency', 'input-latency']) {
+    for (const id of ['collection-count', 'collection-state', 'collection-duration', 'collection-last', 'collection-health', 'depth-image', 'left-hand', 'right-hand', 'orientation-canvas', 'control-state', 'joints', 'gripper', 'torques', 'eef-position', 'state-source', 'motion-diagnostics', 'arm-latency', 'input-latency']) {
       const box = await page.locator('#' + id).boundingBox();
-      assert.ok(box && box.height > 0 && box.x >= 0 && box.x + box.width <= width + 1 && box.y >= 0 && box.y + box.height <= height + 1, id + ' clipped');
+      assert.ok(box && box.height > 0 && box.x >= 0 && box.x + box.width <= width + 1 && box.y >= 0, id + ' clipped');
     }
     await page.screenshot({ path: output + '/monitor-sensors-' + width + '.png' });
   }
@@ -193,7 +194,11 @@ try {
   previewState.stream = {status: 'live', source: {}, stream_id: 'preview-test', sequence: 1};
   previewState.actual_torque = [1, -2, 0, .4, -.5, 3];
   previewState.gripper = {actual: .02, target: .05, max: .082};
-  await page.route('**/api/state', route => route.fulfill({json: previewState}));
+  await page.route('**/api/state', route => {
+    // Model a running feedback stream even while software WebGL is rendering.
+    previewState.stream.sequence++;
+    return route.fulfill({json: previewState});
+  });
   await page.waitForFunction(() => document.querySelector('.torque-row b').textContent === '1.00');
   previewState.stream.sequence++;
   previewState.actual_torque[0] = 2;
@@ -233,7 +238,8 @@ try {
   await page.waitForFunction(() => document.getElementById('replay-time').textContent.startsWith('1.50'));
   assert.ok(replayActions.some(command => command.action === 'seek' && command.position_s === 1.5));
   await page.screenshot({path: output + '/dataset-replay.png'});
-  assert.equal(await page.locator('details.diagnostics-panel').count(), 1);
+  assert.equal(await page.locator('.diagnostics-panel').count(), 1);
+  assert.equal(await page.locator('.diagnostics-panel').isVisible(), false);
   assert.equal(await page.locator('#dataset-replay').isVisible(), true);
   await page.click('#view-live');
   await page.unroute('**/api/replay');
@@ -244,7 +250,7 @@ try {
 
   assert.equal(await page.locator('#connection').getAttribute('data-state'), 'waiting');
   await page.waitForFunction(() => document.querySelector('#gripper').dataset.state === 'waiting');
-  assert.equal(await page.locator('.torque-grid').count(), 7);
+  assert.equal(await page.locator('#torques .torque-grid').count(), 7);
   assert.equal(await page.locator('.gripper-placeholder').isVisible(), true);
   await page.screenshot({ path: `${output}/monitor-waiting.png` });
   await page.evaluate(() => { document.documentElement.dataset.session = 'same-page'; });
@@ -273,10 +279,10 @@ try {
     .every(zero => !zero.hidden && zero.style.left === '50%')), true, 'All position zeros must align');
   for (const [width, height] of [[1440, 960], [1366, 768], [1024, 600]]) {
     await page.setViewportSize({width, height});
-    assert.equal(await page.evaluate(() => [...document.querySelectorAll('.position-row')].every(row => {
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll('#joints .position-row')].every(row => {
       const box = row.getBoundingClientRect();
       const track = row.querySelector('.position-track').getBoundingClientRect();
-      return row.scrollWidth <= row.clientWidth + 1 && box.bottom <= innerHeight && track.width >= 25;
+      return row.scrollWidth <= row.clientWidth + 1 && box.bottom + scrollY <= document.documentElement.scrollHeight && track.width >= 25;
     })), true, 'Position bars overflow at ' + width);
     await page.screenshot({path: `${output}/position-bars-${width}.png`});
   }

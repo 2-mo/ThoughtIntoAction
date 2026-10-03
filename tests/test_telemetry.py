@@ -157,6 +157,21 @@ class TelemetryTests(unittest.TestCase):
         self.assertIsNone(scene.snapshot()['actual_torque'])
         self.assertIsNone(scene.snapshot()['gripper_actual_torque'])
 
+    def test_raw_commands_reach_scene_and_legacy_absence_clears_them(self):
+        publisher = self.publisher()
+        subscriber = self.subscriber()
+        details = {'sdk_cmd_pos': self.q.tolist(), 'gripper_sdk_cmd_pos': .025, 'gripper_kp': 4.}
+        publisher.update(self.q, command_details=details)
+        packet = self.packet(subscriber)
+        scene = Scene(self.robot)
+        self.addCleanup(scene.close)
+        scene.accept(packet)
+        self.assertEqual(scene.snapshot()['command_details'], details)
+        packet.pop('command_details')
+        packet['sequence'] += 1
+        scene.accept(packet)
+        self.assertIsNone(scene.snapshot()['command_details'])
+
     def test_motor_feedback_reaches_scene_and_clears_on_absence(self):
         publisher = self.publisher()
         subscriber = self.subscriber()

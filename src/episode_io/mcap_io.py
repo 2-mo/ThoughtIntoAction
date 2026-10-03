@@ -5,6 +5,7 @@ from zstandard import ZstdError
 from mcap.reader import make_reader
 from mcap.exceptions import McapError
 from mcap.writer import Writer, CompressionType
+from .cameras import camera_metadata, camera_topic, camera_id_from_topic
 
 TOPICS = {'state': '/robot/state', 'frame': '/camera/wrist/rgb/index',
           'diagnostics': '/robot/diagnostics', 'event': '/robot/events'}
@@ -24,13 +25,20 @@ class RecordWriter:
             schema = self.writer.register_schema('quest_teleop.' + kind + '.v1', 'jsonschema',
                 json.dumps({'type': 'object', 'description': 'Original episode snapshot; SI units, host monotonic timestamps in nanoseconds'}).encode())
             self.channels[kind] = self.writer.register_channel(topic, 'json', schema)
+        self.camera_channels = {'wrist_rgb': self.channels['frame']}
+        for camera_id in camera_metadata(manifest):
+            if camera_id != 'wrist_rgb':
+                self.camera_channels[camera_id] = self.writer.register_channel(
+                    camera_topic(camera_id), 'json', self.writer.register_schema(
+                        'quest_teleop.frame.v1', 'jsonschema', b'{"type":"object"}'))
         self.writer.add_metadata('episode', {'manifest': json.dumps(manifest, ensure_ascii=False),
             'clock': 'log_time = started_unix_ns + (host_monotonic_ns - started_monotonic_ns); camera device time retained in payload',
             'media': 'Relative RGB paths refer to files alongside this MCAP; keep the episode directory together'})
 
     def write(self, kind, row, sequence):
         stamp = row['host_received_monotonic_ns' if kind == 'frame' else 'host_monotonic_ns'] + self.offset
-        self.writer.add_message(self.channels[kind], log_time=stamp, publish_time=stamp,
+        channel = self.camera_channels[row.get('camera_id', 'wrist_rgb')] if kind == 'frame' else self.channels[kind]
+        self.writer.add_message(channel, log_time=stamp, publish_time=stamp,
             sequence=sequence, data=json.dumps(row, ensure_ascii=False, allow_nan=False).encode())
 
     def write_state(self, row, sequence):
@@ -68,16 +76,28 @@ def read_records(path):
     return records[TOPICS["state"]], records[TOPICS["frame"]]
 
 
+def read_camera_records(path):
+    records = read_topics(path)
+    cameras = {camera_id_from_topic(topic): rows for topic, rows in records.items()
+               if camera_id_from_topic(topic)}
+    return records[TOPICS['state']], cameras
+
+
 def read_topics(path):
     records = {topic: [] for topic in TOPICS.values()}
     try:
         with path.open('rb') as stream:
             # File order retains producer order so validators detect regressing timestamps.
-            for _, channel, message in make_reader(stream, validate_crcs=True).iter_messages(topics=list(records), log_time_order=False):
+            for _, channel, message in make_reader(stream, validate_crcs=True).iter_messages(log_time_order=False):
+                camera_id = camera_id_from_topic(channel.topic)
+                if channel.topic not in records and camera_id is None:
+                    continue
                 row = json.loads(message.data)
                 if not isinstance(row, dict):
                     raise ValueError('MCAP record must be an object')
-                records[channel.topic].append(row)
+                if camera_id and row.get('camera_id', camera_id) != camera_id:
+                    raise ValueError('Camera ID differs from MCAP channel')
+                records.setdefault(channel.topic, []).append(row)
     except (McapError, EOFError, struct.error, ZstdError) as exc:
         raise ValueError(f"Invalid or incomplete MCAP: {exc}") from exc
     return records

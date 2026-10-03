@@ -1,4 +1,4 @@
-"""Independent single-owner RGB service; monitor and recording share original frames."""
+"""One owner per configured RealSense; independent feeds shared by monitor and recording."""
 import base64
 from contextlib import closing
 import signal
@@ -14,10 +14,12 @@ from .project import load_config
 
 
 class CameraFeed:
-    def __init__(self, options=None):
-        self.options = options
+    def __init__(self, options=None, camera_id="wrist_rgb"):
+        self.options = options or {}
+        self.camera_id = camera_id
         self.enabled = False
         self.control_lock = threading.RLock()
+        self.data_lock = threading.RLock()
         self.capture_stop = threading.Event()
         self.thread = None
         self.frame = None
@@ -55,8 +57,9 @@ class CameraFeed:
                             raise RuntimeError("相机仍在停止，请稍后重试")
                     self.thread = None
                     self.enabled = False
-                    self.frame = self.preview = self.depth_preview = self.metadata = None
-                    self.error = "相机已关闭"
+                    with self.data_lock:
+                        self.frame = self.preview = self.depth_preview = self.metadata = None
+                        self.error = "相机已关闭"
                 return self.dispatch({"command": "monitor"})
             finally:
                 if guard:
@@ -71,12 +74,19 @@ class CameraFeed:
         if payload.get("command") == "set_enabled":
             return self.set_enabled(payload.get("enabled"))
         if payload.get("command") == "frame":
-            return self.frame
+            with self.data_lock:
+                return self.frame
         if payload.get("command") != "monitor":
             raise ValueError("Unknown camera request")
+        with self.data_lock:
+            return self.snapshot()
+
+    def snapshot(self):
         now = time.monotonic_ns()
         frame, preview, depth = self.frame, self.preview, self.depth_preview
-        return {"camera": {"metadata": self.metadata, "error": self.error,
+        return {"camera": {"id": self.camera_id, "label": self.options.get("label", self.camera_id),
+                           "serial": self.options.get("serial", ""), "model": self.options.get("model", ""),
+                           "preview_fps": 5, "metadata": self.metadata, "error": self.error,
                            "enabled": self.enabled, "switch_protocol": 1,
                            "age_s": None if frame is None else (now - frame["host_received_monotonic_ns"]) / 1e9},
                 "depth_preview": {"jpeg_base64": None if depth is None else depth[1],
@@ -89,34 +99,89 @@ class CameraFeed:
         while not stop.is_set():
             try:
                 import cv2
-                with closing(DeviceLease("camera:" + options["serial"])), RealSenseCamera(options["serial"], options["width"], options["height"], options["fps"]) as camera:
+                with closing(DeviceLease("camera:" + options["serial"])), RealSenseCamera(
+                        options["serial"], options["width"], options["height"], options["fps"],
+                        expected_model=options.get("model"), color_options=options.get("color", {})) as camera:
                     # A reconnect starts a new stream even when device frame numbers repeat.
                     stream_id = uuid.uuid4().hex
-                    self.metadata = {**camera.metadata, "stream_id": stream_id}
+                    metadata = {**camera.metadata, "stream_id": stream_id}
                     last_preview = 0
+                    preview = depth_preview = None
                     while not stop.is_set():
                         frame = camera.read()
                         image = frame["image"]
-                        self.frame = {**{k: v for k, v in frame.items() if k not in ("image", "depth_image", "depth_scale_m")},
-                                      "stream_id": stream_id,
-                                      "bgr_base64": base64.b64encode(image.tobytes()).decode("ascii")}
-                        self.error = None
+                        encoded_frame = {**{k: v for k, v in frame.items() if k not in ("image", "depth_image", "depth_scale_m")},
+                                         "stream_id": stream_id,
+                                         "bgr_base64": base64.b64encode(image.tobytes()).decode("ascii")}
                         if time.monotonic() - last_preview >= .2:
-                            ok, jpeg = cv2.imencode(".jpg", cv2.resize(image, (320, 240)), [cv2.IMWRITE_JPEG_QUALITY, 75])
+                            size = (min(640, image.shape[1]), max(1, round(image.shape[0] * min(640, image.shape[1]) / image.shape[1])))
+                            ok, jpeg = cv2.imencode(".jpg", cv2.resize(image, size), [cv2.IMWRITE_JPEG_QUALITY, 75])
                             if ok:
-                                self.preview = (frame["host_received_monotonic_ns"], base64.b64encode(jpeg).decode("ascii"))
+                                preview = (frame["host_received_monotonic_ns"], base64.b64encode(jpeg).decode("ascii"))
                             depth = frame.get("depth_image")
-                            self.depth_preview = None
+                            depth_preview = None
                             if depth is not None:
                                 visual = colorize_depth(depth, frame["depth_scale_m"])
-                                ok, jpeg = cv2.imencode(".jpg", cv2.resize(visual, (320, 240), interpolation=cv2.INTER_NEAREST))
+                                ok, jpeg = cv2.imencode(".jpg", cv2.resize(visual, size, interpolation=cv2.INTER_NEAREST), [cv2.IMWRITE_JPEG_QUALITY, 75])
                                 if ok:
-                                    self.depth_preview = (frame["host_received_monotonic_ns"], base64.b64encode(jpeg).decode("ascii"))
+                                    depth_preview = (frame["host_received_monotonic_ns"], base64.b64encode(jpeg).decode("ascii"))
                             last_preview = time.monotonic()
+                        with self.data_lock:
+                            self.frame, self.metadata, self.error = encoded_frame, metadata, None
+                            self.preview, self.depth_preview = preview, depth_preview
             except Exception as exc:
-                self.error = f"{type(exc).__name__}: {exc}"
-                self.frame = self.preview = self.depth_preview = self.metadata = None
+                with self.data_lock:
+                    self.error = f"{type(exc).__name__}: {exc}"
+                    self.frame = self.preview = self.depth_preview = self.metadata = None
                 stop.wait(2)
+
+
+class CameraService:
+    """Route named feeds; requests without an ID retain the wrist recording contract."""
+    def __init__(self, cameras, color_options=None):
+        if "wrist_rgb" not in cameras:
+            raise ValueError("cameras.wrist_rgb is required for the recording channel")
+        serials = set()
+        self.feeds = {}
+        for camera_id, supplied in cameras.items():
+            options = {"enabled": False, "driver": "realsense", "serial": "",
+                       "width": 640, "height": 480, "fps": 30, **supplied}
+            options["color"] = {**(color_options or {}), **supplied.get("color", {})}
+            if options["driver"] != "realsense":
+                raise ValueError(f"Unsupported camera driver: {camera_id}")
+            serial = options["serial"]
+            if not isinstance(serial, str) or type(options["enabled"]) is not bool:
+                raise ValueError(f"Invalid camera configuration: {camera_id}")
+            if serial and serial in serials:
+                raise ValueError(f"Duplicate camera serial: {serial}")
+            if serial:
+                serials.add(serial)
+            for key in ("width", "height", "fps"):
+                if type(options[key]) is not int or options[key] <= 0:
+                    raise ValueError(f"Invalid {camera_id}.{key}")
+            self.feeds[camera_id] = CameraFeed(options, camera_id)
+
+    def start(self):
+        for feed in self.feeds.values():
+            if feed.options["enabled"]:
+                feed.set_enabled(True)
+            else:
+                feed.error = "相机已关闭"
+
+    def close(self):
+        for feed in self.feeds.values():
+            feed.capture_stop.set()
+        for feed in self.feeds.values():
+            feed.close()
+
+    def dispatch(self, payload):
+        camera_id = payload.get("camera_id", "wrist_rgb")
+        if not isinstance(camera_id, str) or camera_id not in self.feeds:
+            raise ValueError(f"Unknown camera: {camera_id}")
+        if payload.get("command") == "monitor" and "camera_id" not in payload:
+            cameras = {key: feed.dispatch(payload) for key, feed in self.feeds.items()}
+            return {**cameras["wrist_rgb"], "cameras": cameras, "default_camera_id": "wrist_rgb"}
+        return self.feeds[camera_id].dispatch(payload)
 
 
 def colorize_depth(depth, scale):
@@ -133,18 +198,15 @@ def colorize_depth(depth, scale):
 def main():
     import argparse
     argparse.ArgumentParser(description=__doc__).parse_args()
-    options = load_config()["cameras"]["wrist_rgb"]
+    config = load_config()
     stop = threading.Event()
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: stop.set())
     server = None
     try:
-        feed = CameraFeed(options)
+        feed = CameraService(config["cameras"], config.get("camera_service", {}).get("color", {}))
         server = LocalServer(socket_path(), feed.dispatch)
-        if options["enabled"]:
-            feed.set_enabled(True)
-        else:
-            feed.error = "相机已关闭"
+        feed.start()
         print(f"Camera service ready: {socket_path()}", flush=True)
         stop.wait()
     finally:

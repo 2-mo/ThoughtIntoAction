@@ -70,6 +70,54 @@ class SequentialReaderTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('lerobot'), 'requires scripts/datasets/setup_export.sh environment')
 class PortableExportTests(unittest.TestCase):
+    def test_dual_camera_portable_export_keeps_pixels_and_independent_clocks(self):
+        from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path, states, wrist = make_episode(root/'raw', 'dual', count=8)
+            exterior = []
+            writer = RGBVideoWriter(path/'exterior_rgb.mp4', 64, 48, 30)
+            try:
+                for index, frame in enumerate(wrist):
+                    frame.update(camera_id='wrist_rgb', frame_number=index, device_timestamp_ms=index*1000/30,
+                                 device_timestamp_domain='hardware_clock', stream_id='wrist')
+                    writer.write(np.full((48,64,3), (180,80,20), np.uint8))
+                    exterior.append({**frame, 'camera_id':'exterior_rgb', 'video':'exterior_rgb.mp4',
+                        'stream_id':'exterior', 'host_received_monotonic_ns':frame['host_received_monotonic_ns']-5_000_000})
+            finally:
+                writer.close()
+            meta = json.loads((path/'episode.json').read_text())
+            meta['camera']['stream_id'] = 'wrist'
+            meta.update(cameras={'wrist_rgb':meta['camera'], 'exterior_rgb':{**meta['camera'], 'stream_id':'exterior'}},
+                        camera_counts={'wrist_rgb':8, 'exterior_rgb':8})
+            (path/'episode.json').write_text(json.dumps(meta))
+            (path/'quality.json').write_text(json.dumps({'status':'passed', 'episode':'dual'}))
+            write_records(path, states=states, frames=[*wrist, *exterior])
+            archive = finalize_task(root/'raw', ['dual'], root/'dual task', 240)
+            with zipfile.ZipFile(archive) as package:
+                self.assertIn('dual task/episodes/dual/quality.json', package.namelist())
+                self.assertEqual(package.read('dual task/episodes/dual/exterior_rgb.mp4'), (path/'exterior_rgb.mp4').read_bytes())
+                package.extractall(root/'unpacked')
+            bundle = root/'unpacked/dual task'
+            done = subprocess.run(['bash', str(bundle/'转换为LeRobot.sh'), '--decoder','opencv','--decode-workers','0'],
+                cwd=root, env={**os.environ, 'LEROBOT_EXPORT_PYTHON':sys.executable,'PYTHONPATH':''},
+                capture_output=True,text=True,timeout=90)
+            self.assertEqual(done.returncode,0,done.stdout+done.stderr)
+            output = bundle/'lerobot_dataset'
+            loaded = LeRobotDataset('local/quest_x5',root=output,video_backend='pyav')
+            self.assertEqual(len(loaded),7)
+            sample = loaded[0]
+            self.assertEqual(sample['source.rgb_monotonic_ns'].item()-sample['source.exterior_rgb_monotonic_ns'].item(),5_000_000)
+            self.assertTrue(sample['observation.exterior_valid'].item())
+            self.assertEqual(tuple(sample['observation.images.exterior'].shape),(3,48,64))
+            self.assertGreater(sample['observation.images.wrist'][0].mean().item(),.6)
+            self.assertLess(sample['observation.images.exterior'][0].mean().item(),.15)
+            manifest = json.loads((output/'meta/quest_export.json').read_text())
+            self.assertEqual(set(manifest['cameras']),{'wrist_rgb','exterior_rgb'})
+            self.assertEqual(manifest['episodes'][0]['cameras']['exterior_rgb']['max_age_ms'],5.)
+            with np.load(output/'robot/episode_000000.npz') as raw:
+                self.assertEqual(len(raw['state']),len(states))
+
     def test_runtime_schema2_portable_export_preserves_independent_clocks(self):
         from episode_io.runtime_episode import RuntimeEpisodeWriter
         from test_runtime_collection import tick

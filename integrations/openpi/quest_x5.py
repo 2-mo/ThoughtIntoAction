@@ -13,11 +13,16 @@ from x5_policy import X5Inputs, X5Outputs
 
 @dataclasses.dataclass(frozen=True)
 class X5DataConfig(config.DataConfigFactory):
+    exterior_camera: bool = False
+
     def create(self, assets_dirs, model_config):
-        repack = transforms.Group(inputs=[transforms.RepackTransform({
+        fields = {
             'state': 'observation.state', 'wrist_image': 'observation.images.wrist',
             'actions': 'action',
-            'prompt': 'prompt', 'wrist_valid': 'observation.wrist_valid'})])
+            'prompt': 'prompt', 'wrist_valid': 'observation.wrist_valid'}
+        if self.exterior_camera:
+            fields.update(exterior_image='observation.images.exterior', exterior_valid='observation.exterior_valid')
+        repack = transforms.Group(inputs=[transforms.RepackTransform(fields)])
         # Delta joints relative to the first observed state of the chunk;
         # gripper remains absolute metres. Outputs restore absolute joint targets.
         mask = transforms.make_bool_mask(6, -1)
@@ -30,11 +35,11 @@ class X5DataConfig(config.DataConfigFactory):
             action_sequence_keys=('action',), prompt_from_task=True)
 
 
-def train_config(repo_id='local/quest_x5', fps=30):
+def train_config(repo_id='local/quest_x5', fps=30, exterior_camera=False):
     if fps != 30:
         raise ValueError('X5 training state/action and video must all use 30 Hz')
     return config.TrainConfig(name='pi05_quest_x5',
         model=pi0_config.Pi0Config(pi05=True, action_horizon=round(fps * .5)),
-        data=X5DataConfig(repo_id=repo_id, base_config=config.DataConfig(prompt_from_task=True)),
+        data=X5DataConfig(repo_id=repo_id, exterior_camera=exterior_camera, base_config=config.DataConfig(prompt_from_task=True)),
         weight_loader=weight_loaders.CheckpointWeightLoader('gs://openpi-assets/checkpoints/pi05_base/params'),
         num_train_steps=30000)

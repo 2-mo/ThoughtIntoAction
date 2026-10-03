@@ -17,6 +17,7 @@ can_device = "/dev/arx_r5"
 urdf = "assets/robots/x5/X5_2025_hybrid.urdf"
 
 [cameras.wrist_rgb]
+label = "腕部相机"
 enabled = true
 driver = "realsense"
 model = "D435i"
@@ -73,6 +74,7 @@ table_z_m = 0.0
 table_clearance_m = 0.0
 
 [recording]
+camera_ids = ["wrist_rgb"]
 package_on_task_end = true
 rgb_video = true
 video_crf = 20

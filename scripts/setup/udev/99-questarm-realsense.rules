@@ -1,0 +1,4 @@
+# D435 / D435i: allow plugdev members to use RGB/depth without a desktop login.
+# Device matching follows librealsense/config/99-realsense-libusb.rules.
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="8086", ATTRS{idProduct}=="0b07", MODE:="0660", GROUP:="plugdev"
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="8086", ATTRS{idProduct}=="0b3a", MODE:="0660", GROUP:="plugdev"

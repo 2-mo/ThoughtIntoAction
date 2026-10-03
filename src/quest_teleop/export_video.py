@@ -2,6 +2,26 @@
 from pathlib import Path
 
 
+class MultiVideoWriter:
+    """Route LeRobot image paths to one bounded encoder per camera feature."""
+    def __init__(self, writers):
+        self.writers = writers
+
+    def save_image(self, image, fpath):
+        feature = next((key for key in self.writers if key in Path(fpath).parts), None)
+        if feature is None:
+            raise ValueError('Unknown camera image path: ' + str(fpath))
+        self.writers[feature].save_image(image, fpath)
+
+    def wait_until_done(self):
+        for writer in self.writers.values():
+            writer.wait_until_done()
+
+    def stop(self):
+        for writer in self.writers.values():
+            writer.stop()
+
+
 class StreamingVideoWriter:
     """LeRobot image-writer interface; bounded encoder buffers, no PNG round trip.
 

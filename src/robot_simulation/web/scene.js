@@ -1,4 +1,5 @@
 import {mode, displayedState} from './display-state.js';
+import {splitGripperGeometry, attachGripper} from './gripper.js';
 // Display treatment adapted from arx5_test's scene; no desktop kinematics or controls.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -158,22 +159,35 @@ async function initialize() {
   actualModel.visible = targetModel.visible = false;
   const loader = new STLLoader();
   const actualMeshes = [], targetMeshes = [];
+  const grippers = [];
   await Promise.all(manifest.meshes.map(async (spec, index) => {
-    const geometry = await loader.loadAsync(spec.url);
+    let source, geometry;
+    if (spec.link === 'link6') {
+      const response = await fetch(spec.url);
+      if (!response.ok) throw new Error(`${spec.url}: HTTP ${response.status}`);
+      source = await response.arrayBuffer();
+      geometry = loader.parse(source);
+    } else geometry = await loader.loadAsync(spec.url);
     geometry.scale(...spec.scale);
     geometry.computeVertexNormals();
+    const parts = source ? await splitGripperGeometry(source, geometry, spec.scale) : null;
     // The Desktop scene uses black housings and a brushed-metal link3.
     const metal = spec.link === 'link3';
     const material = new THREE.MeshStandardMaterial({
       color: metal ? 0xc8d0d5 : 0x171a1d, emissive: 0x070807, emissiveIntensity: 0.08,
       metalness: metal ? 0.86 : 0.08, roughness: metal ? 0.25 : 0.68, side: THREE.DoubleSide,
     });
-    const actual = new THREE.Mesh(geometry, material);
-    const target = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0xffb84c,
+    const actual = new THREE.Mesh(parts?.body || geometry, material);
+    const target = new THREE.Mesh(parts?.body || geometry, new THREE.MeshBasicMaterial({ color: 0xffb84c,
       transparent: true, opacity: 0.23, depthWrite: false, side: THREE.DoubleSide }));
     actual.name = target.name = spec.name;
     actual.matrixAutoUpdate = target.matrixAutoUpdate = false;
     actual.castShadow = actual.receiveShadow = true;
+    if (parts) {
+      grippers.push({index, actual: attachGripper(actual, parts), target: attachGripper(target, parts)});
+      target.material = target.material.clone();
+      geometry.dispose();
+    }
     actual.userData.online = { color: material.color.clone(), metalness: material.metalness, roughness: material.roughness };
     actualMeshes[index] = actual;
     targetMeshes[index] = target;
@@ -200,10 +214,11 @@ async function initialize() {
   const pathObjects = new Map();
   const pathSignatures = new Map();
   let latest = null;
+  let gripperTargetVisible = false;
   let feedbackLive = false, armDeadline = 0, armVisualState = null;
   function displayOptions() {
     // Coincident ghosts wash out the real materials; show only a distinct target.
-    targetModel.visible = feedbackLive && Boolean(latest?.target_visible) && element('show-target').checked;
+    targetModel.visible = feedbackLive && (Boolean(latest?.target_visible) || gripperTargetVisible) && element('show-target').checked;
     paths.visible = feedbackLive && element('show-path').checked;
     table.visible = element('show-table').checked;
     axes.visible = element('show-axes').checked;
@@ -218,7 +233,7 @@ async function initialize() {
       mesh.material.color.copy(feedbackLive ? original.color : new THREE.Color(0x384148));
       mesh.material.metalness = feedbackLive ? original.metalness : 0;
       mesh.material.roughness = feedbackLive ? original.roughness : 1;
-      mesh.castShadow = feedbackLive;
+      mesh.traverse(part => {part.castShadow = feedbackLive;});
     });
     displayOptions();
   };
@@ -231,13 +246,29 @@ async function initialize() {
     // Pinocchio supplies world matrices including URDF visual origins. There is
     // no hardcoded joint chain, Euler conversion or feedback smoothing in JS.
     actualMeshes.forEach((mesh, index) => mesh.matrix.fromArray(state.actual.meshes[index]));
+    gripperTargetVisible = false;
+    for (const gripper of grippers) {
+      const feedback = state.gripper;
+      gripper.actual.setOpening(feedback?.actual, feedback?.max);
+      gripper.target.setOpening(feedback?.target ?? feedback?.actual, feedback?.max);
+      const actual = actualMeshes[gripper.index].userData.gripperOpening;
+      const target = targetMeshes[gripper.index].userData.gripperOpening;
+      gripperTargetVisible ||= Number.isFinite(actual) && Number.isFinite(target) && Math.abs(target - actual) > .001;
+    }
     targetMeshes.forEach((mesh, index) => {
       const matrix = state.target.meshes[index];
       mesh.matrix.fromArray(matrix);
       // Even with a distinct target, the base and upstream links can coincide.
       // Suppress those ghosts too, avoiding tinted surfaces and z-fighting.
-      mesh.visible = matrix.some((value, entry) => Math.abs(value - state.actual.meshes[index][entry])
+      const poseDiffers = matrix.some((value, entry) => Math.abs(value - state.actual.meshes[index][entry])
         > (entry >= 12 && entry <= 14 ? 0.001 : 0.005));
+      // Gripper-only motion also has a target ghost. Hide the coincident housing.
+      const actualOpening = actualMeshes[index].userData.gripperOpening;
+      const targetOpening = mesh.userData.gripperOpening;
+      const gripDiffers = Number.isFinite(actualOpening) && Number.isFinite(targetOpening)
+        && Math.abs(targetOpening - actualOpening) > .001;
+      mesh.visible = poseDiffers || gripDiffers;
+      mesh.material.visible = poseDiffers;
     });
     actualAxes.matrix.fromArray(state.actual.eef);
     actualModel.visible = true;

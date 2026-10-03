@@ -106,7 +106,7 @@ class SessionTests(unittest.TestCase):
         self.config["runtime"]["socket"] = str(self.root / "session.sock")
         self.config["paths"].update(dataset_dir=str(self.root / "data"), log_dir=str(self.root / "logs"))
         self.config["cameras"]["wrist_rgb"].update(serial="fake", width=32, height=24, fps=30)
-        self.config["recording"].update(min_free_bytes=0, min_duration_s=.15)
+        self.config["recording"].update(min_free_bytes=0, min_duration_s=.15, camera_ids=['wrist_rgb'])
         self.robot = RobotModel()
         self.camera = FakeCamera("fake", 32, 24, 30)
         self.session = TeleopSession(self.config, self.robot.metadata(),

@@ -1,4 +1,4 @@
-"""Teleop-owned snapshots, one camera source, background logging and episode lifecycle."""
+"""Teleop snapshots, named camera streams, background logging and episode quality."""
 
 import base64
 from datetime import datetime
@@ -12,6 +12,7 @@ import shutil
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 from robot_core.plugins import Registry
 from ..recording import EpisodeWriter
@@ -59,6 +60,15 @@ class TeleopSession:
         self.stop_event = threading.Event()
         self.closed = False
         self.camera_factory = camera_factory or Registry().load("camera", config["cameras"]["wrist_rgb"]["driver"])
+        self.camera_ids = settings.get('camera_ids', ['wrist_rgb'])
+        if (not isinstance(self.camera_ids, list) or 'wrist_rgb' not in self.camera_ids
+                or any(not isinstance(key, str) or key not in config['cameras'] for key in self.camera_ids)
+                or len(set(self.camera_ids)) != len(self.camera_ids)):
+            raise ValueError('recording.camera_ids must include wrist_rgb and unique configured camera IDs')
+        self.camera_states = {key: {'metadata': None, 'frame': None, 'error': 'Camera starting'} for key in self.camera_ids}
+        self.quality_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='episode-quality')
+        self.quality_jobs = []
+        self.quality_results = {}
         self.server = None
         self.threads = []
         self.sequence = 0
@@ -77,7 +87,8 @@ class TeleopSession:
     def start(self):
         try:
             self.server = LocalServer(self.socket_path, self.dispatch)
-            for name, target in (("wrist-camera", self._camera_worker), ("session-log", self._background), ("arm-samples", self._sample_worker)):
+            workers = [(key, lambda key=key: self._camera_worker(key)) for key in self.camera_ids]
+            for name, target in [*workers, ("session-log", self._background), ("arm-samples", self._sample_worker)]:
                 thread = threading.Thread(target=target, name=name, daemon=True)
                 self.threads.append(thread)
                 thread.start()
@@ -121,25 +132,32 @@ class TeleopSession:
                     if self.recording is not None:
                         self._stop_recording(reason=self.runtime_error)
 
-    def _camera_worker(self):
-        options = self.config["cameras"]["wrist_rgb"]
+    def _camera_worker(self, camera_id='wrist_rgb'):
+        options = self.config["cameras"][camera_id]
         if not options["enabled"]:
-            self.camera_error = "Wrist camera disabled"
+            self.camera_states[camera_id] = {'metadata': None, 'frame': None, 'error': 'Recording camera disabled'}
+            if camera_id == 'wrist_rgb':
+                self.camera_error = "Wrist camera disabled"
             return
         while not self.stop_event.is_set():
             try:
                 import cv2
-                with self.camera_factory(options["serial"], options["width"], options["height"], options["fps"]) as camera:
-                    self.camera_metadata = camera.metadata
+                arguments = {} if camera_id == 'wrist_rgb' else {'camera_id': camera_id}
+                with self.camera_factory(options["serial"], options["width"], options["height"], options["fps"], **arguments) as camera:
+                    if camera_id == 'wrist_rgb':
+                        self.camera_metadata = camera.metadata
                     last_preview = 0.
                     while not self.stop_event.is_set():
                         frame = camera.read()
-                        self.camera_error = None
-                        self.latest_frame = frame
+                        frame = {**frame, 'camera_id': camera_id}
+                        self.camera_states[camera_id] = {'metadata': camera.metadata, 'frame': frame, 'error': None}
+                        if camera_id == 'wrist_rgb':
+                            self.camera_error = None
+                            self.latest_frame = frame
                         writer = self.recording
                         if writer is not None:
                             writer.add("frame", frame)
-                        if time.monotonic() - last_preview >= .2:
+                        if camera_id == 'wrist_rgb' and time.monotonic() - last_preview >= .2:
                             thumbnail = cv2.resize(frame["image"], (320, 240))
                             ok, encoded = cv2.imencode(".jpg", thumbnail, [cv2.IMWRITE_JPEG_QUALITY, 75])
                             if ok:
@@ -147,8 +165,11 @@ class TeleopSession:
                                 self.preview_frame = {"host_received_monotonic_ns": frame["host_received_monotonic_ns"]}
                             last_preview = time.monotonic()
             except Exception as exc:
-                self.camera_error = f"{type(exc).__name__}: {exc}"
-                self.latest_frame = self.preview_frame = self.preview_jpeg = None
+                error = f"{type(exc).__name__}: {exc}"
+                self.camera_states[camera_id] = {'metadata': None, 'frame': None, 'error': error}
+                if camera_id == 'wrist_rgb':
+                    self.camera_error = error
+                    self.latest_frame = self.preview_frame = self.preview_jpeg = None
                 self.stop_event.wait(.5)
 
     @staticmethod
@@ -164,7 +185,9 @@ class TeleopSession:
                 "camera": {"metadata": self.camera_metadata, "error": self.camera_error,
                            "age_s": self.age(self.latest_frame, "host_received_monotonic_ns")},
                 "recording": writer.status() if writer else None,
-                "last_episode": self.last_episode, "task_dataset": self.task_dataset, "runtime_error": self.runtime_error,
+                "last_episode": ({**self.last_episode, 'quality': self.quality_results.get(self.last_episode['id'], self.last_episode.get('quality'))}
+                                 if self.last_episode else None),
+                "task_dataset": self.task_dataset, "runtime_error": self.runtime_error,
                 "collection_count": len(self.counted_episodes),
                 "task_active": self.task_active, "task_paused": self.task_paused, "task_run_id": self.task_run_id,
                 "log_dir": str(self.log_root),
@@ -335,10 +358,18 @@ class TeleopSession:
                     raise ValueError("No fresh robot snapshot; recording blocked")
                 if status["camera"]["age_s"] is None or status["camera"]["age_s"] > .25:
                     raise ValueError("No fresh wrist RGB frame; recording blocked")
+                for key in self.camera_ids:
+                    camera_state = self.camera_states[key]
+                    age = self.age(camera_state['frame'], 'host_received_monotonic_ns')
+                    if camera_state['error'] or age is None or age > .25:
+                        raise ValueError(f"{key}: {camera_state['error'] or 'No fresh RGB frame'}; recording blocked")
                 self.dataset_root.mkdir(parents=True, exist_ok=True)
                 if shutil.disk_usage(self.dataset_root).free < self.config["recording"]["min_free_bytes"]:
                     raise ValueError("Insufficient disk space for recording")
                 meta = {"robot": self.robot_metadata, "camera": self.camera_metadata,
+                        "cameras": {key: self.camera_states[key]['metadata'] for key in self.camera_ids},
+                        "quality_limits": {key: self.config['recording'][key] for key in (
+                            'min_duration_s', 'max_state_gap_s', 'max_frame_gap_s', 'max_sync_skew_s')},
                         "control": self.control_metadata, "session_id": self.id, "task_run_id": self.task_run_id,
                         "source_sha256": self.source_fingerprint,
                         "hand_eye_calibrated": self.config["cameras"]["wrist_rgb"]["hand_eye_calibrated"],
@@ -363,9 +394,11 @@ class TeleopSession:
                 lease = recording_guard() if self.camera_factory is SharedCamera else None
                 try:
                     if lease:
-                        camera_state = request(socket_path(), "monitor", timeout=.5)["camera"]
-                        if camera_state.get("enabled") is False or camera_state.get("age_s") is None or camera_state["age_s"] > .5:
-                            raise RuntimeError("相机未开启或反馈已过期")
+                        feeds = request(socket_path(), "monitor", timeout=.5)
+                        for key in self.camera_ids:
+                            camera_state = feeds.get('cameras', {'wrist_rgb': feeds})[key]['camera']
+                            if camera_state.get("enabled") is False or camera_state.get("age_s") is None or camera_state["age_s"] > .5:
+                                raise RuntimeError(key + "：相机未开启或反馈已过期")
                     self.recording = EpisodeWriter(raw_root, meta, payload.get("task"),
                                                    queue_size=self.config["recording"]["queue_size"],
                                                    rgb_video=self.config["recording"].get("rgb_video", False),
@@ -395,13 +428,34 @@ class TeleopSession:
             self._camera_record_lease = None
         if self.task_dataset is not None:
             self.task_dataset["episodes"] = len(self.counted_episodes)
+        result['quality'] = {'status': 'checking', 'episode': result['id']}
+        save_json(Path(result['path']) / 'quality.json', result['quality'])
+        self.quality_jobs.append(self.quality_pool.submit(self._check_quality, dict(result)))
         return result
+
+    def _check_quality(self, episode):
+        try:
+            from ..datasets import validate_episode
+            from robot_core.model import RobotModel
+            from robot_core.project import resolve_path
+            robot = RobotModel(resolve_path(self.config['robot']['urdf']), eef=self.robot_metadata['eef_frame'])
+            report = validate_episode(episode['path'], settings=self.config['recording'], robot=robot)
+            report.update(status='passed' if report['valid'] else 'failed', episode=episode['id'])
+        except Exception as exc:
+            report = {'status': 'failed', 'valid': False, 'episode': episode['id'],
+                      'errors': ['质量检查未完成：' + str(exc)], 'warnings': []}
+        save_json(Path(episode['path']) / 'quality.json', report)
+        self.quality_results[episode['id']] = report
+        return report
 
     def _finalize_task_dataset(self):
         if not self.config["recording"].get("package_on_task_end", False) or not self.task_dataset:
             return
         if self.task_dataset["state"] == "complete":
             return
+        for job in self.quality_jobs:
+            job.result()  # Include completed reports in the portable archive.
+        self.quality_jobs.clear()
         episode_ids = []
         for manifest in (self.dataset_root / ".raw").glob("*/episode.json"):
             meta = json.loads(manifest.read_text())
@@ -435,6 +489,11 @@ class TeleopSession:
                         state_age = self.age(self.latest_state, "host_monotonic_ns")
                         frame_age = self.age(self.latest_frame, "host_received_monotonic_ns")
                         reason = writer.error or self.camera_error
+                        for key in self.camera_ids:
+                            current = self.camera_states[key]
+                            age = self.age(current['frame'], 'host_received_monotonic_ns')
+                            if current['error'] or age is None or age > .5:
+                                reason = reason or key + ': RGB stream stale or disconnected'
                         if state_age is None or state_age > .5 or frame_age is None or frame_age > .5:
                             reason = reason or "Robot/RGB stream stale"
                         if writer.status()["duration_s"] >= self.config["recording"]["max_duration_s"]:
@@ -466,5 +525,6 @@ class TeleopSession:
             self.server = None
         for thread in self.threads:
             thread.join(timeout=3)
+        self.quality_pool.shutdown(wait=True)
         save_json(self.log_root / "closed.json", {"closed_unix_ns": time.time_ns(),
                   "last_episode": self.last_episode, "error": self.runtime_error})

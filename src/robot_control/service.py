@@ -23,7 +23,7 @@ from robot_core.model import RobotModel
 from robot_core.loop_rate import LoopRate
 from robot_core.plugins import Registry
 from robot_core.project import load_config, resolve_path
-from robot_core.telemetry import LocalPublisher
+from robot_core.telemetry import LocalPublisher, command_details
 
 MAX_RPC = 65536
 REQUEST_AGE_S = .25
@@ -193,6 +193,7 @@ class ArmService:
                               gripper_actual_torque=state.get("gripper_actual_torque"),
                               actual_vel=state.get("actual_vel"), target_vel=state.get("sdk_cmd_vel"),
                               motor_diagnostics=state.get("motor_diagnostics"),
+                              command_details=command_details(state),
                               gripper_actual_vel=state.get("gripper_actual_vel"), gripper={
             "actual": state["gripper_actual_pos"],
             "target": self.gripper if self.state["actuate"] else None,

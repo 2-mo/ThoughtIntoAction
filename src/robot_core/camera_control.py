@@ -9,11 +9,12 @@ def recording_guard():
     return DeviceLease('camera-recording:' + str(socket_path()))
 
 
-def set_enabled(enabled):
+def set_enabled(enabled, camera_id=None):
     if type(enabled) is not bool:
         raise ValueError('Expected camera enabled boolean')
     ensure_service()
-    return request(socket_path(), 'set_enabled', enabled=enabled, timeout=6)
+    arguments = {} if camera_id is None else {'camera_id': camera_id}
+    return request(socket_path(), 'set_enabled', enabled=enabled, timeout=6, **arguments)
 
 
 def check_legacy_session():

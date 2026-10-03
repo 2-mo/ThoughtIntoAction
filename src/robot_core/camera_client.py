@@ -53,15 +53,16 @@ def ensure_service():
 
 
 class SharedCamera:
-    def __init__(self, serial, width=640, height=480, fps=30):
+    def __init__(self, serial, width=640, height=480, fps=30, *, camera_id=None):
         self.expected = (serial, width, height, fps)
+        self.arguments = {} if camera_id is None else {"camera_id": camera_id}
         self.last = None
 
     def __enter__(self):
         ensure_service()
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
-            state = request(socket_path(), "monitor", timeout=1)
+            state = request(socket_path(), "monitor", timeout=1, **self.arguments)
             meta = state["camera"]["metadata"]
             if meta:
                 if tuple(meta[k] for k in ("serial", "width", "height", "fps")) != self.expected:
@@ -75,7 +76,7 @@ class SharedCamera:
         import numpy as np
         deadline = time.monotonic() + 3
         while time.monotonic() < deadline:
-            frame = request(socket_path(), "frame", timeout=1)
+            frame = request(socket_path(), "frame", timeout=1, **self.arguments)
             if frame and frame["host_received_monotonic_ns"] != self.last:
                 if time.monotonic_ns() - frame["host_received_monotonic_ns"] > 500_000_000:
                     raise RuntimeError("Camera service frame is stale")

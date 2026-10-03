@@ -22,4 +22,10 @@ profile 的命令参数排在用户额外参数之前，后者可以覆盖前者
 
 `[telemetry].endpoint` 定义状态发布通道，默认 `tcp://127.0.0.1:5567`；服务持续发布，可有多个监看。更换控制程序不会重启服务或中断状态流。服务控制接口默认为权限 0600 的 `outputs/runtime/arm.sock`，控制端与手眼标定读取同一配置。详见 [服务与监看说明](../docs/monitoring.md)。
 
-目前使用单 X5 和单腕部 D435i，沿用上述结构。标定原图、会话与结果在 `outputs/calibration/`，不放入配置目录；未知外参和未完成标定状态保持原样。
+相机服务支持多个 `[cameras.<名称>]`，每台独立绑定序列号。`recording.camera_ids` 默认只录 `wrist_rgb`；设为 `["wrist_rgb", "exterior_rgb"]` 后两路都必须在线才能开始录制，并分别保存视频、帧号、设备时钟与主机接收时钟。修改录制列表后重启遥操采集会话，见 [网页和相机控制](../docs/viewer-camera-controls.md)。标定原图、会话与结果在 `outputs/calibration/`，不放入配置目录；未知外参和未完成标定状态保持原样。
+
+`[camera_service.color]` 统一设置所有相机的 RGB 白平衡、曝光、增益和色彩参数；
+`[cameras.<名称>.color]` 可覆盖单台设置。未配置时保留设备设置，未知、不支持或超范围参数会报错。
+修改后重启相机服务生效，重连时也会重新应用。网页展示 SDK 回读值，录制相机的参数随 camera 元数据保存。
+固定白平衡需设置 `enable_auto_white_balance = 0`；固定曝光与增益需设置 `enable_auto_exposure = 0`。
+相同参数能减少独立自动调节造成的差异，但不能代替不同视角、光照和传感器的颜色标定。
