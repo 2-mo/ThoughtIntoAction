@@ -57,6 +57,7 @@ class SharedCamera:
         self.expected = (serial, width, height, fps)
         self.arguments = {} if camera_id is None else {"camera_id": camera_id}
         self.last = None
+        self.frames = None
 
     def __enter__(self):
         ensure_service()
@@ -76,12 +77,20 @@ class SharedCamera:
         import numpy as np
         deadline = time.monotonic() + 3
         while time.monotonic() < deadline:
-            frame = request(socket_path(), "frame", timeout=1, **self.arguments)
+            if self.metadata.get("zmq_frame_protocol") == 1:
+                if self.frames is None:
+                    from .camera_transport import FrameClient
+                    self.frames = FrameClient(socket_path())
+                frame, raw = self.frames.read(self.arguments.get("camera_id", "wrist_rgb"))
+            else:
+                frame = request(socket_path(), "frame", timeout=1, **self.arguments)
+                raw = None
             if frame and frame["host_received_monotonic_ns"] != self.last:
                 if time.monotonic_ns() - frame["host_received_monotonic_ns"] > 500_000_000:
                     raise RuntimeError("Camera service frame is stale")
                 self.last = frame["host_received_monotonic_ns"]
-                raw = base64.b64decode(frame.pop("bgr_base64"), validate=True)
+                if raw is None:
+                    raw = base64.b64decode(frame.pop("bgr_base64"), validate=True)
                 frame["image"] = np.frombuffer(raw, dtype=np.uint8).reshape(
                     self.metadata["height"], self.metadata["width"], 3).copy()
                 return frame
@@ -89,4 +98,6 @@ class SharedCamera:
         raise RuntimeError("Camera service stopped producing frames")
 
     def __exit__(self, *exc):
-        pass  # Shared camera lifetime is independent of each reader.
+        if self.frames is not None:
+            self.frames.close()
+            self.frames = None

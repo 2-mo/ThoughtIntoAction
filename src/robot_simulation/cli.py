@@ -21,6 +21,8 @@ def main(argv=None):
     parser.add_argument("--camera", action=argparse.BooleanOptionalAction, default=False, help="Ensure independent shared RGB service is running")
     parser.add_argument("--connections", action=argparse.BooleanOptionalAction, default=True, help="Read-only arm-service and USB RTT probes")
     parser.add_argument("--managed", action="store_true", help="Expose terminal start/stop control")
+    from .mode import MODES, selected_mode
+    parser.add_argument('--mode', choices=MODES, default=selected_mode())
     args = parser.parse_args(argv)
     address = endpoint(args.endpoint)
     robot = RobotModel(args.urdf, args.eef)
@@ -33,8 +35,31 @@ def main(argv=None):
     legacy_gripper = LegacyGripperFeedback(resolve_path(load_config()["arm_service"]["socket"]))
     subscriber = None
     control_server = None
+    from .arx_preview import Simulation
+    from robot_core.project import PROJECT_ROOT
+    simulation = Simulation()
+    simulation_model = None
+    mode_lock = threading.RLock()
+    current_mode = 'real'
+    def select_mode(mode):
+        nonlocal current_mode, simulation_model
+        if mode not in MODES:
+            raise ValueError('无效工作台模式')
+        with mode_lock:
+            if mode == current_mode:
+                return
+            if mode == 'simulation':
+                if simulation_model is None:
+                    simulation_model = RobotModel(PROJECT_ROOT / 'control/models/x5/x5_2025.urdf', 'tcp_link')
+                scene.set_model(simulation_model, simulation)
+                simulation.start(scene)
+            else:
+                simulation.command('pause')
+                scene.set_model(robot)
+            current_mode = mode
     quit_event = threading.Event()
     try:
+        select_mode(args.mode)
         if args.managed:
             from robot_core.local_server import LocalServer
             from .control import socket_path
@@ -42,9 +67,25 @@ def main(argv=None):
                 command = payload.get("command")
                 if command == "stop":
                     quit_event.set()
+                elif command == 'select-mode':
+                    select_mode(payload.get('mode'))
+                elif command in ('sim-home', 'sim-pregrasp', 'sim-record', 'sim-save'):
+                    if current_mode != 'simulation' or simulation.directory is None:
+                        raise ValueError('MuJoCo 尚未就绪')
+                    if command == 'sim-record':
+                        simulation.actions.start_recording()
+                    elif command == 'sim-save':
+                        simulation.actions.save()
+                    else:
+                        simulation.actions.move(home=command == 'sim-home')
+                elif command in ('sim-resume', 'sim-pause', 'demo-restart', 'demo-stop'):
+                    if current_mode != 'simulation':
+                        raise ValueError('当前不是仿真模式')
+                    simulation.command('resume' if command in ('sim-resume', 'demo-restart') else 'pause')
                 elif command != "status":
                     raise ValueError("Only viewer status/stop are supported")
-                return {"url": scene.url, "pid": os.getpid()}
+                return {"url": scene.url, "pid": os.getpid(), "mode": current_mode,
+                        "mode_protocol": 2, "simulation": simulation.status() if current_mode == 'simulation' else None}
             control_server = LocalServer(socket_path(), dispatch)
         if args.connections and hasattr(scene, "connection_probe"):
             from .connections import ConnectionProbe
@@ -60,16 +101,19 @@ def main(argv=None):
         while not quit_event.is_set():
             try:
                 packet = subscriber.receive()
-                if packet is not None:
+                if packet is not None and current_mode == 'real':
                     packet["gripper"] = legacy_gripper.read(packet)
                     packet["actual_torque"] = legacy_gripper.read_torque(packet)
                     packet["gripper_actual_torque"] = legacy_gripper.read_gripper_torque(packet)
-                    scene.accept(packet)
+                    with mode_lock:
+                        if current_mode == 'real':
+                            scene.accept(packet)
             except (ValueError, TypeError, KeyError, OverflowError) as exc:
                 scene.set_stream_error(str(exc))
     except KeyboardInterrupt:
         pass
     finally:
+        simulation.close()
         if subscriber is not None:
             subscriber.close()
         if getattr(scene, "connection_probe", None):

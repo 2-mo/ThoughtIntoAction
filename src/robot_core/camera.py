@@ -1,6 +1,7 @@
 """Single-owner RealSense RGB stream with explicit receive/device clock metadata."""
 
 import time
+import threading
 
 import numpy as np
 
@@ -43,6 +44,59 @@ class RealSenseCamera:
         self.color_options = {} if color_options is None else color_options
         self.pipeline = None
         self.last_number = None
+        self.imu_sensor = None
+        self.imu_lock = threading.Lock()
+        self.imu = {"supported": False, "error": None, "accel": None, "gyro": None}
+
+    def start_imu(self, device, rs):
+        for sensor in device.query_sensors():
+            profiles = sensor.get_stream_profiles()
+            selected = []
+            for kind in (rs.stream.accel, rs.stream.gyro):
+                choices = [p for p in profiles if p.stream_type() == kind and p.format() == rs.format.motion_xyz32f]
+                if choices:
+                    selected.append(min(choices, key=lambda p: (abs(p.fps() - 200), p.fps())))
+            if len(selected) != 2:
+                continue
+            self.imu["supported"] = True
+            self.imu["frame"] = "SDK motion frame (camera-local axes)"
+            self.imu["rates_hz"] = {"accel" if p.stream_type() == rs.stream.accel else "gyro": p.fps() for p in selected}
+            opened = False
+            try:
+                def callback(frame):
+                    motion = frame.as_motion_frame()
+                    data = motion.get_motion_data()
+                    key = "accel" if frame.get_profile().stream_type() == rs.stream.accel else "gyro"
+                    row = {"xyz": [data.x, data.y, data.z], "unit": "m/s²" if key == "accel" else "rad/s",
+                           "frame_number": frame.get_frame_number(), "device_timestamp_ms": frame.get_timestamp(),
+                           "device_timestamp_domain": str(frame.get_frame_timestamp_domain()),
+                           "host_received_monotonic_ns": time.monotonic_ns()}
+                    with self.imu_lock:
+                        self.imu[key] = row
+                sensor.open(selected)
+                opened = True
+                sensor.start(callback)
+                self.imu_sensor = sensor
+            except Exception as exc:
+                if opened:
+                    try:
+                        sensor.close()
+                    except Exception:
+                        pass
+                self.imu["error"] = str(exc)
+            return
+
+    def imu_snapshot(self):
+        with self.imu_lock:
+            return dict(self.imu)
+
+    def stop_imu(self):
+        if self.imu_sensor is not None:
+            try:
+                self.imu_sensor.stop()
+            finally:
+                self.imu_sensor.close()
+                self.imu_sensor = None
 
     def __enter__(self):
         import pyrealsense2 as rs
@@ -58,7 +112,8 @@ class RealSenseCamera:
             raise ValueError(f"Expected {self.expected_model}, got {model} ({self.serial})")
         pipeline, config = rs.pipeline(), rs.config()
         config.enable_device(self.serial)
-        config.enable_stream(rs.stream.depth, self.width, self.height, rs.format.z16, self.fps)
+        # Depth is a lightweight native preview, independent of the RGB recording resolution.
+        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, self.fps)
         config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps)
         started = False
         try:
@@ -72,6 +127,7 @@ class RealSenseCamera:
             self.metadata = {
                 "depth_scale_m": self.depth_scale, "depth_frame": "depth_optical",
                 "depth_aligned_to_rgb": False,
+                "depth_width": 640, "depth_height": 480,
                 "serial": device.get_info(rs.camera_info.serial_number),
                 "model": device.get_info(rs.camera_info.name),
                 "usb_type": device.get_info(rs.camera_info.usb_type_descriptor),
@@ -83,14 +139,19 @@ class RealSenseCamera:
                 "host_clock": "monotonic_ns at frame receipt (not exposure time)",
             }
             self.pipeline = pipeline
+            self.start_imu(device, rs)
+            self.metadata["imu"] = {k: v for k, v in self.imu_snapshot().items() if k not in ("accel", "gyro")}
             # Allow auto-exposure to settle; never infer intrinsics from requested resolution.
             for _ in range(30):
                 self.read()
             return self
         except BaseException:
-            if started:
-                pipeline.stop()
-            self.pipeline = None
+            try:
+                self.stop_imu()
+            finally:
+                if started:
+                    pipeline.stop()
+                self.pipeline = None
             raise
 
     def read(self):
@@ -104,7 +165,7 @@ class RealSenseCamera:
         if self.last_number is not None and number <= self.last_number:
             raise RuntimeError("Non-increasing camera frame number")
         self.last_number = number
-        return {"depth_image": None if not depth else np.asanyarray(depth.get_data()).copy(),
+        return {"imu": self.imu_snapshot(), "depth_image": None if not depth else np.asanyarray(depth.get_data()).copy(),
                 "depth_scale_m": self.depth_scale,
                 "image": np.asanyarray(frame.get_data()).copy(), "frame_number": number,
                 "device_timestamp_ms": float(frame.get_timestamp()),
@@ -112,6 +173,9 @@ class RealSenseCamera:
                 "host_received_monotonic_ns": received}
 
     def __exit__(self, *exc):
-        if self.pipeline is not None:
-            self.pipeline.stop()
-            self.pipeline = None
+        try:
+            self.stop_imu()
+        finally:
+            if self.pipeline is not None:
+                self.pipeline.stop()
+                self.pipeline = None

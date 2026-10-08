@@ -1,5 +1,7 @@
 """Power sequencing tests use fake subprocesses; never call adb or control a device."""
 import importlib.util
+from contextlib import nullcontext
+import io
 from pathlib import Path
 import signal
 import subprocess
@@ -30,6 +32,23 @@ class ConsoleTests(unittest.TestCase):
         self.console.power = lambda command: events.append(("power", command)) or True
         self.console.sleep()
         self.assertEqual(events, [("signal", signal.SIGINT), ("wait", 10), ("power", "stop")])
+
+    def test_pinned_shortcuts_and_command_editing(self):
+        output = io.StringIO()
+        terminal = module.RichConsole(file=output, width=100, height=28)
+        view = module.TerminalView(self.console, terminal)
+        for i in range(100):
+            view.write(f'运行输出 {i}\n')
+        terminal.print(view.render())
+        screen = output.getvalue()
+        self.assertLess(screen.index('快捷键'), screen.index('遥操状态'))
+        self.assertLess(screen.index('遥操状态'), screen.index('运行日志'))
+        self.assertIn('运行输出 99', screen)
+        self.assertNotIn('运行输出 0\n', screen)
+        # Preserve tmux's Ctrl+U, command, Enter sequence and the two-letter CR command.
+        with patch.object(module, 'terminal_keys', return_value=nullcontext()), patch.object(
+                module, 'read_key', side_effect=['x', '\x15', 'c', 'x', '\x7f', 'r', '\r']):
+            self.assertEqual(view.read_command(), 'cr')
 
     def test_stuck_child_blocks_sleep(self):
         self.console.child = Mock()
@@ -112,6 +131,8 @@ class ConsoleTests(unittest.TestCase):
         self.console.child.poll.return_value = 1
         stop = Mock()
         stop.wait.side_effect = [False, True]
-        with patch.object(module.rich_console, "print") as display:
+        output = io.StringIO()
+        with patch.object(module, "rich_console", module.RichConsole(file=output, width=100)):
             self.console.watch_child(stop)
-        self.assertTrue(any("outside model limits" in str(call) for call in display.call_args_list))
+        self.assertIn("outside model limits", output.getvalue())
+        self.assertIn("遥操异常", output.getvalue())

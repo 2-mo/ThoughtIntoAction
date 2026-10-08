@@ -249,10 +249,13 @@ class X5TeleopController(X5TeleopBase):
     def _shutdown_robot(self) -> None:
         for controller in self.arm_controllers.values():
             try:
-                controller.set_to_damping()
+                if getattr(self, '_service_mode', False):
+                    controller.stop_control(release=True)
+                else:
+                    controller.set_to_damping()
             except RuntimeError as exc:
                 print(f"Control release: {exc}")
-        print("X5 control release requested; arm service continues feedback."
+        print("X5 stop-and-hold requested; arm service continues feedback."
               if getattr(self, "_service_mode", False) else "X5 damping requested.")
 
     def _send_command(self) -> None:

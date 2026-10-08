@@ -2,6 +2,8 @@
 
 Wi-Fi 地址提示来自独立的 `/opt/apps/roboticsservice/RoboticsServiceProcess`，不是机械臂服务。原版 `TcpServerWorker::run()` 每 5 秒无条件调用 `onBraodCastTCPServer()`，通过 UDP 29888 广播本机 IP。USB 追踪使用 ADB reverse 转发的 TCP 63901，是另一条连接。
 
+遥操启动或按 W 恢复时，会先检查主机 TCP 63901 接收端口，未运行则自动启动 XR PC Service，已运行则复用；随后配置 ADB reverse。启动日志在 `outputs/logs/xr-service.log`。头显通过 USB 连接时，服务器地址填写 `127.0.0.1`；头显自己的 Wi-Fi 地址不是服务器地址。只有 ADB 转发而没有主机接收服务时，Connect 仍会失败。
+
 本项目给原生广播函数增加配置检查：缺省不发送，只有显式设置开启时才发送。没有防火墙规则，没有修改 USB 转发、TCP 监听、连接心跳或机械臂控制。
 
 机械臂 TUI 使用 **B 开广播 / N 关广播**。也可以在普通终端执行：

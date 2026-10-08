@@ -2,3 +2,5 @@
 # Device matching follows librealsense/config/99-realsense-libusb.rules.
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="8086", ATTRS{idProduct}=="0b07", MODE:="0660", GROUP:="plugdev"
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="8086", ATTRS{idProduct}=="0b3a", MODE:="0660", GROUP:="plugdev"
+# D435i motion uses IIO sysfs controls as well as the USB/video device nodes.
+SUBSYSTEM=="iio", KERNEL=="iio:device*", ATTRS{idVendor}=="8086", ATTRS{idProduct}=="0b3a", MODE:="0660", GROUP:="plugdev", RUN+="/usr/local/libexec/questarm-imu-permissions /sys%p"

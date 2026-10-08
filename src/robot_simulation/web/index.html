@@ -77,7 +77,13 @@
       <section class="torque-panel"><h2 title="SDK 关节力矩反馈，不等同于末端外力">关节力矩 <span class="chart-actions"><span id="torque-scale">N·m · 5 s</span><select id="torque-zoom" aria-label="力矩曲线纵轴放大" title="仅放大图表纵轴；各关节量程固定，超出显示范围时会标记"><option value="1">完整量程</option><option value="4">放大 4×</option><option value="10">放大 10×</option></select></span></h2><div id="torques"></div><div class="torque-axis"><span>−5 s</span><span>固定纵轴 · 零线居中</span><span>现在</span></div></section>
       <section class="motor-panel"><h2>电机反馈 <span>±30 A · 0–100 °C</span></h2><div class="motor-table" role="table" aria-label="关节与夹爪电机反馈"><div class="motor-row motor-head" role="row"><span>电机</span><span>电流</span><span title="EC 电机温度 / DM MOS 温度">温度</span><span>转子温度</span><span>电压 V</span><span>故障码</span><span>反馈</span></div><div id="motor-feedback" role="rowgroup"></div></div></section>
 
-      </div>
+      <section class="imu-panel" id="camera-imu"><h2>腕部 IMU <span id="imu-source">D435i · 腕部</span></h2><p id="imu-status">等待 IMU 数据</p>
+        <h3>加速度 · m/s² <span id="imu-accel-rate">— Hz</span></h3>
+        <div class="imu-values"><div><span>X</span><b id="imu-accel-0">—</b></div><div><span>Y</span><b id="imu-accel-1">—</b></div><div><span>Z</span><b id="imu-accel-2">—</b></div></div>
+        <h3>角速度 · rad/s <span id="imu-gyro-rate">— Hz</span></h3>
+        <div class="imu-values"><div><span>X</span><b id="imu-gyro-0">—</b></div><div><span>Y</span><b id="imu-gyro-1">—</b></div><div><span>Z</span><b id="imu-gyro-2">—</b></div></div>
+        <p class="imu-note">传感器读数 · 相机局部坐标系<br>加速度包含重力；角速度不是姿态角。</p>
+      </section></div>
     </aside>
 
   </main>
@@ -111,6 +117,7 @@
   </dialog>
   <script type="module" src="/replay.js"></script>
   <script type="module" src="/scene.js"></script>
+  <script type="module" src="/simulation.js"></script>
   <script type="module" src="/telemetry.js"></script>
   <script type="module" src="/sensors.js"></script>
   <script type="module" src="/orientation.js"></script>

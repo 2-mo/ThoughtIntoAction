@@ -45,6 +45,14 @@
         "input",
         "tracking"
       ]
+    },
+    "arx.workbench": {
+      "factory": "adapters.workbench:QuestDevice",
+      "runtime": "control",
+      "capabilities": [
+        "workbench-buttons",
+        "native-control"
+      ]
     }
   },
   "source": {
@@ -175,6 +183,14 @@
         "permit",
         "health"
       ]
+    },
+    "arx.workbench": {
+      "factory": "adapters.workbench:Routing",
+      "runtime": "control",
+      "capabilities": [
+        "workbench-buttons",
+        "native-control"
+      ]
     }
   },
   "ingress": {
@@ -186,6 +202,14 @@
         "handover",
         "freshness",
         "dependency-health"
+      ]
+    },
+    "arx.workbench": {
+      "factory": "adapters.workbench:Ingress",
+      "runtime": "control",
+      "capabilities": [
+        "workbench-buttons",
+        "native-control"
       ]
     }
   },

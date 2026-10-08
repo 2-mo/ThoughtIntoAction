@@ -62,7 +62,8 @@ function update() {
     const q = new THREE.Quaternion(...hand.pose.slice(3));
     if (q.lengthSq() > 1e-8) {
       const basis = new THREE.Matrix4().set(...k[0],0, ...k[1],0, ...k[2],0, 0,0,0,1);
-      const mapped = basis.multiply(new THREE.Matrix4().makeRotationFromQuaternion(q.normalize())).multiply(toolToController);
+      const mapped = basis.multiply(new THREE.Matrix4().makeRotationFromQuaternion(q.normalize()));
+      if (!preview.native_basis) mapped.multiply(toolToController);
       models[0].quaternion.setFromRotationMatrix(mapped);
       models[0].visible = true;
     }

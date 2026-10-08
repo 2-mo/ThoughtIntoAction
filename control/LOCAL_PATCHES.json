@@ -1,8 +1,8 @@
 {
   "arx5_vr/app.py": {
     "upstream_sha256": "373649b5156fba6fc1fca16088cefdea858c7ba3e0159507e6bb192c4fab0c53",
-    "sha256": "535f71022d811e7954c816462f540fcc28ea2acf43c980a2746da60e6637afb2",
-    "reason": "Explicit device/routing/ingress composition and dependency heartbeat; independent failed components withdraw only dependent ownership; native unmanaged baseline preserved."
+    "sha256": "5ef5dfea7bd146755f10cde3700cc5e175eba9bf00e633e9de9994ab888d9bce",
+    "reason": "Explicit device/routing/ingress composition and dependency heartbeat; independent failed components withdraw only dependent ownership; native unmanaged baseline preserved. Workbench routing prints its actual standby/button bindings."
   },
   "arx5_vr/runtime.py": {
     "upstream_sha256": "86c7bc2b98ac74f011bb61ef5081770de6342e976f0640e090cb288bd1efc95b",

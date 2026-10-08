@@ -151,7 +151,7 @@ async function refresh() {
       inputState(count === 2 ? 'live' : count === 1 ? 'partial' : 'offline', '依据手柄输入帧的新鲜度；不代表机械臂控制已启用');
       inputDeadline = count ? performance.now() + 1000 * (.5 - Math.max(data.input_age_s, data.state_age_s)) : 0;
       for (const side of ['left', 'right']) renderHand(side, hands[side], data.button_feedback || {});
-      byId('button-response').textContent = data.button_feedback?.Y || '需重启遥操以显示实际按键响应和长按进度';
+      byId('button-response').textContent = data.button_feedback?.Y ?? '需重启遥操以显示实际按键响应和长按进度';
     }
   } catch {
     window.dispatchEvent(new CustomEvent('teleop-preview', { detail: null }));

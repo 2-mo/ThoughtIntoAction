@@ -2,6 +2,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import tempfile
 from unittest.mock import patch, Mock
 
 spec = importlib.util.spec_from_file_location("transport", Path(__file__).resolve().parents[1] / "scripts/quest/transport.py")
@@ -36,6 +37,20 @@ class TransportTests(unittest.TestCase):
 
     def test_prepare_keeps_existing_mapping_and_does_not_claim_connection(self):
         state = (False, "等待 Quest 通过 USB 连接", "QUEST", True, [])
-        with patch.object(transport, "usb_device", return_value="QUEST"), patch.object(transport, "command") as command, patch.object(transport, "inspect", return_value=state):
+        with patch.object(transport, "usb_device", return_value="QUEST"), patch.object(transport, "command") as command, patch.object(transport, "inspect", return_value=state), patch.object(transport, "ensure_xr_service") as ensure, patch.object(transport, "xr_listening", return_value=True):
             self.assertEqual(transport.main(["prepare"]), 0)
+            ensure.assert_called_once()
             command.assert_called_once_with("adb", "-s", "QUEST", "reverse", "tcp:63901", "tcp:63901")
+
+    def test_existing_xr_receiver_is_reused(self):
+        with patch.object(transport, 'xr_listening', return_value=True), patch.object(transport.subprocess, 'run') as run:
+            transport.ensure_xr_service()
+            run.assert_not_called()
+
+    def test_missing_xr_receiver_is_started_before_waiting_for_headset(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(transport, 'LOG_DIR', Path(folder)), patch.object(
+                transport, 'xr_listening', side_effect=[False, False, True]), patch.object(
+                transport.subprocess, 'run', return_value=Mock(returncode=0)) as run:
+            transport.ensure_xr_service()
+            self.assertEqual(run.call_args.args[0], ['bash', str(transport.PROJECT_ROOT / 'scripts/quest/start_service.sh')])
+            self.assertTrue(run.call_args.kwargs['start_new_session'])

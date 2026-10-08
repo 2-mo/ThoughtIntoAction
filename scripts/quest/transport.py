@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Configure USB transport and report observed XR sockets using Rich."""
 import argparse
+from contextlib import closing
 import ipaddress
 import subprocess
 import time
+
+from robot_core.device_lease import DeviceLease
+from robot_core.project import PROJECT_ROOT, LOG_DIR
 
 from rich.console import Console
 from rich.panel import Panel
@@ -25,6 +29,35 @@ def usb_device():
     if len(devices) != 1:
         raise RuntimeError("需要且只能连接一台已授权的 USB Quest；请检查数据线和头显内的 USB 调试授权。")
     return devices[0]
+
+
+def xr_listening():
+    return bool(command('ss', '-Hltn', 'sport = :63901').strip())
+
+
+def ensure_xr_service():
+    """The ADB tunnel needs the PC receiver; reuse it without interrupting clients."""
+    if xr_listening():
+        return
+    with closing(DeviceLease('xr-service-launch')):
+        if xr_listening():
+            return
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log_path = LOG_DIR / 'xr-service.log'
+        console.print('正在启动主机 XR 接收服务…')
+        with log_path.open('ab', buffering=0) as log:
+            result = subprocess.run(['bash', str(PROJECT_ROOT / 'scripts/quest/start_service.sh')],
+                                    stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                                    start_new_session=True, timeout=10)
+        if result.returncode:
+            raise RuntimeError(f'XR 接收服务启动失败，请查看 {log_path}')
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline:
+            if xr_listening():
+                console.print('主机 XR 接收服务已就绪：TCP 63901')
+                return
+            time.sleep(.2)
+        raise RuntimeError(f'主机 XR 接收端口 63901 未就绪，请查看 {log_path}')
 
 
 def peers_from_ss(output):
@@ -70,9 +103,12 @@ def main(argv=None):
     try:
         if args.action == "prepare":
             serial = usb_device()
+            ensure_xr_service()
             # Idempotent; don't remove a working mapping and interrupt its stream.
             command("adb", "-s", serial, "reverse", "tcp:63901", "tcp:63901")
         state = inspect()
+        if not state[0] and not xr_listening():
+            console.print('[yellow]主机 XR 接收服务未运行；按 W 重试会自动启动。[/yellow]')
         if args.action == "wait" and not state[0]:
             show(state)
             console.print("等待 USB 数据连接，最多 15 秒…")

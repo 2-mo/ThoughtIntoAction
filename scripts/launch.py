@@ -60,6 +60,7 @@ MODULE_COMMANDS = {
     "plugins": "robot_core.plugins",
     "visualize-xr": "quest_teleop.xr_visualizer.cli",
     "view-arm": "robot_simulation.cli",
+    "arx-preview": "robot_simulation.arx_preview",
     "control-arm": "robot_control.cli",
     "arm-service": "robot_control.service",
     "handeye": "handeye_calibration.cli",

@@ -17,6 +17,7 @@ import uuid
 
 import numpy as np
 from .online_motion import OnlineMotion, DEFAULTS as TRAJECTORY_DEFAULTS
+from .startup import WAITING_FOR_ARM, waiting_for_arm
 
 from robot_core.device_lease import DeviceLease
 from robot_core.model import RobotModel
@@ -508,6 +509,11 @@ def main(argv=None):
             serve(service, service_path(args.socket), listener=listener)
     except KeyboardInterrupt:
         pass
+    except RuntimeError as exc:
+        if waiting_for_arm(exc, service_started=service is not None):
+            print("等待机械臂通电或恢复连接：尚未收到电机反馈。", flush=True)
+            raise SystemExit(WAITING_FOR_ARM) from None
+        raise
     finally:
         signal.signal(signal.SIGTERM, previous)
 

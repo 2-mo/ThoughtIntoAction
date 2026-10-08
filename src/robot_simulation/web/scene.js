@@ -301,7 +301,13 @@ async function initialize() {
   async function poll() {
     try {
       const live = await readJSON('/api/state');
-      element('live-arm-status').textContent = live.stream?.status === 'live' ? '机械臂在线' : '机械臂未连接';
+      // Reload the model before applying feedback from a terminal mode switch.
+      if (manifest.viewer_id && live.viewer_id && manifest.viewer_id !== live.viewer_id) {
+        stopped = true;
+        window.location.reload();
+        return;
+      }
+      element('live-arm-status').textContent = manifest.simulation ? 'MuJoCo · 无真机控制' : live.stream?.status === 'live' ? '机械臂在线' : '机械臂未连接';
       element('live-arm-status').dataset.state = live.stream?.status || 'waiting';
       const state = displayedState(live);
       window.dispatchEvent(new CustomEvent('arm-preview', { detail: state }));

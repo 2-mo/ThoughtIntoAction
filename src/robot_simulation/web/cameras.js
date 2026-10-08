@@ -1,8 +1,10 @@
+let cameraLayoutFrame = 0;
 // Independent device cards. A slow/disconnected feed cannot retain a live badge.
 const el = id => document.getElementById(id);
 const cards = new Map();
 let latest = {}, receivedAt = 0, selected = null;
 const streams = [['rgb', 'RGB', 'preview'], ['depth', '深度', 'depth_preview']];
+const pendingImages = new WeakMap();
 
 function createCard(id) {
   const node = document.createElement('article');
@@ -43,24 +45,49 @@ function createCard(id) {
   return card;
 }
 
-function streamLive(feed, key) {
+function streamAvailable(feed, key, maxAge = 2) {
   const preview = feed?.[key];
-  return !serviceError && !feed?.camera?.error && feed?.camera?.enabled !== false &&
+  return !feed?.camera?.error && feed?.camera?.enabled !== false &&
     Number.isFinite(preview?.age_s) && preview.age_s >= 0 &&
-    preview.age_s + (performance.now() - receivedAt) / 1000 < .5 && !!preview.jpeg_base64;
+    preview.age_s + (performance.now() - receivedAt) / 1000 < maxAge && !!preview.jpeg_base64;
+}
+function streamLive(feed, key) {
+  return !serviceError && streamAvailable(feed, key);
 }
 function displayImage(img, placeholder, feed, key, emptyText) {
   const live = streamLive(feed, key);
-  img.hidden = !live; placeholder.hidden = live;
+  // Tolerate brief polling jitter; expire after two seconds without new frames.
+  const available = streamAvailable(feed, key, 2);
   placeholder.textContent = emptyText;
-  if (live) {
+  if (available) {
     const source = 'data:image/jpeg;base64,' + feed[key].jpeg_base64;
-    if (img.getAttribute('src') !== source) img.src = source;
-  } else img.removeAttribute('src');
+    img.hidden = !img.hasAttribute('src');
+    placeholder.hidden = live && !img.hidden;
+    // Keep short transport jitter quiet; a persistent outage still expires the image.
+    if (img.getAttribute('src') !== source && pendingImages.get(img)?.src !== source) {
+      // Decode off-screen, then swap the decoded element in one operation.
+      // Keep the previous image visible throughout; never reveal an empty <img>.
+      const next = img.cloneNode(false);
+      next.src = source;
+      pendingImages.set(img, next);
+      const expires = receivedAt + (2 - feed[key].age_s) * 1000;
+      next.decode().then(() => {
+        if (pendingImages.get(img) !== next || !img.isConnected || performance.now() >= expires) return;
+        pendingImages.delete(img);
+        next.hidden = false;
+        img.replaceWith(next);
+        draw();
+      }).catch(() => { if (pendingImages.get(img) === next) pendingImages.delete(img); });
+    }
+  } else {
+    pendingImages.delete(img); // A late decode cannot resurrect a disconnected feed.
+    img.hidden = true; placeholder.hidden = false;
+    img.removeAttribute('src');
+  }
   return live;
 }
 
-let recording = false, serviceError = '';
+let recording = false, serviceError = '', pendingServiceError = '';
 function colorSettings(meta, full = false) {
   const c = meta?.rgb_controls;
   if (!c) return 'RGB 参数：未提供';
@@ -75,6 +102,7 @@ function colorSettings(meta, full = false) {
   return summary.join(' · ');
 }
 function draw() {
+  serviceError = performance.now() - receivedAt >= 2000 ? pendingServiceError : '';
   let online = 0;
   for (const [id, {node, busy}] of cards) {
     const feed = latest[id] || {}, camera = feed.camera || {}, meta = camera.metadata || {};
@@ -87,7 +115,7 @@ function draw() {
       (live ? 'RGB 正常' + (streamLive(feed, 'depth_preview') ? ' · 深度正常' : ' · 等待深度') : '等待新画面'));
     node.dataset.state = serviceError ? 'offline' : !enabled ? 'off' : live ? 'live' : camera.error ? 'error' : 'waiting';
     node.querySelector('h3').textContent = label;
-    node.querySelector('.camera-model').textContent = [model, meta.fps ? `${meta.fps} FPS` : ''].filter(Boolean).join(' · ');
+    node.querySelector('.camera-model').textContent = [model, meta.fps ? `${meta.fps} FPS` : '', meta.width ? `${meta.width}×${meta.height}` : ''].filter(Boolean).join(' · ');
     node.querySelector('.camera-badge').textContent = ({live: '在线', off: '已关闭', offline: '未连接', error: '连接异常', waiting: '等待画面'})[node.dataset.state];
     const button = node.querySelector('.camera-toggle');
     button.setAttribute('aria-pressed', String(camera.enabled === true));
@@ -114,6 +142,30 @@ function draw() {
   el('camera-service-status').textContent = serviceError || (document.body.dataset.depth === 'true' ? '点击画面放大 · 深度为原生视角，未对齐 RGB' : '点击画面放大');
   el('camera-service-status').dataset.error = String(!!serviceError);
   if (selected) drawDialog();
+  drawImu();
+}
+
+function drawImu() {
+  const panel = el('camera-imu');
+  if (!panel) return;
+  const feed = latest.wrist_rgb;
+  const imu = feed?.imu;
+  const meta = feed?.camera?.metadata;
+  const replay = document.body.dataset.view === 'replay';
+  const unavailable = replay || serviceError || feed?.camera?.error || !imu?.supported;
+  el('imu-source').textContent = `${(meta?.model || 'D435i').replace(/^RealSense\s+/i, '')} · 腕部`;
+  const ages = [];
+  for (const key of ['accel', 'gyro']) {
+    const sample = imu?.[key];
+    // The service includes original host timestamps and a receipt-age for each sample.
+    const age = sample?.age_s + (performance.now() - receivedAt) / 1000;
+    const fresh = !unavailable && Number.isFinite(age) && age < 1 && sample?.xyz?.length === 3 && sample.xyz.every(Number.isFinite);
+    for (let i = 0; i < 3; i++) el(`imu-${key}-${i}`).textContent = fresh ? sample.xyz[i].toFixed(3) : '—';
+    el(`imu-${key}-rate`).textContent = imu?.rates_hz?.[key] ? `${imu.rates_hz[key]} Hz` : '— Hz';
+    if (fresh) ages.push(age);
+  }
+  el('imu-status').textContent = replay ? '回放中 · 实时 IMU 已隐藏' : imu?.error ? 'IMU 不可用（悬停查看）' : ages.length === 2 ? '数据在线' : '等待 IMU 数据';
+  el('imu-status').title = imu?.error || '原始传感器读数；加速度含重力，角速度不是角度。';
 }
 
 function drawDialog() {
@@ -129,28 +181,58 @@ function drawDialog() {
 }
 
 export function renderCameras(data) {
-  serviceError = data.camera_error || '';
+  pendingServiceError = data.camera_error || '';
   const feeds = data.cameras || (data.camera ? {wrist_rgb: data} : null);
   recording = !!data.recording;
-  receivedAt = performance.now();
-  if (feeds) {
+  if (feeds && !pendingServiceError) {
+    receivedAt = performance.now();
     latest = feeds;
     for (const id of cards.keys()) if (!Object.hasOwn(feeds, id)) {cards.get(id).node.remove(); cards.delete(id);}
     for (const id of Object.keys(feeds)) if (!cards.has(id)) createCard(id);
   } else {
-    serviceError ||= '相机服务未连接';
-    latest = Object.fromEntries([...cards.keys()].map(id => [id, {camera: {...latest[id]?.camera, enabled: undefined, error: serviceError}}]));
+    pendingServiceError ||= '相机服务未连接';
+    // Preserve the last receipt time: failed polls must not renew old frames.
   }
   draw();
+  fitCameraColumn();
 }
 
 el('camera-dialog-close').onclick = () => el('camera-dialog').close();
-el('camera-dialog').addEventListener('close', () => {selected = null; el('camera-dialog-image').removeAttribute('src');});
+el('camera-dialog').addEventListener('close', () => {
+  selected = null;
+  const img = el('camera-dialog-image');
+  pendingImages.delete(img); img.removeAttribute('src');
+});
 createCard('wrist_rgb');
 renderCameras({camera_error: '等待相机服务连接'});
 const watchdog = setInterval(() => {
   const expired = [...cards].some(([id, {node}]) => streams.some(([key, , source]) =>
     node.querySelector(`[data-stream="${key}"] img`).hasAttribute('src') && !streamLive(latest[id], source)));
-  if (expired) draw();
+  if (expired || pendingServiceError) draw();
+  else drawImu();
 }, 100);
 window.addEventListener('pagehide', () => clearInterval(watchdog), {once: true});
+
+// Two stacked RGB streams determine this column's width; spare space belongs to 3D.
+function fitCameraColumn() {
+  cancelAnimationFrame(cameraLayoutFrame);
+  cameraLayoutFrame = requestAnimationFrame(() => {
+    if (innerWidth < 1200 || cards.size !== 2 || document.body.dataset.view === 'replay') return;
+    const panel = document.querySelector('.camera-panel');
+    const style = getComputedStyle(panel);
+    let width = 0;
+    for (const [id, card] of cards) {
+      const stream = card.node.querySelector('[data-stream="rgb"]');
+      const height = stream?.clientHeight || card.node.querySelector('.camera-streams')?.clientHeight;
+      const metadata = latest[id]?.camera?.metadata;
+      const ratio = metadata?.width > 0 && metadata?.height > 0 ? metadata.width / metadata.height : 16/9;
+      if (height) width = Math.max(width, height * ratio + 2);
+    }
+    width += parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+    if (width > 200 && Math.abs(panel.getBoundingClientRect().width - width) > 1)
+      document.documentElement.style.setProperty('--camera-column', `${Math.round(width)}px`);
+  });
+}
+const cameraLayout = new ResizeObserver(fitCameraColumn);
+cameraLayout.observe(document.getElementById('camera-grid'));
+window.addEventListener('pagehide', () => {cameraLayout.disconnect(); cancelAnimationFrame(cameraLayoutFrame);}, {once:true});

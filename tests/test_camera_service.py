@@ -7,17 +7,63 @@ import time
 import threading
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock
 from urllib.request import build_opener, ProxyHandler
 
 import numpy as np
 from robot_core.camera_client import SharedCamera
 from robot_core.camera_service import CameraFeed
 from robot_core.local_server import LocalServer
+from robot_core.camera_transport import FrameServer, FrameClient
 from robot_core.model import RobotModel
 from robot_simulation.scene import Scene
 
 
 class CameraServiceTests(unittest.TestCase):
+    def test_full_hd_zmq_frames_preserve_pixels_and_imu_timestamps(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'camera.sock'
+            pixels = np.arange(1920*1080*3, dtype=np.uint8).reshape(1080, 1920, 3)
+            feed = CameraFeed()
+            feed.metadata = {'serial': 'fake', 'width': 1920, 'height': 1080, 'fps': 30, 'zmq_frame_protocol': 1}
+            stamp = time.monotonic_ns()
+            imu = {'supported': True, 'accel': {'xyz': [0, 9.81, 0], 'host_received_monotonic_ns': stamp-1000}}
+            feed.frame = {'image': pixels, 'host_received_monotonic_ns': stamp, 'frame_number': 1, 'imu': imu}
+            server = LocalServer(path, feed.dispatch)
+            self.addCleanup(server.close)
+            frames = FrameServer(path, {'wrist_rgb': feed})
+            self.addCleanup(frames.close)
+            with patch('robot_core.camera_client.socket_path', return_value=path):
+                with SharedCamera('fake', 1920, 1080) as camera:
+                    frame = camera.read()
+            np.testing.assert_array_equal(frame['image'], pixels)
+            self.assertEqual(frame['imu']['accel']['host_received_monotonic_ns'], stamp-1000)
+            self.assertGreaterEqual(feed.snapshot()['imu']['accel']['age_s'], 0)
+            self.assertNotIn('age_s', imu['accel'])
+
+    def test_imu_native_samples_and_failure_are_independent_of_rgb(self):
+        from robot_core.camera import RealSenseCamera
+        rs = SimpleNamespace(stream=SimpleNamespace(accel='a', gyro='g'), format=SimpleNamespace(motion_xyz32f='motion'))
+        sensor = Mock()
+        sensor.get_stream_profiles.return_value = [SimpleNamespace(stream_type=lambda k=k:k, format=lambda:'motion', fps=lambda:200) for k in ('a','g')]
+        camera = RealSenseCamera('fake')
+        device = SimpleNamespace(query_sensors=lambda:[sensor])
+        camera.start_imu(device, rs)
+        frame = SimpleNamespace(as_motion_frame=lambda:SimpleNamespace(get_motion_data=lambda:SimpleNamespace(x=1,y=2,z=3)),
+            get_profile=lambda:SimpleNamespace(stream_type=lambda:'a'), get_frame_number=lambda:7,
+            get_timestamp=lambda:123.4, get_frame_timestamp_domain=lambda:'hardware_clock')
+        sensor.start.call_args.args[0](frame)
+        self.assertEqual(camera.imu_snapshot()['accel']['xyz'], [1,2,3])
+        self.assertEqual(camera.imu_snapshot()['accel']['unit'], 'm/s²')
+        camera.stop_imu()
+        sensor.stop.assert_called_once()
+        failed = RealSenseCamera('fake')
+        sensor.open.side_effect = RuntimeError('permission denied')
+        failed.start_imu(device, rs)
+        self.assertIn('permission denied', failed.imu_snapshot()['error'])
+        self.assertIsNone(failed.imu_sensor)
+
     def test_two_clients_and_scene_share_frames_without_teleop_or_device_sdk(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "camera.sock"

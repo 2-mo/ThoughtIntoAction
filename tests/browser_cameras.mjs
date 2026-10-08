@@ -28,6 +28,7 @@ try {
     enabled:true,switch_protocol:1,error:null,metadata:{serial:id,model,width:640,height:480,fps:30,rgb_exposure_unit_us:100,rgb_controls:{enable_auto_white_balance:0,white_balance:4600,enable_auto_exposure:0,exposure:166,gain:64,contrast:50,saturation:64,gamma:300}}},
     preview:{age_s:.01,jpeg_base64:jpeg},depth_preview:{age_s:.01,jpeg_base64:jpeg}});
   const sample = {cameras:{wrist_rgb:feed('wrist_rgb','D435I'), exterior_rgb:feed('exterior_rgb','D435')}};
+  sample.cameras.wrist_rgb.imu = {supported:true,rates_hz:{accel:200,gyro:200},accel:{xyz:[.1,9.81,.2],age_s:.01},gyro:{xyz:[.001,.002,.003],age_s:.01}};
   const controls = []; let lag = false, serviceDown = false;
   await page.route('**/api/sensors', async route => {
     const data=structuredClone(sample);
@@ -44,9 +45,31 @@ try {
   await page.goto(url);
   await page.waitForFunction(() => document.querySelectorAll('.camera-card[data-state="live"]').length === 2);
   const wrist=page.locator('[data-camera-id="wrist_rgb"]'), exterior=page.locator('[data-camera-id="exterior_rgb"]');
+  await page.waitForFunction(() => document.getElementById('camera-image').naturalWidth > 0);
+  const previous = await page.locator('#camera-image').getAttribute('src');
+  const replacement = await page.evaluate(() => {
+    window.originalDecode = HTMLImageElement.prototype.decode;
+    HTMLImageElement.prototype.decode = async function () {
+      await new Promise(resolve => setTimeout(resolve, 400));
+      return window.originalDecode.call(this);
+    };
+    const canvas = document.createElement('canvas'); canvas.width=640; canvas.height=480;
+    const context = canvas.getContext('2d'); context.fillStyle='#996644'; context.fillRect(0,0,640,480);
+    return canvas.toDataURL('image/jpeg').split(',')[1];
+  });
+  sample.cameras.wrist_rgb.preview.jpeg_base64 = replacement;
+  await page.waitForTimeout(250);
+  assert.equal(await page.locator('#camera-image').getAttribute('src'), previous, 'Keep old frame while decoding');
+  assert.equal(await page.locator('#camera-image').isVisible(), true);
+  await page.waitForFunction(expected => document.getElementById('camera-image').src.endsWith(expected), replacement);
+  assert.equal(await page.locator('#camera-image').evaluate(img => img.naturalWidth), 640);
+  await page.evaluate(() => { HTMLImageElement.prototype.decode = window.originalDecode; });
   assert.equal(await page.locator('.camera-stream[data-stream="rgb"]:visible').count(), 2);
   assert.equal(await wrist.locator('.camera-color-settings').textContent(), '白平衡 4600 K · 曝光 16.6 ms · 增益 64');
   assert.equal(await wrist.locator('.camera-color-settings').isVisible(), true);
+  assert.equal(await wrist.locator('.camera-model').textContent(), 'D435I · 30 FPS · 640×480');
+  assert.equal(await page.locator('#imu-accel-1').textContent(), '9.810');
+  assert.equal(await page.locator('#imu-gyro-2').textContent(), '0.003');
   assert.equal(await page.locator('.camera-stream[data-stream="depth"]:visible').count(), 0);
   await page.click('#depth-toggle');
   assert.equal(await page.locator('.camera-stream[data-stream="depth"]:visible').count(), 2);
@@ -74,9 +97,14 @@ try {
   sample.cameras.exterior_rgb.camera.error=null;
   await page.waitForFunction(() => document.querySelectorAll('.camera-card[data-state="live"]').length === 2);
   await wrist.locator('[data-stream="rgb"]').click();
+  const liveFrameBox = await wrist.locator('[data-stream="rgb"]').boundingBox();
   lag=true;
-  await page.waitForFunction(() => document.getElementById('camera-dialog-image').hidden);
-  assert.equal(await page.locator('.camera-card[data-state="live"]').count(), 0);
+  await page.waitForTimeout(750);
+  assert.equal(await page.locator('#camera-dialog-image').isVisible(), true, 'Short jitter must retain the decoded image');
+  assert.equal(await page.locator('#camera-dialog-empty').isVisible(), false, 'Short jitter must not flash a text overlay');
+  assert.equal(await page.locator('.camera-card[data-state="live"]').count(), 2);
+  const delayedFrameBox = await wrist.locator('[data-stream="rgb"]').boundingBox();
+  assert.deepEqual(delayedFrameBox, liveFrameBox, 'Status changes must not resize or shift the camera viewport');
   await page.keyboard.press('Escape'); lag=false;
   await page.waitForFunction(() => document.querySelectorAll('.camera-card[data-state="live"]').length === 2);
   for (const [width,height] of [[1920,1080]]) {
@@ -104,6 +132,9 @@ try {
   }
   serviceDown=true;
   await page.waitForFunction(() => document.querySelectorAll('.camera-card[data-state="offline"]').length === 2);
+  assert.deepEqual(await wrist.locator('[data-stream="rgb"]').boundingBox(), liveFrameBox,
+    'Service error banners must not resize or shift the camera viewport');
+  await page.waitForFunction(() => document.querySelectorAll('.camera-card img[src]').length === 0);
   assert.equal(await page.locator('.camera-card img[src]').count(),0);
   assert.deepEqual(errors,[]);
   console.log('PASS: independent cameras, RGB/depth switch, zoom, targeted controls, recording exclusion, stale handling, 1920×1080 layout and RGB readbacks.');

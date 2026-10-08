@@ -211,7 +211,10 @@ def run(args):
             children.start("viewer", common + ["_viewer", "--prefix", prefix] + config_flag, cwd=ROOT)
         (directory / 'runtime.ready').write_text('ready\n')
         trigger = 'gripper' if settings.robot.gripper_max_width > 0 else 'unused (no tool)'
-        print(f"A: hold 150 ms to change mode | Grip: clutch | Trigger: {trigger} | A+B: Home")
+        if args.routing_plugin == 'arx.workbench':
+            print('Workbench standby: right stick down 1 s to enable; Grip follows; Trigger controls gripper; A/B reserved for collection/presets.')
+        else:
+            print(f"A: hold 150 ms to change mode | Grip: clutch | Trigger: {trigger} | A+B: Home")
         if args.input == "demo":
             print("Demo: automatic input starts following after about 4.5 s; never used on real hardware.")
         elif args.input == "vr":

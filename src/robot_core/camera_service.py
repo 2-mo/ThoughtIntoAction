@@ -10,6 +10,7 @@ from .camera import RealSenseCamera
 from .camera_client import socket_path
 from .device_lease import DeviceLease
 from .local_server import LocalServer
+from .camera_transport import FrameServer
 from .project import load_config
 
 
@@ -75,7 +76,11 @@ class CameraFeed:
             return self.set_enabled(payload.get("enabled"))
         if payload.get("command") == "frame":
             with self.data_lock:
-                return self.frame
+                frame = self.frame
+            if frame and "image" in frame:
+                return {**{k: v for k, v in frame.items() if k != "image"},
+                        "bgr_base64": base64.b64encode(frame["image"]).decode("ascii")}
+            return frame
         if payload.get("command") != "monitor":
             raise ValueError("Unknown camera request")
         with self.data_lock:
@@ -84,7 +89,12 @@ class CameraFeed:
     def snapshot(self):
         now = time.monotonic_ns()
         frame, preview, depth = self.frame, self.preview, self.depth_preview
-        return {"camera": {"id": self.camera_id, "label": self.options.get("label", self.camera_id),
+        imu = None if frame is None else frame.get("imu")
+        if imu:
+            imu = {**imu, **{key: {**imu[key], "age_s": (now - imu[key]["host_received_monotonic_ns"]) / 1e9}
+                            for key in ("accel", "gyro") if imu.get(key)}}
+        return {"imu": imu,
+                "camera": {"id": self.camera_id, "label": self.options.get("label", self.camera_id),
                            "serial": self.options.get("serial", ""), "model": self.options.get("model", ""),
                            "preview_fps": 5, "metadata": self.metadata, "error": self.error,
                            "enabled": self.enabled, "switch_protocol": 1,
@@ -104,15 +114,14 @@ class CameraFeed:
                         expected_model=options.get("model"), color_options=options.get("color", {})) as camera:
                     # A reconnect starts a new stream even when device frame numbers repeat.
                     stream_id = uuid.uuid4().hex
-                    metadata = {**camera.metadata, "stream_id": stream_id}
+                    metadata = {**camera.metadata, "stream_id": stream_id, "zmq_frame_protocol": 1}
                     last_preview = 0
                     preview = depth_preview = None
                     while not stop.is_set():
                         frame = camera.read()
                         image = frame["image"]
-                        encoded_frame = {**{k: v for k, v in frame.items() if k not in ("image", "depth_image", "depth_scale_m")},
-                                         "stream_id": stream_id,
-                                         "bgr_base64": base64.b64encode(image.tobytes()).decode("ascii")}
+                        encoded_frame = {**{k: v for k, v in frame.items() if k not in ("depth_image", "depth_scale_m")},
+                                         "stream_id": stream_id}
                         if time.monotonic() - last_preview >= .2:
                             size = (min(640, image.shape[1]), max(1, round(image.shape[0] * min(640, image.shape[1]) / image.shape[1])))
                             ok, jpeg = cv2.imencode(".jpg", cv2.resize(image, size), [cv2.IMWRITE_JPEG_QUALITY, 75])
@@ -199,20 +208,29 @@ def main():
     import argparse
     argparse.ArgumentParser(description=__doc__).parse_args()
     config = load_config()
-    stop = threading.Event()
+    stopping = False
+    def stop_requested(*_):
+        nonlocal stopping
+        stopping = True
     for sig in (signal.SIGINT, signal.SIGTERM):
-        signal.signal(sig, lambda *_: stop.set())
-    server = None
+        signal.signal(sig, stop_requested)
+    server = frames = None
     try:
         feed = CameraService(config["cameras"], config.get("camera_service", {}).get("color", {}))
         server = LocalServer(socket_path(), feed.dispatch)
+        frames = FrameServer(socket_path(), feed.feeds)
         feed.start()
         print(f"Camera service ready: {socket_path()}", flush=True)
-        stop.wait()
+        # Keep the signal handler free of locks (Event.set can re-enter a held lock).
+        while not stopping:
+            if frames.error:
+                raise RuntimeError('Camera frame transport failed') from frames.error
+            time.sleep(.2)
     finally:
-        stop.set()
         if "feed" in locals():
             feed.close()
+        if frames:
+            frames.close()
         if server:
             server.close()
 

@@ -9,6 +9,10 @@ can_port = "can0"
 can_device = "/dev/arx_r5"
 
 [cameras.wrist_rgb]
+model = "D435i"
+width = 1920
+height = 1080
+fps = 30
 serial = "REPLACE_WITH_CAMERA_SERIAL"
 hand_eye_calibrated = false
 
@@ -19,8 +23,8 @@ enabled = false
 driver = "realsense"
 model = "D435"
 serial = ""
-width = 640
-height = 480
+width = 1920
+height = 1080
 fps = 30
 
 # Enable both devices above before opting into dual-camera recording.

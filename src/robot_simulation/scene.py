@@ -7,6 +7,7 @@ import mimetypes
 from pathlib import Path
 import threading
 import time
+import uuid
 from urllib.parse import urlsplit
 
 import numpy as np
@@ -17,12 +18,13 @@ WEB_ROOT = Path(__file__).with_name("web")
 
 
 class Scene:
-    def __init__(self, robot, port=0):
+    def __init__(self, robot, port=0, *, simulation=None):
         import pinocchio as pin
 
         self.robot = robot
         self.closed = False
         self.connection_probe = None
+        self.simulation = simulation
         self._lock = threading.RLock()
         self._state = None
         self._stream = None
@@ -30,40 +32,7 @@ class Scene:
         self._paths = {}
         self._sequence = 0
         self.history = deque(maxlen=500)
-        # Own FK buffers; never mutate the controller's model data.
-        self._data = robot.model.createData()
-        self._visual = pin.buildGeomFromUrdf(
-            robot.model, str(robot.urdf), pin.GeometryType.VISUAL,
-            package_dirs=[str(robot.urdf.parent)],
-        )
-        self._geometry_data = pin.GeometryData(self._visual)
-        self._files = {"/" + str(p.relative_to(WEB_ROOT)): p
-                       for p in WEB_ROOT.rglob("*") if p.is_file()}
-        self._files["/"] = WEB_ROOT / "index.html"
-        meshes = []
-        for index, geometry in enumerate(self._visual.geometryObjects):
-            mesh = Path(geometry.meshPath).resolve()
-            if not mesh.is_file() or mesh.suffix.lower() != ".stl":
-                raise ValueError(f"Scene requires an existing STL visual: {mesh}")
-            url = f"/meshes/{index}.stl"
-            self._files[url] = mesh
-            meshes.append({"name": geometry.name,
-                           "link": robot.model.frames[geometry.parentFrame].name,
-                           "url": url, "scale": geometry.meshScale.tolist()})
-        if not meshes:
-            raise ValueError("Robot has no visual meshes")
-        self._manifest = {"robot": robot.metadata(), "model_file": robot.urdf.name,
-                          "meshes": meshes, "matrix_order": "column-major",
-                          "joint_limits": {"lower": robot.lower.tolist(), "upper": robot.upper.tolist()}}
-        from robot_core.project import load_config
-        gripper_max = load_config().get("telemetry", {}).get("gripper_torque_max_nm")
-        if gripper_max is not None and (not np.isfinite(gripper_max) or gripper_max <= 0):
-            raise ValueError("Invalid gripper display torque limit")
-        self._manifest["velocity_limits"] = robot.model.velocityLimit.tolist()
-        self._manifest["torque_limits"] = [*robot.model.effortLimit.tolist(), gripper_max]
-        reference = np.zeros(6)
-        self._manifest["reference"] = {"sequence": 0, "actual": self._pose(reference),
-                                       "target": self._pose(reference), "target_visible": False, "paths": {}}
+        self.set_model(robot, simulation)
         owner = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -71,7 +40,7 @@ class Scene:
                 self.respond(body=True)
 
             def do_POST(self):
-                if urlsplit(self.path).path not in ("/api/replay", "/api/camera"):
+                if urlsplit(self.path).path not in ("/api/replay", "/api/camera", "/api/simulation"):
                     self.send_error(404); return
                 if self.headers.get("Origin") not in (None, owner.url.rstrip("/"),
                         owner.url.rstrip("/").replace("127.0.0.1", "localhost")):
@@ -81,10 +50,16 @@ class Scene:
                     if not 0 < length <= 4096: raise ValueError("Invalid request size")
                     data = json.loads(self.rfile.read(length))
                     if not isinstance(data, dict): raise ValueError("Expected object")
-                    if urlsplit(self.path).path == "/api/camera":
+                    if urlsplit(self.path).path == '/api/simulation':
+                        if owner.simulation is None:
+                            raise ValueError('当前页面不是仿真')
+                        owner.simulation.command(data.get('action'))
+                    elif urlsplit(self.path).path == "/api/camera":
                         from robot_core.camera_control import set_enabled
                         set_enabled(data.get("enabled"), camera_id=data.get("camera_id"))
                     else:
+                        if owner.simulation is not None:
+                            raise ValueError('仿真页不操作真机采集或回放')
                         action = data.get("action")
                         if action not in ("load_last", "load", "play", "pause", "seek", "speed"):
                             raise ValueError("Only web review controls are supported")
@@ -109,7 +84,12 @@ class Scene:
 
             def respond(self, body):
                 path = urlsplit(self.path).path
-                if path == "/api/replay":
+                if path == '/api/simulation':
+                    content = json.dumps(owner.simulation.status() if owner.simulation else {}).encode()
+                    mime = 'application/json'
+                elif path == '/api/replay' and owner.simulation is not None:
+                    content, mime = b'{}', 'application/json'
+                elif path == "/api/replay":
                     from robot_core.project import load_config, resolve_path
                     from robot_core.session_protocol import request
                     try:
@@ -132,7 +112,10 @@ class Scene:
                     from robot_core.project import load_config, resolve_path
                     from robot_core.session_protocol import request
                     try:
-                        payload = request(resolve_path(load_config()["runtime"]["socket"]), "monitor", timeout=.3)
+                        if owner.simulation is not None:
+                            payload = owner.simulation.monitor()
+                        else:
+                            payload = request(resolve_path(load_config()["runtime"]["socket"]), "monitor", timeout=.3)
                         for metric in (payload.get("timing") or {}).values():
                             if metric:
                                 metric["age_s"] = max(0., (time.monotonic_ns() - metric["sample_monotonic_ns"]) / 1e9)
@@ -197,6 +180,53 @@ class Scene:
             raise
         print(f"Scene (Three.js · {robot.urdf.name}): {self.url}", flush=True)
 
+    def set_model(self, robot, simulation=None):
+        """Replace display state without restarting HTTP, camera or connection services."""
+        import pinocchio as pin
+        with self._lock:
+            self.robot, self.simulation = robot, simulation
+            self._state = self._stream = self._stream_error = None
+            self._paths = {}
+            self._sequence = 0
+            self.history.clear()
+            # Own FK buffers; never mutate the controller's model data.
+            self._data = robot.model.createData()
+            self._visual = pin.buildGeomFromUrdf(
+                robot.model, str(robot.urdf), pin.GeometryType.VISUAL,
+                package_dirs=[str(robot.urdf.parent)],
+            )
+            self._geometry_data = pin.GeometryData(self._visual)
+            self._files = {"/" + str(p.relative_to(WEB_ROOT)): p
+                           for p in WEB_ROOT.rglob("*") if p.is_file()}
+            self._files["/"] = WEB_ROOT / "index.html"
+            meshes = []
+            for index, geometry in enumerate(self._visual.geometryObjects):
+                mesh = Path(geometry.meshPath).resolve()
+                if not mesh.is_file() or mesh.suffix.lower() != ".stl":
+                    raise ValueError(f"Scene requires an existing STL visual: {mesh}")
+                url = f"/meshes/{index}.stl"
+                self._files[url] = mesh
+                meshes.append({"name": geometry.name,
+                               "link": robot.model.frames[geometry.parentFrame].name,
+                               "url": url, "scale": geometry.meshScale.tolist()})
+            if not meshes:
+                raise ValueError("Robot has no visual meshes")
+            self._manifest = {"robot": robot.metadata(), "model_file": robot.urdf.name,
+                              "viewer_id": uuid.uuid4().hex,
+                              "meshes": meshes, "matrix_order": "column-major",
+                              "joint_limits": {"lower": robot.lower.tolist(), "upper": robot.upper.tolist()}}
+            if simulation is not None:
+                self._manifest['simulation'] = {'engine': 'arx-televr / MuJoCo', 'control_hz': 250}
+            from robot_core.project import load_config
+            gripper_max = load_config().get("telemetry", {}).get("gripper_torque_max_nm")
+            if gripper_max is not None and (not np.isfinite(gripper_max) or gripper_max <= 0):
+                raise ValueError("Invalid gripper display torque limit")
+            self._manifest["velocity_limits"] = robot.model.velocityLimit.tolist()
+            self._manifest["torque_limits"] = [*robot.model.effortLimit.tolist(), gripper_max]
+            reference = np.zeros(6)
+            self._manifest["reference"] = {"sequence": 0, "actual": self._pose(reference),
+                                           "target": self._pose(reference), "target_visible": False, "paths": {}}
+
     def snapshot(self):
         with self._lock:
             stream = dict(self._stream or {})
@@ -208,7 +238,8 @@ class Scene:
                 now = time.monotonic_ns()
                 age = (now - min(stream["sample_monotonic_ns"], stream["emitted_monotonic_ns"])) / 1e9
                 stream.update(status="stale" if age > 1. else "live", age_s=max(0., age))
-            return {**(self._state or {"actual": None, "target": None, "paths": {}}), "stream": stream}
+            return {**(self._state or {"actual": None, "target": None, "paths": {}}), "stream": stream,
+                    "viewer_id": self._manifest['viewer_id']}
 
     def set_stream_error(self, message):
         with self._lock:
