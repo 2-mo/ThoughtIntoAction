@@ -2,7 +2,7 @@
 
 X5 motor IDs/types follow pinned arx5-sdk config 8c797d5. EC current scaling
 matches the SDK hardware decoder. DM load bits are torque, not amperes.
-See docs/motor-feedback.md for wire layouts, units and verification evidence.
+See docs/guides/motor-feedback.md for wire layouts, units and verification evidence.
 """
 from collections import deque
 import socket

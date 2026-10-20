@@ -1,6 +1,6 @@
 # 共享机械臂场景
 
-`view-arm` / `scripts/viewer/启动仿真.sh` 单独创建 `embodied.monitor.scene.Scene`，订阅通用机械臂状态并服务本机只读网页。机械臂服务与独立数据回放使用 `telemetry.local` 发布数据，不创建或关闭场景；显示无需区分输入方式。详见 [独立监看](../../../docs/monitoring.md)。
+`view-arm` / `scripts/viewer/monitor.sh` 单独创建 `embodied.monitor.scene.Scene`，订阅通用机械臂状态并服务本机只读网页。机械臂服务与独立数据回放使用 `telemetry.local` 发布数据，不创建或关闭场景；显示无需区分输入方式。详见 [独立监看](../../../../docs/guides/monitoring.md)。
 
 显示处理参考桌面备份 `arx5_test/src/frontend/src/features/scene/runtime.ts` 的 `createLinkMaterial`、RoomEnvironment、灯光和木纹工作台。只迁移显示处理及有来源记录的纹理；没有复制其硬编码 `JOINT_SPECS`、旧 STL、D405 安装偏移、夹爪网格形变、伺服操作或网页控制逻辑。工作台仅为示意，不参与碰撞判断。此实现不依赖、也不改动 Desktop 工程。
 
@@ -22,9 +22,9 @@ Python 检查：`./run.sh test`。可选浏览器验证（依赖仅用于测试�
 npm install --prefix .cache/viewer-validation --no-audit --no-fund playwright@1.55.1
 # 首次使用且没有 Chromium 时：
 .cache/viewer-validation/node_modules/.bin/playwright install chromium
-node tests/browser_scene.mjs
+node tests/browser/browser_scene.mjs
 ```
 
 可通过 `SCENE_TEST_BROWSER=/path/to/chromium` 指定现有浏览器。脚本使用软件 WebGL，从 `/tmp` 分别启动监看、虚拟服务与控制；验证控制来源更换不刷新页面、监看重启不影响控制、实际渲染、运动、过期状态与显示开关。截图及日志写入 `outputs/logs/`，不连接真机。
 
-实时与网页回放共用 `robot-canvas`，浏览器本地模式由 `display-state.js` 管理，切换不改变真机控制权。回放的模型、速度、力矩与 RGB 使用同一播放时间；实时连接与 Quest 状态独立保留。速度反馈沿 telemetry 传输，末端速度由 Scene 的 URDF 雅可比计算。隔离回放验证：`node tests/browser_replay.mjs`（不启动相机或设备服务）。
+实时与网页回放共用 `robot-canvas`，浏览器本地模式由 `display-state.js` 管理，切换不改变真机控制权。回放的模型、速度、力矩与 RGB 使用同一播放时间；实时连接与 Quest 状态独立保留。速度反馈沿 telemetry 传输，末端速度由 Scene 的 URDF 雅可比计算。隔离回放验证：`node tests/browser/browser_replay.mjs`（不启动相机或设备服务）。

@@ -1,5 +1,5 @@
 # Trusted project code only. Factories are imported only when their plugin is selected.
-# Plugin factories/units/lifecycle are documented in docs/plugins.md.
+# Plugin factories/units/lifecycle are documented in docs/reference/plugins.md.
 [arm.service]
 factory = "legacy.robot_control.backends.factories:service"
 capabilities = ["recording", "force_hold"]

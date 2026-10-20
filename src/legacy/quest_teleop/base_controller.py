@@ -1,7 +1,7 @@
 """X5 feedback/command bridge over XRoboToolkit's generic Quest/IK loop.
 
 Adapted from XR Robotics (MIT), revision 79e5cb8a56e3455515ce1b476e993c764ec58739.
-See LICENSE.XRoboToolkit and docs/x5-controller.md for provenance.
+See LICENSE.XRoboToolkit and docs/guides/x5-controller.md for provenance.
 Input/telemetry lifecycles are owned here; arm construction uses the selected backend.
 """
 

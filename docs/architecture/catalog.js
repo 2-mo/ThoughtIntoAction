@@ -1056,7 +1056,7 @@ window.ARCHITECTURE_CATALOG = {
       "environment": "analysis",
       "module": "pytest",
       "arguments": [
-        "tests/migrated/arx_motion",
+        "tests/motion",
         "-q",
         "--import-mode=importlib"
       ]
@@ -1066,7 +1066,7 @@ window.ARCHITECTURE_CATALOG = {
       "environment": "analysis",
       "module": "pytest",
       "arguments": [
-        "tests/migrated/phone",
+        "tests/phone",
         "-q",
         "--import-mode=importlib"
       ]

@@ -25,7 +25,7 @@ uv sync --locked           # 平台环境（Python 3.12）
 ./run.sh check all         # 全部离线检查
 ```
 
-详细安装见 [docs/setup.md](docs/setup.md)。
+详细安装见 [docs/guides/setup.md](docs/guides/setup.md)。
 
 ## 使用
 
@@ -49,7 +49,7 @@ uv sync --locked           # 平台环境（Python 3.12）
 
 ## 手柄
 
-右手柄按 arx-televr 上游：A 按住至少 150 ms 后松开切换模式（首次进入跟随，之后在 FreeDrive 与跟随间切换），A+B 回 Home，Grip 跟随，Trigger 控制夹爪。左手柄负责采集：X 录制 / 保存，Y 预抓取（长按作废当前录制），左摇杆管理任务，左 Grip 取消预设动作。以上为仿真工作台的按键；真机日常链路的按键见 [日常操作](docs/operation.md)。
+右手柄按 arx-televr 上游：A 按住至少 150 ms 后松开切换模式（首次进入跟随，之后在 FreeDrive 与跟随间切换），A+B 回 Home，Grip 跟随，Trigger 控制夹爪。左手柄负责采集：X 录制 / 保存，Y 预抓取（长按作废当前录制），左摇杆管理任务，左 Grip 取消预设动作。以上为仿真工作台的按键；真机日常链路的按键见 [日常操作](docs/guides/operation.md)。
 
 ## 安全
 
@@ -61,4 +61,4 @@ uv sync --locked           # 平台环境（Python 3.12）
 
 - 仿真：遥操、采集、导出、手机、动作、标定适配均经过内核，`./run.sh check all` 的 MuJoCo 端到端检查覆盖这些链路。
 - 真机：日常仍走 `src/legacy/` 中的旧机械臂服务；内核真机入口已具备，待一次真机验收后切换（`todo/01-control-kernel.md` K-08、K-09）。
-- 推进计划见 [todo/](todo/README.md)；日常操作细节见 [docs/operation.md](docs/operation.md)；命令说明见 [docs/commands.md](docs/commands.md)。
+- 推进计划见 [todo/](todo/README.md)；日常操作细节见 [docs/guides/operation.md](docs/guides/operation.md)；命令说明见 [docs/reference/commands.md](docs/reference/commands.md)。

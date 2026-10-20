@@ -18,7 +18,7 @@ def main() -> None:
         raise SystemExit("XR rebuild targets this project's .venv; use the default uv environment.")
     uv = shutil.which("uv")
     if not uv:
-        raise SystemExit("uv is required; see docs/setup.md")
+        raise SystemExit("uv is required; see docs/guides/setup.md")
     subprocess.run([sys.executable, "-B", str(ROOT / "scripts/setup/dependencies.py")], check=True)
     build = ROOT / "third_party/XRoboToolkit-Teleop-Sample-Python/dependencies/XRoboToolkit-PC-Service-Pybind/build"
     if build.exists():

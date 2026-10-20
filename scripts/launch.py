@@ -143,7 +143,7 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
     if sdk_path := config["environment"].get("arm_sdk_python"):
         sdk_path = resolve_path(sdk_path)
         if not list(sdk_path.glob("arx5_interface*.so")):
-            raise RuntimeError("Patched arm SDK missing; see docs/gripper-startup.md")
+            raise RuntimeError("Patched arm SDK missing; see docs/guides/gripper-startup.md")
         paths.insert(0, sdk_path)
     env["PYTHONPATH"] = os.pathsep.join(map(str, paths))
     xr_dependencies = PROJECT_ROOT / "third_party/XRoboToolkit-Teleop-Sample-Python/dependencies"

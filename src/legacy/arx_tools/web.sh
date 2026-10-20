@@ -10,7 +10,7 @@ source "$ARX5_SCRIPTS_DIR/web_service_lifecycle.sh"
 source "$ARX5_SCRIPTS_DIR/frontend_runtime.sh"
 
 if [[ ! -x "$CONTROL_PYTHON" || ! -x "$WEB_PYTHON" ]]; then
-  echo "缺少 .venv-handeye 或 .venv-web。请查看 docs/consolidated-components.md。" >&2
+  echo "缺少 .venv-handeye 或 .venv-web。请查看 docs/guides/consolidated-components.md。" >&2
   exit 1
 fi
 if ! "$CONTROL_PYTHON" -B -c 'import arx5_interface, fastapi, ruckig, uvicorn, websockets' >/dev/null 2>&1; then

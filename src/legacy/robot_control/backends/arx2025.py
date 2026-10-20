@@ -59,7 +59,7 @@ class ARXX52025HardwareAdapter:
         except (ImportError, OSError, TypeError) as exc:
             raise RuntimeError(
                 "Official ARX SDK unavailable. Build it with ./run.sh build-x5-2025-sdk "
-                "and install its system KDL/ROS libraries; see docs/setup.md."
+                "and install its system KDL/ROS libraries; see docs/guides/setup.md."
             ) from exc
         from embodied.contracts.device_lease import DeviceLease
         self._device_lease = DeviceLease(can_port)

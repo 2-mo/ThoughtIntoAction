@@ -15,7 +15,7 @@
 
 保留 NumPy 2.3.5、Pinocchio 3.7.0、Placo 0.9.3、Meshcat 0.3.2、OpenCV 5.0.0.93、pyrealsense2 2.58.4.10922 和 arx5-interface 0.1.3。旧环境的 `eiquadprog 1.3.2` 要求 Boost 1.90，与 Pinocchio 使用的 Boost 1.87 冲突；新环境固定兼容的 `eiquadprog 1.2.9`，并锁定 cmeel/URDFDOM 等原生依赖，避免只满足宽泛版本约束却加载到不匹配的 C++ 库。
 
-默认环境不安装 R5、Torch/JAX、其他机器人驱动或完整 ROS。编译器、USB/CAN 工具、Quest PC Service、系统驱动仍属于系统安装项，不能仅靠 `uv.lock` 重建。独立官方 ARX 实验后端另需兼容的 KDL/ROS 系统库，见 [安装说明](../docs/setup.md)。
+默认环境不安装 R5、Torch/JAX、其他机器人驱动或完整 ROS。编译器、USB/CAN 工具、Quest PC Service、系统驱动仍属于系统安装项，不能仅靠 `uv.lock` 重建。独立官方 ARX 实验后端另需兼容的 KDL/ROS 系统库，见 [安装说明](../docs/guides/setup.md)。
 
 原 `xrobot312` Conda 环境未修改，保留作临时回退；默认启动配置不再指向它。不在同一个环境中交替使用 Conda/pip 和 uv 改写依赖。
 

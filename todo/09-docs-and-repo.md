@@ -7,18 +7,21 @@
     - README 还指向本机未跟踪的 `archives/migration/originals/`。
   - 做法：先修正这些事实，再做 O-02。
 
-- [ ] **O-02** 重写 README `P2`
+- [x] **O-02** 重写 README `P2`
+  - 已做：README 改为平台概览与命令表，原操作说明移到 `docs/guides/operation.md`。
   - 现状：17 KB，日常启动从第 28 行开始，安装在第 147 行；缺少新人入门说明。
   - 做法：README 只保留一页：平台是什么、安装、第一次仿真、真机启动、文档链接。操作细节移到 guides。
 
-- [ ] **O-03** 重组 `docs/` `P2`
+- [x] **O-03** 重组 `docs/` `P2`
+  - 已做（2026-10-21）：`docs/{getting-started.md, README.md, guides/, reference/, architecture/, history/}`；迁移记录、`imported/`、`validation/` 移入 `history/`；新增入门与架构概览；`tests/test_docs.py` 检查文档相对链接。测试按环境分为 `tests/{motion,phone,browser}`；`scripts/` 中文文件名改为 ASCII，删除 4 个与命令目录重复的包装脚本。
   - 做法：
     - 分为 getting-started / guides / architecture / reference / history。
     - 迁移方案与实施记录（`arx-runtime-redesign.md`、`arx-runtime-implementation.md`、`control-inputs-and-motion.md`、`plugin-migration-inventory.md`、`migration-review.md`、`refactor.md`、`validation/*.txt`）移入 history。
     - `docs/imported/`（85 个文件，含 `.vscode`、Makefile 和 shell 脚本）移入 history，或直接删除，git 历史保留原文。
   - 依赖：本目录的待办完成后，history 中记录完成情况。
 
-- [ ] **O-04** 过时的结构说明 `P2`
+- [x] **O-04** 过时的结构说明 `P2`
+  - 已做：`src/README.md` 按新结构重写，`docs/layout.md` 移入 history。
   - 现状：`docs/layout.md` 和 `src/README.md` 没有提到 `control/`、`apps/`、`environments/`。`docs/layout.md` 称配置只由 `robot_core/project.py` 读取，但 `src/arx5_paths.py` 被 17 个文件引用。
   - 做法：随 B-01 重写，或合并进 architecture。
 

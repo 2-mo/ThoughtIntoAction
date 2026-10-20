@@ -33,4 +33,4 @@ src/
 
 依赖方向：`control/` → `embodied.contracts`；`embodied.*` 之间只通过 `contracts` 交换数据，不导入彼此的业务状态机；新代码不再导入 `legacy`。`tests/test_package_boundaries.py` 与 `tests/test_convergence.py` 检查这些规则。
 
-入口与命令见 [命令说明](../docs/commands.md)，迁移计划见 [todo/](../todo/README.md)。
+入口与命令见 [命令说明](../docs/reference/commands.md)，迁移计划见 [todo/](../todo/README.md)。

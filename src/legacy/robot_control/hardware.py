@@ -49,7 +49,7 @@ class OfficialX5HardwareAdapter:
         self.robot_config.gripper_open_readout = gripper_open_readout
         self.robot_config.gripper_width = gripper_width
         if getattr(arx5, "quest_gripper_turns_version", None) != 1:
-            raise RuntimeError("夹爪启动修复 SDK 未加载；请使用项目启动脚本，参见 docs/gripper-startup.md")
+            raise RuntimeError("夹爪启动修复 SDK 未加载；请使用项目启动脚本，参见 docs/guides/gripper-startup.md")
         self.robot_config.gripper_startup_turns = True
         if not np.isfinite(gripper_open_limit_m) or not 0 < gripper_open_limit_m <= gripper_width:
             raise ValueError("gripper_open_limit_m must be positive and no greater than gripper_width")

@@ -34,7 +34,7 @@ def simulated(*, settings, initial_q=None):
 
 def arx2025(*, settings, initial_q=None):
     if settings["actuate"]:
-        raise ValueError("Official ARX position actuation remains disabled; see docs/setup.md")
+        raise ValueError("Official ARX position actuation remains disabled; see docs/guides/setup.md")
     if initial_q is not None:
         raise ValueError("initial_q is only available for simulation")
     from legacy.robot_control.backends.arx2025 import ARXX52025HardwareAdapter

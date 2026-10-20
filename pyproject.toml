@@ -27,8 +27,8 @@ test = ["pytest==8.4.1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# tests/migrated runs in its own environments (components run test.motion / test.phone).
-norecursedirs = [".*", "__pycache__", "node_modules", "migrated"]
+# tests/motion and tests/phone run in their own environments (check-all groups motion / phone).
+norecursedirs = [".*", "__pycache__", "node_modules", "motion", "phone", "browser"]
 addopts = ["--strict-markers"]
 markers = [
     "hardware: needs real devices (CAN, cameras, Quest); skipped unless --run-hardware",

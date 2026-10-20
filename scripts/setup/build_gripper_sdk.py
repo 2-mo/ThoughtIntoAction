@@ -78,7 +78,7 @@ def main():
     temporary = output.with_name(output.name + ".building")
     headers = args.headers.resolve() if args.headers else BUILD / "deps/usr/include"
     if not (headers / 'eigen3/Eigen/Core').is_file():
-        raise RuntimeError('Missing SDK development headers; see docs/gripper-startup.md')
+        raise RuntimeError('Missing SDK development headers; see docs/guides/gripper-startup.md')
     command = ["g++", "-O1", "-shared", "-std=c++17", "-fPIC", "-pthread", "-DFMT_HEADER_ONLY",
                '-DSDK_ROOT="' + str(SOURCE) + '"', *includes,
                "-I" + str(SOURCE / "include"), "-I" + str(headers), "-I" + str(headers / "eigen3"),

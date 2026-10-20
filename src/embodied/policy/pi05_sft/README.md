@@ -9,7 +9,7 @@
 ```bash
 bash src/embodied/policy/pi05_sft/run.sh
 # 分类快捷入口，等价：
-bash scripts/inference/启动微调Pi05真机.sh
+bash src/embodied/policy/pi05_sft/run.sh
 ```
 
 模型加载一次 → 机械臂到共用预抓取位 → 夹爪逐步张开至约 78 mm 并确认到位 → 连续读取相机/状态并执行关节和夹爪动作。默认任务是把蓝色方块放到其后方、远离机械臂的白色区域，默认运行 60 秒；Ctrl+C 停止并保持，不自动回零。预抓取移动途中保留当前夹爪开度，到位后以约 30 mm/s 张开，随后由策略决定夹爪目标。每次启动只在首次预测前复位；连续重规划使用实时姿态，不会每个动作块都回预抓取位。
@@ -32,12 +32,12 @@ bash src/embodied/policy/pi05_sft/run.sh --checkpoint /path/to/checkpoint/5000
 另开终端：
 
 ```bash
-bash src/embodied/policy/pi05_sft/停止.sh
-bash src/embodied/policy/pi05_sft/回零.sh
-bash src/embodied/policy/pi05_sft/预抓取.sh
+bash scripts/inference/stop_pi05.sh
+bash scripts/arm/home.sh
+bash src/embodied/policy/pi05_sft/pregrasp.sh
 ```
 
-分别等价于 `scripts/inference/停止Pi05.sh` 和 `scripts/arm/机械臂回零.sh`。独立停止程序已经识别本目录的 `run.py`、`worker.py`，不依赖模型加载或 GPU 响应，不结束机械臂服务。
+分别等价于 `scripts/inference/stop_pi05.sh` 和 `scripts/arm/home.sh`。独立停止程序已经识别本目录的 `run.py`、`worker.py`，不依赖模型加载或 GPU 响应，不结束机械臂服务。
 
 `预抓取.sh` 同样先退出策略进程，再到共用预抓取位并逐步张开夹爪至约 78 mm，最后保持。回零保持当前夹爪开度。两个定位入口复用采集的 ArmClient → 服务 Ruckig → 硬件控制链，并直接读取 `启动遥操.sh` 中的数字运动参数（不执行遥操脚本、不连接头显）。当前回零速度上限为前段 2.0、后段 0.75 rad/s，预抓取为 2.0 rad/s，预览时间 0.05 s，关闭目标超前裁剪；桌面保护和关节边界由服务继续执行。Ctrl+C 停止并保持。这里的独立定位参数不改变模型执行速度。
 

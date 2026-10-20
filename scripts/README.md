@@ -1,6 +1,6 @@
 # 工具脚本
 
-日常从根目录 `run.sh` 调用，命令见 [命令说明](../docs/commands.md)。
+日常从根目录 `run.sh` 调用，命令见 [命令说明](../docs/reference/commands.md)。
 
 | 位置 | 职责 |
 | --- | --- |
@@ -26,12 +26,12 @@
 
 | 用途 | 当前路径 |
 | --- | --- |
-| Pi05 真机推理 | `scripts/inference/启动Pi05真机.sh` |
-| 微调 Pi05 真机推理 | `scripts/inference/启动微调Pi05真机.sh` |
-| 停止 Pi05 | `scripts/inference/停止Pi05.sh` |
-| 独立回零 | `scripts/arm/机械臂回零.sh` |
-| 导出训练数据 | `scripts/datasets/导出训练数据.sh` |
-| 网页监看 / 自定义端口 | `scripts/viewer/启动仿真.sh` |
+| Pi05 真机推理 | `scripts/inference/start_pi05_zeroshot.sh` |
+| 微调 Pi05 真机推理 | `src/embodied/policy/pi05_sft/run.sh` |
+| 停止 Pi05 | `scripts/inference/stop_pi05.sh` |
+| 独立回零 | `scripts/arm/home.sh` |
+| 导出训练数据 | `scripts/datasets/convert.sh` |
+| 网页监看 / 自定义端口 | `scripts/viewer/monitor.sh` |
 | 同一工作台 / 网页选择仿真（18081） | `bash 启动工作台.sh --mode simulation`；总控 `M / F` 切模式，`T / S` 遥操待机 / 暂停保持 |
 
 例如：`./scripts/viewer/启动仿真.sh --port 8082 --no-camera`。
