@@ -6,14 +6,18 @@
   - 做法：在当前 `main` 打 tag，之后重构在独立分支进行，按 `AGENTS.md` 用 `--no-ff` 合并。
   - 完成：附注 tag `pre-platform-refactor` 指向 `172982f`（审查基线）；重构分支为 `refactor/platform`。tag 只在本地，未推送。
 
-- [ ] **G-02** 根目录测试配置 `P1`
-  - 现状：没有根 pytest 配置、`conftest.py` 或测试标记。`./run.sh test` 只运行 `tests/` 顶层 unittest（`scripts/check.py`），不包含 `tests/migrated/`。根 `.venv` 没有 pytest。在 arx_motion 环境中 collect 整个 `tests/` 有 21–22 个错误：缺依赖、`arm_service_fixture` / `mcap_fixture` 同级导入失败，以及两个同名 `test_golden_vectors.py` 冲突。
-  - 做法：
-    - 在根 `pyproject.toml` 增加 `[tool.pytest.ini_options]`，设 `--strict-markers`，标记 `unit`、`sim`、`hardware`、`browser`。
-    - `conftest.py` 默认跳过 `hardware`，共享 fixture 放入 conftest。
-    - pytest 加入根 `test` 依赖组。
-  - 完成：`.venv/bin/python -m pytest --collect-only -q` 无错误。
-  - 依赖：X-02 可同时处理同名测试冲突。
+- [x] **G-02** 根目录测试配置 `P1`
+  - 原状：没有根 pytest 配置、`conftest.py` 或测试标记。`./run.sh test` 只用 unittest 运行 `tests/` 顶层，不包含 `tests/migrated/`；根 `.venv` 没有 pytest。
+  - 已做：
+    - 根 `pyproject.toml` 增加 `test` 依赖组（`pytest==8.4.1`，与 analysis 环境相同）并设为 uv 默认组，`uv sync --locked` 不会移除它。
+    - 增加 `[tool.pytest.ini_options]`：`testpaths = ["tests"]`，递归时跳过 `migrated`（各自环境运行），`--strict-markers`，标记 `hardware`、`sim`。
+    - `tests/conftest.py` 默认跳过 `hardware` 标记，`--run-hardware` 时运行。
+    - `scripts/check.py` 改为 pytest；`./run.sh test` 用法不变，环境仍由 `launch.py` 设置。
+  - 结果：
+    - `./run.sh test --collect-only` 收集到 366 项，无错误。其中包括原 unittest 的全部 362 项（已逐项比对），以及 `tests/golden/` 中 4 项此前未被运行的 pytest 测试。
+    - 全量运行：359 通过、5 跳过、2 失败。2 项失败在基线上同样存在（见 G-07）。
+    - `components run test.motion` / `test.phone` 在新配置下仍分别收集到 65 / 263 项。
+  - 未做：共享 fixture（`arm_service_fixture.py`、`mcap_fixture.py`）在 prepend 导入模式下工作正常，暂不移入 conftest。`unit`、`browser` 标记暂不登记（浏览器测试是 node 运行的 `.mjs`）。
 
 - [ ] **G-03** 按环境分组的离线测试命令 `P1`
   - 现状：测试分散在 `tests/`、`tests/migrated/{arx_motion,phone}`、`src/zero-shot/test_*.py`、`src/infer_after_sft/test_*.py`、`control/scripts/check_*.py`、`scripts/check*.py`、`tests/*.mjs` 和 `apps/console/tests/`，分别依赖不同环境。
@@ -31,6 +35,12 @@
 
 - [ ] **G-05** 删除前的引用检查 `P2`
   - 做法：小脚本，输入模块或目录，列出 `src/`、`control/`、`scripts/`、`configs/`、`apps/` 中的运行时引用，排除 `tests/`、`docs/` 和 `third_party/migration/manifest.json`。`redundancy.md` 中的删除都先运行它。
+
+- [ ] **G-07** 基线上失败的两项测试 `P1`
+  - 现状：在 `172982f` 上用 unittest 同样失败，与测试运行器无关。
+    - `tests/test_package_boundaries.py::test_monitor_never_imports_a_controller_or_device_sdk`：`robot_simulation.cli.main([])` 绑定默认端口 18081，本机已有服务在监听，导致 `OSError`。测试依赖本机环境，应传入 `--port 0`。
+    - `tests/test_plugins.py::test_control_inputs_use_same_service_and_release_only_the_lease`（`:101`）：`--input probe` 结束后服务仍保留 owner，日志为 "X5 stop-and-hold requested"。测试期望释放，实际是停止后保持；需确认是 `172982f` 改变了停止语义而测试未更新，还是 `release_after_stop` 期间 owner 无法清除（`src/robot_control/service.py:89,247`）。
+  - 完成：两项通过，或注明属于旧内核、随 K-10 退役。
 
 - [ ] **G-06** CI 或本地 pre-commit `P2`
   - 现状：没有 `.github`、pre-commit、ruff、mypy 或 pyright 配置（只有 `environments/phone/pyproject.toml` 有）。
