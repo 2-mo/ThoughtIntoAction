@@ -20,6 +20,10 @@ GROUPS = {
     "motion": ("environments/arx_motion/.venv/bin/python", [[RUN, "components", "run", "test.motion"]]),
     "phone": ("environments/arx_motion/.venv/bin/python", [[RUN, "components", "run", "test.phone"]]),
     "rebot": ("environments/rebot/.venv/bin/python", [[RUN, "components", "run", "test.rebot"]]),
+    # Pages of src/embodied/monitor/web; Playwright from: npm install --prefix .cache/viewer-validation playwright
+    "browser": (".cache/viewer-validation/node_modules/playwright/index.mjs",
+                [["node", str(path)] for path in sorted((ROOT / "tests").glob("browser_*.mjs"))]),
+    # Heavy MuJoCo groups last: the legacy services in the browser group are timing-sensitive under load.
     # MuJoCo end to end: native routers + workbench buttons, component faults, capture, plugins + calibration.
     "sim": ("control/.venv/bin/python", [
         [str(ROOT / "control/.venv/bin/python"), "-B", str(ROOT / "control/scripts/check_workbench_teleop.py")],
@@ -32,9 +36,6 @@ GROUPS = {
     "groot": ("environments/arx_motion/.venv-web/bin/python", [
         [str(ROOT / "environments/arx_motion/.venv-web/bin/python"), "-B", "scripts/check_groot_export.py",
          "--output", str(EVIDENCE / "groot-export")]]),
-    # Pages of src/embodied/monitor/web; Playwright from: npm install --prefix .cache/viewer-validation playwright
-    "browser": (".cache/viewer-validation/node_modules/playwright/index.mjs",
-                [["node", str(path)] for path in sorted((ROOT / "tests").glob("browser_*.mjs"))]),
 }
 
 

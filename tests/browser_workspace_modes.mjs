@@ -31,7 +31,11 @@ try {
   async function until(check, timeout=25000) {
     const deadline = performance.now()+timeout;
     while (!await page.evaluate(check)) {
-      if (performance.now()>deadline) throw Error('State condition timed out: '+String(check));
+      if (performance.now()>deadline) {
+        const last = await page.evaluate(async () => ({state: (await fetch('/api/state').then(r=>r.json())).actual?.q,
+          collection: (await fetch('/api/sensors').then(r=>r.json())).collection, simulation: await fetch('/api/simulation').then(r=>r.json())}));
+        throw Error('State condition timed out: '+String(check)+'\nlast: '+JSON.stringify(last));
+      }
       await page.waitForTimeout(50);
     }
   }

@@ -117,5 +117,40 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
 
 
+class CatalogTests(unittest.TestCase):
+    """`./run.sh <group> <command>` names existing commands, scripts and components."""
+
+    def test_every_entry_has_a_target(self):
+        from embodied.workstation.catalog import GROUPS
+        import scripts.launch as launch
+        flat = (launch.PYTHON_COMMANDS | launch.SHELL_COMMANDS | launch.MAINTENANCE_COMMANDS
+                | launch.MODULE_COMMANDS | launch.BOOTSTRAP_COMMANDS)
+        components = set(json.loads((ROOT / "configs/components/commands.json").read_text())["commands"])
+        for group, (_, commands) in GROUPS.items():
+            for name, (_, target) in commands.items():
+                with self.subTest(command=f"{group} {name}"):
+                    if target[0] == "run":
+                        self.assertIn(target[1][0], flat)
+                    elif target[0] == "component":
+                        self.assertIn(target[1], components)
+                    elif target[0] == "bash":
+                        self.assertTrue((ROOT / target[1]).is_file())
+
+    def test_groups_resolve_to_launcher_commands(self):
+        from scripts.launch import resolve_group
+        self.assertEqual(resolve_group(["arm", "check", "--virtual"]), ["check-arm", "--virtual"])
+        self.assertEqual(resolve_group(["calib", "payload", "--help"]), ["components", "run", "calibration.payload", "--help"])
+        self.assertEqual(resolve_group(["phone", "--run", "R"]), ["phone", "--run", "R"])  # single-word command
+        with patch("builtins.print"):
+            self.assertEqual(resolve_group(["check", "bogus"]), 2)
+            self.assertEqual(resolve_group(["data"]), 0)
+
+    def test_bare_run_prints_the_catalog(self):
+        result = subprocess.run([str(ROOT / "run.sh")], capture_output=True, text=True, cwd="/tmp")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("kernel", result.stdout)
+        self.assertIn("./run.sh <功能> <命令>", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

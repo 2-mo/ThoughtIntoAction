@@ -14,6 +14,7 @@ import tomllib
 # The bootstrap interpreter only needs the standard-library project module.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from embodied.core.project import PROJECT_ROOT, load_config, resolve_path
+from embodied.workstation.catalog import GROUPS
 
 PYTHON_COMMANDS = {
     "quest-discovery": "quest/discovery.py",
@@ -191,7 +192,57 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
     return [str(python), "-B", str(PROJECT_ROOT / "scripts" / PYTHON_COMMANDS[command]), *defaults, *arguments], env
 
 
+def catalog_text(group: str | None = None) -> str:
+    lines = [] if group else ["具身智能平台：./run.sh <功能> <命令> [参数]；./run.sh <功能> 只看该组。", ""]
+    for name, (title, commands) in GROUPS.items():
+        if group in (None, name):
+            lines.append(f"{name:8} {title}")
+            lines.extend(f"  {command:17} {description}" for command, (description, _) in commands.items())
+            lines.append("")
+    if not group:
+        lines.append("更多：./run.sh components list 列出全部组件命令；原有命令名（如 arm-service、view-arm）仍可直接使用。")
+    return "\n".join(lines)
+
+
+def resolve_group(argv: list[str]) -> list[str] | int:
+    """Translate `<group> <command> args` into a launcher command, or exec a script."""
+    title, commands = GROUPS[argv[0]]
+    flat = argv[0] in PYTHON_COMMANDS | SHELL_COMMANDS | MAINTENANCE_COMMANDS | MODULE_COMMANDS | BOOTSTRAP_COMMANDS
+    if len(argv) == 1 or argv[1] in ("-h", "--help", "help"):
+        print(catalog_text(argv[0]))
+        return 0
+    if argv[1] not in commands:
+        if flat:
+            return argv  # The single-word command keeps its own arguments, e.g. `phone --run RUN`.
+        print(f"未知命令：{argv[0]} {argv[1]}\n\n" + catalog_text(argv[0]), file=sys.stderr)
+        return 2
+    target, rest = commands[argv[1]][1], argv[2:]
+    if target[0] == "run":
+        return [*target[1], *rest]
+    if target[0] == "component":
+        return ["components", "run", target[1], *rest]
+    os.chdir(PROJECT_ROOT)
+    if target[0] == "bash":
+        os.execvp("bash", ["bash", str(PROJECT_ROOT / target[1]), *target[2], *rest])
+    python = os.environ.get("QUEST_BOOTSTRAP_PYTHON", "/usr/bin/python3")
+    os.execv(python, [python, "-B", str(PROJECT_ROOT / "scripts/workspace/tmux_workspace.py"), *target[1], *rest])
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv or argv[0] in ("help", "-h", "--help"):
+        print(catalog_text())
+        return 0
+    # Launcher options (--config X, --profile X, --print-command) may precede a group.
+    start = 0
+    while start < len(argv) and argv[start] in ("--config", "--profile", "--print-command"):
+        start += 1 if argv[start] == "--print-command" else 2
+    if start < len(argv) and argv[start] in GROUPS:
+        resolved = resolve_group(argv[start:])
+        if isinstance(resolved, int):
+            return resolved
+        argv = argv[:start] + resolved
     parser = argparse.ArgumentParser(description=__doc__, epilog="Use COMMAND --help for command-specific options.")
     parser.add_argument("--config", help="Local TOML override (relative to the repository)")
     parser.add_argument("--profile", help="Profile name in configs/profiles, or TOML path")
