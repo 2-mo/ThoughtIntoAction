@@ -20,6 +20,7 @@ X5 的参数和模型以 arx-televr 为准：`control/config/robot.json`、`cont
     | 夹爪最大宽度 | 0.082（`robot.json`、`project.toml`）；0.078 打开上限（`project.toml:62`）；0.088（`arx5_control` 使用 SDK 出厂值） |
     | 运动默认值 | `robot_control/online_motion.py:5-7`、`project.toml:44-51`、`启动遥操.sh:23-32`、`quest_teleop/cli.py:28-31`，指令超前量 0.15 与 0.05 不一致 |
     | CAN 接口 | `"can0"` 在 30 个文件中硬编码 |
+    | 桌面平面 | `control/config/workspace.json`（内核）与 `configs/project.toml` `[arm_safety]`（旧服务）取值相同；旧服务退役（K-10）后只保留前者 |
 
   - 做法：内核相关参数读 R-01；只属于平台的参数（预抓取位、采集速度等）放平台配置。
   - 完成：G-04 的 `"can0"` 白名单清空。

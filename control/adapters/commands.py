@@ -227,7 +227,9 @@ class MotionPlanner:
     """Independent kinematics instance; never shares mutable IK data with the worker."""
     def __init__(self, config, model_id):
         from arx5_vr.model import X5Model
+        from .workspace import Workspace
         self.model, self.config, self.model_id = X5Model(config), config, model_id
+        self.workspace = Workspace.load()
 
     def plan(self, request, snapshot, now):
         start = np.asarray(snapshot['q'])
@@ -291,6 +293,7 @@ class MotionPlanner:
         width = float(request.get('gripper_width', snapshot['gripper_width']))
         if not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width:
             raise ValueError('Invalid gripper width')
+        self.workspace.check_path(self.model.fk, qs)
         identity = {'kind': kind, 'epoch': snapshot['epoch'], 'owner_present': snapshot['owner'] is not None, 'model_id': self.model_id,
                     'q': qs.tolist(), 'times': times.tolist(), 'gripper_width': width}
         digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()

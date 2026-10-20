@@ -1,6 +1,7 @@
 """Bounded command ingress. Socket handling and planning never run on the robot thread."""
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import queue
@@ -82,8 +83,12 @@ class Gateway:
                             self.plans[plan['plan_id']] = plan
                             while len(self.plans) > 64:
                                 self.plans.popitem(last=False)
-                        result = {**plan, 'q': plan['q'].tolist(), 'collision_check': 'none'}
+                        workspace = getattr(self.planner, 'workspace', None)
+                        result = {**plan, 'q': plan['q'].tolist(), 'collision_check': 'none',
+                                  'workspace': workspace.describe() if workspace else None}
                     else:
+                        if action in ('cartesian', 'joint'):
+                            self._check_workspace(action, request)
                         if action == 'execute':
                             with self.plan_lock:
                                 plan = self.plans.get(request.get('plan_id'))
@@ -116,6 +121,21 @@ class Gateway:
                         pass
         finally:
             self.slots.release()
+
+    def _check_workspace(self, action, request):
+        # Streamed targets from any gateway source; the robot thread only arbitrates.
+        workspace = getattr(self.planner, 'workspace', None)
+        try:
+            target = [float(v) for v in request.get('pose' if action == 'cartesian' else 'q')]
+        except (TypeError, ValueError):
+            return  # Malformed targets are rejected by CommandEngine with its own message.
+        if workspace is None or len(target) != (7 if action == 'cartesian' else 6) or not all(map(math.isfinite, target)):
+            return
+        if action == 'cartesian':
+            workspace.check_pose(target)
+        else:
+            with self.plan_lock:
+                workspace.check_path(self.planner.model.fk, [target])
 
     def tick(self, state, now):
         # Limit per-tick ingress work; no network wait, file IO, or planning here.

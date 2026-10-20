@@ -127,6 +127,46 @@ class CommandsTests(unittest.TestCase):
             self.assertLessEqual(np.max(np.abs(j)), 2.02)
 
 
+    def test_gateway_plans_respect_the_table_plane(self):
+        from adapters.workspace import Workspace
+        planner = MotionPlanner(self.config, 'model')
+        self.assertEqual(planner.workspace.describe(), {'minimum_tcp_z_m': 0.0})  # config/workspace.json
+        q = np.array([0., .6, 1., 0., .2, 0.])
+        snapshot = {**self.engine.status(self.state, self.now), 'q': q.tolist()}
+        start = planner.model.fk(q)
+        planner.workspace = Workspace(table_enabled=True, table_z_m=float(start[2]) - .01)
+        planner.plan({'kind': 'movej', 'q': (q + [0, -.02, 0, 0, 0, 0]).tolist()}, snapshot, self.now)
+        below = start.copy(); below[2] -= .03
+        with self.assertRaisesRegex(ValueError, 'table plane'):
+            planner.plan({'kind': 'movel', 'pose': below.tolist()}, snapshot, self.now)
+        with self.assertRaisesRegex(ValueError, 'table plane'):
+            planner.workspace.check_pose(below)
+        Workspace(table_enabled=False).check_pose(below)
+        for bad in ({'table_enabled': 1}, {'table_enabled': True, 'table_z_m': float('nan')},
+                    {'table_enabled': True, 'table_clearance_m': -.01}):
+            with self.assertRaises(ValueError):
+                Workspace(**bad)
+
+
+    def test_gateway_checks_streamed_targets_before_queueing(self):
+        import threading
+        from adapters.gateway import Gateway
+        from adapters.workspace import Workspace
+        gateway = Gateway.__new__(Gateway)  # no socket: only the request-thread check
+        gateway.planner, gateway.plan_lock = MotionPlanner(self.config, 'model'), threading.Lock()
+        q = np.array([0., .6, 1., 0., .2, 0.])
+        pose = gateway.planner.model.fk(q)
+        gateway.planner.workspace = Workspace(table_enabled=True, table_z_m=float(pose[2]) + .01)
+        with self.assertRaisesRegex(ValueError, 'table plane'):
+            gateway._check_workspace('cartesian', {'pose': pose.tolist()})
+        with self.assertRaisesRegex(ValueError, 'table plane'):
+            gateway._check_workspace('joint', {'q': q.tolist()})
+        gateway._check_workspace('cartesian', {'pose': [0, 0]})  # malformed: left to CommandEngine
+        gateway.planner.workspace = Workspace(table_enabled=True, table_z_m=float(pose[2]) - .01)
+        gateway._check_workspace('cartesian', {'pose': pose.tolist()})
+        gateway._check_workspace('joint', {'q': q.tolist()})
+
+
 class NativeGateTests(unittest.TestCase):
     def setUp(self):
         from adapters.sources import NativeIngress

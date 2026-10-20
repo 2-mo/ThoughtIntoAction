@@ -43,7 +43,9 @@
     - phase5 两个脚本删除，或用 `component_plugins.ownership.leased_operation` 包裹。
   - 完成：所有打开 SDK 的入口使用同一锁。
 
-- [ ] **C-04** 手机接入的剩余缺口 `P0` `待定`
+- [ ] **C-04** 手机接入的剩余缺口 `P1`
+  - 工作空间已完成：`control/adapters/workspace.py` 读取 `control/config/workspace.json`（与旧 `[arm_safety]` 相同：桌面 z=0、余量 0），gateway 在请求线程中检查流式 `cartesian` / `joint` 目标，规划器检查 MoveJ / MoveL / Home 每个采样点；对所有经 gateway 的来源统一生效，原生 Quest 路径不变，机器人线程不增加计算。预抓取与 Home 路径最低 TCP z 为 0.156 m，不受影响。速率由现有 0.15 m 超前与每 tick 关节步长限制。未真机验证。
+  - 仍待做：手机双端急停复位握手（下方）。
   - 现状：手机已通过 gateway 接入（`src/inputs/phone.py:49` 使用 `ControlSession`），不再持有 SDK。但原 robot-teleop 的检查在集成路径上不生效：
     - 工作空间（z ≥ 0）与目标速率门不生效；gateway 对笛卡尔目标只检查四元数归一化和 0.15 m 超前（`control/adapters/commands.py:151-156`），`control/` 中没有工作空间检查。
     - 双端急停复位被固定拒绝（`src/inputs/phone.py:55`，`estop_reset_request_callback=lambda _: False`）。
