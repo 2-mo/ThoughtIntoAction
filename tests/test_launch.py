@@ -111,7 +111,7 @@ class LauncherTests(unittest.TestCase):
 
     def test_source_checks_can_bootstrap_before_environment_exists(self):
         with patch.dict(os.environ, {"QUEST_TELEOP_PYTHON": "/missing-quest-env/bin/python"}):
-            for command in ("check-dependencies", "fetch-dependencies"):
+            for command in ("check-dependencies", "fetch-dependencies", "check-all"):
                 result = subprocess.run([str(ROOT / "run.sh"), command, "--help"],
                                         cwd="/tmp", capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)

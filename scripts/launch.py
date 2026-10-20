@@ -37,6 +37,7 @@ SHELL_COMMANDS = {
 }
 MAINTENANCE_COMMANDS = {
     "test": "check.py",
+    "check-all": "check_all.py",
     "check-dependencies": "setup/dependencies.py",
     "fetch-dependencies": "setup/dependencies.py",
     "rebuild-xr-sdk": "setup/rebuild_xr_sdk.py",
@@ -123,6 +124,9 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
     if command in {"check-dependencies", "fetch-dependencies"}:
         extra = ["--fetch"] if command == "fetch-dependencies" else []
         return [sys.executable, "-B", str(PROJECT_ROOT / "scripts/setup/dependencies.py"), *extra, *arguments], env
+    if command == "check-all":
+        # Every group re-enters run.sh, which selects that group's interpreter and paths.
+        return [sys.executable, "-B", str(PROJECT_ROOT / "scripts/check_all.py"), *arguments], env
 
     python = resolve_python(config)
     if (command in {"collect", "runtime-data", "workbench", "phone", "motion", "component-source"}

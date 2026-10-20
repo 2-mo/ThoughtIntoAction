@@ -19,11 +19,20 @@
     - `components run test.motion` / `test.phone` 在新配置下仍分别收集到 65 / 263 项。
   - 未做：共享 fixture（`arm_service_fixture.py`、`mcap_fixture.py`）在 prepend 导入模式下工作正常，暂不移入 conftest。`unit`、`browser` 标记暂不登记（浏览器测试是 node 运行的 `.mjs`）。
 
-- [ ] **G-03** 按环境分组的离线测试命令 `P1`
-  - 现状：测试分散在 `tests/`、`tests/migrated/{arx_motion,phone}`、`src/zero-shot/test_*.py`、`src/infer_after_sft/test_*.py`、`control/scripts/check_*.py`、`scripts/check*.py`、`tests/*.mjs` 和 `apps/console/tests/`，分别依赖不同环境。
-  - 做法：一个入口按环境运行：控制（Python 3.10，`./run.sh control verify`）、平台（Python 3.12）、手机、前端。各组可单独运行。
-  - 完成：新入口列出各组结果；`AGENTS.md` 的最小验证仍可只运行单组。
-  - 依赖：G-02。
+- [x] **G-03** 按环境分组的离线测试命令 `P1`
+  - 原状：测试分散在 `tests/`、`tests/migrated/{arx_motion,phone}`、`src/zero-shot/test_*.py`、`src/infer_after_sft/test_*.py`、`control/scripts/check_*.py`、`scripts/check*.py`、`tests/*.mjs` 和 `apps/console/tests/`，分别依赖不同环境。
+  - 已做：`./run.sh check-all`（`scripts/check_all.py`）依次运行以下各组，每组重新进入 `run.sh`，环境与单独运行时相同；缺少环境的组显示 SKIP。支持 `--only`、`--simulation`（加跑 12 s MuJoCo 链路）和 `--print`。
+
+    | 组 | 命令 |
+    | --- | --- |
+    | control | `control verify` + `control check` |
+    | platform | `test` |
+    | motion | `components run test.motion` |
+    | phone | `components run test.phone` |
+    | rebot | `components run test.rebot` |
+
+  - 基线结果：control、motion（65）、phone（263）、rebot 通过；platform 为 359 通过、5 跳过，失败见 G-07。
+  - 未纳入：`src/zero-shot`、`src/infer_after_sft` 的 unittest（依赖 `outputs/envs/` 下的推理环境，随 P-07 迁入 `tests/`）、浏览器 `.mjs`、`apps/console` Playwright。
 
 - [x] **G-04** 收敛检查（棘轮） `P1`
   - 已做：`tests/test_convergence.py` 扫描 `src/`、`control/`（跳过 `.venv`、`run`、`build`、`native`、`vendor`、`models`）、`scripts/`、`apps/console/src`、`integrations/`、`examples/`。名单在 `tests/convergence_baseline.json`：新增违规时失败；已清理的条目没有从名单删除时也失败，所以名单只能缩小。
@@ -46,7 +55,8 @@
   - 现状：在 `172982f` 上用 unittest 同样失败，与测试运行器无关。
     - `tests/test_package_boundaries.py::test_monitor_never_imports_a_controller_or_device_sdk`：`robot_simulation.cli.main([])` 绑定默认端口 18081，本机已有服务在监听，导致 `OSError`。测试依赖本机环境，应传入 `--port 0`。
     - `tests/test_plugins.py::test_control_inputs_use_same_service_and_release_only_the_lease`（`:101`）：`--input probe` 结束后服务仍保留 owner，日志为 "X5 stop-and-hold requested"。测试期望释放，实际是停止后保持；需确认是 `172982f` 改变了停止语义而测试未更新，还是 `release_after_stop` 期间 owner 无法清除（`src/robot_control/service.py:89,247`）。
-  - 完成：两项通过，或注明属于旧内核、随 K-10 退役。
+  - 偶发失败：`tests/test_camera_lifecycle.py::test_real_graceful_shutdown_of_dummy_socket_owner` 在一次 `check-all` 全量运行中失败（"相机服务尚未退出"），单独运行 3 次都通过，属于时序不稳定。
+  - 完成：两项通过，或注明属于旧内核、随 K-10 退役；偶发项稳定通过。
 
 - [ ] **G-06** CI 或本地 pre-commit `P2`
   - 现状：没有 `.github`、pre-commit、ruff、mypy 或 pyright 配置（只有 `environments/phone/pyproject.toml` 有）。
