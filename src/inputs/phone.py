@@ -44,12 +44,14 @@ class PhoneController:
         self.ghost = ghost
         self.mapping_name = mapping
         source = Path(__file__).resolve().parents[1]
-        source_hashes = {str(path.relative_to(source)): hashlib.sha256(path.read_bytes()).hexdigest()
-                         for path in [Path(__file__).resolve(), *sorted((source / 'robot_teleop').rglob('*.py'))]}
+        files = [Path(__file__).resolve(), *sorted((source / 'robot_teleop').rglob('*.py'))]
+        # One digest over sorted (path, file hash) lines: a per-file map exceeds the gateway's 8 KiB metadata bound.
+        tree = hashlib.sha256(''.join(f'{path.relative_to(source)} {hashlib.sha256(path.read_bytes()).hexdigest()}\n'
+                                      for path in files).encode()).hexdigest()
         self.client = ControlClient(directory) if ghost else ControlSession(directory, source='phone', purpose='teleop',
             metadata={'plugin': 'phone.arkit', 'protocol': 1, 'mapping': mapping, 'position_scale': 2.,
                       'rotation_scale': 1., 'pose_frame': 'base_tcp', 'quaternion': 'xyzw', 'gripper': 'metres',
-                      'source_sha256': source_hashes})
+                      'source_tree_sha256': tree, 'source_files': len(files)})
         self.transport = UdpTransport(UdpTransportConfig(bind_host=bind_host, bind_port=port, receive_timeout_s=.02))
         self.source = registry.create('input', 'arkit', transport=self.transport, on_controls=self._controls,
             settings_callback=self._settings, estop_reset_request_callback=lambda _: False)
