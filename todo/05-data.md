@@ -17,7 +17,8 @@
 
 ## P0
 
-- [ ] **D-01** 导出拼接时间轴 `P1`
+- [x] **D-01** 导出拼接时间轴 `P1`
+  - 已做：`dataset_tools.exporters.anchor_gaps` 记录保留锚点间超过 1.5 个帧周期的缺口（位置、时长、缺失帧数），每条 episode 标 `anomaly`；原因按 episode 计数（schema 1：`stale-robot-data`、`camera-unmatched`；schema 2：沿用 `exclusion_reasons`）。导出仍按 1/fps 拼接。GR00T 导出（重排时间、折叠静止帧）未改，见 D-08。
   - 决定（2026-10-21）：不切分。缺口作为异常（视同现实世界的干扰）记入导出元数据与质量报告，记录位置、时长和原因（反馈过旧、缺相机帧、owner / phase / mode 排除），便于以后按原因筛选。实施并入 D-02。
   - 现状：
     - `quest_teleop/export_lerobot.py:272` 调用 `dataset.add_frame` 时不传时间戳，LeRobot 按 index / fps 生成。
@@ -26,7 +27,8 @@
   - 做法：在缺口处切成独立片段，或写入真实时间与断点；作为导出布局新版本，旧导出保持可复现。
   - 完成：每个导出 episode 的缺口都有记录。
 
-- [ ] **D-02** 导出写入 action 定义与来源 `P0`
+- [x] **D-02** 导出写入 action 定义与来源 `P0`
+  - 已做：每条 episode 报告增加 `control_stack`（schema 1 按是否记录 arm-service 轨迹参数区分 Ruckig 路点与直接 IK 目标；schema 2 为 arx 内核 `sent_q`）、`backend`、`gaps`、`anomaly`；`meta/quest_export.json` 汇总 `control_stacks`、`backends`、`anomalous_episodes` 与缺口规则。原有 `action_definition`、`cameras`、`layout` 保留，文件名不变。验证：`tests/test_export_metadata.py`、`test_dual_recording.py`，以及在 LeRobot 导出环境中运行 `test_export_package.py`（6 项）。
   - 现状：
     - schema 1 的 `requested_pos` 在服务路径是 Ruckig 每周期的插值点（`robot_control/service.py:153` → `hardware.py:236-247`），在直连路径是原始 IK 目标（`hardware.py:257`），两者使用同一个 schema 标识。
     - `docs/recording.md:94` 称它为"最新输入目标"；manifest 的 `action_definition`（`session.py:376`）描述的却是 submission / sdk_cmd。

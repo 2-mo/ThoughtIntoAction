@@ -2,6 +2,33 @@
 import json
 import numpy as np
 
+# Kept camera anchors further apart than this many frame periods form a gap.
+GAP_PERIODS = 1.5
+
+
+def anchor_gaps(rows, fps=30):
+    """Gaps between kept camera anchors (todo D-01).
+
+    Exports stay spliced at 1/fps for LeRobot; each gap is recorded as an anomaly so
+    training can filter by it later. Reasons are counted per episode
+    (`exclusion_reasons`); a gap with no excluded anchors is a camera drop.
+    """
+    stamps = [row[3]['host_received_monotonic_ns'] for row in rows]
+    period_ns = 1e9 / fps
+    gaps = []
+    for index in range(1, len(stamps)):
+        delta = stamps[index] - stamps[index - 1]
+        if delta > GAP_PERIODS * period_ns:
+            gaps.append({'after_sample': index - 1, 'duration_ms': round(delta / 1e6, 1),
+                         'missing_frames': int(round(delta / period_ns)) - 1})
+    return gaps
+
+
+def annotate(report, rows, *, control_stack, backend):
+    gaps = anchor_gaps(rows)
+    report.update(control_stack=control_stack, backend=backend, gaps=gaps, anomaly=bool(gaps))
+    return report
+
 
 class Schema1:
     identity = (1, 'requested_joint_position + requested_gripper_width')
@@ -10,7 +37,13 @@ class Schema1:
 
     def prepare(self, path):
         from quest_teleop.export_lerobot import prepare_schema1_camera_episode
-        return prepare_schema1_camera_episode(path)
+        meta, rows, report, states = prepare_schema1_camera_episode(path)
+        # The arm service records its Ruckig settings; other recorders sent IK targets directly.
+        stack = ('robot_control.service: requested_pos is the Ruckig waypoint per cycle'
+                 if (meta.get('control') or {}).get('trajectory_settings') else
+                 'unknown: requested_pos may be the raw IK target (no arm-service trajectory settings)')
+        annotate(report, rows, control_stack=stack, backend='real')
+        return meta, rows, report, states
 
     def save_sidecar(self, path, rows):
         from quest_teleop.multirate import save_robot_sidecar
@@ -52,6 +85,8 @@ class Schema2:
                   'state_max_age_ms': max(r[3]['host_received_monotonic_ns']-r[4]['host_monotonic_ns'] for r in rows)/1e6,
                   'action_max_age_ms': max(r[3]['host_received_monotonic_ns']-r[4]['requested_monotonic_ns'] for r in rows)/1e6,
                   'image_max_age_ms': 0, 'repeated_images': 0, 'action_definition': self.identity[1]}
+        annotate(report, rows, control_stack='arx-televr kernel: sent_q at 250 Hz',
+                 backend=meta['runtime']['backend'])
         return meta, rows, report, raw
 
     def save_sidecar(self, path, rows):

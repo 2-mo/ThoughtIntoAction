@@ -18,7 +18,8 @@
 
 ## P0
 
-- [ ] **P-01** 校验相机集合 `P1`
+- [x] **P-01** 校验相机集合 `P1`
+  - 已做：`infer_after_sft/checkpoint.py` 从训练配置读取 `exterior_camera`（`trained_cameras`），JAX checkpoint 记为未知；`run.py` 在相机集合未知或与推理不一致时打印警告并继续。现有 `checkpoints/2500` 训练于该字段之前，因此显示"未记录"。
   - 决定（2026-10-21）：不一致时只警告，继续运行。
   - 现状：
     - 导出包含外部相机时，openpi 训练配置自动启用它（`integrations/openpi/run.py:33`）。`configs/local.toml:40` 配置了 `wrist_rgb` 和 `exterior_rgb`。

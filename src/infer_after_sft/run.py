@@ -52,6 +52,11 @@ def main():
     if not python.is_file():
         raise RuntimeError('请先运行 bash src/infer_after_sft/' + ('setup_jax.sh' if args.backend == 'jax' else 'setup.sh'))
     print(f'{args.backend.upper()} SFT step={spec["step"]}，horizon={spec["model"]["action_horizon"]}，统计={spec["asset_id"]}\n任务：{args.prompt}\n输出：{output}',flush=True)
+    # Inference opens only the wrist camera; X5Inputs zero-fills and masks the base image.
+    if spec['cameras'] is None:
+        print('警告：checkpoint 未记录训练时的相机集合；推理只打开腕部相机。若训练用了外部相机，模型收到的外部图像为全零（mask=False）。',flush=True)
+    elif spec['cameras'] != ['wrist_rgb']:
+        print(f'警告：模型训练相机为 {spec["cameras"]}，推理只打开腕部相机；外部图像为全零（mask=False），继续运行。',flush=True)
     # Detect an unreleased controller before spending time loading/compiling the model.
     if resolve_path(load_config()['arm_service']['socket']).exists():
         probe=ArmClient(RobotModel(resolve_path(load_config()['robot']['urdf'])),hardware=True,actuate=False)

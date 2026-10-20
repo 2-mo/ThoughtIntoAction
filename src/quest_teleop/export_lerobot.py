@@ -129,6 +129,7 @@ def prepare_schema1_camera_episode(path):
     if meta['camera']['fps'] != 30:
         raise ValueError('Expected original camera FPS 30')
     rows = camera_rows(states, frames, path)
+    exclusion_reasons = {'stale-robot-data': len(frames) - len(rows)}
     cameras = camera_metadata(meta)
     other_frames, clocks = {}, {}
     if len(cameras) > 1:
@@ -149,6 +150,7 @@ def prepare_schema1_camera_episode(path):
                 matched[key] = other_frames[key][index]
             if len(matched) == len(cameras):
                 selected.append((state, action, root, {**wrist, 'camera_frames': matched}, source))
+        exclusion_reasons['camera-unmatched'] = len(rows) - len(selected)
         rows = selected
     if len(rows) < 2:
         raise ValueError('Insufficient causal camera anchors')
@@ -156,6 +158,7 @@ def prepare_schema1_camera_episode(path):
               'outcome': meta['outcome'], 'samples': len(rows),
               'robot_samples': len(states), 'observation_samples': len(rows),
               'excluded_camera_anchors': len(frames)-len(rows),
+              'exclusion_reasons': {key: value for key, value in exclusion_reasons.items() if value},
               'start_monotonic_ns': frames[0]['host_received_monotonic_ns'],
               'end_monotonic_ns': frames[-1]['host_received_monotonic_ns'],
               'state_max_age_ms': max(r[3]['host_received_monotonic_ns']-r[4]['host_monotonic_ns'] for r in rows)/1e6,
@@ -288,6 +291,10 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False, prese
                     'alignment': 'wrist RGB anchors; latest preceding robot state and other cameras within max skew; original clocks retained',
                     'camera': '30 FPS wrist anchors; other cameras may repeat on alignment; see per-camera report; H264 CRF20 GOP2',
                     'cameras': list(shapes),
+                    'control_stacks': sorted({report['control_stack'] for _, report in plans}),
+                    'backends': sorted({report['backend'] for _, report in plans}),
+                    'gap_policy': 'gaps stay spliced at 1/fps (LeRobot timestamps); each is listed per episode and the episode is marked anomaly',
+                    'anomalous_episodes': [report['id'] for _, report in plans if report['anomaly']],
                     'conversion': {'video_preset': video_preset, 'video_threads': video_threads,
                                    'decoder': decoder, 'decode_workers': decode_workers,
                                    'decode_batch_size': decode_batch_size, 'encoder': 'streaming'},

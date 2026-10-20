@@ -149,6 +149,9 @@ class PortableExportTests(unittest.TestCase):
             output = bundle/'lerobot_dataset'
             manifest = json.loads((output/'meta/quest_export.json').read_text())
             self.assertEqual(manifest['layout'],'aligned30_raw250_v2')
+            self.assertEqual(manifest['control_stacks'], ['arx-televr kernel: sent_q at 250 Hz'])
+            self.assertEqual(manifest['anomalous_episodes'], [])
+            self.assertEqual(manifest['episodes'][0]['gaps'], [])
             loaded = LeRobotDataset('local/quest_x5',root=output,video_backend='pyav')
             self.assertEqual(len(loaded),10)
             self.assertGreater(loaded[0]['source.action_monotonic_ns'].item(), loaded[0]['source.state_monotonic_ns'].item())

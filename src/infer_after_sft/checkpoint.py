@@ -22,6 +22,17 @@ class MetadataReader(pickle.Unpickler):
         raise pickle.UnpicklingError(f'Unsupported metadata object: {module}.{name}')
 
 
+def trained_cameras(data_config):
+    """Camera keys the model was trained with, or None when the checkpoint does not say.
+
+    integrations/openpi/quest_x5.py X5DataConfig.exterior_camera is serialized only by
+    checkpoints trained after that field existed.
+    """
+    if 'exterior_camera' not in data_config:
+        return None
+    return ['wrist_rgb', 'exterior_rgb'] if data_config['exterior_camera'] else ['wrist_rgb']
+
+
 def inspect_checkpoint(path):
     path = Path(path).resolve()
     with zipfile.ZipFile(path/'metadata.pt') as archive:
@@ -45,7 +56,7 @@ def inspect_checkpoint(path):
     if not (path/'model.safetensors').is_file():
         raise FileNotFoundError(path/'model.safetensors')
     return {'checkpoint': str(path), 'step': meta['global_step'], 'config_name': config['name'],
-            'model': model, 'asset_id': repo, 'stats': str(stats),
+            'model': model, 'asset_id': repo, 'stats': str(stats), 'cameras': trained_cameras(config['data']),
             'adapter': 'project X5Inputs/X5Outputs; delta6 joints + absolute gripper metres (user confirmed)',
             'openpi_revision': OPENPI_REVISION}
 
@@ -77,5 +88,5 @@ def inspect_jax_checkpoint(path, horizon=15):
                 action_horizon=horizon, max_token_len=200, discrete_state_input=True,
                 dtype='bfloat16', pytorch_compile_mode=None),
             'stats':str(files[0]), 'asset_id':str(files[0].parent.relative_to(path/'assets')),
-            'openpi_revision':OPENPI_REVISION,
+            'openpi_revision':OPENPI_REVISION, 'cameras':None,
             'config_source':'project X5 adapter defaults; Orbax checkpoint does not store training config'}

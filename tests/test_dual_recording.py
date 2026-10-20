@@ -80,6 +80,11 @@ class DualRecordingTests(unittest.TestCase):
             _, rows, exported, raw = prepare_camera_episode(path)
             self.assertEqual(len(raw), len(states))
             self.assertEqual(exported['cameras']['exterior_rgb']['repeated_images'], 0)
+            # Export metadata names the control stack and records anchor gaps (todo D-01, D-02).
+            self.assertEqual(exported['backend'], 'real')
+            self.assertIn(exported['control_stack'].split(':')[0], ('robot_control.service', 'unknown'))
+            self.assertEqual(exported['gaps'], [])
+            self.assertFalse(exported['anomaly'])
             for row in rows:
                 cameras = row[3]['camera_frames']
                 self.assertLessEqual(cameras['exterior_rgb']['host_received_monotonic_ns'], row[3]['host_received_monotonic_ns'])
