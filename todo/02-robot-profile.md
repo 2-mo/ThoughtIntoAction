@@ -34,7 +34,8 @@ X5 的参数和模型以 arx-televr 为准：`control/config/robot.json`、`cont
   - 做法：FK、Ghost、标定、导出、离线规划都使用 `control/models/x5/` 产物；其他 URDF 在使用者迁移后删除（X-26）。
   - 完成：其他模块对 X5 模型的引用只剩 `control/models/x5/`。
 
-- [ ] **R-04** 策略运动参数不再解析启动脚本 `P0`
+- [ ] **R-04** 策略运动参数不再解析启动脚本 `P2`
+  - 复核（2026-10-21）：风险低于审查时的判断。策略预抓取与遥操 B 键预抓取使用同一组 preset 速度、加速度和 jerk（2.0 rad/s，由机械臂服务的 Ruckig 规划），并非不受限的硬件速度。剩下的只是解析 shell 脚本这一耦合，随策略改为内核客户端（P-06）、旧链路退役（K-10）一并消除。按"安全控制统一在内核"的原则，不给策略单独设保守速度。
   - 现状：`src/robot_core/collection_motion.py:17-21` 用正则读取 `启动遥操.sh`，`src/infer_after_sft/run.py:73` 和 `src/zero-shot/recover.py:21` 用它决定预抓取运动。脚本当前 `MAX_JOINT_SPEED_RAD_S=0`，即 SDK 硬件上限（`启动遥操.sh:20`）；README 仍写 2.0。
   - 做法：
     - 短期：给策略流程单独设定有限的预抓取速度，放平台配置。

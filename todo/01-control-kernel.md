@@ -79,7 +79,8 @@
     - 启动回 Home 是上游行为，需在操作说明中写明；`park_q` 可在 `robot.json` 配置。
   - 完成：每行有决定并记录在此。
 
-- [ ] **K-07** 统一真机入口的夹爪补丁 `P0`
+- [x] **K-07** 统一真机入口的夹爪补丁 `P1`
+  - 复核与处理（2026-10-21）：`control/start_real.sh` 是上游原文件，不带本地夹爪补丁时行为与上游一致（上游 README 要求夹爪闭合后上电），不是安全缺陷。平台真机入口为 `./run.sh control start --backend real`（启用补丁并清理环境）；`real.py` 在补丁未启用时打印说明。统一 CLI（B-02）后日常只保留平台入口。未真机验证。
   - 现状：`real.py:161` 只在环境变量 `QUEST_ARX_GRIPPER_TURNS=1` 时启用本机夹爪修正。该变量只由 `src/workstation/control.py:54` 设置，`control/start_real.sh:11` 不设置；`start_real.sh` 也不像 `workstation/control.py:40-49` 那样清理 `PYTHONPATH`、`LD_LIBRARY_PATH` 和 `CONDA_*`。
   - 做法：真机只允许经 `./run.sh control start` 启动；或者 `start_real.sh` 改为调用它。缺少补丁 SDK 时拒绝启动。
   - 完成：两种方式启动真机时补丁状态与环境相同。

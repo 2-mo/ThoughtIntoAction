@@ -16,8 +16,8 @@
   },
   "arx5_vr/real.py": {
     "upstream_sha256": "1a17549508ab4cfb2368a245ace8f4aa1d5cf224ff18d7e0a63f4c3f8048af89",
-    "sha256": "7199e8a6f24a447d3f848dd14c73f8e6575b4fb55192b7cc2b468f555b39aabd",
-    "reason": "Actual SDK submission timestamps and opt-in local gripper startup correction; unmodified IK and gains."
+    "sha256": "0e27741ba9a17a6f268b9fe0fe4518ca30b5ae7ee0e15efcc33990d1f4adccec",
+    "reason": "Actual SDK submission timestamps and opt-in local gripper startup correction; unmodified IK and gains. Without the opt-in patch, print which gripper startup behaviour is active."
   },
   "arx5_vr/sim.py": {
     "upstream_sha256": "f69cba4060b4fb5334080b2a22e63aaf489076cd1cc32763e33fada52c24f9a8",
