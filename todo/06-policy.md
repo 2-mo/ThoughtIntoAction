@@ -4,7 +4,7 @@
 
 - spec：观测与动作定义，从导出元数据写入 checkpoint；
 - 观测构建器；
-- 动作块执行器：负责延迟跳步、过期拒绝、分布外状态拦截、单步限幅和失败预算；
+- 动作块执行器：只负责动作时序（延迟跳步、动作块衔接）；限幅、偏离与工作空间等安全检查由内核统一负责；
 - sink：通过 `ControlSession` 把动作交给内核；
 - GPU 推理服务：独立环境，机械臂侧不导入 torch / jax。
 
@@ -18,25 +18,27 @@
 
 ## P0
 
-- [ ] **P-01** 校验相机集合 `P0`
+- [ ] **P-01** 校验相机集合 `P1`
+  - 决定（2026-10-21）：不一致时只警告，继续运行。
   - 现状：
     - 导出包含外部相机时，openpi 训练配置自动启用它（`integrations/openpi/run.py:33`）。`configs/local.toml:40` 配置了 `wrist_rgb` 和 `exterior_rgb`。
     - SFT 推理只打开腕部相机（`src/infer_after_sft/run.py:85`）；`integrations/openpi/x5_policy.py:16-18` 将 base 图像填零、mask 设为 False。
     - `src/infer_after_sft/checkpoint.py` 不检查训练时用了哪些相机。
-  - 做法：checkpoint 记录相机集合（来自 D-02）；推理启动时比对，不一致则拒绝运行，或按实际训练配置打开相机。
+  - 做法：checkpoint 记录相机集合（来自 D-02）；推理启动时比对，不一致时打印警告。
   - 依赖：D-02。
 
 - [ ] **P-02** `--preview` 不移动机械臂 `P0`
   - 现状：`src/infer_after_sft/run.py:76` 在判断 `args.preview` 之前就执行 `move_pregrasp(arm, open_gripper=True)`。
   - 做法：preview 只做观测与预测，不发送运动；需要预抓取的流程使用单独参数。
 
-- [ ] **P-03** GR00T 运行时保护 `P0`
+- [x] **P-03** GR00T 运行时保护 `P2`
+  - 决定（2026-10-21）：不在 runner 中增加或恢复安全检查，速度保护保持关闭。安全控制统一由内核负责，GR00T 改为内核客户端（P-08）后自动适用。以下现状保留作为 P-08 的输入。
   - 现状：
     - 反馈速度保护被设为浮点最大值（`src/gr_zeroshot/runtime.py:612`），默认值为 0.60 rad/s（`arx5_control/controller.py:99`）。
     - 被拒绝的动作块和 worker 错误被忽略（`runtime.py:744,773`），没有失败计数或时间限制。
     - 实时延迟按 0 传入（`runtime.py:755`），过期步不会被跳过；不检查观测年龄。
     - 任何异常都会自动回 Home（`runtime.py:826`）。
-  - 做法：恢复速度保护；增加失败预算、观测年龄检查和延迟跳步；异常时保持当前位置，回 Home 改由操作者确认。
+  - 做法：见决定，随 P-08 处理。
 
 ## 一致性
 
@@ -54,7 +56,7 @@
 - [ ] **P-06** 统一策略运行时 `P1`
   - 做法：
     - 新建 policy 包，包含 spec / observation / executor / client / sinks。
-    - 现有 `ArmClient` runner 的保护（采集前制动、5 s 推理超时、图像与状态时间差 > 60 ms 或图像 > 200 ms 拒绝、观测 > 1.5 s 拒绝、偏离观测 > 0.2 rad 拒绝、分布外状态拦截，见 `zero-shot/rollout.py:58,114,124,134,137`）迁入 executor 作为默认值。
+    - 现有 `ArmClient` runner 的检查（`zero-shot/rollout.py:58,114,124,134,137`）逐项归类：观测时序类（图像与状态时间差、观测年龄、推理超时）留在 executor；安全类（偏离观测 > 0.2 rad、分布外状态、单步限幅）移入内核，或确认内核已覆盖后删除。
     - JAX 的 horizon 与模型配置从 checkpoint 读取，不在代码中假设（`infer_after_sft/checkpoint.py:76-81`）。
   - 依赖：C-01。先在 MuJoCo 内核上执行验证，真机执行放到阶段 3。
 

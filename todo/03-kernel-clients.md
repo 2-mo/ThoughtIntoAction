@@ -46,7 +46,7 @@
   - 现状：手机已通过 gateway 接入（`src/inputs/phone.py:49` 使用 `ControlSession`），不再持有 SDK。但原 robot-teleop 的检查在集成路径上不生效：
     - 工作空间（z ≥ 0）与目标速率门不生效；gateway 对笛卡尔目标只检查四元数归一化和 0.15 m 超前（`control/adapters/commands.py:151-156`），`control/` 中没有工作空间检查。
     - 双端急停复位被固定拒绝（`src/inputs/phone.py:55`，`estop_reset_request_callback=lambda _: False`）。
-  - 做法：在 gateway 增加对非原生来源的工作空间与速率检查，原生 Quest 路径不变（与 K-06 一起决定）；急停复位握手按 `docs/plugin-migration-inventory.md` 的 C05 接入。
+  - 做法：在 gateway 增加对非原生来源的工作空间与速率检查（安全控制统一在内核），桌面平面沿用 `configs/project.toml` 的 `[arm_safety]`，原生 Quest 路径不变（K-06）；急停复位握手按 `docs/plugin-migration-inventory.md` 的 C05 接入。
   - 依赖：K-06。
 
 - [ ] **C-05** 网页后端改为内核客户端 `P1`

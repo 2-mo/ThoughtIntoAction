@@ -17,13 +17,14 @@
 
 ## P0
 
-- [ ] **D-01** 导出拼接时间轴 `P0`
+- [ ] **D-01** 导出拼接时间轴 `P1`
+  - 决定（2026-10-21）：不切分。缺口作为异常（视同现实世界的干扰）记入导出元数据与质量报告，记录位置、时长和原因（反馈过旧、缺相机帧、owner / phase / mode 排除），便于以后按原因筛选。实施并入 D-02。
   - 现状：
     - `quest_teleop/export_lerobot.py:272` 调用 `dataset.add_frame` 时不传时间戳，LeRobot 按 index / fps 生成。
     - episode 中间被剔除的帧会造成断点，包括反馈过旧（`multirate.py:11-12`）、缺外部帧（`export_lerobot.py:146-151`），以及 owner / phase / mode 排除（`observations/runtime_alignment.py:224-241`）。动作块可能跨越被删除的 Home 或 FreeDrive 段。
     - GR00T 导出同样重新生成时间（`exporter.py:321`），并折叠静止帧（`exporter.py:640-668`）。
   - 做法：在缺口处切成独立片段，或写入真实时间与断点；作为导出布局新版本，旧导出保持可复现。
-  - 完成：导出中不存在跨缺口的连续帧。
+  - 完成：每个导出 episode 的缺口都有记录。
 
 - [ ] **D-02** 导出写入 action 定义与来源 `P0`
   - 现状：
