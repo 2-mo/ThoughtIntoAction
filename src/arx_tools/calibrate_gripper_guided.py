@@ -4,12 +4,10 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
-import os
-from pathlib import Path
-import sys
 
 import arx5_interface as arx5
+
+from robot_core.device_lease import DeviceLease
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,46 +17,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-class InterfaceLock:
-    """Use the same advisory lock as the controller before touching CAN."""
-
-    def __init__(self, interface: str) -> None:
-        safe_name = "".join(
-            char if char.isalnum() or char in "-_" else "_"
-            for char in interface
-        )
-        self.path = Path("/tmp") / f"arx5-control-{safe_name}.lock"
-        self.fd: int | None = None
-
-    def acquire(self) -> None:
-        fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            os.close(fd)
-            raise RuntimeError(
-                "CAN 正被其他控制器占用；请先断开机械臂后重试"
-            ) from exc
-        os.ftruncate(fd, 0)
-        os.write(fd, f"pid={os.getpid()}\n".encode("ascii"))
-        self.fd = fd
-
-    def release(self) -> None:
-        if self.fd is None:
-            return
-        try:
-            fcntl.flock(self.fd, fcntl.LOCK_UN)
-        finally:
-            os.close(self.fd)
-            self.fd = None
-
-
 def main() -> int:
     args = parse_args()
-    lock = InterfaceLock(args.interface)
+    lock = None
     controller = None
     try:
-        lock.acquire()
+        # Same lease as the arm service, the arx kernel and ArmController.
+        lock = DeviceLease(args.interface)
         robot_config = arx5.RobotConfigFactory.get_instance().get_config(args.model)
         # ``Arx5JointController`` validates the interpreted gripper width
         # while it is being constructed.  A stale zero/readout is exactly the
@@ -90,7 +55,8 @@ def main() -> int:
     finally:
         if controller is not None:
             del controller
-        lock.release()
+        if lock is not None:
+            lock.close()
 
 
 if __name__ == "__main__":

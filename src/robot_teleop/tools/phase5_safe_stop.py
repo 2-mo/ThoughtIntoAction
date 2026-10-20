@@ -11,6 +11,8 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
+
+from robot_core.device_lease import DeviceLease
 from typing import Any, Protocol, cast
 
 from robot_teleop.kinematics.config import load_model_config
@@ -157,11 +159,15 @@ def run_safe_stop_validation(
         else controller_factory
     )
     controller: SafeStopController | None = None
+    # Real SDK only: share the arm service / kernel CAN lease; injected test controllers skip it.
+    lease = None
     samples: list[SafeStopSample] = []
     read_errors: list[str] = []
     stop_error: str | None = None
     stop_command_sent = False
     try:
+        if controller_factory is None:
+            lease = DeviceLease(interface)
         sdk = loader()
         controller = factory(sdk, model, interface, joint_count)
         try:
@@ -218,6 +224,9 @@ def run_safe_stop_validation(
         SafeStopValidationError,
     ) as exc:
         read_errors.append(str(exc))
+    finally:
+        if lease is not None:
+            lease.close()
 
     timestamp_progress = _timestamp_progress(samples)
     host_sample_progress = _host_sample_progress(samples)

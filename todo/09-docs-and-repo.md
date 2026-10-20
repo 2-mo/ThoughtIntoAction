@@ -44,5 +44,5 @@
   - 做法：决定 `参考图像/` 是提交还是忽略；`archives/migration/originals/` 何时移出工作区由用户决定。
 
 - [ ] **O-09** 文件命名 `P3`
-  - 做法：根目录中文入口脚本保留，方便操作者；代码、模块与 `src/` 下的路径使用 ASCII，`src/infer_after_sft/*.sh`、`scripts/**/*.sh`。
+  - 做法：根目录中文入口脚本保留，方便操作者；代码、模块与 `src/` 下的路径使用 ASCII，包括 `src/infer_after_sft/*.sh`、`scripts/**/*.sh`。
   - 统一包名：`reBotArm_control_py`、`zero-shot`，以及 `handeye_calibration` / `hand_eye_calibration`。

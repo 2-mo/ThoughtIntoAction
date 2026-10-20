@@ -11,6 +11,8 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
+
+from robot_core.device_lease import DeviceLease
 from typing import Any, Protocol, cast
 
 from robot_teleop.kinematics.config import load_model_config
@@ -162,6 +164,8 @@ def run_hold_current(
         else controller_factory
     )
     controller: HoldCurrentController | None = None
+    # Real SDK only: share the arm service / kernel CAN lease; injected test controllers skip it.
+    lease = None
     samples: list[HoldCurrentSample] = []
     command_writes = 0
     read_error: str | None = None
@@ -169,6 +173,8 @@ def run_hold_current(
     damping_error: str | None = None
     hold_position: tuple[float, ...] | None = None
     try:
+        if controller_factory is None:
+            lease = DeviceLease(interface)
         sdk = loader()
         controller = factory(sdk, model, interface, joint_count)
         initial = controller.get_joint_state()
@@ -226,6 +232,8 @@ def run_hold_current(
                 controller.set_to_damping()
             except (AttributeError, TypeError, RuntimeError) as exc:
                 damping_error = str(exc)
+        if lease is not None:
+            lease.close()
 
     max_drift = max((sample.max_abs_drift_rad for sample in samples), default=math.inf)
     final_drift = samples[-1].max_abs_drift_rad if samples else math.inf

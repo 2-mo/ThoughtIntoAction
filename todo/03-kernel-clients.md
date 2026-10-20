@@ -31,7 +31,8 @@
 
   - 完成：G-04 的白名单只剩 `real.py`。
 
-- [ ] **C-03** 设备锁修复 `P0`
+- [x] **C-03** 设备锁修复 `P0`
+  - 已做：`calibrate_gripper_guided.py` 改用 `robot_core.device_lease.DeviceLease`（网页内核在启动它之前已要求断开机械臂，原流程不受影响）；phase5 两个工具在使用真实 SDK 时获取同一锁，注入测试控制器时不获取；legacy 两个脚本已删除（X-06）。离线验证：锁被占用时三者都拒绝，且不加载 SDK。未真机验证。
   - 现状：
     - `src/arx_tools/calibrate_gripper_guided.py:21-30` 注释说使用"与控制器相同的锁"，实际锁的是 `/tmp/arx5-control-{if}.lock`。其他组件使用 `quest-x5-{uid}-{key}.lock`（`src/robot_core/device_lease.py:13`、`control/adapters/device_lease.py:15`），所以它与机械臂服务、内核都不互斥。
     - 网页内核以子进程启动它（`src/arx5_backend/kernel/control.py:1957-1961`）。
