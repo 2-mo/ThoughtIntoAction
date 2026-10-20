@@ -1,13 +1,10 @@
 """Offline raw H264, exact clocks and 50Hz state / 30FPS observation alignment."""
-from mcap_fixture import write_records
 from quest_teleop.mcap_io import read_records
-import json
 from pathlib import Path
 import tempfile
 import time
 import unittest
 import numpy as np
-from quest_teleop.export_lerobot import prepare_episode
 from quest_teleop.recording import EpisodeWriter
 from quest_teleop.video import read_frame
 
@@ -37,38 +34,6 @@ class TrainingExportTests(unittest.TestCase):
             self.assertLess(abs(float(image.mean())-150), 5)
             self.assertEqual(len(list(writer.path.glob('wrist_rgb/*.png'))), 0)
 
-    def test_50hz_grid_keeps_commands_and_reuses_only_preceding_30fps_images(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            states, frames = [], []
-            origin = 1234567890000000
-            for i in range(11):
-                states.append({'host_monotonic_ns': origin+i*20_000_000,
-                    'requested_monotonic_ns': origin+i*20_000_000-1,
-                    'actual_pos': [i/100]*6, 'gripper_actual_pos': .04,
-                    'requested_pos': [i/100+.1]*6, 'requested_gripper_pos': .02})
-            for i in range(7):
-                image = f'{i}.png'; (root/image).touch()
-                frames.append({'host_received_monotonic_ns': origin+round(i*1e9/30), 'image': image})
-            meta = {'kind':'quest_teleop_episode', 'schema_version':1, 'lifecycle':'complete',
-                    'outcome':'unknown', 'counts':{'state':11,'frame':7}, 'id':'sample','task':'pick',
-                    'camera':{'width':64,'height':48,'fps':30}}
-            (root/'episode.json').write_text(json.dumps(meta))
-            write_records(root, states=states, frames=frames)
-            _, rows, report = prepare_episode(root)
-            self.assertEqual(len(rows), 11)
-            self.assertGreater(report['repeated_images'], 0)
-            self.assertLessEqual(report['image_max_age_ms'], 34)
-            np.testing.assert_allclose(rows[5][0][:6], .05)
-            np.testing.assert_allclose(rows[5][1][:6], .15)
-            _, every_row, _ = prepare_episode(root, fps=240, preserve_samples=True)
-            self.assertEqual(len(every_row), len(states))
-            self.assertEqual([row[4]['host_monotonic_ns'] for row in every_row], [row['host_monotonic_ns'] for row in states])
-            self.assertEqual(rows[1][3]['image'], '0.png')  # 20ms must not use the 33ms image.
-            states[5]['requested_pos'] = None
-            write_records(root, states=states)
-            with self.assertRaises((TypeError, ValueError)):
-                prepare_episode(root)
 
 class X5PolicyTests(unittest.TestCase):
     def test_exterior_image_is_used_in_base_camera_slot(self):

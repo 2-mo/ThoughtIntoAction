@@ -2,7 +2,6 @@
 import argparse
 from datetime import datetime
 import json
-import math
 import os
 from pathlib import Path
 import shutil
@@ -84,45 +83,6 @@ def load_episode(path, max_gap_s=.1):
     return meta, states, images, clocks
 
 
-def prepare_episode(path, fps=50, max_gap_s=.1, preserve_samples=False):
-    """Uniform host-clock grid; causal image/state/command selection, no extrapolation."""
-    meta, states, images, clocks = load_episode(path, max_gap_s)
-    start, end = max(c[0] for c in clocks), min(c[-1] for c in clocks)
-    grid = start + np.rint(np.arange(max(0, math.floor((end-start)*fps/1e9)+1)) * 1e9 / fps).astype(np.int64)
-    if preserve_samples:
-        grid = clocks[0].copy()
-    if len(grid) < 2:
-        raise ValueError('No usable overlapping image/state interval')
-    indices = [np.maximum(0, np.searchsorted(c, grid, side='right') - 1) for c in clocks]
-    if any(np.max(grid - c[ix]) > max_gap_s * 1e9 for c, ix in zip(clocks, indices)):
-        raise ValueError('Stale observation on synchronized grid')
-    selected = []
-    for t, si, fi in zip(grid, *indices):
-        state, frame = states[int(si)], images[int(fi)]
-        if state.get('preset_name') or state.get('source') in ('preset', 'replay'):
-            raise ValueError('Episode includes positioning/replay; collect a clean demonstration')
-        observation = np.asarray([*state['actual_pos'], state['gripper_actual_pos']], dtype=np.float32)
-        # Use commanded targets, not the later measured response. Force hold remains
-        # a deployment-controller behavior, as it is during collection.
-        command = np.asarray([*state['requested_pos'], state['requested_gripper_pos']], dtype=np.float32)
-        if observation.shape != (7,) or command.shape != (7,) or not np.isfinite([observation, command]).all():
-            raise ValueError('Missing/nonfinite 7D state or command')
-        if not (0 <= observation[-1] <= .082 and 0 <= command[-1] <= .082):
-            raise ValueError('Gripper outside calibrated width range')
-        image = (path / frame.get('video', frame.get('image', ''))).resolve()
-        if not image.is_relative_to(path.resolve()) or not image.is_file():
-            raise ValueError('Missing image or image path escapes episode')
-        frame = {**frame, "wrist_valid": bool(t >= clocks[1][0])}
-        selected.append((observation, command, path, frame, state))
-    report = {'id': meta['id'], 'task': meta['task'], 'source': str(path.resolve()),
-              'outcome': meta['outcome'], 'samples': len(grid),
-              'start_monotonic_ns': int(grid[0]), 'end_monotonic_ns': int(grid[-1]),
-              'state_max_age_ms': float(np.max(grid-clocks[0][indices[0]]) / 1e6),
-              'image_max_age_ms': float(np.max(grid-clocks[1][indices[1]]) / 1e6),
-              'repeated_images': len(grid) - len(set(indices[1].tolist()))}
-    return meta, selected, report
-
-
 def prepare_schema1_camera_episode(path):
     from .multirate import camera_rows
     meta, states, frames, _ = load_episode(path)
@@ -176,7 +136,7 @@ def prepare_camera_episode(path):
     return for_episode(path).prepare(path)
 
 
-def export(source, output, repo_id, task=None, fps=30, skip_invalid=False, preserve_samples=False,
+def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
            video_threads=None, video_preset='veryfast', progress=True,
            decoder='torchcodec', decode_workers=0, decode_batch_size=32):
     if fps != 30:
@@ -339,7 +299,6 @@ def main():
     parser.add_argument('--task', help='Exact task text; omit to export all tasks')
     parser.add_argument('--fps', type=int, default=30)
     parser.add_argument('--skip-invalid', action='store_true')
-    parser.add_argument('--preserve-samples', action='store_true', help='Compatibility flag; full robot samples are always retained in robot/*.npz')
     parser.add_argument('--video-threads', type=int, default=min(4, os.cpu_count() or 1), help='H264 encoder threads (default: up to 4)')
     parser.add_argument('--video-preset', choices=('ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow'), default='veryfast', help='Faster presets trade compression efficiency for speed; CRF stays 20')
     parser.add_argument('--no-progress', action='store_true', help='Disable conversion progress bars')
@@ -352,7 +311,7 @@ def main():
     if args.decode_workers < 0: parser.error('decode-workers must be nonnegative')
     if args.decode_batch_size < 1: parser.error('decode-batch-size must be positive')
     print('正在加载 LeRobot 转换依赖…', file=sys.stderr, flush=True)
-    export(args.source, args.output, args.repo_id, args.task, args.fps, args.skip_invalid, args.preserve_samples,
+    export(args.source, args.output, args.repo_id, args.task, args.fps, args.skip_invalid,
            args.video_threads, args.video_preset, not args.no_progress,
            args.decoder, args.decode_workers, args.decode_batch_size)
 

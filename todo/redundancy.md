@@ -52,7 +52,7 @@
 | X-21 | 在线 Ruckig 封装 3 套 | `arx5_control/motion/online.py`（如仍需要） | 旧服务与手机旧 CLI 退役 | C-07 |
 | X-22 | 相机服务 2 套，另有 4 处直接打开 RealSense | `robot_core/camera_service.py` | WebRTC 改为消费者 | S-01、S-02 |
 | X-23 | MCAP 写入 / 读取各 2 套，对齐 5 套，schema 1 校验 2 套 | 统一的 `episode_io` | 导出回归通过 | D-05 – D-07 |
-| X-24 | `quest_teleop/export_lerobot.prepare_episode` 及 `tests/test_training_export.py:40-71` | — | 确认生产路径不使用（测试覆盖的路径与生产不一致） | D-05 |
+| ~~X-24~~ 已完成 | `quest_teleop/export_lerobot.prepare_episode` 及 `tests/test_training_export.py:40-71` | — | 确认生产路径不使用（测试覆盖的路径与生产不一致） | D-05 |
 | X-25 | GR00T modality 配置 4 份（`isaac_groot_data_collection/{,eef_only_,wrist_eef_only_,wrist_only_}modality_config.py`），都登记为 `NEW_EMBODIMENT` | 由 spec 生成 | 导出器插件化 | D-08 |
 | X-26 | X5 URDF：`assets/robots/x5/`、`assets/phone/robots/arx5/`，以及 SDK 自带模型的引用 | `control/models/x5/` | 使用者全部改为引用内核模型 | R-03 |
 | X-27 | 重复资产：X5 网格 4 份、纹理 2 份、three.js 3 份 | 一份 | 引用改为同一路径 | O-05、U-03 |
