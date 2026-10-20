@@ -16,7 +16,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from robot_core.device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 from robot_core.project import load_config, resolve_path
 from robot_core.session_protocol import request
 from robot_simulation.mode import MODES, selected_mode, save_mode

@@ -20,7 +20,8 @@
   - 做法：逐项判断保留、移到 `adapters/`，或整理后提交给上游。目标是让 `arx5_vr/` 的补丁只剩确实无法在外围完成的部分。
   - 涉及：`app.py`、`runtime.py`、`worker.py`、`real.py`、`sim.py`、`recording.py`、`model.py`、`types.py`、`ipc/__init__.py`、`pyproject.toml`、`uv.lock`、`scripts/{package_release,self_test}.py`。
 
-- [ ] **K-03** 内核对 `src/` 的反向依赖 `P1`
+- [x] **K-03** 内核对 `src/` 的反向依赖 `P1`
+  - 已做：内核只导入 L0 `embodied_contracts`（注册表、RPC、设备锁、运动 profile）；`DownHoldGate` 依赖随 K-04 去掉。G-04 的 `control_imports_src` 名单已清空。`app.py`、`worker.py` 仍用 `sys.path` 定位 L0（本仓库 `src/` 或打包后的 `shared/`），B-01 时改为路径依赖。
   - 现状：
     - `arx5_vr/app.py:95` 和 `worker.py:48` 通过 `sys.path` 引入 `src/component_api`。
     - `adapters/workbench.py:15` 引入旧遥操包 `quest_teleop.arming.DownHoldGate`。

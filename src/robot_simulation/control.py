@@ -6,7 +6,7 @@ import time
 import sys
 from robot_core.project import PROJECT_ROOT, load_config, resolve_path
 from robot_core.session_protocol import request
-from robot_core.device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 from .mode import MODES, selected_mode
 
 

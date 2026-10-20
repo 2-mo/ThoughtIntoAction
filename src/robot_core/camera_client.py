@@ -5,7 +5,7 @@ import time
 
 from .project import load_config, resolve_path, PROJECT_ROOT
 from .session_protocol import request
-from .device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 
 
 def socket_path():

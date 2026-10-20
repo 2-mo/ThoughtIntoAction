@@ -2,7 +2,7 @@
 from .project import load_config, resolve_path
 from .camera_client import socket_path, ensure_service
 from .session_protocol import request
-from .device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 
 
 def recording_guard():

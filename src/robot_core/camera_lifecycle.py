@@ -11,7 +11,7 @@ import sys
 
 from .camera_client import socket_path
 from .camera_control import check_legacy_session, recording_guard
-from .device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 
 
 def stop_service():

@@ -1,6 +1,6 @@
 """Share the existing arx worker's device lease with migrated device adapters."""
 from functools import wraps
-from robot_core.device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 
 
 def leased_operation(device):

@@ -2,7 +2,7 @@
 import argparse
 import json
 import signal
-from component_api.registry import Registry
+from embodied_contracts.registry import Registry
 
 
 def main():

@@ -4,7 +4,7 @@ from pathlib import Path
 import threading
 import time
 
-from component_api.rpc import request
+from embodied_contracts.rpc import request
 
 
 class ControlClient:

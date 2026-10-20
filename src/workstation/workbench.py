@@ -7,7 +7,7 @@ import signal
 import subprocess
 import time
 
-from component_api.registry import Registry, PROJECT_ROOT
+from embodied_contracts.registry import Registry, PROJECT_ROOT
 
 
 def profile(path):
@@ -101,7 +101,7 @@ def start(config, robot, args):
             '--plugin', config['source'], '--options', json.dumps(options)], cwd=PROJECT_ROOT)
         children.insert(0, source)
         if args.record_task:
-            from runtime_client.control import ControlClient
+            from embodied_contracts.runtime.control import ControlClient
             if 'lease' in Registry().spec('source', config['source']).capabilities:
                 deadline = time.monotonic()+5
                 while time.monotonic() < deadline:
@@ -148,7 +148,7 @@ def main(argv=None):
     if args.command in ('status', 'stop'):
         if args.run is None:
             parser.error('--run is required')
-        from runtime_client.control import ControlClient
+        from embodied_contracts.runtime.control import ControlClient
         client = ControlClient(args.run)
         print(json.dumps(client.status() if args.command == 'status' else client.request('stop'), indent=2))
         return 0

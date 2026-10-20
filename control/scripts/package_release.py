@@ -48,7 +48,7 @@ def main():
         for path in paths:
             archive.add(path, arcname=str(Path('arx-televr') / path.relative_to(ROOT)), recursive=False)
         shared_hashes = {}
-        for module in ('component_api', 'operations'):
+        for module in ('embodied_contracts',):
             origin = ROOT.parent / 'src' / module
             if not origin.is_dir():
                 origin = ROOT / 'shared' / module

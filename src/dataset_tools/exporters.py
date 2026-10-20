@@ -73,5 +73,5 @@ def for_episode(path, registry=None):
         raise ValueError('Unsupported episode schema')
     # Data selects a schema, never a Python factory. Factory choices belong to
     # the trusted project registry, so a deployment can replace its exporter.
-    from component_api.registry import Registry
+    from embodied_contracts.registry import Registry
     return (registry or Registry()).create('exporter', f'schema{version}')

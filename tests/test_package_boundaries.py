@@ -32,7 +32,7 @@ class PackageBoundaryTests(unittest.TestCase):
             from episode_io.mcap_io import RecordWriter
             from collection.capture import capture
             from dataset_tools.runtime_v2 import load_episode
-            from runtime_client import RuntimeReader
+            from embodied_contracts.runtime import RuntimeReader
             from observations.runtime_alignment import align
             ''',
         )

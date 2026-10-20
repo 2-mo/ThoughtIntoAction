@@ -92,8 +92,8 @@ def run(args):
     native_device = native_routing = None
     device_plugin = args.input_plugin
     if args.managed:
-        sys.path.insert(0, str(ROOT.parent / "src" if (ROOT.parent / "src/component_api").is_dir() else ROOT / "shared"))
-        from component_api.registry import Registry
+        sys.path.insert(0, str(ROOT.parent / "src" if (ROOT.parent / "src/embodied_contracts").is_dir() else ROOT / "shared"))
+        from embodied_contracts.registry import Registry
         registry = Registry(ROOT / "config/components.json")
         # Old --input presets remain shortcuts; profiles pass explicit connections.
         device_plugin = device_plugin or {'vr': 'arx.quest', 'demo': 'arx.demo'}.get(args.input)

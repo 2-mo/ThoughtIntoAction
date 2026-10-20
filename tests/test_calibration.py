@@ -150,7 +150,7 @@ class ModelTests(unittest.TestCase):
             np.testing.assert_allclose(qs[1], self.q + .01)
 
     def test_shared_can_lease_rejects_second_owner_and_releases(self):
-        from robot_core.device_lease import DeviceLease
+        from embodied_contracts.device_lease import DeviceLease
         first = DeviceLease("offline-test-can-only")
         try:
             with self.assertRaisesRegex(RuntimeError, "owned"):
@@ -372,7 +372,7 @@ class SharedBackendTests(unittest.TestCase):
     def test_partial_initialization_failure_damps_and_releases_lease(self):
         import arx5_interface as arx5
         from robot_control.hardware import OfficialX5HardwareAdapter
-        from robot_core.device_lease import DeviceLease
+        from embodied_contracts.device_lease import DeviceLease
         native = MagicMock()
         native.get_joint_state.side_effect = RuntimeError("feedback failed")
         with patch.object(arx5, "Arx5JointController", return_value=native):

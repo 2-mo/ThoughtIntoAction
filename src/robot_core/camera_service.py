@@ -8,7 +8,7 @@ import uuid
 
 from .camera import RealSenseCamera
 from .camera_client import socket_path
-from .device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 from .local_server import LocalServer
 from .camera_transport import FrameServer
 from .project import load_config

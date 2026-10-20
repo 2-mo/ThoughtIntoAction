@@ -14,14 +14,14 @@ from workstation.control import ROOT, control_environment, verify_sources
 
 class ControlEntryTests(unittest.TestCase):
     def test_legacy_and_arx_lease_exclude_each_other_across_processes(self):
-        from robot_core.device_lease import DeviceLease
+        from embodied_contracts.device_lease import DeviceLease
         import uuid
         device = 'offline-lease-' + uuid.uuid4().hex
         lease = DeviceLease(device)
         self.addCleanup(lease.close)
-        source = ('from adapters.device_lease import DeviceLease; '
+        source = ('from embodied_contracts.device_lease import DeviceLease; '
                   'DeviceLease(' + repr(device) + ')')
-        env = {**os.environ, 'PYTHONPATH': str(ROOT / 'control')}
+        env = {**os.environ, 'PYTHONPATH': str(ROOT / 'src')}  # the control interpreter loads the same L0 lease
         python = str(ROOT / 'control/.venv/bin/python')
         if not Path(python).is_file():
             self.skipTest('Control environment not installed')

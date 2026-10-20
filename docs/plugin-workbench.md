@@ -48,7 +48,7 @@ flowchart LR
 | `calibration_arm` | `arx`、`legacy` | `snapshot/enable/command/damp`；原标定求解与采样流程不依赖 SDK |
 | `exporter` | `schema1`、`schema2` | 独立 LeRobot 环境；`prepare/save_sidecar`，数据只能选择 schema，不能指定 Python 工厂 |
 
-注册表在 `configs/plugins.toml` 和 `control/config/components.json`。共享实现为 `src/component_api/`；旧 `robot_core.plugins` 保留兼容模块身份。`api_version=1` 和 `runtime=workstation/control` 在加载前检查，列举、校验 profile 不导入硬件 SDK。控制端只读 JSON，避免向 Python 3.10 引入 Python 3.12 的依赖。
+注册表在 `configs/plugins.toml` 和 `control/config/components.json`。共享实现为 L0 契约包 `src/embodied_contracts/`；旧 `robot_core.plugins` 保留兼容模块身份。`api_version=1` 和 `runtime=workstation/control` 在加载前检查，列举、校验 profile 不导入硬件 SDK。控制端只读 JSON，避免向 Python 3.10 引入 Python 3.12 的依赖。
 
 当前机器人协议明确是六轴 X5 + 米制夹爪，替换驱动须满足同源 X5 模型契约。其他轴数/机械臂需要新协议版本及对应模型运行时；注册名称不代表已经支持其他硬件。控制权、有效期、反馈检查保留在公共执行边界，各输入插件不能绕过它们。
 

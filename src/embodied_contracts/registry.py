@@ -6,7 +6,13 @@ import importlib
 import json
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+def _project_root():
+    """Repository containing configs/plugins.toml; independent of where this package lives."""
+    here = Path(__file__).resolve()
+    return next((parent for parent in here.parents if (parent / "configs/plugins.toml").is_file()), here.parents[1])
+
+
+PROJECT_ROOT = _project_root()
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import socket
 import struct
-from component_api.rpc import connect
+from embodied_contracts.rpc import connect
 
 MAX_MESSAGE = 4_000_000
 

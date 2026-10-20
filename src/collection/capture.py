@@ -9,7 +9,7 @@ import threading
 import time
 
 from episode_io.runtime_episode import RuntimeEpisodeWriter
-from runtime_client import RuntimeReader
+from embodied_contracts.runtime import RuntimeReader
 
 
 def capture(reader, root, task, duration, camera=None):
@@ -92,7 +92,7 @@ def main(argv=None):
         with ExitStack() as stack:
             camera = None
             if args.camera != 'none':
-                from component_api.registry import Registry
+                from embodied_contracts.registry import Registry
                 from robot_core.camera_control import recording_guard
                 from robot_core.project import load_config
                 options = load_config()['cameras']['wrist_rgb']

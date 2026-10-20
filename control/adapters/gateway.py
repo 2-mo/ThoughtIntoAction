@@ -9,7 +9,7 @@ import threading
 import time
 from collections import OrderedDict
 
-from component_api.rpc import receive, send
+from embodied_contracts.rpc import receive, send
 from .commands import CommandEngine, MotionPlanner
 
 

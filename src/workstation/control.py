@@ -174,7 +174,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == "observe":
-            from runtime_client.client import RuntimeReader
+            from embodied_contracts.runtime.client import RuntimeReader
             if args.count < 0:
                 raise ValueError("Count must be nonnegative")
             directory = runtime_directory(args.run)

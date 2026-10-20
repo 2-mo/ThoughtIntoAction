@@ -50,7 +50,7 @@ class ARX5Interface:
         # fixed target. The official teleop example uses a future waypoint.
         self.controller_config.default_preview_time = preview_time_s
 
-        from robot_core.device_lease import DeviceLease
+        from embodied_contracts.device_lease import DeviceLease
         self._device_lease = DeviceLease(can_port)
         try:
             self.arm = arx5.Arx5JointController(

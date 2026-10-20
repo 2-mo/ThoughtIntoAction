@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
 
-from robot_core.device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 from typing import Any, Protocol, cast
 
 from robot_teleop.kinematics.config import load_model_config

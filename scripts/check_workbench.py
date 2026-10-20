@@ -15,7 +15,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
-from runtime_client.control import ControlClient, ControlSession
+from embodied_contracts.runtime.control import ControlClient, ControlSession
 from inputs.phone import PhoneController
 from robot_teleop.protocol.golden import GOLDEN_POSE
 from robot_teleop.protocol.packet import encode_packet

@@ -4,7 +4,7 @@ from pathlib import Path
 import time
 import numpy as np
 
-from runtime_client.control import ControlSession
+from embodied_contracts.runtime.control import ControlSession
 
 
 class ArxCalibrationArm:

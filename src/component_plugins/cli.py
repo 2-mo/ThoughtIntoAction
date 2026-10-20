@@ -51,7 +51,7 @@ def main(argv=None):
     try:
         catalog = json.loads(CATALOG.read_text())
         if args.action == 'list':
-            from component_api.registry import Registry
+            from embodied_contracts.registry import Registry
             print(json.dumps({'plugins': Registry().entries, **catalog}, ensure_ascii=False, indent=2))
             return 0
         if args.action == 'setup':

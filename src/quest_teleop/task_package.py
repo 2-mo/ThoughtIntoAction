@@ -73,9 +73,10 @@ def finalize_task(raw_root, episode_ids, output, fps):
             package.writestr(output.name + "/tools/src/quest_teleop/__init__.py", "")
             # The portable converter must carry the extracted storage package;
             # compatibility shims alone would work only inside this checkout.
-            for module in ('episode_io', 'dataset_tools', 'observations', 'component_api'):
-                for file in sorted((PROJECT_ROOT / 'src' / module).glob('*.py')):
-                    package.write(file, output.name + '/tools/src/' + module + '/' + file.name)
+            for module in ('episode_io', 'dataset_tools', 'observations', 'embodied_contracts'):
+                for file in sorted((PROJECT_ROOT / 'src' / module).rglob('*.py')):
+                    if '__pycache__' not in file.parts:
+                        package.write(file, output.name + '/tools/' + str(file.relative_to(PROJECT_ROOT)))
             package.writestr(output.name + '/tools/src/robot_core/__init__.py', '')
             package.write(PROJECT_ROOT / 'src/robot_core/storage.py', output.name + '/tools/src/robot_core/storage.py')
             for registry in ('configs/plugins.toml', 'control/config/components.json'):

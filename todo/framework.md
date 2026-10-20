@@ -25,7 +25,7 @@
 ```text
 control/                    L1：arx-televr 上游布局（arx5_vr/ config/ models/ native/ scripts/ vendor/）+ adapters/
 contracts/                  语言无关的 schema 与金样本：手机 UDP、commands.sock、RobotTick、episode
-packages/contracts/         L0 Python 包（uv workspace 成员；control/ 以路径依赖引用）
+src/embodied_contracts/     L0 Python 包；B-01 前随 src/ 一起加入路径，control/ 在本仓库中从这里加载，打包后从 shared/ 加载
 src/<平台包>/               L2 Python 包（根 pyproject，package = true）
 apps/console/  apps/ios/    L3 前端与手机端
 policies/<backend>/         推理服务：openpi、lerobot_pi05、groot，各自声明环境
@@ -34,20 +34,21 @@ scripts/                    安装、设备准备、一次性诊断
 tests/                      按层分目录：contracts/ platform/ …；control 自带检查留在 control/scripts
 ```
 
-- 根目录与 `packages/contracts` 组成 uv workspace，共用一个锁文件。`control/` 保持独立 uv 项目（Python 3.10 与平台环境不能共锁），通过 `{ path = "../packages/contracts" }` 依赖 L0。
+- L0 目前放在 `src/embodied_contracts/`：现有各环境（含系统 Python 运行的工作台与相机服务）都以 `src` 为路径，无需新增路径配置。B-01 包化时再给它独立 `pyproject.toml`，`control/` 改用路径依赖，去掉 `sys.path` 查找。`control/` 保持独立 uv 项目（Python 3.10 与平台环境不能共锁）。
 - 推理服务各自一个环境，只依赖 L0。机械臂侧不导入 torch / jax。
 
-## 3. L0 契约包的初始内容
+## 3. L0 契约包 `embodied_contracts`
 
-全部来自现有代码，已确认只依赖标准库或 numpy，兼容 3.10：
+全部来自现有代码，只依赖标准库或 numpy，兼容 3.10。前五项已迁入（2026-10-21）：
 
 | 内容 | 来源 |
 | --- | --- |
-| 注册表 | `src/component_api/registry.py` |
-| RPC 帧格式 | `src/component_api/rpc.py` |
-| 内核客户端 `ControlClient`、`ControlSession`、`RuntimeReader` | `src/runtime_client/` |
-| 设备锁 | `src/robot_core/device_lease.py`（`control/adapters/device_lease.py` 改为导入它，X-11） |
-| 运动 profile（smoothstep9） | `src/operations/vendor/arx_motion/profiles.py` |
+| `registry`：注册表（按 `configs/plugins.toml` 向上查找仓库根） | 原 `src/component_api/registry.py` |
+| `rpc`：RPC 帧格式 | 原 `src/component_api/rpc.py` |
+| `interfaces`：Protocol 定义 | 原 `src/component_api/contracts.py` |
+| `runtime`：`ControlClient`、`ControlSession`、`RuntimeReader` | 原 `src/runtime_client/` |
+| `device_lease`：设备锁（控制内核与平台同一实现，X-11） | 原 `src/robot_core/device_lease.py` 与 `control/adapters/device_lease.py` |
+| `vendor/arx_motion/profiles`：运动 profile（smoothstep9） | 原 `src/operations/vendor/arx_motion/` |
 | 机器人配置读取 | 新增：读取 `control/config/{robot,tool}.json` 与 `control/models/x5/`，返回限位、`park_q`、夹爪、CAN、频率、模型路径与哈希（R-01） |
 | 协议常量与 schema 绑定 | 新增（C-01） |
 

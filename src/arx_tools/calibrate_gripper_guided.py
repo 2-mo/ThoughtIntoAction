@@ -7,7 +7,7 @@ import argparse
 
 import arx5_interface as arx5
 
-from robot_core.device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 
 
 def parse_args() -> argparse.Namespace:

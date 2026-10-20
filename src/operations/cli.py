@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import time
 
-from runtime_client.control import ControlClient, ControlSession
+from embodied_contracts.runtime.control import ControlClient, ControlSession
 
 
 def main(argv=None):

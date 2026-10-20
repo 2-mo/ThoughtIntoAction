@@ -157,6 +157,18 @@ window.ARCHITECTURE_CATALOG = {
       ]
     },
     {
+      "kind": "vr",
+      "name": "arx.workbench",
+      "origin": "arx 工作台",
+      "registry": "control/config/components.json",
+      "factory": "adapters.workbench:QuestDevice",
+      "runtime": "control",
+      "capabilities": [
+        "workbench-buttons",
+        "native-control"
+      ]
+    },
+    {
       "kind": "source",
       "name": "phone.arkit",
       "origin": "arx 工作台",
@@ -323,6 +335,18 @@ window.ARCHITECTURE_CATALOG = {
       ]
     },
     {
+      "kind": "routing",
+      "name": "arx.workbench",
+      "origin": "arx 工作台",
+      "registry": "control/config/components.json",
+      "factory": "adapters.workbench:Routing",
+      "runtime": "control",
+      "capabilities": [
+        "workbench-buttons",
+        "native-control"
+      ]
+    },
+    {
       "kind": "ingress",
       "name": "arx.native",
       "origin": "arx 工作台",
@@ -334,6 +358,18 @@ window.ARCHITECTURE_CATALOG = {
         "handover",
         "freshness",
         "dependency-health"
+      ]
+    },
+    {
+      "kind": "ingress",
+      "name": "arx.workbench",
+      "origin": "arx 工作台",
+      "registry": "control/config/components.json",
+      "factory": "adapters.workbench:Ingress",
+      "runtime": "control",
+      "capabilities": [
+        "workbench-buttons",
+        "native-control"
       ]
     },
     {
@@ -1198,14 +1234,16 @@ window.ARCHITECTURE_CATALOG = {
     "src/",
     "tests/",
     "third_party/",
+    "todo/",
+    "参考图像/",
     "src/arx5_backend/",
     "src/arx5_control/",
     "src/arx_tools/",
     "src/backend/",
     "src/collection/",
-    "src/component_api/",
     "src/component_plugins/",
     "src/dataset_tools/",
+    "src/embodied_contracts/",
     "src/episode_io/",
     "src/experiments/",
     "src/gr_zeroshot/",
@@ -1222,7 +1260,6 @@ window.ARCHITECTURE_CATALOG = {
     "src/robot_core/",
     "src/robot_simulation/",
     "src/robot_teleop/",
-    "src/runtime_client/",
     "src/workstation/",
     "src/zero-shot/"
   ],

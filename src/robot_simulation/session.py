@@ -10,8 +10,8 @@ from episode_io.runtime_episode import RuntimeEpisodeWriter
 from inputs.gestures import Press, StickAction
 from robot_core.presets import DEFAULT_GRASP_READY_JOINTS
 from robot_core.project import load_config, resolve_path
-from runtime_client import RuntimeReader
-from runtime_client.control import ControlSession
+from embodied_contracts.runtime import RuntimeReader
+from embodied_contracts.runtime.control import ControlSession
 
 # Shown by the monitor; the legacy real-arm page keeps its own layout.
 BUTTON_LAYOUT = {

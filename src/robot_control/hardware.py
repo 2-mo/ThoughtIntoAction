@@ -9,7 +9,7 @@ from pathlib import Path
 import arx5_interface as arx5
 import numpy as np
 
-from robot_core.device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 from robot_core.project import X5_2025_URDF
 from .trajectory import bounded_joint_target, validate_motion_limits
 

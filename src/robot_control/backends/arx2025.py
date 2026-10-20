@@ -61,7 +61,7 @@ class ARXX52025HardwareAdapter:
                 "Official ARX SDK unavailable. Build it with ./run.sh build-x5-2025-sdk "
                 "and install its system KDL/ROS libraries; see docs/setup.md."
             ) from exc
-        from robot_core.device_lease import DeviceLease
+        from embodied_contracts.device_lease import DeviceLease
         self._device_lease = DeviceLease(can_port)
         try:
             self.arm = SingleArm(

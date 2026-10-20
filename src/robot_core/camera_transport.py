@@ -6,7 +6,7 @@ import threading
 
 import zmq
 
-from .device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 
 
 def frame_path(control_path):

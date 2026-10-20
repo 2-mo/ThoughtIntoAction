@@ -19,7 +19,7 @@ import numpy as np
 from .online_motion import OnlineMotion, DEFAULTS as TRAJECTORY_DEFAULTS
 from .startup import WAITING_FOR_ARM, waiting_for_arm
 
-from robot_core.device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 from robot_core.model import RobotModel
 from robot_core.loop_rate import LoopRate
 from robot_core.plugins import Registry

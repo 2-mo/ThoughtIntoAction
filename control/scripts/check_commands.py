@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT.parent / 'src' if (ROOT.parent / 'src/component_api').is_dir() else ROOT / 'shared')]
+sys.path[:0] = [str(ROOT), str(ROOT.parent / 'src' if (ROOT.parent / 'src/embodied_contracts').is_dir() else ROOT / 'shared')]
 from adapters.commands import CommandEngine, MotionPlanner
 from arx5_vr.types import RobotState, ControlCommand, Mode
 from arx5_vr.settings import load_settings

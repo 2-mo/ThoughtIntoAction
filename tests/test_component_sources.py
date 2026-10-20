@@ -107,7 +107,7 @@ class CompositionTests(unittest.TestCase):
             return profile(path)
 
     def test_manual_and_phone_need_no_native_plugins(self):
-        from component_api.registry import Registry
+        from embodied_contracts.registry import Registry
         registry = Registry()
         for key in ('vr', 'routing', 'ingress'):
             registry.entries.pop(key)
@@ -117,7 +117,7 @@ class CompositionTests(unittest.TestCase):
                 self.assertNotIn('native',config)
 
     def test_binding_uses_capabilities_and_explicit_channel_not_source_name(self):
-        from component_api.registry import Registry
+        from embodied_contracts.registry import Registry
         registry = Registry()
         registry.entries['source']['operator_b'] = registry.entries['source']['quest']
         config={'version':1,'robot':'arx.sim','source':'operator_b',

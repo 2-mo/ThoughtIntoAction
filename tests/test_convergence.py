@@ -39,8 +39,8 @@ def source_files():
 
 
 def control_imports_of_src(files):
-    """Control kernel modules importing platform packages from src/ (target: shared package only, todo K-03)."""
-    packages = {path.name for path in (ROOT / "src").iterdir() if (path / "__init__.py").is_file()}
+    """Control kernel modules importing platform packages from src/; only L0 embodied_contracts is allowed (todo K-03)."""
+    packages = {path.name for path in (ROOT / "src").iterdir() if (path / "__init__.py").is_file()} - {"embodied_contracts"}
     found = set()
     for relative, path in files:
         if not relative.startswith("control/") or path.suffix != ".py":

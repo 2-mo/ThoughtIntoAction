@@ -20,14 +20,7 @@
     "src/quest_teleop/experimental/arx2025.py",
     "src/quest_teleop/legacy/controller.py"
   ],
-  "control_imports_src": [
-    "control/adapters/commands.py:operations",
-    "control/adapters/gateway.py:component_api",
-    "control/arx5_vr/app.py:component_api",
-    "control/arx5_vr/worker.py:component_api",
-    "control/scripts/check_native_components.py:component_api",
-    "control/scripts/check_workbench_teleop.py:runtime_client"
-  ],
+  "control_imports_src": [],
   "home_path": [
     "apps/console/src/features/collection/runtime.ts",
     "apps/console/src/features/collection/shell.html",

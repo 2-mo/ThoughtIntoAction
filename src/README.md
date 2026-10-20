@@ -4,6 +4,7 @@
 
 ```text
 src/
+├── embodied_contracts/     L0 契约：注册表、RPC、内核客户端、设备锁、运动 profile；控制内核只可导入此包
 ├── robot_core/             共享基础
 │   ├── project.py          标准库实现的根路径、配置读取与路径解析
 │   ├── plugins.py          显式插件注册表、延迟加载和设备类型检查
@@ -11,7 +12,6 @@ src/
 │   ├── model.py            当前 URDF、FK/IK、关节限位、模型元数据
 │   ├── transforms.py       坐标变换与姿态计算
 │   ├── camera.py           单 D435i RGB 流、内参与时间戳
-│   ├── device_lease.py     CAN/本机会话的共享所有权锁
 │   └── storage.py          原子 JSON 写入
 ├── robot_control/          与 Quest 无关的机械臂控制
 │   ├── service.py          独立设备所有权、指令仲裁、待机反馈与状态发布

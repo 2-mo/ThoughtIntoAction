@@ -10,7 +10,7 @@ import time
 from robot_core.model import RobotModel
 from robot_core.project import PROJECT_ROOT, LOG_DIR, load_config
 from robot_core.telemetry import SCHEMA
-from runtime_client import RuntimeReader
+from embodied_contracts.runtime import RuntimeReader
 from .scene import Scene
 
 STANDBY = '待机：松开全部按键后可操作 · 右手 A 长按切换模式，Grip 跟随'
@@ -113,7 +113,7 @@ class Simulation:
                     'simulation': self.status()}
 
     def run(self):
-        from runtime_client.control import ControlSession
+        from embodied_contracts.runtime.control import ControlSession
         process = reader = None
         try:
             LOG_DIR.mkdir(parents=True, exist_ok=True)

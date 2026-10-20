@@ -368,7 +368,7 @@ class _InterfaceLock:
 
     def acquire(self) -> None:
         if self._lease is None:
-            from robot_core.device_lease import DeviceLease
+            from embodied_contracts.device_lease import DeviceLease
             try:
                 self._lease = DeviceLease(self.interface)
             except RuntimeError as exc:

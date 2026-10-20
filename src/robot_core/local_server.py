@@ -8,7 +8,7 @@ import socketserver
 import stat
 import threading
 
-from robot_core.device_lease import DeviceLease
+from embodied_contracts.device_lease import DeviceLease
 
 from robot_core.session_protocol import MAX_REQUEST
 

@@ -1,6 +1,6 @@
 """Workbench source lifecycles. CLI leaves authority available to motion tools."""
 import time
-from runtime_client.control import ControlSession
+from embodied_contracts.runtime.control import ControlSession
 
 
 class IdleSource:

@@ -11,7 +11,7 @@ from robot_teleop.core.mapping import PoseMapping, AxisMapping, MappingOutputFra
 from robot_teleop.core.models import Pose, Quaternion, Vector3, RobotState, TrackingQuality
 from robot_teleop.policies.relative_pose import RelativePosePolicy
 from robot_teleop.transports.udp import UdpTransport, UdpTransportConfig
-from runtime_client.control import ControlClient, ControlSession
+from embodied_contracts.runtime.control import ControlClient, ControlSession
 
 
 class PhoneInput(ArkitInputSource):
@@ -37,7 +37,7 @@ def phone_base():
 
 class PhoneController:
     def __init__(self, directory, bind_host='127.0.0.1', port=5005, mapping='phone_tool', ghost=False):
-        from component_api.registry import Registry
+        from embodied_contracts.registry import Registry
         registry = Registry()
         self.mapping = registry.create('mapping', mapping)
         self.policy = RelativePosePolicy(self.mapping, mapping_provider=lambda: self.mapping)
@@ -187,7 +187,7 @@ def main(argv=None):
     parser.add_argument('--ghost', action='store_true')
     parser.add_argument('--duration', type=float, default=0)
     args = parser.parse_args(argv)
-    from component_api.registry import Registry
+    from embodied_contracts.registry import Registry
     controller = Registry().create('source', 'phone.arkit', directory=args.run,
         bind_host=args.bind_host, port=args.port, mapping=args.mapping, ghost=args.ghost)
     try:

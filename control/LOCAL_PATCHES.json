@@ -1,8 +1,8 @@
 {
   "arx5_vr/app.py": {
     "upstream_sha256": "373649b5156fba6fc1fca16088cefdea858c7ba3e0159507e6bb192c4fab0c53",
-    "sha256": "9086e7f5c31d19a22b4c0a11cf5937b3f797b2680b9a2fc162e93af482e1b2c5",
-    "reason": "Explicit device/routing/ingress composition and dependency heartbeat; independent failed components withdraw only dependent ownership; native unmanaged baseline preserved. Workbench routing prints its actual button bindings (right controller upstream, left controller collection)."
+    "sha256": "bc5699f8faf2800d5d5d78df43d83387ee0870d898f9928f5a2bbc32f10e7edf",
+    "reason": "Explicit device/routing/ingress composition and dependency heartbeat; independent failed components withdraw only dependent ownership; native unmanaged baseline preserved. Workbench routing prints its actual button bindings (right controller upstream, left controller collection). Shared contracts come from src/embodied_contracts (or the portable shared/ copy)."
   },
   "arx5_vr/runtime.py": {
     "upstream_sha256": "86c7bc2b98ac74f011bb61ef5081770de6342e976f0640e090cb288bd1efc95b",
@@ -11,8 +11,8 @@
   },
   "arx5_vr/worker.py": {
     "upstream_sha256": "f2114216d81d8eaa24f895a8d328cec73dba2674260c46a7e0ff1409d1ed8554",
-    "sha256": "871bed328577db52baf3a779ccae3159d908c2cfc4cc324bbbd9ce91577f174f",
-    "reason": "Managed gateway consumes registered ingresses without device names; optional controller injection, telemetry and shared CAN lease; native unmanaged baseline preserved."
+    "sha256": "737cc4007d85f04373477fb77211e49ebbd48165ac0aecb51cae37be398720f9",
+    "reason": "Managed gateway consumes registered ingresses without device names; optional controller injection, telemetry and shared CAN lease; native unmanaged baseline preserved. Shared contracts come from src/embodied_contracts (or the portable shared/ copy)."
   },
   "arx5_vr/real.py": {
     "upstream_sha256": "1a17549508ab4cfb2368a245ace8f4aa1d5cf224ff18d7e0a63f4c3f8048af89",
@@ -26,8 +26,8 @@
   },
   "arx5_vr/recording.py": {
     "upstream_sha256": "362d90330125b1b5ed36d4eb5f13aafba421f191d3d2ae36df9b33f7e75b875f",
-    "sha256": "83e0057e5c3c8edf4186026bbd6198479bfe2d42781f35e1b9919d0d0fcec522",
-    "reason": "Fingerprint integration and shared sources; optional controller-specific IK diagnostics do not couple injected target controllers to arx internals."
+    "sha256": "823eec10743546f524bb56efb4508f4d8fc8fdc0e9d5cac48f68666850142e92",
+    "reason": "Fingerprint integration and shared sources; optional controller-specific IK diagnostics do not couple injected target controllers to arx internals. Shared contracts come from src/embodied_contracts (or the portable shared/ copy)."
   },
   "pyproject.toml": {
     "upstream_sha256": "2f23fb2a1fa8539682c94d1f92cb3dd5d7ed0a1baa873e85eac12d21d2ca92eb",
@@ -41,8 +41,8 @@
   },
   "scripts/package_release.py": {
     "upstream_sha256": "725219ecacc2dc0c79f3eb67897b3f8c8afd851c7966ba28ba271dfe5d23ef41",
-    "sha256": "9dc034d70d489c552c50ef08e6d8b2a053b660dc94aef32b453b0b5f42b4c23c",
-    "reason": "Include integration adapters, shared pure Python contracts/motion math, SDK source and provenance in portable packages."
+    "sha256": "0bba3205fb8ca8a47aedd6a853806a7e92270f4b17f94cbab9785fcb5d9f40eb",
+    "reason": "Include integration adapters, shared pure Python contracts/motion math, SDK source and provenance in portable packages. Shared contracts come from src/embodied_contracts (or the portable shared/ copy)."
   },
   "scripts/self_test.py": {
     "upstream_sha256": "86848cb1cfb3b2502b83bcf489766c0e5866e4478d188afc4c6ef040f841ceae",

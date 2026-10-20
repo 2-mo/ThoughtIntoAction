@@ -33,10 +33,10 @@
 ./run.sh components run ui.build
 ```
 
-`components list` 同时列出插件与可执行操作。工厂登记在 `configs/components/migrated.json`，命令/环境登记在 `configs/components/commands.json`。可执行参数原样传递，不通过 shell 拼接；列举不会加载硬件 SDK。插件创建仍通过 `component_api.Registry`，例如在 analysis 环境：
+`components list` 同时列出插件与可执行操作。工厂登记在 `configs/components/migrated.json`，命令/环境登记在 `configs/components/commands.json`。可执行参数原样传递，不通过 shell 拼接；列举不会加载硬件 SDK。插件创建仍通过 `embodied_contracts.registry.Registry`，例如在 analysis 环境：
 
 ```python
-from component_api.registry import Registry
+from embodied_contracts.registry import Registry
 planner = Registry().create("trajectory", "ruckig", runtime="analysis")
 # 使用 planner.plan_ruckig_joint_trajectory(...)，显式提供模型限制和起始状态。
 ```
