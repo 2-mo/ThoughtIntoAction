@@ -5,13 +5,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .core.settings import BackendSettings
-from .features import feature_catalog
-from .runtime import ControlRuntime
-from .transport.collection import create_collection_router
-from .transport.control import create_control_router
-from .transport.frontend import SPAStaticFiles, create_ca_router
-from .transport.system import create_system_router
+from arx5_backend.core.settings import BackendSettings
+from arx5_backend.features import feature_catalog
+from arx5_backend.runtime import ControlRuntime
+from arx5_backend.transport.collection import create_collection_router
+from arx5_backend.transport.control import create_control_router
+from arx5_backend.transport.frontend import SPAStaticFiles, create_ca_router
+from arx5_backend.transport.system import create_system_router
 
 
 def create_app(settings: BackendSettings | None = None) -> FastAPI:

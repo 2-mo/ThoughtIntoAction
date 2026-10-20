@@ -7,7 +7,7 @@ import sys
 from robot_core.project import PROJECT_ROOT, load_config, resolve_path
 from robot_core.session_protocol import request
 from embodied_contracts.device_lease import DeviceLease
-from .mode import MODES, selected_mode
+from robot_simulation.mode import MODES, selected_mode
 
 
 def socket_path():

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .schema import CameraIntrinsics
+from hand_eye_calibration.core.schema import CameraIntrinsics
 
 
 def normalize_image_points(

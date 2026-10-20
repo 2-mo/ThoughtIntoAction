@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .schema import CameraIntrinsics, EyeToHandSample
+from hand_eye_calibration.core.schema import CameraIntrinsics, EyeToHandSample
 
 
 class CalibrationSession:

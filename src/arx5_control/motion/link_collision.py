@@ -10,8 +10,8 @@ from typing import Sequence
 
 import numpy as np
 
-from .collision import AabbObstacle, PrimitiveObstacle, SphereObstacle
-from .pinocchio_backend import PinocchioKinematics
+from arx5_control.motion.collision import AabbObstacle, PrimitiveObstacle, SphereObstacle
+from arx5_control.motion.pinocchio_backend import PinocchioKinematics
 
 
 @dataclass(frozen=True)

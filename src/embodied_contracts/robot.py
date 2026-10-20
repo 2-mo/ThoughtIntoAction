@@ -8,7 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from .registry import PROJECT_ROOT
+from embodied_contracts.registry import PROJECT_ROOT
 
 CONFIG = PROJECT_ROOT / 'control/config'
 

@@ -37,8 +37,8 @@ from robot_teleop.protocol.packet import (
 from robot_teleop.registry import ApplicationBundle, create_application
 from robot_teleop.transports.udp import UdpTransport
 
-from ._common import print_report, validate_positive
-from .phase3_mock_session import PHASE3_METRICS_SAMPLE_CAPACITY
+from robot_teleop.tools._common import print_report, validate_positive
+from robot_teleop.tools.phase3_mock_session import PHASE3_METRICS_SAMPLE_CAPACITY
 
 ROOT = Path(__file__).resolve().parents[3]
 IDENTITY = Quaternion(0.0, 0.0, 0.0, 1.0)

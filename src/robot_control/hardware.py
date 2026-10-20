@@ -11,7 +11,7 @@ import numpy as np
 
 from embodied_contracts.device_lease import DeviceLease
 from robot_core.project import X5_2025_URDF
-from .trajectory import bounded_joint_target, validate_motion_limits
+from robot_control.trajectory import bounded_joint_target, validate_motion_limits
 
 DEFAULT_X5_URDF_PATH = str(X5_2025_URDF)
 
@@ -151,7 +151,7 @@ class OfficialX5HardwareAdapter:
             self.close()
             raise
 
-        from .motor_feedback import MotorFeedback
+        from robot_control.motor_feedback import MotorFeedback
         self._motor_feedback = MotorFeedback(can_port, self.robot_config.motor_id,
             [t.name for t in self.robot_config.motor_type], self.robot_config.gripper_motor_id,
             self.robot_config.gripper_motor_type.name)

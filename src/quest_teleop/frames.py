@@ -3,7 +3,7 @@ import math
 import numpy as np
 import meshcat.transformations as tf
 
-from .target_limits import rotvec
+from quest_teleop.target_limits import rotvec
 
 
 # Quest local forward -Z, right +X, up +Y -> X5 link6 forward +X,

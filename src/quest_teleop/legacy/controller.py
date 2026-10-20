@@ -20,7 +20,7 @@ from quest_teleop.base_controller import (
 )
 from xrobotoolkit_teleop.utils.geometry import apply_delta_pose
 
-from .telemetry import TelemetryCSVLogger, add_vector
+from quest_teleop.legacy.telemetry import TelemetryCSVLogger, add_vector
 
 
 DEFAULT_X5_URDF_PATH = str(Path(arx5.__file__).resolve().parent / "models/X5.urdf")

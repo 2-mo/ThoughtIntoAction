@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 
 from robot_teleop.core.models import Pose
 
-from .models import IKResult, IKSolverConfig, OfflineKinematics
+from robot_teleop.kinematics.models import IKResult, IKSolverConfig, OfflineKinematics
 
 
 @dataclass(frozen=True, slots=True)

@@ -21,7 +21,7 @@ from hand_eye_calibration.core.schema import CameraIntrinsics
 from hand_eye_calibration.core.transforms import invert_transform, validate_transform
 from arx_tools.rgb_cube_detector import RgbCubeDetector
 
-from .config import ExperimentConfig, PerceptionConfig, TableConfig
+from experiments.cube_pick_rotate_place.config import ExperimentConfig, PerceptionConfig, TableConfig
 
 
 @dataclass(frozen=True)

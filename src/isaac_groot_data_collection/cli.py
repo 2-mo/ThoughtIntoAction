@@ -8,10 +8,10 @@ from pathlib import Path
 
 from arx5_paths import DATASETS_ROOT
 
-from .config import load_collection_config
-from .exporter import export_dataset, find_groot_root, validate_with_groot
-from .raw_episode import BATCHED_RAW_ROOT, RawEpisodeStore
-from .validator import validate_exported_dataset, validate_raw_episode
+from isaac_groot_data_collection.config import load_collection_config
+from isaac_groot_data_collection.exporter import export_dataset, find_groot_root, validate_with_groot
+from isaac_groot_data_collection.raw_episode import BATCHED_RAW_ROOT, RawEpisodeStore
+from isaac_groot_data_collection.validator import validate_exported_dataset, validate_raw_episode
 
 
 def _print(payload: object) -> None:

@@ -51,26 +51,26 @@ from typing import Optional
 
 import numpy as np
 
-from ..dynamics import compute_generalized_gravity
-from ..kinematics import (
+from reBotArm_control_py.dynamics import compute_generalized_gravity
+from reBotArm_control_py.kinematics import (
     compute_fk,
     pos_rot_to_se3,
     get_end_effector_frame_id,
     load_robot_model,
     pad_q_for_model,
 )
-from ..kinematics.inverse_kinematics import (
+from reBotArm_control_py.kinematics.inverse_kinematics import (
     solve_ik,
     IKParams as TrajIKParams,
 )
-from ..trajectory import (
+from reBotArm_control_py.trajectory import (
     TrajProfile,
     TrajPlanParams,
     IKParams as ClikIKParams,
     plan_cartesian_geodesic_trajectory,
     track_trajectory,
 )
-from ..actuator import RebotArm
+from reBotArm_control_py.actuator import RebotArm
 
 
 class RebotArmEndPose:

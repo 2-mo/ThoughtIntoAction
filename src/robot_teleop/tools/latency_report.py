@@ -9,7 +9,7 @@ import math
 from collections.abc import Sequence
 from pathlib import Path
 
-from ._common import distribution_with_count, print_report
+from robot_teleop.tools._common import distribution_with_count, print_report
 
 
 def _samples(value: object, field: str) -> list[float]:

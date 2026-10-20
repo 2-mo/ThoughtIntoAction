@@ -22,12 +22,12 @@ from arx5_control import CartesianPathSegment, Pose
 from arx5_control.cartesian import normalize_quaternion_xyzw
 from hand_eye_calibration.core.transforms import quaternion_xyzw_from_matrix, rpy_to_matrix
 
-from .config import ExperimentConfig, MotionConfig
+from experiments.cube_pick_rotate_place.config import ExperimentConfig, MotionConfig
 
 if TYPE_CHECKING:
     # Perception pulls in OpenCV. Keeping it behind TYPE_CHECKING lets the
     # control-only .venv import this planner without a vision stack.
-    from .perception import CubeObservation
+    from experiments.cube_pick_rotate_place.perception import CubeObservation
 
 
 # Oblique side-grasp profiles as (downward tilt deg, jaw-axis roll deg). A

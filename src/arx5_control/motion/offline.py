@@ -8,9 +8,9 @@ import math
 import numpy as np
 import ruckig
 
-from .interpolation import resample_quintic_hermite
-from .limits import analyze_sampled_motion
-from .profiles import TrajectorySample
+from arx5_control.motion.interpolation import resample_quintic_hermite
+from arx5_control.motion.limits import analyze_sampled_motion
+from arx5_control.motion.profiles import TrajectorySample
 
 
 # Long low-speed moves otherwise create tens of thousands of waypoints. The SDK

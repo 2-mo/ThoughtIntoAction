@@ -10,9 +10,9 @@ import tyro
 
 from robot_core.project import LOG_DIR
 from robot_core.project import X5_2025_URDF
-from .base_controller import DEFAULT_X5_MANIPULATOR_CONFIG
-from .controller import X5TeleopController
-from .presets import DEFAULT_HOME_JOINTS, DEFAULT_GRASP_READY_JOINTS, PresetSingleX5Controller
+from quest_teleop.base_controller import DEFAULT_X5_MANIPULATOR_CONFIG
+from quest_teleop.controller import X5TeleopController
+from quest_teleop.presets import DEFAULT_HOME_JOINTS, DEFAULT_GRASP_READY_JOINTS, PresetSingleX5Controller
 
 
 def baseline_main(

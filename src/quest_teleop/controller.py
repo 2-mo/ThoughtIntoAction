@@ -8,9 +8,9 @@ from copy import deepcopy
 from robot_core.project import X5_2025_URDF
 from robot_core.plugins import Registry
 
-from .base_controller import X5TeleopBase
-from .arming import DownHoldGate
-from .frames import R_CONTROLLER_TO_TOOL, R_CONTROLLER_TO_DOWN_TOOL
+from quest_teleop.base_controller import X5TeleopBase
+from quest_teleop.arming import DownHoldGate
+from quest_teleop.frames import R_CONTROLLER_TO_TOOL, R_CONTROLLER_TO_DOWN_TOOL
 
 
 class X5TeleopController(X5TeleopBase):
@@ -300,7 +300,7 @@ class X5TeleopController(X5TeleopBase):
             now = time.monotonic_ns()
             previous = getattr(self, "_monitor_input", None)
             if previous is None or now - previous["sample_monotonic_ns"] >= 100_000_000:
-                from .inputs import controller_snapshot
+                from quest_teleop.inputs import controller_snapshot
                 self._monitor_input = controller_snapshot(self.xr_client, now)
             packet["input"] = self._monitor_input
         # Read-only orientation comparison: use the actual Cartesian IK task,
@@ -343,7 +343,7 @@ class X5TeleopController(X5TeleopBase):
                 for field in ("ref_ee_xyz", "ref_ee_quat", "ref_controller_xyz", "ref_controller_quat"):
                     getattr(self, field)[name] = None
             if not paused:
-                from .inputs import InputFreshness
+                from quest_teleop.inputs import InputFreshness
                 self._input_freshness = InputFreshness(self.xr_client.get_timestamp_ns)
                 self._resume_pending = True
                 self._input_paused = False
@@ -351,7 +351,7 @@ class X5TeleopController(X5TeleopBase):
 
     def _resume_input_ready(self):
         """Wait for a new stream and released buttons before rebuilding anchors."""
-        from .inputs import InputFreshness
+        from quest_teleop.inputs import InputFreshness
         try:
             ready = self._input_freshness.ready()
         except RuntimeError:
@@ -375,7 +375,7 @@ class X5TeleopController(X5TeleopBase):
 
     def set_frame_calibration(self, rotation, session_id):
         """Apply a measured coordinate map only while the arm is in standby."""
-        from .frame_calibration import validate_rotation
+        from quest_teleop.frame_calibration import validate_rotation
         basis = validate_rotation(rotation).tolist()
         with self._state_lock:
             if self.rotation_frame not in {"base", "calibrated"}:
@@ -391,8 +391,8 @@ class X5TeleopController(X5TeleopBase):
                 if arm.info.get("mode") == "stopping":
                     raise RuntimeError("请等待机械臂停稳再标定")
             if self.rotation_frame == "base":
-                from .inputs import controller_snapshot
-                from .frame_calibration import validate_standby_status
+                from quest_teleop.inputs import controller_snapshot
+                from quest_teleop.frame_calibration import validate_standby_status
                 validate_standby_status({"session_id": session_id, "state_age_s": 0.,
                     "recording": None, "state": {"control_enabled": False,
                     "input": controller_snapshot(self.xr_client, time.monotonic_ns())}})

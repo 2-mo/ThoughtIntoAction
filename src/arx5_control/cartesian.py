@@ -14,19 +14,19 @@ from typing import Sequence
 import arx5_interface as arx5
 import numpy as np
 
-from .motion.jacobian import (
+from arx5_control.motion.jacobian import (
     JacobianDiagnostics,
     numerical_jacobian,
     singularity_speed_scale,
 )
-from .motion.link_collision import (
+from arx5_control.motion.link_collision import (
     LinkCapsule,
     LinkCollisionCheck,
     PinocchioCollisionModel,
     default_x5_capsules,
 )
-from .motion.pinocchio_backend import PinocchioKinematics
-from .motion.collision import (
+from arx5_control.motion.pinocchio_backend import PinocchioKinematics
+from arx5_control.motion.collision import (
     CollisionCheck,
     PrimitiveObstacle,
     check_tcp_path,

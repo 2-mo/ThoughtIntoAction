@@ -20,7 +20,7 @@ from robot_teleop.kinematics.models import (
     OfflineKinematics,
 )
 
-from .ruckig_servo import (
+from robot_teleop.controllers.ruckig_servo import (
     JointServoState,
     JointServoStep,
     RuckigJointServo,

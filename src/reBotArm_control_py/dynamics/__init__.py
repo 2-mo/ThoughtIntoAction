@@ -1,6 +1,6 @@
 """Dynamics 动力学库 — 基于 Pinocchio 的刚体动力学参数解算。"""
 
-from .robot_model import (
+from reBotArm_control_py.dynamics.robot_model import (
     load_dynamics_model,
     get_default_gravity,
     set_gravity,
@@ -8,34 +8,34 @@ from .robot_model import (
     neutral_configuration,
     random_configuration,
 )
-from .inertia import (
+from reBotArm_control_py.dynamics.inertia import (
     compute_mass_matrix,
     compute_coriolis_matrix,
     compute_gravity_vector,
     compute_nle,
     compute_all_terms,
 )
-from .forward_dynamics import (
+from reBotArm_control_py.dynamics.forward_dynamics import (
     compute_forward_dynamics,
     forward_dynamics_from_nle,
 )
-from .inverse_dynamics import (
+from reBotArm_control_py.dynamics.inverse_dynamics import (
     compute_inverse_dynamics,
     compute_generalized_gravity,
     compute_static_torque,
 )
-from .derivatives import (
+from reBotArm_control_py.dynamics.derivatives import (
     compute_mass_matrix_derivatives,
     compute_coriolis_derivatives,
     compute_rnea_derivatives,
     compute_generalized_gravity_derivatives,
 )
-from .energy import (
+from reBotArm_control_py.dynamics.energy import (
     compute_kinetic_energy,
     compute_potential_energy,
     compute_total_energy,
 )
-from .centroidal import (
+from reBotArm_control_py.dynamics.centroidal import (
     compute_center_of_mass,
     compute_com_velocity,
     compute_centroidal_matrix,

@@ -38,11 +38,11 @@ from experiments.cube_pick_rotate_place.planner import (
     validate_initial_pose,
 )
 
-from .config import load_collection_config
-from .home import load_collection_home, load_training_start
-from .raw_episode import RawEpisodeStore
-from .recording import ArmStateRecorder
-from .validator import validate_raw_episode
+from isaac_groot_data_collection.config import load_collection_config
+from isaac_groot_data_collection.home import load_collection_home, load_training_start
+from isaac_groot_data_collection.raw_episode import RawEpisodeStore
+from isaac_groot_data_collection.recording import ArmStateRecorder
+from isaac_groot_data_collection.validator import validate_raw_episode
 
 
 CAMERA_URL = "ws://127.0.0.1:8768/api/v1/cameras/collection"

@@ -11,7 +11,7 @@ from robot_core.model import RobotModel
 from robot_core.project import PROJECT_ROOT, LOG_DIR, load_config
 from robot_core.telemetry import SCHEMA
 from embodied_contracts.runtime import RuntimeReader
-from .scene import Scene
+from robot_simulation.scene import Scene
 
 STANDBY = '待机：松开全部按键后可操作 · 右手 A 长按切换模式，Grip 跟随'
 
@@ -41,7 +41,7 @@ class Simulation:
         self.closed = threading.Event()
         self.active = False
         self.revision = 0
-        from .session import SimulationSession
+        from robot_simulation.session import SimulationSession
         self.actions = SimulationSession(self)
         self.directory = None
         self.session = None
@@ -211,7 +211,7 @@ class Simulation:
 
 
 def main(argv=None):
-    from .cli import main as viewer_main
+    from robot_simulation.cli import main as viewer_main
     viewer_main(['--mode', 'simulation', *(argv or [])])
 
 

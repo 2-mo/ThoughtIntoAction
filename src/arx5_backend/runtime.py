@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from .kernel.control import (
+from arx5_backend.kernel.control import (
     ControlKernel,
     TELEOPERATION_CONFIG_PATH,
     load_teleoperation_config,
 )
 
-from .core.settings import BackendSettings
-from .protocol import CommandCatalog
+from arx5_backend.core.settings import BackendSettings
+from arx5_backend.protocol import CommandCatalog
 
 
 class ControlRuntime:

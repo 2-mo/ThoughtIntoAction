@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from .capabilities import InputCapabilities, RobotCapabilities
-from .models import RobotCommand, RobotState, RobotTarget, TeleopInput
+from robot_teleop.core.capabilities import InputCapabilities, RobotCapabilities
+from robot_teleop.core.models import RobotCommand, RobotState, RobotTarget, TeleopInput
 
 
 class Transport(Protocol):

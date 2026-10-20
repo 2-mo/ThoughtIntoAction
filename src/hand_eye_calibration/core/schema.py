@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from .transforms import validate_transform
+from hand_eye_calibration.core.transforms import validate_transform
 
 
 @dataclass(frozen=True)

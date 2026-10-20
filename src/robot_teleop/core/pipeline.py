@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from .capabilities import InputCapabilities
-from .filtering import IdentityTargetFilter
-from .models import (
+from robot_teleop.core.capabilities import InputCapabilities
+from robot_teleop.core.filtering import IdentityTargetFilter
+from robot_teleop.core.models import (
     RobotState,
     RobotTarget,
     TeleopInput,
@@ -15,10 +15,10 @@ from .models import (
     joint_zero_target,
     stop_target,
 )
-from .ports import CompliancePolicy, ControlPolicy, TargetFilter
-from .safety import TargetSafetyGate, TargetSafetyLimits
-from .session import SessionAction, TeleopSession
-from .state_machine import TeleopEvent, TeleopState, TeleopStateMachine
+from robot_teleop.core.ports import CompliancePolicy, ControlPolicy, TargetFilter
+from robot_teleop.core.safety import TargetSafetyGate, TargetSafetyLimits
+from robot_teleop.core.session import SessionAction, TeleopSession
+from robot_teleop.core.state_machine import TeleopEvent, TeleopState, TeleopStateMachine
 
 
 class TeleopPipeline:

@@ -23,7 +23,7 @@ def stanford(*, settings, initial_q=None):
 
 def simulated(*, settings, initial_q=None):
     from robot_core.model import RobotModel
-    from .simulated import SimulatedX5
+    from robot_control.backends.simulated import SimulatedX5
     return SimulatedX5(
         RobotModel(settings["dynamics_urdf_path"]), initial_q=initial_q,
         gripper_width=settings["gripper_width"], control_rate_hz=settings["control_rate_hz"],
@@ -37,5 +37,5 @@ def arx2025(*, settings, initial_q=None):
         raise ValueError("Official ARX position actuation remains disabled; see docs/setup.md")
     if initial_q is not None:
         raise ValueError("initial_q is only available for simulation")
-    from .arx2025 import ARXX52025HardwareAdapter
+    from robot_control.backends.arx2025 import ARXX52025HardwareAdapter
     return ARXX52025HardwareAdapter(**settings)

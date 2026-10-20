@@ -84,7 +84,7 @@ def load_episode(path, max_gap_s=.1):
 
 
 def prepare_schema1_camera_episode(path):
-    from .multirate import camera_rows
+    from quest_teleop.multirate import camera_rows
     meta, states, frames, _ = load_episode(path)
     if meta['camera']['fps'] != 30:
         raise ValueError('Expected original camera FPS 30')
@@ -150,8 +150,8 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
     from tqdm import tqdm
     from dataset_tools.exporters import for_episode
     from lerobot.common.datasets.lerobot_dataset import LeRobotDataset, CODEBASE_VERSION
-    from .export_video import StreamingVideoWriter, MultiVideoWriter
-    from .export_decode import BatchFrameReader
+    from quest_teleop.export_video import StreamingVideoWriter, MultiVideoWriter
+    from quest_teleop.export_decode import BatchFrameReader
     if CODEBASE_VERSION != 'v2.1':
         raise RuntimeError('Use the pinned export environment; this OpenPI adapter requires LeRobot v2.1')
     source, output = Path(source).resolve(), Path(output).resolve()

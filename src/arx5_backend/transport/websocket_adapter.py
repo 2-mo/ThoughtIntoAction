@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 
-from ..protocol import CommandCatalog, CommandRequest, StreamRequest
+from arx5_backend.protocol import CommandCatalog, CommandRequest, StreamRequest
 
 
 EVENT_NAMES = {

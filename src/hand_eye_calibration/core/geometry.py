@@ -12,9 +12,9 @@ from typing import Any
 
 import numpy as np
 
-from .projection import normalize_image_points
-from .schema import CameraIntrinsics
-from .transforms import validate_transform
+from hand_eye_calibration.core.projection import normalize_image_points
+from hand_eye_calibration.core.schema import CameraIntrinsics
+from hand_eye_calibration.core.transforms import validate_transform
 
 
 @dataclass(frozen=True)

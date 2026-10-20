@@ -16,8 +16,8 @@ import time
 import uuid
 
 import numpy as np
-from .online_motion import OnlineMotion, DEFAULTS as TRAJECTORY_DEFAULTS
-from .startup import WAITING_FOR_ARM, waiting_for_arm
+from robot_control.online_motion import OnlineMotion, DEFAULTS as TRAJECTORY_DEFAULTS
+from robot_control.startup import WAITING_FOR_ARM, waiting_for_arm
 
 from embodied_contracts.device_lease import DeviceLease
 from robot_core.model import RobotModel
@@ -286,7 +286,7 @@ class ArmService:
             if not isinstance(overrides, dict) or set(overrides) - set(keys):
                 raise ValueError("Invalid motion settings")
             motion = {key: overrides.get(key, self.settings.get(key)) for key in keys}
-            from .trajectory import validate_motion_limits
+            from robot_control.trajectory import validate_motion_limits
             validate_motion_limits(speed, motion["max_command_lead_rad"], motion["preview_time_s"], motion["joint_soft_limit_margin_rad"])
             for key in TRAJECTORY_DEFAULTS:
                 if type(motion[key]) not in (int, float) or not math.isfinite(motion[key]) or motion[key] < 0 or (motion[key] == 0 and key not in {"preset_speed_rad_s", "home_final_speed_rad_s"}):
@@ -482,7 +482,7 @@ def main(argv=None):
         if result.returncode:
             parser.exit(1, "CAN 接口准备失败，机械臂服务未启动。请检查 USB-CAN 连接及 sudo 权限。\n")
     if args.interactive:
-        from .console import run_console
+        from robot_control.console import run_console
         return run_console(args, spec.hardware,
                            [*list(sys.argv[1:] if argv is None else argv), "--no-prepare-can"])
     robot = RobotModel(args.urdf)

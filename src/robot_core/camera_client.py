@@ -3,8 +3,8 @@ import base64
 import subprocess
 import time
 
-from .project import load_config, resolve_path, PROJECT_ROOT
-from .session_protocol import request
+from robot_core.project import load_config, resolve_path, PROJECT_ROOT
+from robot_core.session_protocol import request
 from embodied_contracts.device_lease import DeviceLease
 
 
@@ -79,7 +79,7 @@ class SharedCamera:
         while time.monotonic() < deadline:
             if self.metadata.get("zmq_frame_protocol") == 1:
                 if self.frames is None:
-                    from .camera_transport import FrameClient
+                    from robot_core.camera_transport import FrameClient
                     self.frames = FrameClient(socket_path())
                 frame, raw = self.frames.read(self.arguments.get("camera_id", "wrist_rgb"))
             else:

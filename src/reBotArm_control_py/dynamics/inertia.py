@@ -17,8 +17,8 @@ from typing import Optional
 import numpy as np
 import pinocchio as pin
 
-from .robot_model import load_dynamics_model, create_data
-from ..kinematics.robot_model import pad_q_for_model
+from reBotArm_control_py.dynamics.robot_model import load_dynamics_model, create_data
+from reBotArm_control_py.kinematics.robot_model import pad_q_for_model
 
 
 # --------------------------------------------------------------------------- #

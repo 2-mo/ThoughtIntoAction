@@ -5,9 +5,9 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, replace
 
-from .capabilities import InputCapabilities
-from .frames import quaternion_angular_distance, quaternion_slerp
-from .models import (
+from robot_teleop.core.capabilities import InputCapabilities
+from robot_teleop.core.frames import quaternion_angular_distance, quaternion_slerp
+from robot_teleop.core.models import (
     ControlMode,
     Pose,
     RobotState,

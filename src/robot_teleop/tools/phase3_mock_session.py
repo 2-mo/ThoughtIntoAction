@@ -11,7 +11,7 @@ from typing import cast
 from robot_teleop.config import load_profile
 from robot_teleop.registry import ApplicationBundle, create_application
 
-from ._common import print_report, validate_port
+from robot_teleop.tools._common import print_report, validate_port
 
 ROOT = Path(__file__).resolve().parents[3]
 PHASE3_METRICS_SAMPLE_CAPACITY = 131_072

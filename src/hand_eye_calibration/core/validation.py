@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .transforms import validate_transform
+from hand_eye_calibration.core.transforms import validate_transform
 
 
 @dataclass(frozen=True)

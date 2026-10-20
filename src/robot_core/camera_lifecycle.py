@@ -9,8 +9,8 @@ import struct
 import subprocess
 import sys
 
-from .camera_client import socket_path
-from .camera_control import check_legacy_session, recording_guard
+from robot_core.camera_client import socket_path
+from robot_core.camera_control import check_legacy_session, recording_guard
 from embodied_contracts.device_lease import DeviceLease
 
 

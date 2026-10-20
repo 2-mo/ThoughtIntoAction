@@ -21,7 +21,7 @@ def main(argv=None):
     parser.add_argument("--camera", action=argparse.BooleanOptionalAction, default=False, help="Ensure independent shared RGB service is running")
     parser.add_argument("--connections", action=argparse.BooleanOptionalAction, default=True, help="Read-only arm-service and USB RTT probes")
     parser.add_argument("--managed", action="store_true", help="Expose terminal start/stop control")
-    from .mode import MODES, selected_mode
+    from robot_simulation.mode import MODES, selected_mode
     parser.add_argument('--mode', choices=MODES, default=selected_mode())
     args = parser.parse_args(argv)
     address = endpoint(args.endpoint)
@@ -31,11 +31,11 @@ def main(argv=None):
     def interrupted(*_):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, interrupted)
-    from .connections import LegacyGripperFeedback
+    from robot_simulation.connections import LegacyGripperFeedback
     legacy_gripper = LegacyGripperFeedback(resolve_path(load_config()["arm_service"]["socket"]))
     subscriber = None
     control_server = None
-    from .arx_preview import Simulation
+    from robot_simulation.arx_preview import Simulation
     from robot_core.project import PROJECT_ROOT
     simulation = Simulation()
     simulation_model = None
@@ -62,7 +62,7 @@ def main(argv=None):
         select_mode(args.mode)
         if args.managed:
             from robot_core.local_server import LocalServer
-            from .control import socket_path
+            from robot_simulation.control import socket_path
             def dispatch(payload):
                 command = payload.get("command")
                 if command == "stop":
@@ -88,7 +88,7 @@ def main(argv=None):
                         "mode_protocol": 2, "simulation": simulation.status() if current_mode == 'simulation' else None}
             control_server = LocalServer(socket_path(), dispatch)
         if args.connections and hasattr(scene, "connection_probe"):
-            from .connections import ConnectionProbe
+            from robot_simulation.connections import ConnectionProbe
             scene.connection_probe = ConnectionProbe(resolve_path(load_config()["arm_service"]["socket"]))
         if args.camera:
             from robot_core.camera_client import ensure_service

@@ -11,9 +11,9 @@ import numpy as np
 
 from robot_core.model import DEFAULT_URDF, RobotModel
 from robot_core.storage import save_json
-from .motion import execute_plan, make_plan, validate_plan
-from .solver import solve
-from .target import MarkerDetector, marker_svg, target_spec
+from handeye_calibration.motion import execute_plan, make_plan, validate_plan
+from handeye_calibration.solver import solve
+from handeye_calibration.target import MarkerDetector, marker_svg, target_spec
 
 
 def read_json(path):
@@ -25,7 +25,7 @@ def capture(args, robot, plan=None):
     import cv2
     from robot_core.project import load_config
     from robot_core.plugins import Registry
-    from .session import Session
+    from handeye_calibration.session import Session
     config = load_config()
     spec = target_spec(args.marker_size_m, args.marker_id)
     if not config["cameras"]["wrist_rgb"]["enabled"]:

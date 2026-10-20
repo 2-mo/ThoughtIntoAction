@@ -28,7 +28,7 @@ class ArmClient:
         self.info = self._rpc("describe")
         if self.info.get("trajectory_protocol") != 1:
             raise RuntimeError("机械臂服务版本较旧，请退出遥操并重启 启动机械臂服务.sh，再启动遥操")
-        from .online_motion import DEFAULTS
+        from robot_control.online_motion import DEFAULTS
         missing = (set(self.motion) & set(DEFAULTS)) - set(self.info.get("effective_motion_limits", {}))
         if missing:
             raise RuntimeError("机械臂服务版本较旧，不支持参数 " + ", ".join(sorted(missing))

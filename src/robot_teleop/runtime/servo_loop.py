@@ -13,10 +13,10 @@ from robot_teleop.core.pipeline import TeleopPipeline
 from robot_teleop.core.ports import Controller, RobotBackend
 from robot_teleop.core.state_machine import TeleopState
 
-from .debug_dashboard import DebugTelemetry
-from .latest_value import LatestValue
-from .metrics import CycleTiming, RuntimeMetrics
-from .watchdog import Watchdog, WatchdogStage
+from robot_teleop.runtime.debug_dashboard import DebugTelemetry
+from robot_teleop.runtime.latest_value import LatestValue
+from robot_teleop.runtime.metrics import CycleTiming, RuntimeMetrics
+from robot_teleop.runtime.watchdog import Watchdog, WatchdogStage
 
 
 @dataclass(frozen=True, slots=True)

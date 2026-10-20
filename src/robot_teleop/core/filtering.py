@@ -1,6 +1,6 @@
 """Single target-filter extension point; Phase 0 defaults to disabled."""
 
-from .models import RobotState, RobotTarget
+from robot_teleop.core.models import RobotState, RobotTarget
 
 
 class IdentityTargetFilter:

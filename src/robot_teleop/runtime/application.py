@@ -13,12 +13,12 @@ from robot_teleop.core.ports import RobotBackend
 from robot_teleop.core.state_machine import TeleopState
 from robot_teleop.protocol.packet import EStopResetRequestPacket
 
-from .debug_dashboard import DebugDashboardServer, DebugTelemetry
-from .estop_reset import EStopResetGate
-from .latest_value import LatestValue
-from .metrics import MetricsWorker
-from .receiver import InputReceiver
-from .servo_loop import ServoLoop
+from robot_teleop.runtime.debug_dashboard import DebugDashboardServer, DebugTelemetry
+from robot_teleop.runtime.estop_reset import EStopResetGate
+from robot_teleop.runtime.latest_value import LatestValue
+from robot_teleop.runtime.metrics import MetricsWorker
+from robot_teleop.runtime.receiver import InputReceiver
+from robot_teleop.runtime.servo_loop import ServoLoop
 
 
 class TeleopApplication:

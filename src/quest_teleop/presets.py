@@ -2,14 +2,14 @@
 
 from inputs.gestures import Press, StickAction
 
-from .collection import EpisodeActions
+from quest_teleop.collection import EpisodeActions
 
 import threading
 import time
 
 import numpy as np
 
-from .controller import X5TeleopController
+from quest_teleop.controller import X5TeleopController
 
 
 from robot_core.presets import DEFAULT_HOME_JOINTS, DEFAULT_GRASP_READY_JOINTS
@@ -167,7 +167,7 @@ class PresetSingleX5Controller(X5TeleopController):
             try:
                 if self._session is None: raise ValueError("采集会话未启用")
                 episode = self._session.load_previous_episode()
-                from .replay import RobotReplay
+                from quest_teleop.replay import RobotReplay
                 with self._state_lock:
                     if generation != self._replay_generation or self._replay_closed: return
                     if not self._control_enabled or self._collection.recording: return

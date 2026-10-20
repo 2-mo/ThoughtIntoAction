@@ -9,7 +9,7 @@ import time
 import uuid
 
 from robot_core.storage import save_json
-from .cameras import camera_metadata
+from episode_io.cameras import camera_metadata
 
 
 class EpisodeWriter:
@@ -18,7 +18,7 @@ class EpisodeWriter:
             raise ValueError("Provide a task description (1..2000 characters)")
         if queue_size < 1:
             raise ValueError("Writer queue must be positive")
-        from .mcap_io import RecordWriter  # Check dependency before creating an episode.
+        from episode_io.mcap_io import RecordWriter  # Check dependency before creating an episode.
         task_name = re.sub(r"[^\w\-]+", "_", task.strip(), flags=re.UNICODE).strip("_.")[:48] or "task"
         self.id = f"{task_name}_{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}"
         self.path = Path(root) / self.id
@@ -80,7 +80,7 @@ class EpisodeWriter:
         import cv2
         videos = {}
         try:
-            from .mcap_io import RecordWriter
+            from episode_io.mcap_io import RecordWriter
             with (self.path / "episode.mcap").open("wb") as stream:
                 records = RecordWriter(stream, self.manifest)
                 last_flush = time.monotonic()
@@ -96,7 +96,7 @@ class EpisodeWriter:
                         index = self.camera_counts[camera_id]
                         if self.rgb_video:
                             if camera_id not in videos:
-                                from .video import RGBVideoWriter
+                                from episode_io.video import RGBVideoWriter
                                 camera = self.cameras[camera_id]
                                 videos[camera_id] = RGBVideoWriter(self.path / f'{camera_id}.mp4', camera['width'], camera['height'], camera['fps'], self.video_crf)
                             videos[camera_id].write(payload['image'])

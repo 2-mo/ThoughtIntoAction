@@ -1,6 +1,6 @@
 """Read-only RGB integrity checks using receipt clocks, never exposure sync claims."""
 import numpy as np
-from .video import media_path, SequentialFrameReader
+from episode_io.video import media_path, SequentialFrameReader
 
 
 def nearest_skew(reference, query):

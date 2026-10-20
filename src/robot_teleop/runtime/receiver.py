@@ -15,8 +15,8 @@ from robot_teleop.core.safety import (
     SafetyViolation,
 )
 
-from .latest_value import LatestValue
-from .metrics import RuntimeMetrics
+from robot_teleop.runtime.latest_value import LatestValue
+from robot_teleop.runtime.metrics import RuntimeMetrics
 
 type InputAcceptedCallback = Callable[[TeleopInput], None]
 

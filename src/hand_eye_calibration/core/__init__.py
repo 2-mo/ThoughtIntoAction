@@ -1,7 +1,7 @@
 """Shared acquisition, geometry, storage, and ``A X = Z B`` calibration core."""
 
-from .schema import CameraIntrinsics, EyeToHandSample, HandEyeSample
-from .solver import (
+from hand_eye_calibration.core.schema import CameraIntrinsics, EyeToHandSample, HandEyeSample
+from hand_eye_calibration.core.solver import (
     CalibrationQualityError,
     MotionDiversity,
     analyze_motion_diversity,

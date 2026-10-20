@@ -1,7 +1,7 @@
 """Explicit camera lifecycle and recording exclusion, without opening camera SDKs."""
-from .project import load_config, resolve_path
-from .camera_client import socket_path, ensure_service
-from .session_protocol import request
+from robot_core.project import load_config, resolve_path
+from robot_core.camera_client import socket_path, ensure_service
+from robot_core.session_protocol import request
 from embodied_contracts.device_lease import DeviceLease
 
 

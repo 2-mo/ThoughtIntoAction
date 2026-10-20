@@ -4,7 +4,7 @@ import numpy as np
 
 from robot_control.trajectory import trajectory
 from robot_control.motion import move_and_settle
-from .solver import diversity
+from handeye_calibration.solver import diversity
 
 
 def validate_plan(plan, robot):

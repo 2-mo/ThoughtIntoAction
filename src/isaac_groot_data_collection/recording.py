@@ -14,7 +14,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from .raw_episode import atomic_json, utc_now
+from isaac_groot_data_collection.raw_episode import atomic_json, utc_now
 
 
 class SnapshotController(Protocol):

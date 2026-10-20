@@ -8,7 +8,7 @@ import math
 import numpy as np
 import ruckig
 
-from ..errors import SafetyError
+from arx5_control.errors import SafetyError
 
 
 @dataclass(frozen=True)

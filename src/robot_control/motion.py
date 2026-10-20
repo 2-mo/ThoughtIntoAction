@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 
-from .trajectory import trajectory
+from robot_control.trajectory import trajectory
 
 
 def move_and_settle(arm, robot, target, settings, *, bounds=None, clock=time.monotonic, sleep=time.sleep):

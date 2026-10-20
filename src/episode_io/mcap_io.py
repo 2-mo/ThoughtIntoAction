@@ -5,7 +5,7 @@ from zstandard import ZstdError
 from mcap.reader import make_reader
 from mcap.exceptions import McapError
 from mcap.writer import Writer, CompressionType
-from .cameras import camera_metadata, camera_topic, camera_id_from_topic
+from episode_io.cameras import camera_metadata, camera_topic, camera_id_from_topic
 
 TOPICS = {'state': '/robot/state', 'frame': '/camera/wrist/rgb/index',
           'diagnostics': '/robot/diagnostics', 'event': '/robot/events'}

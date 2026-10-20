@@ -21,16 +21,16 @@ from typing import Sequence
 import arx5_interface as arx5
 import numpy as np
 
-from .cartesian import (
+from arx5_control.cartesian import (
     CartesianPlan,
     CartesianPlanner,
     CartesianPlanningError,
     quaternion_xyzw_to_rpy,
     rpy_to_quaternion_xyzw,
 )
-from .errors import BusyError, ControlError, MotionSettleError, SafetyError
-from .kdl_urdf import kdl_compatible_urdf_path
-from .motion import (
+from arx5_control.errors import BusyError, ControlError, MotionSettleError, SafetyError
+from arx5_control.kdl_urdf import kdl_compatible_urdf_path
+from arx5_control.motion import (
     RuckigJointTrajectory,
     TrajectorySample,
     analyze_sampled_motion,
@@ -2071,7 +2071,7 @@ class ArmController:
                 return existing
             if self._motion_in_progress:
                 raise BusyError("another motion is already in progress")
-            from .servo import CartesianServo, JointServo
+            from arx5_control.servo import CartesianServo, JointServo
 
             servo_type = JointServo if kind == "servoj" else CartesianServo
             servo = servo_type(
@@ -3155,7 +3155,7 @@ class ArmController:
         deceleration_scale: float,
     ) -> tuple[ArmSnapshot, np.ndarray, np.ndarray]:
         """Replace a queued trajectory with fixed-period jerk-limited braking."""
-        from .motion import JointRuckigPlanner
+        from arx5_control.motion import JointRuckigPlanner
 
         robot_config = self._require_robot_config()
         velocity_limit, acceleration_limit, jerk_limit = (

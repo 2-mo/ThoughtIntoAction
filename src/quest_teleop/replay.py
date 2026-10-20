@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 
-from .datasets import load_episode, image_path
+from quest_teleop.datasets import load_episode, image_path
 from episode_io.mcap_io import read_topics, TOPICS
 from copy import deepcopy
 from episode_io.video import media_path, read_frame

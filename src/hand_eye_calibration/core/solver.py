@@ -9,8 +9,8 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from .schema import HandEyeSample
-from .transforms import (
+from hand_eye_calibration.core.schema import HandEyeSample
+from hand_eye_calibration.core.transforms import (
     make_transform,
     rotation_distance_rad,
     rotation_vector_from_matrix,

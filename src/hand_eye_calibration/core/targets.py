@@ -8,9 +8,9 @@ from typing import Any
 
 import numpy as np
 
-from .projection import normalize_image_points, normalized_error_to_pixels
-from .schema import CameraIntrinsics
-from .transforms import make_transform
+from hand_eye_calibration.core.projection import normalize_image_points, normalized_error_to_pixels
+from hand_eye_calibration.core.schema import CameraIntrinsics
+from hand_eye_calibration.core.transforms import make_transform
 
 
 @dataclass(frozen=True)
@@ -492,7 +492,7 @@ def _draw_normalized_axes(
         np.eye(3),
         np.zeros(5),
     )
-    from .projection import normalized_to_image_points
+    from hand_eye_calibration.core.projection import normalized_to_image_points
 
     pixels = normalized_to_image_points(projected.reshape(-1, 2), intrinsics)
     points = [tuple(int(round(component)) for component in point) for point in pixels]

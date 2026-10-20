@@ -10,7 +10,7 @@ from typing import Any
 from robot_teleop.core.frames import quaternion_from_matrix, quaternion_to_matrix
 from robot_teleop.core.models import Pose, Vector3
 
-from .models import (
+from robot_teleop.kinematics.models import (
     IKResult,
     IKSolverConfig,
     JacobianDiagnostics,

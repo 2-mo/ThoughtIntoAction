@@ -3,7 +3,7 @@
 提供 SE(3) 测地线轨迹采样与 CLIK 关节空间跟踪。
 """
 
-from .sampler import (
+from reBotArm_control_py.trajectory.sampler import (
     TrajProfile,
     TrajPlanParams,
     CartesianPoint,
@@ -11,12 +11,12 @@ from .sampler import (
     CartesianTrajectoryResult,
     plan_cartesian_geodesic_trajectory,
 )
-from .clik_tracker import (
+from reBotArm_control_py.trajectory.clik_tracker import (
     IKParams,
     JointTrajectoryPoint,
     track_trajectory,
 )
-from .trajectory_planner import (
+from reBotArm_control_py.trajectory.trajectory_planner import (
     TrajStats,
     plan_joint_space_trajectory,
     compute_traj_stats,

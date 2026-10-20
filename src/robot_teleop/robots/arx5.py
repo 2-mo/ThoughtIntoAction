@@ -37,7 +37,7 @@ from robot_teleop.core.models import (
 )
 from robot_teleop.kinematics.models import IKSolverConfig, OfflineKinematics
 
-from .arx5_safety import (
+from robot_teleop.robots.arx5_safety import (
     Arx5SafetyEnvelope,
     Arx5SafetyViolation,
     validate_interface_name,

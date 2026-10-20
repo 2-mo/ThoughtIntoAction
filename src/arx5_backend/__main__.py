@@ -5,8 +5,8 @@ from pathlib import Path
 
 import uvicorn
 
-from .app import create_app
-from .core.settings import BackendSettings
+from arx5_backend.app import create_app
+from arx5_backend.core.settings import BackendSettings
 
 
 def parse_args() -> argparse.Namespace:

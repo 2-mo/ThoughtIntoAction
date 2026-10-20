@@ -7,8 +7,8 @@ import hmac
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
-from ..core.settings import BackendSettings
-from ..runtime import ControlRuntime
+from arx5_backend.core.settings import BackendSettings
+from arx5_backend.runtime import ControlRuntime
 
 
 CAMERA_VIDEO_KEYS = frozenset({"exterior_rgb", "wrist_rgb"})

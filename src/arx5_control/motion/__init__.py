@@ -4,7 +4,7 @@ This package is hardware-independent. SDK submission and feedback monitoring
 remain in :mod:`arx5_control.controller` and :mod:`arx5_control.servo`.
 """
 
-from .limits import (
+from arx5_control.motion.limits import (
     DEFAULT_DERIVATIVE_SCALE_FLOOR,
     MAX_CARTESIAN_WAYPOINTS,
     MIN_CARTESIAN_WAYPOINTS,
@@ -13,32 +13,32 @@ from .limits import (
     derivative_scales,
     scaled_derivative_limits,
 )
-from .offline import (
+from arx5_control.motion.offline import (
     MAX_SAMPLED_WAYPOINTS,
     RuckigJointTrajectory,
     plan_blended_joint_trajectory,
     plan_ruckig_joint_trajectory,
 )
-from .online import JointRuckigPlanner, JointServoCommand
-from .cartesian_time import (
+from arx5_control.motion.online import JointRuckigPlanner, JointServoCommand
+from arx5_control.motion.cartesian_time import (
     MAX_PROGRESS_SAMPLES,
     ScalarProgressTrajectory,
     plan_scalar_progress,
 )
-from .collision import (
+from arx5_control.motion.collision import (
     AabbObstacle,
     CollisionCheck,
     PrimitiveObstacle,
     SphereObstacle,
     check_tcp_path,
 )
-from .jacobian import (
+from arx5_control.motion.jacobian import (
     JacobianDiagnostics,
     analyze_jacobian,
     numerical_jacobian,
     singularity_speed_scale,
 )
-from .geometry import (
+from arx5_control.motion.geometry import (
     CartesianGeometryPath,
     CartesianWaypoint,
     build_cartesian_path,
@@ -47,7 +47,7 @@ from .geometry import (
     quaternion_distance_rad,
     slerp_quaternion_xyzw,
 )
-from .contracts import (
+from arx5_control.motion.contracts import (
     CartesianPathMode,
     CartesianPathSegment,
     MotionContext,
@@ -60,14 +60,14 @@ from .contracts import (
     quaternion_multiply_xyzw,
     rotate_vector_xyzw,
 )
-from .link_collision import (
+from arx5_control.motion.link_collision import (
     LinkCapsule,
     LinkCollisionCheck,
     PinocchioCollisionModel,
     default_x5_capsules,
 )
-from .pinocchio_backend import PinocchioKinematics, PinocchioUnavailableError
-from .profiles import (
+from arx5_control.motion.pinocchio_backend import PinocchioKinematics, PinocchioUnavailableError
+from arx5_control.motion.profiles import (
     TrajectorySample,
     cosine_fraction,
     cosine_segment,
@@ -77,7 +77,7 @@ from .profiles import (
     smoothstep9_fraction,
     via_point,
 )
-from .interpolation import (
+from arx5_control.motion.interpolation import (
     MAX_RESAMPLED_SAMPLES,
     resample_cubic_hermite,
     resample_quintic_hermite,

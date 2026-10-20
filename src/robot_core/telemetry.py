@@ -10,7 +10,7 @@ import uuid
 import numpy as np
 import zmq
 
-from .project import load_config
+from robot_core.project import load_config
 
 SCHEMA = 1
 MAX_MESSAGE = 4_000_000

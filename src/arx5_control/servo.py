@@ -10,15 +10,15 @@ from typing import Protocol
 
 import numpy as np
 
-from .controller import (
+from arx5_control.controller import (
     ArmSnapshot,
     ControlError,
     ControllerMode,
     SafetyError,
 )
-from .motion.limits import scaled_derivative_limits
-from .motion.online import JointRuckigPlanner, JointServoCommand
-from .motion.contracts import Pose
+from arx5_control.motion.limits import scaled_derivative_limits
+from arx5_control.motion.online import JointRuckigPlanner, JointServoCommand
+from arx5_control.motion.contracts import Pose
 
 
 class ServoArm(Protocol):

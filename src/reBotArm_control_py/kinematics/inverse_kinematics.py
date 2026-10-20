@@ -14,7 +14,7 @@ from typing import Optional
 import numpy as np
 import pinocchio as pin
 
-from .forward_kinematics import compute_fk
+from reBotArm_control_py.kinematics.forward_kinematics import compute_fk
 
 
 # ─── 参数与结果数据结构 ────────────────────────────────────────────────────────
@@ -267,7 +267,7 @@ def compute_ik(
     返回:
         IKResult。
     """
-    from .robot_model import load_robot_model, get_end_effector_frame_id
+    from reBotArm_control_py.kinematics.robot_model import load_robot_model, get_end_effector_frame_id
 
     model = load_robot_model()
     data = model.createData()

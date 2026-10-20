@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from .models import Pose, Quaternion, Vector3
+from robot_teleop.core.models import Pose, Quaternion, Vector3
 
 Matrix3 = tuple[
     tuple[float, float, float],

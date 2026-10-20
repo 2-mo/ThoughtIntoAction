@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, WebSocket
 
-from ..core.settings import BackendSettings
-from ..runtime import ControlRuntime
-from .websocket_adapter import ApiWebSocket
+from arx5_backend.core.settings import BackendSettings
+from arx5_backend.runtime import ControlRuntime
+from arx5_backend.transport.websocket_adapter import ApiWebSocket
 
 
 def create_control_router(

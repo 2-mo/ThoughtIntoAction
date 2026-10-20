@@ -29,7 +29,7 @@ def main(argv=None):
         sub.add_argument("--socket", help="Override local session socket")
     args = parser.parse_args(argv)
     if args.group == "session" and args.command == "demo":
-        from .demo import run_demo
+        from quest_teleop.runtime.demo import run_demo
         run_demo(args.seconds)
         return
     path = args.socket or str(resolve_path(load_config()["runtime"]["socket"]))

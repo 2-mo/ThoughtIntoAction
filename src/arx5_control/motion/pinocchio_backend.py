@@ -11,7 +11,7 @@ import threading
 
 import numpy as np
 
-from .jacobian import JacobianDiagnostics, analyze_jacobian
+from arx5_control.motion.jacobian import JacobianDiagnostics, analyze_jacobian
 
 
 class PinocchioUnavailableError(RuntimeError):

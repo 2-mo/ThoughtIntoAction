@@ -11,12 +11,12 @@ from typing import List
 import numpy as np
 import pinocchio as pin
 
-from .clik_tracker import (
+from reBotArm_control_py.trajectory.clik_tracker import (
     IKParams,
     JointTrajectoryPoint,
     track_trajectory,
 )
-from .sampler import (
+from reBotArm_control_py.trajectory.sampler import (
     TrajProfile,
     TrajPlanParams,
     CartesianTrajectory,

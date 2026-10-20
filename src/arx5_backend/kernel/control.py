@@ -94,14 +94,14 @@ from isaac_groot_data_collection.validator import (
     MINIMUM_USABLE_CAMERA_RATE_FRACTION,
     validate_raw_episode,
 )
-from ..features.collection.camera_client import CollectionCameraClient
-from ..features.cube.stack import (
+from arx5_backend.features.collection.camera_client import CollectionCameraClient
+from arx5_backend.features.cube.stack import (
     CUBE_STACK_PREVIEW_TIMEOUT_S,
     CubeStackPlan,
     execute_cube_stack,
     plan_cube_stack,
 )
-from ..features.gripper import HOME_GRIPPER_WIDTH_M
+from arx5_backend.features.gripper import HOME_GRIPPER_WIDTH_M
 from arx_tools.runtime_identity import SERVICE_STARTED_AT, SOURCE_REVISION
 from arx5_paths import CALIBRATIONS_ROOT, CONFIG_ROOT, HANDEYE_ROOT, PROJECT_ROOT
 

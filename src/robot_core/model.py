@@ -6,7 +6,7 @@ import hashlib
 import numpy as np
 import pinocchio as pin
 
-from .project import PROJECT_ROOT as ROOT, X5_2025_URDF as DEFAULT_URDF
+from robot_core.project import PROJECT_ROOT as ROOT, X5_2025_URDF as DEFAULT_URDF
 
 
 class RobotModel:
@@ -51,7 +51,7 @@ class RobotModel:
         return self.data.oMf[self.frame].homogeneous.copy()
 
     def ik(self, target, seed, iterations=250):
-        from .transforms import transform
+        from robot_core.transforms import transform
         target = pin.SE3(transform(target))
         q = self.joints(seed)
         for _ in range(iterations):

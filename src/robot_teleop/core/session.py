@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from .models import TeleopInput, TrackingQuality
+from robot_teleop.core.models import TeleopInput, TrackingQuality
 
 
 class SessionAction(Enum):

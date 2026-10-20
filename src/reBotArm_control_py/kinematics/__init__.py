@@ -1,6 +1,6 @@
 """Kinematics 运动学库 — 基于 Pinocchio 的正逆运动学计算。"""
 
-from .robot_model import (
+from reBotArm_control_py.kinematics.robot_model import (
     load_robot_model,
     get_end_effector_frame,
     get_joint_count,
@@ -11,8 +11,8 @@ from .robot_model import (
     get_all_frame_names,
     pad_q_for_model,
 )
-from .forward_kinematics import compute_fk, joint_to_pose
-from .inverse_kinematics import (
+from reBotArm_control_py.kinematics.forward_kinematics import compute_fk, joint_to_pose
+from reBotArm_control_py.kinematics.inverse_kinematics import (
     compute_ik,
     solve_ik_with_retry,
     solve_ik,

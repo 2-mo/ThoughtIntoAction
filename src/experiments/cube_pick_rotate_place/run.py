@@ -14,9 +14,9 @@ from arx5_control import ArmController, ControllerMode
 from arx5_control.gripper_calibration import load_gripper_open_readout
 from arx5_paths import OUTPUTS_ROOT
 
-from .config import DEFAULT_CONFIG_PATH, load_config, validate_config
-from .perception import capture_cube_observation, capture_cube_scene_observation
-from .planner import (
+from experiments.cube_pick_rotate_place.config import DEFAULT_CONFIG_PATH, load_config, validate_config
+from experiments.cube_pick_rotate_place.perception import capture_cube_observation, capture_cube_scene_observation
+from experiments.cube_pick_rotate_place.planner import (
     Action,
     build_action_plan,
     execute_action_plan,

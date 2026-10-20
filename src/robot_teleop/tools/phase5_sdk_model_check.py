@@ -11,7 +11,7 @@ from typing import Any, cast
 
 from robot_teleop.kinematics.config import KinematicModelConfig, load_model_config
 
-from .arx5_sdk_inspect import (
+from robot_teleop.tools.arx5_sdk_inspect import (
     Arx5SdkInspectionError,
     inspect_arx5_sdk_isolated,
 )

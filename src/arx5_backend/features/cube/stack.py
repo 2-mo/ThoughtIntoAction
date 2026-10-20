@@ -24,7 +24,7 @@ from experiments.cube_pick_rotate_place.planner import (
     maximum_plausible_contact_width_m,
     motion_plan_runs,
 )
-from ..gripper import HOME_GRIPPER_WIDTH_M
+from arx5_backend.features.gripper import HOME_GRIPPER_WIDTH_M
 
 
 CUBE_STACK_PREVIEW_TIMEOUT_S = 600.0

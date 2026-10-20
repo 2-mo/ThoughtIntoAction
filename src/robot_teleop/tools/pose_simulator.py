@@ -23,7 +23,7 @@ from robot_teleop.protocol.packet import (
     encode_packet,
 )
 
-from ._common import (
+from robot_teleop.tools._common import (
     distribution_with_count,
     print_report,
     validate_nonnegative,

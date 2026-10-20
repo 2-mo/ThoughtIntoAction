@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pinocchio as pin
 
-from ..kinematics.robot_model import load_robot_model
+from reBotArm_control_py.kinematics.robot_model import load_robot_model
 
 EARTH_GRAVITY: tuple[float, float, float] = (0.0, 0.0, -9.81)
 ZERO_GRAVITY: tuple[float, float, float] = (0.0, 0.0, 0.0)

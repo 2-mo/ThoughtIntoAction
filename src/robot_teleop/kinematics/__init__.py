@@ -1,8 +1,8 @@
 """Offline robot-model and kinematics adapters outside the canonical core."""
 
-from .checks import KinematicPathReport, KinematicPathStep, KinematicTarget
-from .config import KinematicModelConfig, ModelConfigurationError, load_model_config
-from .models import (
+from robot_teleop.kinematics.checks import KinematicPathReport, KinematicPathStep, KinematicTarget
+from robot_teleop.kinematics.config import KinematicModelConfig, ModelConfigurationError, load_model_config
+from robot_teleop.kinematics.models import (
     IKResult,
     IKSolverConfig,
     JacobianDiagnostics,
@@ -10,7 +10,7 @@ from .models import (
     KinematicsUnavailableError,
     RobotModel,
 )
-from .pinocchio import PinocchioKinematics
+from robot_teleop.kinematics.pinocchio import PinocchioKinematics
 
 __all__ = [
     "IKResult",

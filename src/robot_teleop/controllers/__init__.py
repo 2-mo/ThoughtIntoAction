@@ -1,6 +1,6 @@
 """Target-to-command controllers."""
 
-from .cartesian_ruckig import (
+from robot_teleop.controllers.cartesian_ruckig import (
     CartesianRuckigServo,
     CartesianServoConfig,
     CartesianServoError,

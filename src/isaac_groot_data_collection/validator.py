@@ -9,8 +9,8 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from .config import CameraConfig, CollectionConfig, load_collection_config
-from .raw_episode import atomic_json, read_json
+from isaac_groot_data_collection.config import CameraConfig, CollectionConfig, load_collection_config
+from isaac_groot_data_collection.raw_episode import atomic_json, read_json
 
 
 DEFAULT_GRIPPER_POSITION_TOLERANCE_M = 0.005

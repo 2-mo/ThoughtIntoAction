@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from ..protocol import CommandCatalog
+from arx5_backend.protocol import CommandCatalog
 
 
 def create_system_router(catalog: CommandCatalog) -> APIRouter:

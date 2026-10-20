@@ -20,7 +20,7 @@
     rebotarm.disconnect()
 """
 
-from .rebotarm import RebotArm, JointGroup, JointCfg, load_cfg
+from reBotArm_control_py.actuator.rebotarm import RebotArm, JointGroup, JointCfg, load_cfg
 
 __all__ = [
     "RebotArm",

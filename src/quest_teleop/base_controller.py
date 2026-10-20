@@ -19,9 +19,9 @@ from robot_core.plugins import Registry
 from robot_core.model import RobotModel
 from robot_core.loop_rate import LoopRate
 from robot_core.safety import TablePlane
-from .frames import (operator_yaw_rotation, tool_rotation_delta,
+from quest_teleop.frames import (operator_yaw_rotation, tool_rotation_delta,
                      aligned_rotation_basis, aligned_rotation_delta, aligned_position_basis)
-from .target_limits import CartesianTargetLimiter
+from quest_teleop.target_limits import CartesianTargetLimiter
 
 DEFAULT_X5_MANIPULATOR_CONFIG = {
     "right_arm": {
@@ -144,7 +144,7 @@ class X5TeleopBase(HardwareTeleopController):
                     "backend": backend, "input": input_plugin, "controller": type(self).__name__,
                 })
             self.xr_client = input_factory()
-            from .inputs import InputFreshness
+            from quest_teleop.inputs import InputFreshness
             timestamp = getattr(self.xr_client, "get_timestamp_ns", None)
             self._input_freshness = InputFreshness(timestamp) if callable(timestamp) else None
             self._input_ready = self._input_freshness is None

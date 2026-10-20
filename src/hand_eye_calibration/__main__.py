@@ -12,10 +12,10 @@ from typing import Any
 
 from arx5_paths import PROJECT_ROOT
 
-from .collector import ManualEyeToHandCollector, solve_and_store_session
-from .core.storage import CalibrationSession
-from .core.targets import build_target_detector
-from .core.validation import disable_result, enable_validated_result, validate_cached_result
+from hand_eye_calibration.collector import ManualEyeToHandCollector, solve_and_store_session
+from hand_eye_calibration.core.storage import CalibrationSession
+from hand_eye_calibration.core.targets import build_target_detector
+from hand_eye_calibration.core.validation import disable_result, enable_validated_result, validate_cached_result
 
 
 ROOT = PROJECT_ROOT

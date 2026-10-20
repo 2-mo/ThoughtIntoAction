@@ -21,8 +21,8 @@ from robot_teleop.core.models import Pose, Twist, Vector3
 from robot_teleop.kinematics.config import KinematicModelConfig, load_model_config
 from robot_teleop.robots.arx5_safety import Arx5SafetyEnvelope
 
-from .arx5_sdk_inspect import Arx5SdkInspectionError, inspect_arx5_sdk_isolated
-from .phase5_sdk_model_check import SdkModelMismatchError, compare_sdk_model_config
+from robot_teleop.tools.arx5_sdk_inspect import Arx5SdkInspectionError, inspect_arx5_sdk_isolated
+from robot_teleop.tools.phase5_sdk_model_check import SdkModelMismatchError, compare_sdk_model_config
 
 ROOT = Path(__file__).resolve().parents[3]
 

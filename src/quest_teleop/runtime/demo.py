@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 
-from .session import TeleopSession
+from quest_teleop.runtime.session import TeleopSession
 
 
 class SyntheticCamera:

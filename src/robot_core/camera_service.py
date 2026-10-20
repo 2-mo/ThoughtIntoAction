@@ -6,12 +6,12 @@ import threading
 import time
 import uuid
 
-from .camera import RealSenseCamera
-from .camera_client import socket_path
+from robot_core.camera import RealSenseCamera
+from robot_core.camera_client import socket_path
 from embodied_contracts.device_lease import DeviceLease
-from .local_server import LocalServer
-from .camera_transport import FrameServer
-from .project import load_config
+from robot_core.local_server import LocalServer
+from robot_core.camera_transport import FrameServer
+from robot_core.project import load_config
 
 
 class CameraFeed:
@@ -30,7 +30,7 @@ class CameraFeed:
         self.error = "Camera starting"
 
     def set_enabled(self, enabled):
-        from .camera_control import recording_guard, check_legacy_session
+        from robot_core.camera_control import recording_guard, check_legacy_session
         if type(enabled) is not bool:
             raise ValueError("Expected enabled boolean")
         with self.control_lock:

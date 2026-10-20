@@ -35,9 +35,9 @@ from arx5_paths import CONFIG_ROOT
 from isaac_groot_data_collection.geometry import pose_6d_to_eef_9d
 from isaac_groot_data_collection.home import load_collection_home, load_training_start
 
-from .cameras import DualRgbCamera, SynchronizedFrames
-from .checkpoint import ACTION_HORIZON, LANGUAGE_KEY, STATE_KEYS, VIDEO_KEYS
-from .policy import PolicyClient, PolicyError, PolicyWorker
+from gr_zeroshot.cameras import DualRgbCamera, SynchronizedFrames
+from gr_zeroshot.checkpoint import ACTION_HORIZON, LANGUAGE_KEY, STATE_KEYS, VIDEO_KEYS
+from gr_zeroshot.policy import PolicyClient, PolicyError, PolicyWorker
 
 
 EXECUTION_HZ = 30.0

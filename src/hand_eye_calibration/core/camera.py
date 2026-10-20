@@ -10,8 +10,8 @@ from typing import Any
 
 import numpy as np
 
-from .camera_profiles import format_profiles, list_bgr_color_profiles
-from .schema import CameraIntrinsics
+from hand_eye_calibration.core.camera_profiles import format_profiles, list_bgr_color_profiles
+from hand_eye_calibration.core.schema import CameraIntrinsics
 
 
 @dataclass(frozen=True)

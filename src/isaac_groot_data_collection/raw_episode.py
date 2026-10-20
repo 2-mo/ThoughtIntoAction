@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from arx5_paths import DATASETS_ROOT
 
-from .config import CollectionConfig, load_collection_config
+from isaac_groot_data_collection.config import CollectionConfig, load_collection_config
 
 
 DEFAULT_RAW_ROOT = DATASETS_ROOT / "data-coll"

@@ -9,7 +9,7 @@ from typing import cast
 
 import yaml
 
-from .models import JointLimits, RobotModel
+from robot_teleop.kinematics.models import JointLimits, RobotModel
 
 
 class ModelConfigurationError(ValueError):

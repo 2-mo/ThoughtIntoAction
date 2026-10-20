@@ -12,7 +12,7 @@ import time
 import unicodedata
 
 from robot_core.project import load_config, resolve_path
-from .startup import WAITING_FOR_ARM, NO_MOTOR_FEEDBACK
+from robot_control.startup import WAITING_FOR_ARM, NO_MOTOR_FEEDBACK
 from robot_core.terminal_keys import terminal_keys, read_key
 from rich.console import Console as RichConsole, Group
 from rich.live import Live

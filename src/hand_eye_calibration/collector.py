@@ -28,22 +28,22 @@ from arx5_control import (
     SafetyError,
 )
 
-from .core.camera import RealSenseCamera
-from .core.schema import CameraIntrinsics, EyeToHandSample
-from .core.solver import (
+from hand_eye_calibration.core.camera import RealSenseCamera
+from hand_eye_calibration.core.schema import CameraIntrinsics, EyeToHandSample
+from hand_eye_calibration.core.solver import (
     CalibrationQualityError,
     analyze_motion_diversity,
     analyze_transform_motion_diversity,
     validate_motion_diversity,
 )
-from .core.storage import (
+from hand_eye_calibration.core.storage import (
     CalibrationSession,
     phase_cache_filename,
     read_cached_result,
     write_cached_result,
 )
-from .core.targets import TargetDetection, build_target_detector
-from .core.transforms import (
+from hand_eye_calibration.core.targets import TargetDetection, build_target_detector
+from hand_eye_calibration.core.transforms import (
     average_transforms,
     pose6_to_transform,
     quaternion_xyzw_from_matrix,
@@ -51,8 +51,8 @@ from .core.transforms import (
     rotation_vector_from_matrix,
     transform_error,
 )
-from .eye_in_hand import evaluate_eye_in_hand_validation, solve_eye_in_hand
-from .eye_to_hand import evaluate_eye_to_hand_validation, solve_eye_to_hand
+from hand_eye_calibration.eye_in_hand import evaluate_eye_in_hand_validation, solve_eye_in_hand
+from hand_eye_calibration.eye_to_hand import evaluate_eye_to_hand_validation, solve_eye_to_hand
 
 
 def _evaluate_independent_validation(

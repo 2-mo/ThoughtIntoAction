@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass
 from enum import Enum
 
-from .frames import (
+from robot_teleop.core.frames import (
     Matrix3,
     matrix_multiply,
     quaternion_from_matrix,
@@ -14,7 +14,7 @@ from .frames import (
     scale_quaternion_rotation,
     transpose_matrix,
 )
-from .models import Pose, Vector3
+from robot_teleop.core.models import Pose, Vector3
 
 
 class MappingOutputFrame(Enum):

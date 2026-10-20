@@ -1,6 +1,6 @@
 """Dual-installation hand-eye calibration for D405, D455, and ARX X5."""
 
-from .core.geometry import (
+from hand_eye_calibration.core.geometry import (
     BlockObservation,
     camera_to_base,
     deproject_pixel,
@@ -8,7 +8,7 @@ from .core.geometry import (
     observe_depth_sample,
     observe_pixel,
 )
-from .core.validation import (
+from hand_eye_calibration.core.validation import (
     ValidationThresholds,
     disable_result,
     enable_validated_result,
@@ -16,10 +16,10 @@ from .core.validation import (
     validate_result,
 )
 
-from .core.schema import CameraIntrinsics, EyeToHandSample, HandEyeSample
-from .core.solver import CalibrationQualityError
-from .eye_in_hand import solve_eye_in_hand
-from .eye_to_hand import solve_eye_to_hand
+from hand_eye_calibration.core.schema import CameraIntrinsics, EyeToHandSample, HandEyeSample
+from hand_eye_calibration.core.solver import CalibrationQualityError
+from hand_eye_calibration.eye_in_hand import solve_eye_in_hand
+from hand_eye_calibration.eye_to_hand import solve_eye_to_hand
 
 __all__ = [
     "BlockObservation",

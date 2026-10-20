@@ -15,7 +15,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from robot_core.plugins import Registry
-from ..recording import EpisodeWriter
+from quest_teleop.recording import EpisodeWriter
 from robot_core.storage import save_json
 from robot_core.local_server import LocalServer
 
@@ -207,7 +207,7 @@ class TeleopSession:
         return sorted(result, key=lambda row: (row["started"], row["id"]), reverse=True)
 
     def load_saved_episode(self, episode_id):
-        from ..replay import RecordedEpisode
+        from quest_teleop.replay import RecordedEpisode
         if not isinstance(episode_id, str) or Path(episode_id).name != episode_id or episode_id in (".", "..", ""):
             raise ValueError("无效数据集编号")
         root = (self.dataset_root / episode_id).resolve()
@@ -219,7 +219,7 @@ class TeleopSession:
         return RecordedEpisode(root)
 
     def load_previous_episode(self):
-        from ..replay import RecordedEpisode
+        from quest_teleop.replay import RecordedEpisode
         with self.operations:
             if self.closed or self.recording is not None:
                 raise ValueError("请先保存当前采集，再回放上一条")
@@ -235,7 +235,7 @@ class TeleopSession:
         if command == "replay.list":
             return {"episodes": self.saved_episodes()}
         if command in ("collection.replay_previous", "collection.replay_episode"):
-            from ..replay import WebReplay
+            from quest_teleop.replay import WebReplay
             episode = self.load_previous_episode() if command.endswith("previous") else self.load_saved_episode(payload.get("episode_id"))
             with self.operations:
                 if self.closed or self.recording is not None:
@@ -332,7 +332,7 @@ class TeleopSession:
                     if payload.get("episode_id") is not None and (previous is None or previous["id"] != payload["episode_id"]):
                         raise ValueError("上一条 Episode 已变化；未丢弃其他数据")
                     if previous is not None and previous["outcome"] != "discarded":
-                        from ..datasets import label_episode
+                        from quest_teleop.datasets import label_episode
                         label_episode(previous["path"], "discarded", note="Discard previous episode from Quest stick")
                         self.last_episode = {**previous, "outcome": "discarded"}
                         self.counted_episodes = self.counted_episodes - {previous["id"]}
@@ -435,7 +435,7 @@ class TeleopSession:
 
     def _check_quality(self, episode):
         try:
-            from ..datasets import validate_episode
+            from quest_teleop.datasets import validate_episode
             from robot_core.model import RobotModel
             from robot_core.project import resolve_path
             robot = RobotModel(resolve_path(self.config['robot']['urdf']), eef=self.robot_metadata['eef_frame'])
@@ -464,7 +464,7 @@ class TeleopSession:
         if not episode_ids:
             self.task_dataset["state"] = "empty"
             return
-        from ..task_package import finalize_task
+        from quest_teleop.task_package import finalize_task
         self.task_dataset.update(state="saving", episodes=len(episode_ids), retained_episodes=len(self.counted_episodes))
         try:
             package = finalize_task(self.dataset_root / ".raw", sorted(episode_ids),

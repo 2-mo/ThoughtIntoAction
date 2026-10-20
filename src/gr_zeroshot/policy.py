@@ -16,7 +16,7 @@ import msgpack_numpy as mnp
 import numpy as np
 import zmq
 
-from .checkpoint import FineTunedCheckpoint
+from gr_zeroshot.checkpoint import FineTunedCheckpoint
 
 
 class PolicyError(RuntimeError):

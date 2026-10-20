@@ -1,4 +1,4 @@
-from ...protocol import FeatureSpec
+from arx5_backend.protocol import FeatureSpec
 
 
 FEATURE = FeatureSpec(

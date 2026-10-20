@@ -9,7 +9,7 @@ from typing import Any
 
 import numpy as np
 
-from .geometry import normalize_quaternion_xyzw
+from arx5_control.motion.geometry import normalize_quaternion_xyzw
 
 
 def _vector(value: np.ndarray, size: int, name: str) -> np.ndarray:

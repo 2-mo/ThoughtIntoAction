@@ -11,7 +11,7 @@ from typing import Tuple
 import numpy as np
 import pinocchio as pin
 
-from .robot_model import load_robot_model, get_end_effector_frame_id, pad_q_for_model
+from reBotArm_control_py.kinematics.robot_model import load_robot_model, get_end_effector_frame_id, pad_q_for_model
 
 
 def compute_fk(
