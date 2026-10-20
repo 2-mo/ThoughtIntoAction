@@ -35,6 +35,7 @@ QuestArmTeleop 从"多个项目合并后的仓库"整理为具身智能平台的
 
 | 文件 | 范围 |
 | --- | --- |
+| [framework.md](framework.md) | 阶段 1 框架草案：分层、目录、L0 契约、内核接口、平台包、统一入口、待决定项 |
 | [00-guardrails.md](00-guardrails.md) | 基线标签、测试配置、引用检查、CI |
 | [01-control-kernel.md](01-control-kernel.md) | arx-televr 内核：上游同步、适配边界、真机验收与切换 |
 | [02-robot-profile.md](02-robot-profile.md) | 机器人参数、模型、平台配置的单一来源 |
