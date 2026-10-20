@@ -25,13 +25,19 @@
   - 完成：新入口列出各组结果；`AGENTS.md` 的最小验证仍可只运行单组。
   - 依赖：G-02。
 
-- [ ] **G-04** 收敛检查（棘轮） `P1`
-  - 做法：在 `tests/test_package_boundaries.py` 现有机制上增加白名单检查，名单只允许缩小：
-    - `Arx5JointController(` 构造位置（目标只剩 `control/arx5_vr/real.py`，见 C-02）；
-    - `sys.path.insert` / `sys.path.append`（审查时 45 个文件）；
-    - 字面量 `"can0"`、`/home/`；
-    - `control/` 对 `src/` 的导入（目标只剩共享契约包，见 K-03）。
-  - 完成：新增违规时检查失败；每次清理同步缩小白名单。
+- [x] **G-04** 收敛检查（棘轮） `P1`
+  - 已做：`tests/test_convergence.py` 扫描 `src/`、`control/`（跳过 `.venv`、`run`、`build`、`native`、`vendor`、`models`）、`scripts/`、`apps/console/src`、`integrations/`、`examples/`。名单在 `tests/convergence_baseline.json`：新增违规时失败；已清理的条目没有从名单删除时也失败，所以名单只能缩小。
+  - 基线（`172982f` 之后）：
+
+    | 检查 | 文件数 | 目标 |
+    | --- | --- | --- |
+    | `sdk_controller`：`Arx5JointController(` | 9 | 只剩 `control/arx5_vr/real.py`（C-02） |
+    | `sys_path`：`sys.path.insert/append(` | 40 | 0（B-01） |
+    | `can0_literal`：代码中的 `"can0"` / `=can0` | 22 | 0；上游默认值 `control/arx5_vr/types.py` 豁免（R-02） |
+    | `home_path`：`/home/<user>/` | 5 | 0（R-05） |
+    | `control_imports_src`：`control/` 导入 `src/` 的包 | 7 | 只剩共享包（K-03） |
+
+  - 验证：基线通过；人为新增一处违规、添加一条过期条目，两种情况都会失败。
 
 - [ ] **G-05** 删除前的引用检查 `P2`
   - 做法：小脚本，输入模块或目录，列出 `src/`、`control/`、`scripts/`、`configs/`、`apps/` 中的运行时引用，排除 `tests/`、`docs/` 和 `third_party/migration/manifest.json`。`redundancy.md` 中的删除都先运行它。
