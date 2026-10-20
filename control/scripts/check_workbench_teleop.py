@@ -68,6 +68,8 @@ else:
         (directory/'workbench-request.json').write_text(json.dumps({'revision':1, 'active':True}))
         session = ControlSession(directory, source='quest', ingress='native', purpose='teleop').__enter__()
         reader = RuntimeReader(directory, 'latest')
+        described = session.describe()
+        assert described['robot']['control_hz'] == 250 and described['workspace'] == {'minimum_tcp_z_m': 0.0}, described
         def collect(seconds):
             samples=[]; end=time.monotonic()+seconds
             while time.monotonic()<end:

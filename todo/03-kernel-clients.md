@@ -7,6 +7,7 @@
 - 客户端库：`src/runtime_client/`（`ControlSession`、`ControlClient`、`RuntimeReader`）。
 
 - [ ] **C-01** 协议说明与金样本 `P1`
+  - 部分完成：gateway 增加只读 `describe`（不需租约或反馈；返回机器人限位、频率、`park_q`、夹爪、CAN、模型 ID、工作空间和动作列表），客户端 `ControlClient.describe()`。schema 与金样本仍待做。
   - 现状：
     - 手机 UDP 协议有版本号，并有 Python / Swift 共用金样本（`tests/golden`），是仓库内的最好做法。
     - `commands.sock` 只有 `version:1` 封装，没有 schema 文件，动作在代码中逐个检查。

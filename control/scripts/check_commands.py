@@ -167,6 +167,25 @@ class CommandsTests(unittest.TestCase):
         gateway._check_workspace('joint', {'q': q.tolist()})
 
 
+    def test_describe_reports_kernel_limits_without_a_lease(self):
+        import threading
+        from adapters.gateway import Gateway, ACTIONS
+        gateway = Gateway.__new__(Gateway)
+        gateway.config, gateway.model_id, gateway.engine = self.config, 'model', self.engine
+        gateway.planner, gateway.plan_lock = MotionPlanner(self.config, 'model'), threading.Lock()
+        described = gateway.describe()
+        self.assertEqual(described['robot']['joint_min'], list(self.config.joint_min))
+        self.assertEqual(described['robot']['control_hz'], 250)
+        self.assertEqual(described['workspace'], {'minimum_tcp_z_m': 0.0})
+        self.assertEqual(set(described['actions']), set(ACTIONS))
+        # The platform's offline reader returns the same robot facts.
+        from embodied_contracts.robot import load_robot_profile
+        profile = load_robot_profile(ROOT / 'config')
+        for name, value in described['robot'].items():
+            self.assertEqual(profile['robot'][name], value, name)
+        self.assertEqual(profile['workspace'], described['workspace'])
+
+
 class NativeGateTests(unittest.TestCase):
     def setUp(self):
         from adapters.sources import NativeIngress

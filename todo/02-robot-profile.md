@@ -2,7 +2,8 @@
 
 X5 的参数和模型以 arx-televr 为准：`control/config/robot.json`、`control/config/tool.json`，以及由 `control/scripts/build_model.py` 生成并带校验值的 `control/models/x5/`。平台其他位置引用它们，不再复制。
 
-- [ ] **R-01** 确立唯一来源 `P1`
+- [x] **R-01** 确立唯一来源 `P1`
+  - 已做：`embodied_contracts.robot.load_robot_profile()` 读取 `control/config/robot.json` 与 `workspace.json`（附来源与 sha256）；运行中的内核通过 `describe` 返回同样的值，`check_commands.py` 逐字段比对两者。R-02 的使用者迁移仍待做。
   - 做法：
     - 共享包提供读取函数，返回 robot / tool / model 的解析结果，附来源路径和哈希。
     - 平台配置（`configs/`）只引用，不复制。

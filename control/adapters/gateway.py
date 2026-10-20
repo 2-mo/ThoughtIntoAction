@@ -13,6 +13,12 @@ from collections import OrderedDict
 from embodied_contracts.rpc import receive, send
 from .commands import CommandEngine, MotionPlanner
 
+# Robot facts clients read instead of keeping their own copies (todo C-01, R-01).
+DESCRIBED_ROBOT_FIELDS = ('variant', 'control_hz', 'joint_min', 'joint_max', 'park_q', 'gripper_max_width',
+                          'torque_max', 'joint_step_limit', 'can_interface')
+ACTIONS = ('describe', 'status', 'acquire', 'source-metadata', 'heartbeat', 'release', 'hold', 'cancel', 'stop',
+           'preview', 'execute', 'free-drive', 'joint', 'cartesian', 'gripper')
+
 
 class Gateway:
     def __init__(self, directory, runtime_id, config, planner_factory=MotionPlanner, ingresses=None):
@@ -20,6 +26,7 @@ class Gateway:
         manifest = Path(config.model_path).with_suffix('.model.json')
         self.model_id = hashlib.sha256(manifest.read_bytes()).hexdigest()
         self.ingresses = ingresses or {}
+        self.config = config
         self.engine = CommandEngine(runtime_id, config, self.model_id, self.ingresses)
         self.planner = planner_factory(config, self.model_id)
         self.pending = queue.Queue(maxsize=64)
@@ -72,6 +79,9 @@ class Gateway:
                             raise ValueError('Source metadata must be a bounded JSON object')
                         if len(self.metadata_events) >= 1024:
                             raise ValueError('Source metadata history full; start a new runtime')
+                    if action == 'describe':
+                        send(sock, {'ok': True, 'result': self.describe()})
+                        return
                     snapshot = self.snapshot
                     if snapshot is None:
                         raise ValueError('Worker feedback not ready')
@@ -121,6 +131,14 @@ class Gateway:
                         pass
         finally:
             self.slots.release()
+
+    def describe(self):
+        """Read-only; needs no lease or feedback."""
+        robot = {name: getattr(self.config, name) for name in DESCRIBED_ROBOT_FIELDS}
+        workspace = getattr(self.planner, 'workspace', None)
+        return {'protocol': 1, 'runtime_id': self.engine.runtime_id, 'model_id': self.model_id,
+                'robot': {k: list(v) if isinstance(v, tuple) else v for k, v in robot.items()},
+                'workspace': workspace.describe() if workspace else None, 'actions': list(ACTIONS)}
 
     def _check_workspace(self, action, request):
         # Streamed targets from any gateway source; the robot thread only arbitrates.

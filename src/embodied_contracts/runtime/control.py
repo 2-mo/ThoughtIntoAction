@@ -27,6 +27,10 @@ class ControlClient:
             raise RuntimeError('Runtime feedback is stale')
         return status
 
+    def describe(self):
+        """Robot limits, model identity and workspace from the running kernel; no lease."""
+        return self.request('describe')
+
     def preview(self, kind='movej', **fields):
         return self.request('preview', kind=kind, **fields)
 
