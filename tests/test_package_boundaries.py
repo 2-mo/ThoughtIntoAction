@@ -89,7 +89,10 @@ class PackageBoundaryTests(unittest.TestCase):
             from unittest.mock import patch
             from robot_simulation.cli import main
             with patch("robot_simulation.cli.StateSubscriber.receive", side_effect=KeyboardInterrupt):
-                main([])
+                main(["--mode", "real", "--port", "0"])
+            # The MuJoCo workbench modules load without starting a runtime.
+            from robot_simulation.arx_preview import Simulation
+            from robot_simulation.session import SimulationSession
             ''',
         )
 

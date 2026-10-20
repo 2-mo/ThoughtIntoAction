@@ -35,7 +35,7 @@ def command(action, *, mode=None):
             if not info or info.get('mode') != 'simulation':
                 raise RuntimeError('请先在总控按 M 切到仿真')
             request(socket_path(), action, timeout=6)
-            return {'sim-home':'仿真正在回零', 'sim-pregrasp':'仿真正在前往预抓取位', 'sim-record':'正在记录 MuJoCo 原始状态', 'sim-save':'MuJoCo 原始状态已保存'}.get(action, '仿真遥操待机：右摇杆下拨 1 秒启用' if action in ('sim-resume', 'demo-restart') else '仿真已暂停，保持姿态')
+            return {'sim-home':'仿真正在回零', 'sim-pregrasp':'仿真正在前往预抓取位', 'sim-record':'正在记录 MuJoCo 原始状态', 'sim-save':'MuJoCo 原始状态已保存'}.get(action, '仿真遥操已允许：松开全部按键后右手 A 长按切换模式' if action in ('sim-resume', 'demo-restart') else '仿真已暂停，保持姿态')
         switching = action == 'start' and info is not None and info.get('mode', 'real') != mode
         if switching and info.get('mode_protocol') == 2:
             request(socket_path(), 'select-mode', mode=mode, timeout=10)

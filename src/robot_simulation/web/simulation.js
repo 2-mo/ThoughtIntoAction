@@ -6,7 +6,7 @@ if (meta.simulation) {
   document.getElementById('camera-title').textContent = '相机 · 实物参考';
   const heading = document.createElement('div');
   heading.id = 'simulation-heading';
-  heading.innerHTML = '<strong>MuJoCo · Quest 遥操</strong><span id="simulation-status">等待连接…</span><span>右摇杆下拨 1 秒启用 · Grip 跟随 · Trigger 夹爪</span>';
+  heading.innerHTML = '<strong>MuJoCo · Quest 遥操</strong><span id="simulation-status">等待连接…</span><span>右手：A 长按切换模式 · A+B 回 Home · Grip 跟随 · Trigger 夹爪；左手：采集</span>';
   document.querySelector('.collection-panel').prepend(heading);
   let stopped = false;
   window.addEventListener('pagehide', () => {stopped = true;});

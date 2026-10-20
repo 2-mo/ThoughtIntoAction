@@ -56,7 +56,9 @@
     - `tests/test_package_boundaries.py::test_monitor_never_imports_a_controller_or_device_sdk`：两个原因。
       - 绑定默认端口 18081，本机工作台运行时会冲突（`OSError`）。测试应传入 `--port 0`。
       - 端口空闲时暴露真正的边界违规：`robot_simulation.cli` → `arx_preview.py:43` → `session.py:6` 导入 `quest_teleop.collection`（`Press`、`StickAction`），监看进程因此依赖旧遥操包。由 `172982f` 引入。按键解析应移到采集或 L0，不留在 `quest_teleop`。
+    - 监看边界：已修复。测试改用 `--mode real --port 0`，并单独检查仿真模块可导入；`session.py` 不再导入 `quest_teleop`（K-04）。
     - `tests/test_plugins.py::test_control_inputs_use_same_service_and_release_only_the_lease`（`:101`）：`--input probe` 结束后服务仍保留 owner，日志为 "X5 stop-and-hold requested"。测试期望释放，实际是停止后保持；需确认是 `172982f` 改变了停止语义而测试未更新，还是 `release_after_stop` 期间 owner 无法清除（`src/robot_control/service.py:89,247`）。
+  - 浏览器测试：`tests/browser_telemetry.mjs:100` 力矩图高度断言在基线上同样失败；另外它只去掉 `sensors.js` 的第一条 import，`172982f` 增加第二条后手柄部分不再加载。
   - 偶发失败：`tests/test_camera_lifecycle.py::test_real_graceful_shutdown_of_dummy_socket_owner` 在一次 `check-all` 全量运行中失败（"相机服务尚未退出"），单独运行 3 次都通过，属于时序不稳定。
   - 完成：两项通过，或注明属于旧内核、随 K-10 退役；偶发项稳定通过。
 

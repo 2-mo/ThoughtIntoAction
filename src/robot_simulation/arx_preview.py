@@ -13,6 +13,8 @@ from robot_core.telemetry import SCHEMA
 from runtime_client import RuntimeReader
 from .scene import Scene
 
+STANDBY = '待机：松开全部按键后可操作 · 右手 A 长按切换模式，Grip 跟随'
+
 
 def preview_packet(robot, tick):
     feedback = tick['feedback']
@@ -39,7 +41,6 @@ class Simulation:
         self.closed = threading.Event()
         self.active = False
         self.revision = 0
-        self.restore_enabled = False
         from .session import SimulationSession
         self.actions = SimulationSession(self)
         self.directory = None
@@ -58,7 +59,7 @@ class Simulation:
     def _request(self):
         if self.directory:
             temporary = self.directory / 'workbench-request.tmp'
-            temporary.write_text(json.dumps({'revision': self.revision, 'active': self.active, 'restore_enabled': self.restore_enabled}))
+            temporary.write_text(json.dumps({'revision': self.revision, 'active': self.active}))
             temporary.replace(self.directory / 'workbench-request.json')
 
     def command(self, action, *, preserve_actions=False):
@@ -67,14 +68,13 @@ class Simulation:
         if not preserve_actions:
             self.actions.stop()
         with self.lock:
-            self.restore_enabled = False
             self.active = action in ('resume', 'restart')
             self.revision += 1
             self._request()
             if self.session:
                 self.session.close()
                 self.session = None
-            self.state.update(message='待机：右摇杆下拨 1 秒启用' if self.active else '仿真已暂停 · 保持姿态')
+            self.state.update(message=STANDBY if self.active else '仿真已暂停 · 保持姿态')
 
     def start(self, scene):
         self.scene = scene
@@ -104,7 +104,7 @@ class Simulation:
             return {**collection, 'state_age_s': age, 'input_age_s': age,
                     'input': {'sample_monotonic_ns': stamp, 'device_timestamp_ns': inp.get('device_timestamp_ns'),
                               'hands': inp.get('hands', {})},
-                    'button_feedback': {'down': {'progress': inp.get('down_progress', 0)}, 'Y': ''},
+                    'button_feedback': self.actions.feedback(), 'button_layout': self.actions.layout,
                     'loop_rates': {'arm_service': {'configured_hz': 250, 'observed_hz': None}},
                     'orientation_preview': {'input_ready': bool(inp.get('tracking')), 'native_basis': True,
                          'basis': [[1,0,0],[0,1,0],[0,0,1]],
@@ -175,7 +175,7 @@ class Simulation:
                         message = ('仿真已暂停 · 保持姿态' if not self.active else
                                    '等待 Quest 连接 / 有效跟踪' if not inp.get('tracking') else
                                    '控制已启用 · Grip 跟随 / Trigger 夹爪' if inp.get('control_enabled') else
-                                   '待机：松开按键，右摇杆回中后下拨 1 秒启用')
+                                   STANDBY)
                         self.state.update(state='running' if self.active else 'paused', message=message,
                                           runtime_id=tick['runtime_id'], directory=str(self.directory),
                                           tracking=bool(inp.get('tracking')), control_enabled=bool(self.active and inp.get('control_enabled')))

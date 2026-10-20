@@ -2,7 +2,8 @@
 import threading
 import unittest
 from unittest.mock import Mock
-from quest_teleop.collection import Press, EpisodeActions, StickAction
+from inputs.gestures import Press, StickAction
+from quest_teleop.collection import EpisodeActions
 from quest_teleop.runtime.session import TeleopSession
 
 

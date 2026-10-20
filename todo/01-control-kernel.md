@@ -31,7 +31,14 @@
 
 ## 工作台适配与上游操控一致
 
-- [ ] **K-04** 按键映射 `P1`
+- [x] **K-04** 按键映射 `P1`
+  - 已做（仿真内核工作台；真机内核使用同一适配，阶段 3 验收）：
+    - `control/adapters/workbench.py` 去掉"右摇杆下拨 1 秒启用"和合成的 A 脉冲，右手柄原样送给 coordinator；只保留总控的允许 / 暂停，允许后需先松开全部按键、Grip、Trigger 才接收输入。不再导入 `quest_teleop`，也不再修改 `sys.path`。
+    - 修复按键位解码：rollio 每个手柄的位是 MENU=1、摇杆按下=2、primary=4、secondary=8。旧代码把 X=1、Y=2、R3=16，导致 X 读成菜单键、R3 永远不触发。
+    - `src/robot_simulation/session.py` 采集改读左手柄；`Press` / `StickAction` 移到 `src/inputs/gestures.py`。
+    - 网页手柄卡片按后端下发的布局显示；真机旧页面保持原布局。终端、总控、README 文案同步。
+  - 观察到的上游行为：在 managed 工作台中，首次 A 进入跟随，之后在 FreeDrive / 跟随间切换（`control/scripts/check_workbench_teleop.py` 断言）。
+  - 验证：`check_workbench_teleop.py`（原生路由 + MuJoCo）通过；`tests/test_sim_buttons.py`、`tests/browser_sim_buttons.mjs` 通过。未用真实 Quest 验证。
   - 决定（2026-10-21）：右手柄完全按上游，采集全部移到左手柄：
 
     | 按键 | 动作 |

@@ -1,6 +1,8 @@
 """Quest A/B preset state machine over the project's X5 controller."""
 
-from .collection import Press, EpisodeActions, StickAction
+from inputs.gestures import Press, StickAction
+
+from .collection import EpisodeActions
 
 import threading
 import time

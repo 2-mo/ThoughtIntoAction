@@ -333,7 +333,7 @@ def switch_mode(mode):
     result = command('start', mode=mode)
     if mode == 'simulation':
         restore_simulation_panes()
-    return result + ('；T 遥操待机，S 暂停保持；右摇杆下拨 1 秒启用。' if mode == 'simulation'
+    return result + ('；T 允许遥操，S 暂停保持；松开全部按键后右手 A 长按切换模式。' if mode == 'simulation'
                      else '；A 连接机械臂，T 启动遥操（仍需原启用手势）。')
 
 

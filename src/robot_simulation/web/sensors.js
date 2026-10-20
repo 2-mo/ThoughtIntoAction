@@ -22,16 +22,25 @@ function validHand(hand) {
   return hand?.pose?.length === 7 && hand.pose.every(Number.isFinite) &&
     Math.hypot(...hand.pose.slice(3)) > .1;
 }
-function renderHand(side, hand, feedback = {}, state = hand ? 'live' : 'offline') {
+// Real-arm teleop keeps this layout; the MuJoCo workbench sends its own (button_layout).
+const LEGACY_LAYOUT = {
+  left: {stick: null, holds: [], keys: {X: '网页回放', Y: '真机回放'}},
+  right: {stick: 'R3', holds: ['stick', 'B'], keys: {A: '预抓取/采集', B: '预抓取/回零'}},
+};
+let lastLayout = LEGACY_LAYOUT;
+function renderHand(side, hand, feedback = {}, state = hand ? 'live' : 'offline', layouts = LEGACY_LAYOUT) {
   const root = byId(side + '-hand');
+  const layout = layouts[side] || LEGACY_LAYOUT[side];
+  const signature = JSON.stringify(layout);
+  if (root.dataset.layout !== signature) { root.innerHTML = ''; root.dataset.layout = signature; }
   root.dataset.state = state;
   root.setAttribute('aria-label', (side === 'left' ? '左手柄：' : '右手柄：') + stateLabels[state]);
   root.title = root.getAttribute('aria-label');
   if (!root.querySelector('.controller-shell')) {
-    const keys = side === 'left' ? ['X', 'Y'] : ['A', 'B'];
     const ring = (key, content, label) => `<span class="hold-ring" data-hold="${key}" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">${content}</span>`;
-    const stick = `<span class="controller-stick" ${side === 'right' ? 'data-key="R3"' : ''}><i></i></span>`;
-    root.innerHTML = `<div class="controller-shell"><div class="controller-face"><div class="key-unit">${side === 'right' ? ring('stick', stick, '摇杆长按进度') : stick}<small class="stick-label">摇杆</small></div>${keys.map(key => `<div class="key-unit">${key === 'B' ? ring('B', `<span class="controller-key" data-key="B">B</span>`, 'B 回零长按进度') : `<span class="controller-key" data-key="${key}">${key}</span>`}<small>${({A:'预抓取/采集', B:'预抓取/回零', X:'网页回放', Y:'真机回放'})[key]}</small></div>`).join('')}</div><div class="meters"></div></div><p class="controller-pose"></p>`;
+    const stick = `<span class="controller-stick" ${layout.stick ? `data-key="${layout.stick}"` : ''}><i></i></span>`;
+    const keyNode = key => `<span class="controller-key" data-key="${key}">${key}</span>`;
+    root.innerHTML = `<div class="controller-shell"><div class="controller-face"><div class="key-unit">${layout.holds.includes('stick') ? ring('stick', stick, '摇杆长按进度') : stick}<small class="stick-label">摇杆</small></div>${Object.entries(layout.keys).map(([key, label]) => `<div class="key-unit">${layout.holds.includes(key) ? ring(key, keyNode(key), key + ' 长按进度') : keyNode(key)}<small>${label}</small></div>`).join('')}</div><div class="meters"></div></div><p class="controller-pose"></p>`;
     const labels = [['trigger', 'Trigger'], ['grip', 'Grip']];
     root.querySelector('.meters').innerHTML = labels.map(([key, label]) => `<label class="controller-meter">${label}<output data-meter="${key}" aria-label="${label}">0%</output></label>`).join('');
   }
@@ -43,7 +52,7 @@ function renderHand(side, hand, feedback = {}, state = hand ? 'live' : 'offline'
     node.title = hand ? feedback[key]?.fired ? '长按已触发' : Math.round(value * 100) + '%' : '数据未连接';
   });
   root.querySelectorAll('[data-hold]').forEach(node => {
-    const key = node.dataset.hold === 'stick' ? ((feedback.down?.progress || 0) > 0 ? 'down' : 'R3') : node.dataset.hold;
+    const key = node.dataset.hold === 'stick' ? ((feedback.down?.progress || 0) > 0 ? 'down' : layout.stick) : node.dataset.hold;
     const value = hand ? Math.max(0, Math.min(1, feedback[key]?.progress || 0)) : 0;
     node.style.setProperty('--hold', `${value * 360}deg`);
     node.setAttribute('aria-valuenow', String(Math.round(value * 100)));
@@ -58,7 +67,7 @@ function renderHand(side, hand, feedback = {}, state = hand ? 'live' : 'offline'
 function clearInput(message, state = 'offline') {
   inputDeadline = 0;
   inputState(state, message);
-  for (const side of ['left', 'right']) renderHand(side, null, {}, state);
+  for (const side of ['left', 'right']) renderHand(side, null, {}, state, lastLayout);
   byId('button-response').textContent = '';
   byId('button-response').title = message;
 }
@@ -150,8 +159,18 @@ async function refresh() {
       const count = Object.values(hands).filter(Boolean).length;
       inputState(count === 2 ? 'live' : count === 1 ? 'partial' : 'offline', '依据手柄输入帧的新鲜度；不代表机械臂控制已启用');
       inputDeadline = count ? performance.now() + 1000 * (.5 - Math.max(data.input_age_s, data.state_age_s)) : 0;
-      for (const side of ['left', 'right']) renderHand(side, hands[side], data.button_feedback || {});
-      byId('button-response').textContent = data.button_feedback?.Y ?? '需重启遥操以显示实际按键响应和长按进度';
+      lastLayout = data.button_layout || LEGACY_LAYOUT;
+      const help = document.querySelector('.collection-controls');
+      if (help && data.button_layout?.help) {
+        if (!help.dataset.legacy) help.dataset.legacy = JSON.stringify([...help.children].map(node => node.textContent));
+        help.replaceChildren(...data.button_layout.help.map(text => Object.assign(document.createElement('span'), {textContent: text})));
+      } else if (help?.dataset.legacy) {
+        help.replaceChildren(...JSON.parse(help.dataset.legacy).map(text => Object.assign(document.createElement('span'), {textContent: text})));
+        delete help.dataset.legacy;
+      }
+      for (const side of ['left', 'right']) renderHand(side, hands[side], data.button_feedback || {}, undefined, lastLayout);
+      const response = data.button_feedback?.Y;
+      byId('button-response').textContent = typeof response === 'string' ? response : data.button_layout ? '' : '需重启遥操以显示实际按键响应和长按进度';
     }
   } catch {
     window.dispatchEvent(new CustomEvent('teleop-preview', { detail: null }));

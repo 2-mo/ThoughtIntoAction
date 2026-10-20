@@ -212,7 +212,7 @@ def run(args):
         (directory / 'runtime.ready').write_text('ready\n')
         trigger = 'gripper' if settings.robot.gripper_max_width > 0 else 'unused (no tool)'
         if args.routing_plugin == 'arx.workbench':
-            print('Workbench standby: right stick down 1 s to enable; Grip follows; Trigger controls gripper; A/B reserved for collection/presets.')
+            print(f'Workbench: right controller as upstream (A: hold 150 ms to change mode | Grip: clutch | Trigger: {trigger} | A+B: Home); left controller: collection.')
         else:
             print(f"A: hold 150 ms to change mode | Grip: clutch | Trigger: {trigger} | A+B: Home")
         if args.input == "demo":
