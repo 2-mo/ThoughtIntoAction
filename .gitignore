@@ -241,3 +241,7 @@ __marimo__/
 
 # Recorded raw episodes and generated training datasets.
 /datasets/
+
+# Local design references: third-party video screenshots (watermarked), not redistributable.
+# The intended look is described in todo/07-ui.md (U-05).
+/参考图像/
