@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from robot_teleop.kinematics.config import load_model_config
-from robot_teleop.tools.phase5_sdk_model_check import (
+from embodied.phone.kinematics.config import load_model_config
+from embodied.phone.tools.phase5_sdk_model_check import (
     SdkModelMismatchError,
     compare_sdk_model_config,
 )

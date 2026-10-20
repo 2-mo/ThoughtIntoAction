@@ -6,10 +6,10 @@ import threading
 import time
 from unittest.mock import Mock
 
-from robot_core.model import RobotModel
-from robot_core.project import load_config
-from robot_control.backends.factories import simulated
-from robot_control.service import ArmService, serve
+from embodied.core.model import RobotModel
+from embodied.core.project import load_config
+from legacy.robot_control.backends.factories import simulated
+from legacy.robot_control.service import ArmService, serve
 
 
 class ServiceFixture:

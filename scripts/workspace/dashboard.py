@@ -15,7 +15,7 @@ from rich.table import Table
 from rich.text import Text
 
 import tmux_workspace as workspace
-from robot_simulation.control import command as viewer_command, status as viewer_status
+from embodied.monitor.control import command as viewer_command, status as viewer_status
 
 
 def overview():

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from robot_teleop.controllers.ruckig_servo import (
+from embodied.phone.controllers.ruckig_servo import (
     JointServoLimits,
     JointServoState,
     RuckigJointServo,

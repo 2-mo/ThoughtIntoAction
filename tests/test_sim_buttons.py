@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 
-from robot_simulation.session import BUTTON_LAYOUT, SimulationSession
+from embodied.monitor.session import BUTTON_LAYOUT, SimulationSession
 
 
 class SimulationButtonTests(unittest.TestCase):
@@ -24,7 +24,7 @@ class SimulationButtonTests(unittest.TestCase):
                 self.stamp += 1
                 hands = {'left': {'buttons': (left or {}) if pressed else {}, 'grip': 0, 'axes': [0, 0]},
                          'right': {'buttons': (right or {}) if pressed else {}, 'grip': 0, 'axes': [0, 0]}}
-                with patch('robot_simulation.session.time.monotonic', return_value=self.clock):
+                with patch('embodied.monitor.session.time.monotonic', return_value=self.clock):
                     self.session.update({'device_timestamp_ns': self.stamp, 'tracking': True, 'hands': hands}, enabled)
 
     def stick(self, x, y):
@@ -32,7 +32,7 @@ class SimulationButtonTests(unittest.TestCase):
             self.clock += .02
             self.stamp += 1
             hands = {'left': {'buttons': {}, 'grip': 0, 'axes': list(axes)}, 'right': {'buttons': {}, 'grip': 0, 'axes': [0, 0]}}
-            with patch('robot_simulation.session.time.monotonic', return_value=self.clock):
+            with patch('embodied.monitor.session.time.monotonic', return_value=self.clock):
                 self.session.update({'device_timestamp_ns': self.stamp, 'tracking': True, 'hands': hands}, True)
 
     def test_right_controller_buttons_never_drive_collection(self):

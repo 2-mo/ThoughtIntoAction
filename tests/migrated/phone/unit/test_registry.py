@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from robot_teleop.config import load_profile
-from robot_teleop.inputs.arkit import ArkitInputSource
-from robot_teleop.registry import (
+from embodied.phone.config import load_profile
+from embodied.phone.inputs.arkit import ArkitInputSource
+from embodied.phone.registry import (
     CONTROLLERS,
     INPUTS,
     POLICIES,
@@ -15,7 +15,7 @@ from robot_teleop.registry import (
     HardwareEnableRequiredError,
     create_application,
 )
-from robot_teleop.transports.udp import UdpTransport
+from embodied.phone.transports.udp import UdpTransport
 
 ROOT = Path(__file__).parents[4]
 

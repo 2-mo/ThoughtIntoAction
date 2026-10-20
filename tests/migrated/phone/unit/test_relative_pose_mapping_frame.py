@@ -2,13 +2,13 @@ import math
 
 import pytest
 
-from robot_teleop.core.frames import (
+from embodied.phone.core.frames import (
     quaternion_angular_distance,
     quaternion_from_axis_angle,
     quaternion_multiply,
 )
-from robot_teleop.core.mapping import AxisMapping, MappingOutputFrame, PoseMapping
-from robot_teleop.core.models import (
+from embodied.phone.core.mapping import AxisMapping, MappingOutputFrame, PoseMapping
+from embodied.phone.core.models import (
     Pose,
     Quaternion,
     RobotState,
@@ -16,7 +16,7 @@ from robot_teleop.core.models import (
     TrackingQuality,
     Vector3,
 )
-from robot_teleop.policies.relative_pose import RelativePosePolicy
+from embodied.phone.policies.relative_pose import RelativePosePolicy
 
 
 def _input(position: Vector3, orientation: Quaternion) -> TeleopInput:

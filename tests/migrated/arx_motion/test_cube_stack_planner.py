@@ -3,9 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 import unittest
 
-from arx5_backend.features.cube.stack import speed_partitioned_motion_runs
-from experiments.cube_pick_rotate_place.config import load_config
-from experiments.cube_pick_rotate_place.planner import (
+from embodied.console.features.cube.stack import speed_partitioned_motion_runs
+from embodied.tasks.cube.config import load_config
+from embodied.tasks.cube.planner import (
     Action,
     build_stack_actions,
     consecutive_move_runs,

@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from robot_teleop.config import ConfigurationError, load_profile
-from robot_teleop.registry import (
+from embodied.phone.config import ConfigurationError, load_profile
+from embodied.phone.registry import (
     ComponentUnavailableError,
     HardwareEnableRequiredError,
     create_application,

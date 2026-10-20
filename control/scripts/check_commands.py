@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT.parent / 'src' if (ROOT.parent / 'src/embodied_contracts').is_dir() else ROOT / 'shared')]
+sys.path[:0] = [str(ROOT), str(ROOT.parent / 'src' if (ROOT.parent / 'src/embodied/contracts').is_dir() else ROOT / 'shared')]
 from adapters.commands import CommandEngine, MotionPlanner
 from arx5_vr.types import RobotState, ControlCommand, Mode
 from arx5_vr.settings import load_settings
@@ -179,7 +179,7 @@ class CommandsTests(unittest.TestCase):
         self.assertEqual(described['workspace'], {'minimum_tcp_z_m': 0.0})
         self.assertEqual(set(described['actions']), set(ACTIONS))
         # The platform's offline reader returns the same robot facts.
-        from embodied_contracts.robot import load_robot_profile
+        from embodied.contracts.robot import load_robot_profile
         profile = load_robot_profile(ROOT / 'config')
         for name, value in described['robot'].items():
             self.assertEqual(profile['robot'][name], value, name)

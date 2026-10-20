@@ -5,10 +5,10 @@ import unittest
 
 import numpy as np
 
-from arx5_control import ControllerMode
-from arx5_backend.kernel.control import ControlKernel
-from arx5_backend.features.cube.stack import execute_cube_stack
-from experiments.cube_pick_rotate_place.planner import Action
+from legacy.arx5_control import ControllerMode
+from embodied.console.kernel.control import ControlKernel
+from embodied.console.features.cube.stack import execute_cube_stack
+from embodied.tasks.cube.planner import Action
 
 
 class FakeParkController:

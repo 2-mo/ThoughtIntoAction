@@ -1,11 +1,11 @@
 import socket
 from typing import cast
 
-from robot_teleop.tools.phase3_mock_session import (
+from embodied.phone.tools.phase3_mock_session import (
     Phase3MockSessionConfig,
     run_phase3_mock_session,
 )
-from robot_teleop.tools.phase3_mock_validation import (
+from embodied.phone.tools.phase3_mock_validation import (
     Phase3MockValidationConfig,
     run_phase3_mock_validation,
 )

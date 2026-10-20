@@ -2,7 +2,7 @@
 
 使用项目内 X5-2025 hybrid URDF。`link6` 与当前遥操 EEF 一致；`eef_link` 是另一个固定坐标系，不能混用结果。相机坐标系是 **RGB 光学系**，不是相机外壳或深度光学系。
 
-三维监看在 `src/robot_simulation/`，虚拟控制在 `src/robot_control/cli.py`，标定在 `src/handeye_calibration/`。共同使用当前 X5-2025 模型，控制通过本机接口连接机械臂服务，服务向监看发布状态。
+三维监看在 `src/embodied/monitor/`，虚拟控制在 `src/legacy/robot_control/cli.py`，标定在 `src/embodied/calibration/wrist/`。共同使用当前 X5-2025 模型，控制通过本机接口连接机械臂服务，服务向监看发布状态。
 
 ## 监看与虚拟控制
 

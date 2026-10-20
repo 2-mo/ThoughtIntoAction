@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {chromium} from '../.cache/viewer-validation/node_modules/playwright/index.mjs';
-const root = new URL('../src/robot_simulation/web/', import.meta.url);
+const root = new URL('../src/embodied/monitor/web/', import.meta.url);
 const browser = await chromium.launch({headless:true, args:['--no-sandbox']});
 try {
   const page = await browser.newPage();

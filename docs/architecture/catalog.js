@@ -6,7 +6,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "service",
       "origin": "原有注册表",
       "registry": "configs/plugins.toml",
-      "factory": "robot_control.backends.factories:service",
+      "factory": "legacy.robot_control.backends.factories:service",
       "capabilities": [
         "recording",
         "force_hold"
@@ -17,7 +17,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "stanford",
       "origin": "原有注册表",
       "registry": "configs/plugins.toml",
-      "factory": "robot_control.backends.factories:stanford",
+      "factory": "legacy.robot_control.backends.factories:stanford",
       "hardware": true,
       "capabilities": [
         "recording",
@@ -30,7 +30,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "simulated",
       "origin": "原有注册表",
       "registry": "configs/plugins.toml",
-      "factory": "robot_control.backends.factories:simulated",
+      "factory": "legacy.robot_control.backends.factories:simulated",
       "simulation_only": true,
       "capabilities": [
         "service_device"
@@ -41,7 +41,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "arx2025",
       "origin": "原有注册表",
       "registry": "configs/plugins.toml",
-      "factory": "robot_control.backends.factories:arx2025",
+      "factory": "legacy.robot_control.backends.factories:arx2025",
       "hardware": true,
       "capabilities": [
         "experimental"
@@ -52,14 +52,14 @@ window.ARCHITECTURE_CATALOG = {
       "name": "quest",
       "origin": "原有注册表",
       "registry": "configs/plugins.toml",
-      "factory": "quest_teleop.inputs:quest"
+      "factory": "legacy.quest_teleop.inputs:quest"
     },
     {
       "kind": "input",
       "name": "idle",
       "origin": "原有注册表",
       "registry": "configs/plugins.toml",
-      "factory": "quest_teleop.inputs:IdleInput",
+      "factory": "legacy.quest_teleop.inputs:IdleInput",
       "simulation_only": true
     },
     {
@@ -67,28 +67,28 @@ window.ARCHITECTURE_CATALOG = {
       "name": "web",
       "origin": "原有注册表",
       "registry": "configs/plugins.toml",
-      "factory": "robot_simulation.scene:Scene"
+      "factory": "embodied.monitor.scene:Scene"
     },
     {
       "kind": "telemetry",
       "name": "local",
       "origin": "原有注册表",
       "registry": "configs/plugins.toml",
-      "factory": "robot_core.telemetry:LocalPublisher"
+      "factory": "embodied.core.telemetry:LocalPublisher"
     },
     {
       "kind": "telemetry",
       "name": "none",
       "origin": "原有注册表",
       "registry": "configs/plugins.toml",
-      "factory": "robot_core.telemetry:NullPublisher"
+      "factory": "embodied.core.telemetry:NullPublisher"
     },
     {
       "kind": "camera",
       "name": "realsense",
       "origin": "原有注册表",
       "registry": "configs/plugins.toml",
-      "factory": "robot_core.camera_client:SharedCamera",
+      "factory": "embodied.sensors.client:SharedCamera",
       "hardware": true,
       "capabilities": [
         "shared-service",
@@ -173,7 +173,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "phone.arkit",
       "origin": "arx 工作台",
       "registry": "control/config/components.json",
-      "factory": "inputs.phone:PhoneController",
+      "factory": "embodied.inputs.phone:PhoneController",
       "capabilities": [
         "pose",
         "clutch",
@@ -187,7 +187,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "cli",
       "origin": "arx 工作台",
       "registry": "control/config/components.json",
-      "factory": "inputs.idle:IdleSource",
+      "factory": "embodied.inputs.idle:IdleSource",
       "capabilities": [
         "joint",
         "cartesian",
@@ -201,7 +201,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "quest",
       "origin": "arx 工作台",
       "registry": "control/config/components.json",
-      "factory": "inputs.idle:NativeSession",
+      "factory": "embodied.inputs.idle:NativeSession",
       "capabilities": [
         "lease",
         "native-ingress"
@@ -212,7 +212,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "arx",
       "origin": "arx 工作台",
       "registry": "control/config/components.json",
-      "factory": "handeye_calibration.arx_arm:ArxCalibrationArm",
+      "factory": "embodied.calibration.wrist.arx_arm:ArxCalibrationArm",
       "capabilities": [
         "snapshot",
         "joint",
@@ -225,7 +225,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "legacy",
       "origin": "arx 工作台",
       "registry": "control/config/components.json",
-      "factory": "handeye_calibration.arm:CalibrationArm",
+      "factory": "embodied.calibration.wrist.arm:CalibrationArm",
       "capabilities": [
         "snapshot",
         "joint",
@@ -238,7 +238,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "schema1",
       "origin": "arx 工作台",
       "registry": "control/config/components.json",
-      "factory": "dataset_tools.exporters:Schema1",
+      "factory": "embodied.data.export.exporters:Schema1",
       "capabilities": [
         "lerobot-v2.1",
         "raw-sidecar"
@@ -249,7 +249,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "schema2",
       "origin": "arx 工作台",
       "registry": "control/config/components.json",
-      "factory": "dataset_tools.exporters:Schema2",
+      "factory": "embodied.data.export.exporters:Schema2",
       "capabilities": [
         "lerobot-v2.1",
         "raw-sidecar",
@@ -261,7 +261,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "phone_tool",
       "origin": "arx 工作台",
       "registry": "control/config/components.json",
-      "factory": "inputs.phone:phone_tool",
+      "factory": "embodied.inputs.phone:phone_tool",
       "capabilities": [
         "relative-pose",
         "tool"
@@ -272,7 +272,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "phone_base",
       "origin": "arx 工作台",
       "registry": "control/config/components.json",
-      "factory": "inputs.phone:phone_base",
+      "factory": "embodied.inputs.phone:phone_base",
       "capabilities": [
         "relative-pose",
         "base"
@@ -283,7 +283,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "arkit",
       "origin": "arx 工作台",
       "registry": "control/config/components.json",
-      "factory": "inputs.phone:PhoneInput",
+      "factory": "embodied.inputs.phone:PhoneInput",
       "capabilities": [
         "pose",
         "sequence",
@@ -296,7 +296,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "synthetic",
       "origin": "arx 工作台",
       "registry": "control/config/components.json",
-      "factory": "robot_core.synthetic_camera:SyntheticCamera",
+      "factory": "embodied.sensors.synthetic:SyntheticCamera",
       "simulation_only": true,
       "capabilities": [
         "rgb",
@@ -391,7 +391,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "ruckig",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:offline_ruckig",
+      "factory": "embodied.workstation.components.factories:offline_ruckig",
       "runtime": "analysis",
       "capabilities": [
         "joint",
@@ -405,7 +405,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "clik",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:clik",
+      "factory": "embodied.workstation.components.factories:clik",
       "runtime": "rebot",
       "capabilities": [
         "jacobian",
@@ -418,7 +418,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "cartesian",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:cartesian_path",
+      "factory": "embodied.workstation.components.factories:cartesian_path",
       "runtime": "analysis",
       "capabilities": [
         "line",
@@ -431,7 +431,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "se3_geodesic",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:se3_path",
+      "factory": "embodied.workstation.components.factories:se3_path",
       "runtime": "rebot",
       "capabilities": [
         "linear",
@@ -445,7 +445,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "tcp",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:tcp_collision",
+      "factory": "embodied.workstation.components.factories:tcp_collision",
       "runtime": "analysis",
       "capabilities": [
         "sphere",
@@ -458,7 +458,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "links",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:link_collision",
+      "factory": "embodied.workstation.components.factories:link_collision",
       "runtime": "analysis",
       "capabilities": [
         "coal",
@@ -471,7 +471,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "jacobian",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:jacobian",
+      "factory": "embodied.workstation.components.factories:jacobian",
       "runtime": "analysis",
       "capabilities": [
         "singularity",
@@ -483,7 +483,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "rebot",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:rebot_kinematics",
+      "factory": "embodied.workstation.components.factories:rebot_kinematics",
       "runtime": "rebot",
       "capabilities": [
         "fk",
@@ -496,7 +496,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "eye_in_hand",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:eye_in_hand",
+      "factory": "embodied.workstation.components.factories:eye_in_hand",
       "runtime": "analysis",
       "capabilities": [
         "T_eef_camera",
@@ -508,7 +508,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "eye_to_hand",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:eye_to_hand",
+      "factory": "embodied.workstation.components.factories:eye_to_hand",
       "runtime": "analysis",
       "capabilities": [
         "T_base_camera",
@@ -520,7 +520,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "handeye",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:calibration_quality",
+      "factory": "embodied.workstation.components.factories:calibration_quality",
       "runtime": "analysis",
       "capabilities": [
         "validate",
@@ -533,7 +533,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "payload",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:payload",
+      "factory": "embodied.workstation.components.factories:payload",
       "runtime": "analysis",
       "capabilities": [
         "mass",
@@ -546,7 +546,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "gripper",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:gripper_calibration",
+      "factory": "embodied.workstation.components.factories:gripper_calibration",
       "runtime": "analysis",
       "capabilities": [
         "width",
@@ -558,7 +558,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "cube_stack",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:cube_stack",
+      "factory": "embodied.workstation.components.factories:cube_stack",
       "runtime": "analysis",
       "capabilities": [
         "pick",
@@ -572,7 +572,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "cube_pick_place",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:cube_pick_place",
+      "factory": "embodied.workstation.components.factories:cube_pick_place",
       "runtime": "analysis",
       "capabilities": [
         "grasp",
@@ -585,7 +585,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "groot_v21",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:groot_export",
+      "factory": "embodied.workstation.components.factories:groot_export",
       "runtime": "analysis",
       "capabilities": [
         "dual-rgb",
@@ -599,7 +599,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "groot",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:groot_validation",
+      "factory": "embodied.workstation.components.factories:groot_validation",
       "runtime": "analysis",
       "capabilities": [
         "timestamps",
@@ -612,7 +612,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "groot",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:groot_collection",
+      "factory": "embodied.workstation.components.factories:groot_collection",
       "runtime": "analysis",
       "capabilities": [
         "accept",
@@ -625,7 +625,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "groot",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:groot_policy",
+      "factory": "embodied.workstation.components.factories:groot_policy",
       "runtime": "analysis",
       "capabilities": [
         "model-server",
@@ -637,7 +637,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "groot",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:groot_actions",
+      "factory": "embodied.workstation.components.factories:groot_actions",
       "runtime": "analysis",
       "capabilities": [
         "chunk",
@@ -650,7 +650,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "groot",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:groot_checkpoint",
+      "factory": "embodied.workstation.components.factories:groot_checkpoint",
       "runtime": "analysis",
       "capabilities": [
         "modality",
@@ -662,7 +662,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "pinocchio",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:rebot_dynamics",
+      "factory": "embodied.workstation.components.factories:rebot_dynamics",
       "runtime": "rebot",
       "capabilities": [
         "inverse",
@@ -678,7 +678,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "mock",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "robot_teleop.inputs.mock:MockInputSource",
+      "factory": "embodied.phone.inputs.mock:MockInputSource",
       "runtime": "workstation",
       "capabilities": [
         "push",
@@ -692,7 +692,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "replay",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "robot_teleop.inputs.replay:ReplayInputSource",
+      "factory": "embodied.phone.inputs.replay:ReplayInputSource",
       "runtime": "workstation",
       "capabilities": [
         "playback",
@@ -705,7 +705,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "mock",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "robot_teleop.transports.mock:MockTransport",
+      "factory": "embodied.phone.transports.mock:MockTransport",
       "runtime": "workstation",
       "capabilities": [
         "deterministic",
@@ -718,7 +718,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "mock",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "robot_teleop.robots.mock:MockRobotBackend",
+      "factory": "embodied.phone.robots.mock:MockRobotBackend",
       "runtime": "workstation",
       "capabilities": [
         "feedback",
@@ -731,7 +731,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "ruckig_joint",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "robot_teleop.controllers.ruckig_servo:RuckigJointServo",
+      "factory": "embodied.phone.controllers.ruckig_servo:RuckigJointServo",
       "runtime": "analysis",
       "capabilities": [
         "joint",
@@ -743,7 +743,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "ruckig_cartesian",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "robot_teleop.controllers.cartesian_ruckig:CartesianRuckigServo",
+      "factory": "embodied.phone.controllers.cartesian_ruckig:CartesianRuckigServo",
       "runtime": "analysis",
       "capabilities": [
         "cartesian",
@@ -756,7 +756,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "phone_pinocchio",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "robot_teleop.kinematics.pinocchio:PinocchioKinematics",
+      "factory": "embodied.phone.kinematics.pinocchio:PinocchioKinematics",
       "runtime": "analysis",
       "capabilities": [
         "fk",
@@ -769,7 +769,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "motion_pinocchio",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "arx5_control.motion.pinocchio_backend:PinocchioKinematics",
+      "factory": "embodied.motion.pinocchio_backend:PinocchioKinematics",
       "runtime": "analysis",
       "capabilities": [
         "fk",
@@ -781,7 +781,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "rgb_cube",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "arx_tools.rgb_cube_detector:RgbCubeDetector",
+      "factory": "legacy.arx_tools.rgb_cube_detector:RgbCubeDetector",
       "runtime": "analysis",
       "capabilities": [
         "rgb",
@@ -794,7 +794,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "rebot_dm",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:rebot_dm",
+      "factory": "embodied.workstation.components.factories:rebot_dm",
       "runtime": "rebot",
       "capabilities": [
         "joint-groups",
@@ -809,7 +809,7 @@ window.ARCHITECTURE_CATALOG = {
       "name": "rebot_rs",
       "origin": "迁入组件",
       "registry": "configs/components/migrated.json",
-      "factory": "component_plugins.factories:rebot_rs",
+      "factory": "embodied.workstation.components.factories:rebot_rs",
       "runtime": "rebot",
       "capabilities": [
         "joint-groups",
@@ -824,142 +824,142 @@ window.ARCHITECTURE_CATALOG = {
     {
       "name": "calibration.handeye",
       "environment": "analysis",
-      "module": "hand_eye_calibration"
+      "module": "embodied.calibration.hand_eye"
     },
     {
       "name": "calibration.payload",
       "environment": "analysis",
-      "module": "arx_tools.calibrate_payload"
+      "module": "legacy.arx_tools.calibrate_payload"
     },
     {
       "name": "calibration.gripper",
       "environment": "analysis",
-      "module": "arx_tools.calibrate_gripper_guided"
+      "module": "legacy.arx_tools.calibrate_gripper_guided"
     },
     {
       "name": "motion.console",
       "environment": "analysis",
-      "module": "arx_tools.control_cli"
+      "module": "legacy.arx_tools.control_cli"
     },
     {
       "name": "diagnostic.arm_state",
       "environment": "analysis",
-      "module": "arx_tools.show_state"
+      "module": "legacy.arx_tools.show_state"
     },
     {
       "name": "diagnostic.d405",
       "environment": "analysis",
-      "module": "arx_tools.d405_profile_benchmark"
+      "module": "legacy.arx_tools.d405_profile_benchmark"
     },
     {
       "name": "gripper.position",
       "environment": "analysis",
-      "module": "arx_tools.gripper_position_test"
+      "module": "legacy.arx_tools.gripper_position_test"
     },
     {
       "name": "gripper.torque",
       "environment": "analysis",
-      "module": "arx_tools.gripper_force_test"
+      "module": "legacy.arx_tools.gripper_force_test"
     },
     {
       "name": "task.cube",
       "environment": "analysis",
-      "module": "experiments.cube_pick_rotate_place"
+      "module": "embodied.tasks.cube"
     },
     {
       "name": "collection.groot",
       "environment": "web",
-      "module": "isaac_groot_data_collection.cli"
+      "module": "embodied.data.groot.cli"
     },
     {
       "name": "policy.groot",
       "environment": "analysis",
-      "module": "gr_zeroshot.cli"
+      "module": "embodied.policy.groot.cli"
     },
     {
       "name": "ui.backend",
       "environment": "analysis",
-      "module": "arx5_backend"
+      "module": "embodied.console"
     },
     {
       "name": "camera.rgbd",
       "environment": "web",
-      "module": "arx5_backend.features.camera.service"
+      "module": "embodied.console.features.camera.service"
     },
     {
       "name": "input.hand_service",
       "environment": "web",
-      "module": "arx5_backend.features.vision.service"
+      "module": "embodied.console.features.vision.service"
     },
     {
       "name": "diagnostic.pose_monitor",
       "environment": "analysis",
-      "module": "robot_teleop.tools.pose_monitor"
+      "module": "embodied.phone.tools.pose_monitor"
     },
     {
       "name": "diagnostic.pose_simulator",
       "environment": "analysis",
-      "module": "robot_teleop.tools.pose_simulator"
+      "module": "embodied.phone.tools.pose_simulator"
     },
     {
       "name": "diagnostic.udp_loopback",
       "environment": "analysis",
-      "module": "robot_teleop.tools.udp_loopback"
+      "module": "embodied.phone.tools.udp_loopback"
     },
     {
       "name": "diagnostic.network_test",
       "environment": "analysis",
-      "module": "robot_teleop.tools.network_test"
+      "module": "embodied.phone.tools.network_test"
     },
     {
       "name": "diagnostic.latency_report",
       "environment": "analysis",
-      "module": "robot_teleop.tools.latency_report"
+      "module": "embodied.phone.tools.latency_report"
     },
     {
       "name": "diagnostic.control_observations",
       "environment": "analysis",
-      "module": "robot_teleop.tools.control_observations"
+      "module": "embodied.phone.tools.control_observations"
     },
     {
       "name": "diagnostic.phase3_mock_validation",
       "environment": "analysis",
-      "module": "robot_teleop.tools.phase3_mock_validation"
+      "module": "embodied.phone.tools.phase3_mock_validation"
     },
     {
       "name": "diagnostic.phase4_kinematics_check",
       "environment": "analysis",
-      "module": "robot_teleop.tools.phase4_kinematics_check"
+      "module": "embodied.phone.tools.phase4_kinematics_check"
     },
     {
       "name": "diagnostic.phase4_ghost_review",
       "environment": "analysis",
-      "module": "robot_teleop.tools.phase4_ghost_review"
+      "module": "embodied.phone.tools.phase4_ghost_review"
     },
     {
       "name": "diagnostic.arx5_sdk_inspect",
       "environment": "analysis",
-      "module": "robot_teleop.tools.arx5_sdk_inspect"
+      "module": "embodied.phone.tools.arx5_sdk_inspect"
     },
     {
       "name": "diagnostic.arx5_state_readiness",
       "environment": "analysis",
-      "module": "robot_teleop.tools.arx5_state_readiness"
+      "module": "embodied.phone.tools.arx5_state_readiness"
     },
     {
       "name": "diagnostic.phase5_motion_preflight",
       "environment": "analysis",
-      "module": "robot_teleop.tools.phase5_motion_preflight"
+      "module": "embodied.phone.tools.phase5_motion_preflight"
     },
     {
       "name": "diagnostic.phase5_safety_contract",
       "environment": "analysis",
-      "module": "robot_teleop.tools.phase5_safety_contract"
+      "module": "embodied.phone.tools.phase5_safety_contract"
     },
     {
       "name": "phone.tools",
       "environment": "phone",
-      "module": "robot_teleop.cli"
+      "module": "embodied.phone.cli"
     },
     {
       "name": "rebot.dm",
@@ -1074,27 +1074,27 @@ window.ARCHITECTURE_CATALOG = {
     {
       "name": "ui.console",
       "environment": "analysis",
-      "shell": "src/arx_tools/web.sh"
+      "shell": "src/legacy/arx_tools/web.sh"
     },
     {
       "name": "deployment.lan",
       "environment": "analysis",
-      "shell": "src/arx_tools/web_lan.sh"
+      "shell": "src/legacy/arx_tools/web_lan.sh"
     },
     {
       "name": "deployment.tailnet",
       "environment": "analysis",
-      "shell": "src/arx_tools/web_tailnet.sh"
+      "shell": "src/legacy/arx_tools/web_tailnet.sh"
     },
     {
       "name": "deployment.restart",
       "environment": "analysis",
-      "shell": "src/arx_tools/web_restart.sh"
+      "shell": "src/legacy/arx_tools/web_restart.sh"
     },
     {
       "name": "diagnostic.can",
       "environment": "analysis",
-      "shell": "src/arx_tools/can_up.sh"
+      "shell": "src/legacy/arx_tools/can_up.sh"
     },
     {
       "name": "test.rebot",
@@ -1236,32 +1236,8 @@ window.ARCHITECTURE_CATALOG = {
     "third_party/",
     "todo/",
     "参考图像/",
-    "src/arx5_backend/",
-    "src/arx5_control/",
-    "src/arx_tools/",
-    "src/backend/",
-    "src/collection/",
-    "src/component_plugins/",
-    "src/dataset_tools/",
-    "src/embodied_contracts/",
-    "src/episode_io/",
-    "src/experiments/",
-    "src/gr_zeroshot/",
-    "src/hand_eye_calibration/",
-    "src/handeye_calibration/",
-    "src/infer_after_sft/",
-    "src/inputs/",
-    "src/isaac_groot_data_collection/",
-    "src/observations/",
-    "src/operations/",
-    "src/quest_teleop/",
-    "src/reBotArm_control_py/",
-    "src/robot_control/",
-    "src/robot_core/",
-    "src/robot_simulation/",
-    "src/robot_teleop/",
-    "src/workstation/",
-    "src/zero-shot/"
+    "src/embodied/",
+    "src/legacy/"
   ],
   "sources": [
     "configs/plugins.toml",

@@ -6,12 +6,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 import numpy as np
 import pinocchio as pin
-from embodied_contracts.registry import Registry
-from reBotArm_control_py.kinematics.robot_model import load_robot_model, get_joint_limits
-from reBotArm_control_py.dynamics import (
+from embodied.contracts.registry import Registry
+from embodied.robots.rebot.kinematics.robot_model import load_robot_model, get_joint_limits
+from embodied.robots.rebot.dynamics import (
     compute_generalized_gravity, compute_inverse_dynamics, compute_mass_matrix,
 )
-from reBotArm_control_py.trajectory.sampler import _apply_profile, TrajProfile
+from embodied.robots.rebot.trajectory.sampler import _apply_profile, TrajProfile
 
 
 def main():

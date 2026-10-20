@@ -9,8 +9,8 @@ import unittest
 import zipfile
 
 from mcap_fixture import write_records
-from quest_teleop.mcap_io import read_records
-from quest_teleop.task_package import finalize_task
+from embodied.data.episode.mcap_io import read_records
+from embodied.data.task_package import finalize_task
 
 
 class TaskPackageTests(unittest.TestCase):
@@ -41,9 +41,9 @@ class TaskPackageTests(unittest.TestCase):
                 package.extractall(root / 'unpacked')
             bundle = root / 'unpacked/pick_place'
             probe = subprocess.run([sys.executable, '-B', '-c',
-                'from pathlib import Path; from episode_io.mcap_io import read_records; '
-                'from quest_teleop.export_lerobot import load_episode; '
-                'from quest_teleop.export_decode import BatchFrameReader; '
+                'from pathlib import Path; from embodied.data.episode.mcap_io import read_records; '
+                'from embodied.data.export.lerobot import load_episode; '
+                'from embodied.data.export.decode import BatchFrameReader; '
                 'assert len(read_records(Path("episodes/episode/episode.mcap"))[0]) == 1'],
                 cwd=bundle, env={**os.environ, 'PYTHONPATH': str(bundle / 'tools/src')},
                 capture_output=True, text=True, timeout=20)

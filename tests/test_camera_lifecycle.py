@@ -10,7 +10,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
-from robot_core import camera_lifecycle as lifecycle
+from embodied.sensors import lifecycle
 
 
 class CameraLifecycleTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class CameraLifecycleTests(unittest.TestCase):
             config = Path(folder) / 'local.toml'
             config.write_text(f'[camera_service]\nsocket = "{path}"\n[runtime]\nsocket = "{folder}/no-teleop.sock"\n')
             code = '''import signal,sys,threading
-from robot_core.local_server import LocalServer
+from embodied.core.local_server import LocalServer
 stop=threading.Event()
 signal.signal(signal.SIGTERM,lambda *_:stop.set())
 server=LocalServer(sys.argv[-1],lambda _: {})
@@ -30,7 +30,7 @@ server.close()
 '''
             with patch.dict(os.environ, {'QUEST_TELEOP_CONFIG': str(config),
                                         'PYTHONPATH': str(Path(__file__).resolve().parents[1] / 'src')}):
-                child = subprocess.Popen([sys.executable, '-B', '-c', code, 'robot_core.camera_service', str(path)],
+                child = subprocess.Popen([sys.executable, '-B', '-c', code, 'embodied.sensors.service', str(path)],
                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 try:
                     self.assertEqual(child.stdout.readline().strip(), 'ready')
@@ -44,7 +44,7 @@ server.close()
                     child.stdout.close()
                     child.stderr.close()
 
-    def setup_mocks(self, stack, argv=b'python\0-m\0robot_core.camera_service\0'):
+    def setup_mocks(self, stack, argv=b'python\0-m\0embodied.sensors.service\0'):
         stack.enter_context(patch.object(lifecycle, 'DeviceLease'))
         stack.enter_context(patch.object(lifecycle, 'recording_guard'))
         guard = stack.enter_context(patch.object(lifecycle, 'check_legacy_session'))

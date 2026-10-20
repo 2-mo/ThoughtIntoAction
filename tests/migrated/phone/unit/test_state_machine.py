@@ -1,4 +1,4 @@
-from robot_teleop.core.state_machine import (
+from embodied.phone.core.state_machine import (
     TeleopEvent,
     TeleopState,
     TeleopStateMachine,

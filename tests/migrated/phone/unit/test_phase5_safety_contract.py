@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from robot_teleop.kinematics.config import load_model_config
-from robot_teleop.tools.phase5_safety_contract import (
+from embodied.phone.kinematics.config import load_model_config
+from embodied.phone.tools.phase5_safety_contract import (
     Phase5SafetyContractError,
     run_safety_contract,
 )

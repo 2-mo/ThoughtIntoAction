@@ -5,16 +5,16 @@ from pathlib import Path
 
 import pytest
 
-from robot_teleop.protocol.golden import GOLDEN_POSE
-from robot_teleop.protocol.packet import (
+from embodied.phone.protocol.golden import GOLDEN_POSE
+from embodied.phone.protocol.packet import (
     SettingsAckPacket,
     SettingsPacket,
     decode_packet,
     encode_packet,
 )
-from robot_teleop.tools import latency_report, network_test, udp_loopback
-from robot_teleop.tools.pose_monitor import PoseMonitorConfig, run_monitor
-from robot_teleop.tools.pose_simulator import PoseSimulatorConfig, run_simulator
+from embodied.phone.tools import latency_report, network_test, udp_loopback
+from embodied.phone.tools.pose_monitor import PoseMonitorConfig, run_monitor
+from embodied.phone.tools.pose_simulator import PoseSimulatorConfig, run_simulator
 
 
 def unused_udp_port() -> int:

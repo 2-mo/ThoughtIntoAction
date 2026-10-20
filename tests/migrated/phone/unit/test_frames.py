@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from robot_teleop.core.frames import (
+from embodied.phone.core.frames import (
     compose_pose,
     inverse_pose,
     quaternion_angular_distance,
@@ -10,8 +10,8 @@ from robot_teleop.core.frames import (
     rotate_vector,
     scale_quaternion_rotation,
 )
-from robot_teleop.core.mapping import AxisMapping, PoseMapping
-from robot_teleop.core.models import Pose, Quaternion, Vector3
+from embodied.phone.core.mapping import AxisMapping, PoseMapping
+from embodied.phone.core.models import Pose, Quaternion, Vector3
 
 IDENTITY = Quaternion(0.0, 0.0, 0.0, 1.0)
 

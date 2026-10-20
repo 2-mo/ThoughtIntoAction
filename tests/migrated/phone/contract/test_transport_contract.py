@@ -1,6 +1,6 @@
 import pytest
 
-from robot_teleop.transports.mock import MockTransport, TransportStateError
+from embodied.phone.transports.mock import MockTransport, TransportStateError
 
 
 def test_mock_transport_is_latest_only() -> None:

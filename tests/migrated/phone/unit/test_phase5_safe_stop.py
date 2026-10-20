@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from robot_teleop.tools.phase5_safe_stop import run_safe_stop_validation
+from embodied.phone.tools.phase5_safe_stop import run_safe_stop_validation
 
 ROOT = Path(__file__).resolve().parents[4]
 MODEL_CONFIG = ROOT / "configs/phone/robots/arx5.yaml"

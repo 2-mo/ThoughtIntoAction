@@ -27,8 +27,8 @@
 | 来源 | 已进入 QuestArmTeleop | 仍未覆盖 |
 | --- | --- | --- |
 | arx-televr | `control/` 导入的原生链路、真实/仿真后端、模型、SDK、适配层；已按 VR、routing、ingress、controller 等装配 | 下述跨机器人、扩展规划、相机及业务契约还需补齐；当前接口仍以 X5 六轴为基础 |
-| robot-teleop | `apps/ios/`；`src/robot_teleop/` 中 ARKit、UDP、协议、基础类型和相对位姿映射；`src/inputs/phone.py` 接入现有运行时。来源清单冻结 61 个文件 | mock/replay、在线 Ruckig、离线运动学、完整诊断和复位握手等，见 C 表 |
-| arx5_test | `src/operations/vendor/arx_motion/` 的 profiles、geometry、interpolation、limits、contracts 五个数学模块；基础动作接入 `arx.basic` | 几何模块存在不等于 MoveC/混合路径已经可执行；其余能力见 A 表 |
+| robot-teleop | `apps/ios/`；`src/embodied/phone/` 中 ARKit、UDP、协议、基础类型和相对位姿映射；`src/embodied/inputs/phone.py` 接入现有运行时。来源清单冻结 61 个文件 | mock/replay、在线 Ruckig、离线运动学、完整诊断和复位握手等，见 C 表 |
+| arx5_test | `src/embodied/operations/vendor/arx_motion/` 的 profiles、geometry、interpolation、limits、contracts 五个数学模块；基础动作接入 `arx.basic` | 几何模块存在不等于 MoveC/混合路径已经可执行；其余能力见 A 表 |
 | reBotArm_control_py | FreeDrive、保持、示教点等思路已用于现有 arx 操作 | 没有直接迁入其驱动、运动学、动力学和控制策略源码，见 B 表 |
 
 本表描述实际迁入范围，不表示三个项目已经完整迁完。当前 arx 自动标定是原 QuestArmTeleop 标定流程的 arx 适配，不是 arx5_test 双相机标定的完整迁入。
@@ -37,11 +37,11 @@
 
 ## A．arx5_test
 
-源码根目录：[arx5_test](../src/arx5_control)。表内路径相对此根目录；阶段编号见后文。
+源码根目录：[arx5_test](../src/legacy/arx5_control)。表内路径相对此根目录；阶段编号见后文。
 
 | 编号 | 能力与源码依据 | 迁入决定、插件边界及验收要点 |
 | --- | --- | --- |
-| A01 | `src/arx5_control/motion/{profiles,geometry,interpolation,limits,contracts}.py`：时间曲线、线/弧几何、插值、约束 | **部分已迁**。共享数学库继续复用；插件消费它而非复制。核对原始测试与本地 Python 3.10 补丁，区分“已导入”与“已接执行入口”。P1 |
+| A01 | `src/embodied/motion/{profiles,geometry,interpolation,limits,contracts}.py`：时间曲线、线/弧几何、插值、约束 | **部分已迁**。共享数学库继续复用；插件消费它而非复制。核对原始测试与本地 Python 3.10 补丁，区分“已导入”与“已接执行入口”。P1 |
 | A02 | `motion/{offline,cartesian_time}.py`：离线 Ruckig、笛卡尔进度时间参数化 | **迁入** `planner.ruckig`。现有 smoothstep MoveJ/离散 MoveL 不构成完整替代；保存 q/dq/时间及边界条件，验证限速、加速度、jerk 和重定时。P1 |
 | A03 | `motion/{geometry,offline,interpolation}.py` 及控制器中的 MoveC、waypoint、圆角混合 | **迁入** `planner.cartesian_path`。已有几何只是基础；补路径编排与执行。验证圆弧经过点、拼接连续性、工具/工件坐标、同一路径变速后几何不变。P1 |
 | A04 | `motion/online.py`、`teleoperation_servo.py`：在线 Ruckig、制动、连续目标 | **迁入**可选 `controller.ruckig_joint`，与 C06 共用底层前先比较状态更新/制动语义。禁止无条件叠到默认 Quest 控制器后面；验证换目标、丢目标和停止时 q/dq/ddq 连续。P1 |
@@ -50,24 +50,24 @@
 | A07 | `src/backend/arx5_backend/features/arm/commands.py`、`src/frontend/src/features/{control,scene}/`：末端编辑、参考点、Ghost、预览执行取消、关节操作 | **合并并补齐** `operation.motion/teach`、`ui.motion/scene`。基础 CLI 操作已有；补末端交互和浏览器操作。预览与执行使用同一计划/模型；当前 CLI jog 仅关节，不把它记为完整笛卡尔点动。P1 |
 | A08 | arm 命令的 connect、activate、damping、clear-fault、reset-joint 与 servo 生命周期 | **拆分迁入语义**至 `operation.device` / `maintenance.*`；SDK 生命周期交给唯一后端。源项目 connect 不运动，当前 arx 真机启动会 Home，两者不能直接等同；实际阻尼、故障恢复、物理零点均需独立契约。P1 |
 | A09 | `features/gripper/commands.py`、`src/scripts/gripper_force_test.py`：位置夹爪、限扭矩闭合/保持 | **位置能力复用，限扭矩迁入** `gripper.torque_limited`。明确开口宽度、电机角度、扭矩单位及支持后端；电机扭矩不是已标定指尖力。验证饱和、超时与取消。P2 |
-| A10 | `src/arx5_control/gripper_calibration.py`、`src/scripts/calibrate_gripper_guided.py` | **迁入** `calibration.gripper`。保留测量开口、型号/接口匹配、结果版本和闭合零点条件；与日常夹爪关闭动作分开。验证错误型号/无效结果拒绝启用。P2 |
-| A11 | `src/arx5_control/payload_profiles.py`、`src/scripts/calibrate_payload.py` | **迁入** `calibration.payload`、工具/负载档案。保留固定工具/抓取负载区分、静态质量和质心拟合、原子保存；不称为完整惯量辨识。模型/负载变更使旧计划与相关标定失效。P2 |
+| A10 | `src/legacy/arx5_control/gripper_calibration.py`、`src/scripts/calibrate_gripper_guided.py` | **迁入** `calibration.gripper`。保留测量开口、型号/接口匹配、结果版本和闭合零点条件；与日常夹爪关闭动作分开。验证错误型号/无效结果拒绝启用。P2 |
+| A11 | `src/legacy/arx5_control/payload_profiles.py`、`src/scripts/calibrate_payload.py` | **迁入** `calibration.payload`、工具/负载档案。保留固定工具/抓取负载区分、静态质量和质心拟合、原子保存；不称为完整惯量辨识。模型/负载变更使旧计划与相关标定失效。P2 |
 | A12 | `src/frontend/src/features/teleoperation/{runtime,math}.ts`、`features/vision/service.py`：MediaPipe 双手输入与传输 | **迁入** `input.browser_hand`、映射和手势 UI。当前源码含左手离合/位姿、右手开闭、丢手处理和预览。只提交带 session/sequence/期限的目标，失去追踪或旧响应不得重新激活动作。P1 |
 | A13 | `features/camera/service.py`：D455/D405 RGB-D、内参、深度采样、WebRTC、降级/恢复 | **迁入缺失能力**至 `camera.realsense` 扩展和 `stream.webrtc`。共用每台物理相机的唯一采集服务，预览编码独立；当前 SharedCamera RGB 不能覆盖全部功能。验证双 serial、断流、RGB-only 降级、录制时配置稳定。P2 |
-| A14 | `src/hand_eye_calibration/{eye_in_hand,eye_to_hand}/`、`collector.py`：双相机分阶段自动采集 | **迁入** `calibration.eye_in_hand`、`calibration.eye_to_hand` 及工作流。D405 输出 `T_eef_camera`、D455 输出 `T_base_camera`；改用 arx 租约/动作与共享相机，不沿用临时抢占 SDK 的方式。验证两种安装方向和模型/相机绑定。P2 |
-| A15 | `src/hand_eye_calibration/core/{solver,validation}.py`、collector 的复核/补采 | **迁入并比较现有求解器**：AX=ZB、运动多样性、鲁棒拟合、留一/Bootstrap、独立验证、自适应复核、结果启停。验证集转入新一轮拟合时必须采集新的验证集；不能重复使用后声称独立验证。P2 |
-| A16 | `src/scripts/rgb_cube_detector.py`、`src/experiments/cube_pick_rotate_place/perception.py`、前端 `vision/pose-temporal-filter.ts` | **迁入** `perception.rgb_cube`。保留候选稳定性、几何估计和可视化；输出带时间、frame、标定版本的检测结果。区分浏览器手势消息服务与方块检测算法。P4 |
-| A17 | `features/cube/stack.py`、`src/experiments/cube_pick_rotate_place/{planner,run}.py` | **迁入** `task.cube_pick_place/stack`。抓取、旋转、转移、放置、堆叠作为可取消步骤组合，执行走统一动作会话；用假感知/假执行器验证次序、失败和夹爪完成条件。P4 |
-| A18 | `src/isaac_groot_data_collection/{recording,raw_episode,validator,cli,home}.py` 与 collection UI | **迁入** `collection.dual_camera_demo` 和 review 工作流。双 RGB、原始状态、拖动采集、返回参考位、accept/reject/discard 均保留；扩展当前单相机 writer。验证单侧相机失败时的整段状态及审核记录。P4 |
-| A19 | `src/isaac_groot_data_collection/{exporter,geometry,config}.py` 等：GR00T LeRobot 数据 | **迁入** `exporter.groot_v21` 与专属数据契约。双相机、16 维 xyz/Rot6D/夹爪/关节、`action[t]=measured_state[t+1]`、相对统计及 loader 验证；与现有 sent-action schema 2 分开，禁止换名混装。P4 |
+| A14 | `src/embodied/calibration/hand_eye/{eye_in_hand,eye_to_hand}/`、`collector.py`：双相机分阶段自动采集 | **迁入** `calibration.eye_in_hand`、`calibration.eye_to_hand` 及工作流。D405 输出 `T_eef_camera`、D455 输出 `T_base_camera`；改用 arx 租约/动作与共享相机，不沿用临时抢占 SDK 的方式。验证两种安装方向和模型/相机绑定。P2 |
+| A15 | `src/embodied/calibration/hand_eye/core/{solver,validation}.py`、collector 的复核/补采 | **迁入并比较现有求解器**：AX=ZB、运动多样性、鲁棒拟合、留一/Bootstrap、独立验证、自适应复核、结果启停。验证集转入新一轮拟合时必须采集新的验证集；不能重复使用后声称独立验证。P2 |
+| A16 | `src/scripts/rgb_cube_detector.py`、`src/embodied/tasks/cube/perception.py`、前端 `vision/pose-temporal-filter.ts` | **迁入** `perception.rgb_cube`。保留候选稳定性、几何估计和可视化；输出带时间、frame、标定版本的检测结果。区分浏览器手势消息服务与方块检测算法。P4 |
+| A17 | `features/cube/stack.py`、`src/embodied/tasks/cube/{planner,run}.py` | **迁入** `task.cube_pick_place/stack`。抓取、旋转、转移、放置、堆叠作为可取消步骤组合，执行走统一动作会话；用假感知/假执行器验证次序、失败和夹爪完成条件。P4 |
+| A18 | `src/embodied/data/groot/{recording,raw_episode,validator,cli,home}.py` 与 collection UI | **迁入** `collection.dual_camera_demo` 和 review 工作流。双 RGB、原始状态、拖动采集、返回参考位、accept/reject/discard 均保留；扩展当前单相机 writer。验证单侧相机失败时的整段状态及审核记录。P4 |
+| A19 | `src/embodied/data/groot/{exporter,geometry,config}.py` 等：GR00T LeRobot 数据 | **迁入** `exporter.groot_v21` 与专属数据契约。双相机、16 维 xyz/Rot6D/夹爪/关节、`action[t]=measured_state[t+1]`、相对统计及 loader 验证；与现有 sent-action schema 2 分开，禁止换名混装。P4 |
 | A20 | `src/gr-zeroshot/gr_zeroshot/{checkpoint,policy,cameras,runtime}.py` | **迁入** `policy.groot` + `operation.policy_session`。保留 checkpoint/modality 校验、模型服务、异步预测、动作分块调度和预览；执行改接当前 gateway。现有 OpenPI 不构成同模型替代。验证晚到结果、取消、维度/frame/统计失配。P4 |
 | A21 | `src/scripts/` 的 CAN、相机恢复/性能、Web 生命周期/身份、HTTPS、LAN/Tailscale 等工具；前后端公共壳 | **功能归并**至 `diagnostic.*`、`deployment.*`、公共 UI。保留实用诊断和部署配方；生命周期统一 workbench，旧路径/PID/设备抢占不能照搬。模型资源与测试随 A01–A20 导入。P1 起随各功能完成 |
 
-本节 `motion/` 是 `src/arx5_control/motion/`，`features/` 是 `src/backend/arx5_backend/features/`。大型 `controller.py`、`servo.py`、`teleoperation.py` 是提取行为的来源，不作为第二套常驻 ARX 应用启动。
+本节 `motion/` 是 `src/embodied/motion/`，`features/` 是 `src/backend/arx5_backend/features/`。大型 `controller.py`、`servo.py`、`teleoperation.py` 是提取行为的来源，不作为第二套常驻 ARX 应用启动。
 
 ## B．reBotArm_control_py
 
-源码根目录：[reBotArm_control_py](../src/reBotArm_control_py)。下表 `package/` 代表其内部 `reBotArm_control_py/` Python 包。
+源码根目录：[reBotArm_control_py](../src/embodied/robots/rebot)。下表 `package/` 代表其内部 `reBotArm_control_py/` Python 包。
 
 | 编号 | 能力与源码依据 | 迁入决定、插件边界及验收要点 |
 | --- | --- | --- |
@@ -85,7 +85,7 @@
 
 ## C．robot-teleop
 
-源码根目录：[robot-teleop](../src/robot_teleop)。下表路径除特别注明外相对 `src/robot_teleop/`。
+源码根目录：[robot-teleop](../src/embodied/phone)。下表路径除特别注明外相对 `src/embodied/phone/`。
 
 | 编号 | 能力与源码依据 | 迁入决定、插件边界及验收要点 |
 | --- | --- | --- |
@@ -150,7 +150,7 @@ flowchart LR
 | Episode / Exporter | 多相机时间对齐、原始观测、实际提交命令、审核与完成边界；显式 action 定义 | schema 2 的 sent-action 与 GR00T 的 measured-next-state 使用不同身份和转换器；拖动数据不能伪装成发送目标 |
 | Plugin manifest / Runtime | API 版本、依赖/环境、能力、资源路径、默认参数、生命周期、状态和自检 | 未选插件不加载其 SDK/GPU 依赖；profile 装配检查能力/环境匹配。公共控制权与命令有效性不可通过插件配置关闭 |
 
-目录依功能组织：继续使用现有 `control/`、`src/inputs/`、`src/operations/`、`src/collection/`、`src/dataset_tools/`、`src/handeye_calibration/`；按需要增加运动学/动力学、感知/任务、策略集成及 Web UI 模块。来源原文件与补丁用清单追踪，不让业务长期依赖 `arx5_test_app` / `rebot_app` 这类整项目容器。
+目录依功能组织：继续使用现有 `control/`、`src/embodied/inputs/`、`src/embodied/operations/`、`src/embodied/data/capture/`、`src/embodied/data/export/`、`src/embodied/calibration/wrist/`；按需要增加运动学/动力学、感知/任务、策略集成及 Web UI 模块。来源原文件与补丁用清单追踪，不让业务长期依赖 `arx5_test_app` / `rebot_app` 这类整项目容器。
 
 环境仍独立：arx control 当前 Python 3.10，工作台/手机 Python 3.12；reBot 声明 Python `>=3.10,<3.12`，robot-teleop 的可选 Pinocchio/Ruckig 依赖也不同。B601 worker、GPU 推理和导出使用各自锁定环境；公共协议尽量保持轻量，不能为了同目录交付把所有 native 依赖塞入一个 venv。
 

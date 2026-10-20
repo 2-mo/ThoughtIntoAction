@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 from scripts.launch import build_command, resolve_python, MODULE_COMMANDS, PYTHON_COMMANDS
-from robot_core.project import load_config
+from embodied.core.project import load_config
 
 
 class LauncherTests(unittest.TestCase):
@@ -53,7 +53,7 @@ class LauncherTests(unittest.TestCase):
                                     cwd="/tmp", capture_output=True, text=True)
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertFalse((ROOT / "configs/profiles/quest-simulation.toml").exists())
-        self.assertFalse((ROOT / "src/quest_teleop/legacy/simulation.py").exists())
+        self.assertFalse((ROOT / "src/legacy/quest_teleop/legacy/simulation.py").exists())
 
     def test_profile_mismatch_fails_before_execution(self):
         result = subprocess.run([str(ROOT / "run.sh"), "--print-command", "--profile", "presets", "control-arm"], capture_output=True)

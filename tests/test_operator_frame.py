@@ -2,12 +2,12 @@
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
-from quest_teleop.controller import X5TeleopController
-from quest_teleop.target_limits import CartesianTargetLimiter
+from legacy.quest_teleop.controller import X5TeleopController
+from legacy.quest_teleop.target_limits import CartesianTargetLimiter
 import numpy as np
 import meshcat.transformations as tf
-from quest_teleop.base_controller import R_HEADSET_TO_WORLD
-from quest_teleop.frames import operator_yaw_rotation
+from legacy.quest_teleop.base_controller import R_HEADSET_TO_WORLD
+from legacy.quest_teleop.frames import operator_yaw_rotation
 from xrobotoolkit_teleop.utils.geometry import apply_delta_pose
 
 
@@ -194,8 +194,8 @@ class OperatorFrameTests(unittest.TestCase):
         np.testing.assert_allclose(rotation, 0, atol=1e-10)
 
     def test_grasp_pose_twist_reaches_ik_and_reanchors_after_release(self):
-        from robot_core.model import RobotModel
-        from quest_teleop.presets import DEFAULT_GRASP_READY_JOINTS
+        from embodied.core.model import RobotModel
+        from legacy.quest_teleop.presets import DEFAULT_GRASP_READY_JOINTS
         grasp = RobotModel().fk(DEFAULT_GRASP_READY_JOINTS)
         for mode, tool_axis in (("tool", [1, 0, 0]), ("aligned", [0, 0, 1])):
             obj = self.controller(90, mode)

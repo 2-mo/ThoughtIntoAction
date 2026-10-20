@@ -3,7 +3,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from robot_teleop.core.models import (
+from embodied.phone.core.models import (
     ControlMode,
     Pose,
     Quaternion,

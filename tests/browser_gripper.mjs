@@ -5,8 +5,8 @@ import {readFile, mkdir} from 'node:fs/promises';
 import {spawn} from 'node:child_process';
 import {chromium} from '../.cache/viewer-validation/node_modules/playwright/index.mjs';
 
-const server = spawn('.venv/bin/python', ['-u', '-B', '-c', `from robot_core.model import RobotModel
-from robot_simulation.scene import Scene
+const server = spawn('.venv/bin/python', ['-u', '-B', '-c', `from embodied.core.model import RobotModel
+from embodied.monitor.scene import Scene
 import threading
 scene = Scene(RobotModel())
 threading.Event().wait()`], {env:{...process.env, PYTHONPATH:'src'}, stdio:['ignore','pipe','pipe']});
@@ -34,7 +34,7 @@ try {
   const page = await browser.newPage({viewport:{width:1920,height:1080}});
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  const source = await readFile(new URL('../src/robot_simulation/web/scene.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/embodied/monitor/web/scene.js', import.meta.url), 'utf8');
   // Inspect rendered objects without adding a production debug API.
   await page.route('**/scene.js', route => route.fulfill({contentType:'text/javascript', body:source.replace(
     'scene.add(actualModel, targetModel);',

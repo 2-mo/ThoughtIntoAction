@@ -1,41 +1,41 @@
 # Trusted project code only. Factories are imported only when their plugin is selected.
 # Plugin factories/units/lifecycle are documented in docs/plugins.md.
 [arm.service]
-factory = "robot_control.backends.factories:service"
+factory = "legacy.robot_control.backends.factories:service"
 capabilities = ["recording", "force_hold"]
 
 [arm.stanford]
-factory = "robot_control.backends.factories:stanford"
+factory = "legacy.robot_control.backends.factories:stanford"
 hardware = true
 capabilities = ["recording", "force_hold", "service_device"]
 
 [arm.simulated]
-factory = "robot_control.backends.factories:simulated"
+factory = "legacy.robot_control.backends.factories:simulated"
 simulation_only = true
 capabilities = ["service_device"]
 
 [arm.arx2025]
-factory = "robot_control.backends.factories:arx2025"
+factory = "legacy.robot_control.backends.factories:arx2025"
 hardware = true
 capabilities = ["experimental"]
 
 [input.quest]
-factory = "quest_teleop.inputs:quest"
+factory = "legacy.quest_teleop.inputs:quest"
 
 [input.idle]
-factory = "quest_teleop.inputs:IdleInput"
+factory = "legacy.quest_teleop.inputs:IdleInput"
 simulation_only = true
 
 [viewer.web]
-factory = "robot_simulation.scene:Scene"
+factory = "embodied.monitor.scene:Scene"
 
 [telemetry.local]
-factory = "robot_core.telemetry:LocalPublisher"
+factory = "embodied.core.telemetry:LocalPublisher"
 
 [telemetry.none]
-factory = "robot_core.telemetry:NullPublisher"
+factory = "embodied.core.telemetry:NullPublisher"
 
 [camera.realsense]
-factory = "robot_core.camera_client:SharedCamera"
+factory = "embodied.sensors.client:SharedCamera"
 hardware = true
 capabilities = ["shared-service", "rgb", "intrinsics"]

@@ -1,6 +1,6 @@
 # 电机诊断采集
 
-只读 SocketCAN 接收器 `src/robot_control/motor_feedback.py` 在真机适配器初始化后启动，和 SDK 各自接收 CAN 广播；不发送任何 CAN 帧，不查询寄存器、不修改电机状态。通过 `recvmsg` 的 `MSG_DONTROUTE` 排除本机下发的指令，避免把同 ID 的控制帧当反馈。仿真不创建接收器。
+只读 SocketCAN 接收器 `src/legacy/robot_control/motor_feedback.py` 在真机适配器初始化后启动，和 SDK 各自接收 CAN 广播；不发送任何 CAN 帧，不查询寄存器、不修改电机状态。通过 `recvmsg` 的 `MSG_DONTROUTE` 排除本机下发的指令，避免把同 ID 的控制帧当反馈。仿真不创建接收器。
 
 ## 已核对的硬件和字段
 

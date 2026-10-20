@@ -13,7 +13,7 @@ import tomllib
 
 # The bootstrap interpreter only needs the standard-library project module.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from robot_core.project import PROJECT_ROOT, load_config, resolve_path
+from embodied.core.project import PROJECT_ROOT, load_config, resolve_path
 
 PYTHON_COMMANDS = {
     "quest-discovery": "quest/discovery.py",
@@ -44,34 +44,34 @@ MAINTENANCE_COMMANDS = {
     "check-camera": "diagnostics/check_camera.py",
 }
 MODULE_COMMANDS = {
-    "collect": "collection.capture",
-    "workbench": "workstation.workbench",
-    "component-source": "workstation.source",
-    "phone": "inputs.phone",
-    "motion": "operations.cli",
-    "runtime-data": "dataset_tools.runtime_v2",
-    "quest-calibrate": "quest_teleop.frame_calibration",
-    "camera-service": "robot_core.camera_service",
-    "viewer-control": "robot_simulation.control",
-    "teleop-official-x5": "quest_teleop.cli",
-    "teleop-presets-x5": "quest_teleop.cli",
-    "teleop": "quest_teleop.legacy.controller",
-    "teleop-dry-run": "quest_teleop.legacy.controller",
-    "teleop-x5-2025": "quest_teleop.experimental.arx2025",
-    "plugins": "robot_core.plugins",
-    "visualize-xr": "quest_teleop.xr_visualizer.cli",
-    "view-arm": "robot_simulation.cli",
-    "arx-preview": "robot_simulation.arx_preview",
-    "control-arm": "robot_control.cli",
-    "arm-service": "robot_control.service",
-    "handeye": "handeye_calibration.cli",
-    "session": "quest_teleop.runtime.cli",
-    "record": "quest_teleop.runtime.cli",
-    "dataset": "quest_teleop.datasets",
-    "doctor": "quest_teleop.diagnostics",
-    "monitor": "quest_teleop.runtime.monitor",
+    "collect": "embodied.data.capture.capture",
+    "workbench": "embodied.workstation.workbench",
+    "component-source": "embodied.workstation.source",
+    "phone": "embodied.inputs.phone",
+    "motion": "embodied.operations.cli",
+    "runtime-data": "embodied.data.export.runtime_v2",
+    "quest-calibrate": "legacy.quest_teleop.frame_calibration",
+    "camera-service": "embodied.sensors.service",
+    "viewer-control": "embodied.monitor.control",
+    "teleop-official-x5": "legacy.quest_teleop.cli",
+    "teleop-presets-x5": "legacy.quest_teleop.cli",
+    "teleop": "legacy.quest_teleop.legacy.controller",
+    "teleop-dry-run": "legacy.quest_teleop.legacy.controller",
+    "teleop-x5-2025": "legacy.quest_teleop.experimental.arx2025",
+    "plugins": "embodied.core.plugins",
+    "visualize-xr": "legacy.quest_teleop.xr_visualizer.cli",
+    "view-arm": "embodied.monitor.cli",
+    "arx-preview": "embodied.monitor.arx_preview",
+    "control-arm": "legacy.robot_control.cli",
+    "arm-service": "legacy.robot_control.service",
+    "handeye": "embodied.calibration.wrist.cli",
+    "session": "legacy.quest_teleop.runtime.cli",
+    "record": "legacy.quest_teleop.runtime.cli",
+    "dataset": "embodied.data.datasets",
+    "doctor": "legacy.quest_teleop.diagnostics",
+    "monitor": "legacy.quest_teleop.runtime.monitor",
 }
-BOOTSTRAP_COMMANDS = {"control": "workstation.control", "components": "component_plugins.cli"}
+BOOTSTRAP_COMMANDS = {"control": "embodied.workstation.control", "components": "embodied.workstation.components.cli"}
 HARDWARE_COMMANDS = {
     "test-joint", "test-joint-2025", "teleop", "teleop-dry-run",
     "teleop-x5-2025", "arm-service",

@@ -9,9 +9,9 @@ from unittest.mock import patch
 import cv2
 import numpy as np
 
-from robot_core.model import RobotModel
-from quest_teleop.replay import RecordedEpisode, WebReplay, RobotReplay
-from quest_teleop.runtime.session import TeleopSession
+from embodied.core.model import RobotModel
+from embodied.data.replay import RecordedEpisode, WebReplay, RobotReplay
+from legacy.quest_teleop.runtime.session import TeleopSession
 
 
 class ReplayTests(unittest.TestCase):
@@ -33,7 +33,7 @@ class ReplayTests(unittest.TestCase):
 
     def test_readonly_review_video_and_joints_follow_same_clock(self):
         data = RecordedEpisode(self.root)
-        with patch('quest_teleop.replay.time.monotonic', return_value=10) as clock:
+        with patch('embodied.data.replay.time.monotonic', return_value=10) as clock:
             replay = WebReplay(data)
             clock.return_value = 10.5
             first = replay.frame()
@@ -50,7 +50,7 @@ class ReplayTests(unittest.TestCase):
             self.assertEqual(replay.frame()['position_s'], 0.)
 
     def test_motor_diagnostics_use_causal_temperature_and_fault_events(self):
-        from quest_teleop.mcap_io import RecordWriter
+        from embodied.data.episode.mcap_io import RecordWriter
         self.rows[1].update(joint_current_a=[.2, None, None, None, None, None], feedback_valid=[False] * 7)
         with (self.root / 'episode.mcap').open('wb') as stream:
             writer = RecordWriter(stream, {'started_unix_ns': 0, 'started_monotonic_ns': 0})
@@ -76,7 +76,7 @@ class ReplayTests(unittest.TestCase):
         self.assertIsNone(data.review(0)['motor_diagnostics'])
 
     def test_mp4_review_seek_keeps_image_and_robot_sample_together(self):
-        from quest_teleop.video import RGBVideoWriter
+        from embodied.data.episode.video import RGBVideoWriter
         writer = RGBVideoWriter(self.root / "wrist_rgb.mp4", 16, 16, 1, 20)
         try:
             for value in (0, 200):
@@ -122,8 +122,8 @@ class ReplayTests(unittest.TestCase):
 
     def test_web_api_loads_video_and_pose_but_cannot_start_hardware_replay(self):
         import urllib.request
-        from robot_core.local_server import LocalServer
-        from robot_simulation.scene import Scene
+        from embodied.core.local_server import LocalServer
+        from embodied.monitor.scene import Scene
         session = TeleopSession.__new__(TeleopSession)
         session.operations = threading.Lock()
         session.closed = False
@@ -141,7 +141,7 @@ class ReplayTests(unittest.TestCase):
             request = urllib.request.Request(scene.url + 'api/replay',
                 data=json.dumps({'action': action}).encode(), headers={'Content-Type': 'application/json', **({'Origin': origin} if origin else {})})
             with opener.open(request) as response: return json.load(response)
-        with patch('robot_core.project.load_config', return_value={'runtime': {'socket': str(socket)}}):
+        with patch('embodied.core.project.load_config', return_value={'runtime': {'socket': str(socket)}}):
             self.assertTrue(post('load_last')['ok'])
             self.assertTrue(post('load_last', scene.url.rstrip('/').replace('127.0.0.1', 'localhost'))['ok'])
             import urllib.error
@@ -159,7 +159,7 @@ class ReplayTests(unittest.TestCase):
     def test_robot_replay_runs_through_virtual_service_with_table_limit(self):
         import time
         from arm_service_fixture import ServiceFixture
-        from robot_control.client import ArmClient
+        from legacy.robot_control.client import ArmClient
         fixture = ServiceFixture(table_safety=True)
         self.addCleanup(fixture.close)
         client = ArmClient(fixture.robot, path=fixture.path, hardware=False, actuate=True,

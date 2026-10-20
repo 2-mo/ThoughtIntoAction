@@ -13,9 +13,9 @@ import zipfile
 import numpy as np
 from mcap_fixture import write_records
 
-from quest_teleop.task_package import finalize_task
-from quest_teleop.export_decode import BatchFrameReader
-from quest_teleop.video import RGBVideoWriter, SequentialFrameReader, read_frame
+from embodied.data.task_package import finalize_task
+from embodied.data.export.decode import BatchFrameReader
+from embodied.data.episode.video import RGBVideoWriter, SequentialFrameReader, read_frame
 
 
 def make_episode(root, name, count=120, png=False):
@@ -119,10 +119,10 @@ class PortableExportTests(unittest.TestCase):
                 self.assertEqual(len(raw['state']),len(states))
 
     def test_runtime_schema2_portable_export_preserves_independent_clocks(self):
-        from episode_io.runtime_episode import RuntimeEpisodeWriter
+        from embodied.data.episode.runtime_episode import RuntimeEpisodeWriter
         from test_runtime_collection import tick
         from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
-        from quest_teleop.export_lerobot import export
+        from embodied.data.export.lerobot import export
         import time
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -234,7 +234,7 @@ class PortableExportTests(unittest.TestCase):
             self.assertIn('Output already exists', rerun.stderr)
 
     def test_decoder_failure_removes_partial_output(self):
-        from quest_teleop.export_lerobot import export
+        from embodied.data.export.lerobot import export
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             path, _, _ = make_episode(root, 'video', count=4)

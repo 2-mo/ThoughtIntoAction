@@ -12,12 +12,12 @@ from unittest.mock import Mock
 from urllib.request import build_opener, ProxyHandler
 
 import numpy as np
-from robot_core.camera_client import SharedCamera
-from robot_core.camera_service import CameraFeed
-from robot_core.local_server import LocalServer
-from robot_core.camera_transport import FrameServer, FrameClient
-from robot_core.model import RobotModel
-from robot_simulation.scene import Scene
+from embodied.sensors.client import SharedCamera
+from embodied.sensors.service import CameraFeed
+from embodied.core.local_server import LocalServer
+from embodied.sensors.transport import FrameServer, FrameClient
+from embodied.core.model import RobotModel
+from embodied.monitor.scene import Scene
 
 
 class CameraServiceTests(unittest.TestCase):
@@ -34,7 +34,7 @@ class CameraServiceTests(unittest.TestCase):
             self.addCleanup(server.close)
             frames = FrameServer(path, {'wrist_rgb': feed})
             self.addCleanup(frames.close)
-            with patch('robot_core.camera_client.socket_path', return_value=path):
+            with patch('embodied.sensors.client.socket_path', return_value=path):
                 with SharedCamera('fake', 1920, 1080) as camera:
                     frame = camera.read()
             np.testing.assert_array_equal(frame['image'], pixels)
@@ -43,7 +43,7 @@ class CameraServiceTests(unittest.TestCase):
             self.assertNotIn('age_s', imu['accel'])
 
     def test_imu_native_samples_and_failure_are_independent_of_rgb(self):
-        from robot_core.camera import RealSenseCamera
+        from embodied.sensors.realsense import RealSenseCamera
         rs = SimpleNamespace(stream=SimpleNamespace(accel='a', gyro='g'), format=SimpleNamespace(motion_xyz32f='motion'))
         sensor = Mock()
         sensor.get_stream_profiles.return_value = [SimpleNamespace(stream_type=lambda k=k:k, format=lambda:'motion', fps=lambda:200) for k in ('a','g')]
@@ -80,7 +80,7 @@ class CameraServiceTests(unittest.TestCase):
             feed.preview = (stamp, "preview")
             server = LocalServer(path, feed.dispatch)
             self.addCleanup(server.close)
-            with patch("robot_core.camera_client.load_config", return_value=config), patch("robot_core.project.load_config", return_value=config):
+            with patch("embodied.sensors.client.load_config", return_value=config), patch("embodied.core.project.load_config", return_value=config):
                 with SharedCamera("fake", 3, 2, 30) as one, SharedCamera("fake", 3, 2, 30) as two:
                     first, second = one.read(), two.read()
                     np.testing.assert_array_equal(first["image"], pixels)
@@ -105,8 +105,8 @@ class CameraServiceTests(unittest.TestCase):
                     SharedCamera("another", 3, 2, 30).__enter__()
 
     def test_switch_stops_pipeline_preserves_off_state_and_blocks_recording(self):
-        from robot_core.camera_control import recording_guard
-        with tempfile.TemporaryDirectory() as folder, patch("robot_core.camera_control.socket_path", return_value=Path(folder)/"camera.sock"), patch("robot_core.camera_control.check_legacy_session"):
+        from embodied.sensors.control import recording_guard
+        with tempfile.TemporaryDirectory() as folder, patch("embodied.sensors.control.socket_path", return_value=Path(folder)/"camera.sock"), patch("embodied.sensors.control.check_legacy_session"):
             feed = CameraFeed({"enabled": True})
             opened, closed = threading.Event(), threading.Event()
             def capture(options, stop):
@@ -135,11 +135,11 @@ class CameraServiceTests(unittest.TestCase):
             self.assertTrue(feed.enabled)
 
     def test_old_session_cannot_be_silently_disconnected(self):
-        from robot_core.camera_control import check_legacy_session
-        with patch("robot_core.camera_control.request", return_value={"recording": None}):
+        from embodied.sensors.control import check_legacy_session
+        with patch("embodied.sensors.control.request", return_value={"recording": None}):
             with self.assertRaisesRegex(RuntimeError, "退出遥操"):
                 check_legacy_session()
-        with patch("robot_core.camera_control.request", return_value={"camera_switch_protocol": 1, "recording": {"id": "recording"}}):
+        with patch("embodied.sensors.control.request", return_value={"camera_switch_protocol": 1, "recording": {"id": "recording"}}):
             with self.assertRaisesRegex(RuntimeError, "录制"):
                 check_legacy_session()
 
@@ -148,7 +148,7 @@ class CameraServiceTests(unittest.TestCase):
             CameraFeed().dispatch({"command": "record.start"})
 
     def test_depth_colors_use_fixed_metric_scale_and_black_invalid_pixels(self):
-        from robot_core.camera_service import colorize_depth
+        from embodied.sensors.service import colorize_depth
         values = np.array([[0, 200, 1000, 2000, 3000]], dtype=np.uint16)
         colors = colorize_depth(values, .001)
         np.testing.assert_array_equal(colors[0, 0], [0, 0, 0])

@@ -7,7 +7,7 @@ import tempfile
 import threading
 import unittest
 
-from embodied_contracts.runtime.client import RuntimeReader, read_message
+from embodied.contracts.runtime.client import RuntimeReader, read_message
 
 
 class RuntimeClientTests(unittest.TestCase):

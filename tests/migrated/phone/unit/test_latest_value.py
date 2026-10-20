@@ -1,4 +1,4 @@
-from robot_teleop.runtime.latest_value import LatestValue
+from embodied.phone.runtime.latest_value import LatestValue
 
 
 class FakeClock:

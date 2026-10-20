@@ -1,6 +1,6 @@
 import pytest
 
-from robot_teleop.runtime.watchdog import Watchdog, WatchdogConfig, WatchdogStage
+from embodied.phone.runtime.watchdog import Watchdog, WatchdogConfig, WatchdogStage
 
 
 def test_watchdog_progresses_through_ordered_stages() -> None:

@@ -57,7 +57,7 @@
   },
   "source": {
     "phone.arkit": {
-      "factory": "inputs.phone:PhoneController",
+      "factory": "embodied.inputs.phone:PhoneController",
       "capabilities": [
         "pose",
         "clutch",
@@ -67,7 +67,7 @@
       ]
     },
     "cli": {
-      "factory": "inputs.idle:IdleSource",
+      "factory": "embodied.inputs.idle:IdleSource",
       "capabilities": [
         "joint",
         "cartesian",
@@ -77,7 +77,7 @@
       ]
     },
     "quest": {
-      "factory": "inputs.idle:NativeSession",
+      "factory": "embodied.inputs.idle:NativeSession",
       "capabilities": [
         "lease",
         "native-ingress"
@@ -86,7 +86,7 @@
   },
   "calibration_arm": {
     "arx": {
-      "factory": "handeye_calibration.arx_arm:ArxCalibrationArm",
+      "factory": "embodied.calibration.wrist.arx_arm:ArxCalibrationArm",
       "capabilities": [
         "snapshot",
         "joint",
@@ -95,7 +95,7 @@
       ]
     },
     "legacy": {
-      "factory": "handeye_calibration.arm:CalibrationArm",
+      "factory": "embodied.calibration.wrist.arm:CalibrationArm",
       "capabilities": [
         "snapshot",
         "joint",
@@ -106,14 +106,14 @@
   },
   "exporter": {
     "schema1": {
-      "factory": "dataset_tools.exporters:Schema1",
+      "factory": "embodied.data.export.exporters:Schema1",
       "capabilities": [
         "lerobot-v2.1",
         "raw-sidecar"
       ]
     },
     "schema2": {
-      "factory": "dataset_tools.exporters:Schema2",
+      "factory": "embodied.data.export.exporters:Schema2",
       "capabilities": [
         "lerobot-v2.1",
         "raw-sidecar",
@@ -123,14 +123,14 @@
   },
   "mapping": {
     "phone_tool": {
-      "factory": "inputs.phone:phone_tool",
+      "factory": "embodied.inputs.phone:phone_tool",
       "capabilities": [
         "relative-pose",
         "tool"
       ]
     },
     "phone_base": {
-      "factory": "inputs.phone:phone_base",
+      "factory": "embodied.inputs.phone:phone_base",
       "capabilities": [
         "relative-pose",
         "base"
@@ -139,7 +139,7 @@
   },
   "input": {
     "arkit": {
-      "factory": "inputs.phone:PhoneInput",
+      "factory": "embodied.inputs.phone:PhoneInput",
       "capabilities": [
         "pose",
         "sequence",
@@ -150,7 +150,7 @@
   },
   "camera": {
     "synthetic": {
-      "factory": "robot_core.synthetic_camera:SyntheticCamera",
+      "factory": "embodied.sensors.synthetic:SyntheticCamera",
       "simulation_only": true,
       "capabilities": [
         "rgb",

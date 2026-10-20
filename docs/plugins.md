@@ -1,6 +1,6 @@
 # 可替换组件
 
-新 arx 运行使用共享 `embodied_contracts.registry.Registry`，合并 `configs/plugins.toml` 和 `control/config/components.json`；机械臂、VR、控制源、相机、规划、标定和导出接口见 [插件工作台](plugin-workbench.md)。下面保留旧服务入口的契约，不能将其 `arm` 插件直接当作新 `robot` 后端使用。
+新 arx 运行使用共享 `embodied.contracts.registry.Registry`，合并 `configs/plugins.toml` 和 `control/config/components.json`；机械臂、VR、控制源、相机、规划、标定和导出接口见 [插件工作台](plugin-workbench.md)。下面保留旧服务入口的契约，不能将其 `arm` 插件直接当作新 `robot` 后端使用。
 
 组件由 `configs/plugins.toml` 注册，按职责加载。列出注册项：`./run.sh plugins`。
 
@@ -31,7 +31,7 @@
 
 ```toml
 [arm.my_device]
-factory = "robot_control.backends.my_device:create"
+factory = "legacy.robot_control.backends.my_device:create"
 hardware = true
 capabilities = ["service_device", "recording"]
 ```

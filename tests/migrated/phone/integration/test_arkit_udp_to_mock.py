@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from robot_teleop.config import load_profile
-from robot_teleop.core.models import Pose, Quaternion, TrackingQuality, Vector3
-from robot_teleop.core.state_machine import TeleopState
-from robot_teleop.protocol.packet import (
+from embodied.phone.config import load_profile
+from embodied.phone.core.models import Pose, Quaternion, TrackingQuality, Vector3
+from embodied.phone.core.state_machine import TeleopState
+from embodied.phone.protocol.packet import (
     EStopResetAckPacket,
     EStopResetRequestPacket,
     Packet,
@@ -22,8 +22,8 @@ from robot_teleop.protocol.packet import (
     decode_packet,
     encode_packet,
 )
-from robot_teleop.registry import create_application
-from robot_teleop.transports.udp import UdpTransport
+from embodied.phone.registry import create_application
+from embodied.phone.transports.udp import UdpTransport
 
 ROOT = Path(__file__).parents[4]
 

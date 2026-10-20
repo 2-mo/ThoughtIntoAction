@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from robot_teleop.tools.phase4_ghost_review import (
+from embodied.phone.tools.phase4_ghost_review import (
     build_ghost_review,
     render_html,
     write_ghost_review,

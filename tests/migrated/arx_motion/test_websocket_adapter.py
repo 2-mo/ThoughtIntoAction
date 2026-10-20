@@ -5,8 +5,8 @@ import unittest
 
 from starlette.websockets import WebSocketState
 
-from arx5_backend.features import feature_catalog
-from arx5_backend.transport.websocket_adapter import ApiWebSocket
+from embodied.console.features import feature_catalog
+from embodied.console.transport.websocket_adapter import ApiWebSocket
 
 
 class FakeSocket:

@@ -2,9 +2,9 @@
 import threading
 import unittest
 from unittest.mock import Mock
-from inputs.gestures import Press, StickAction
-from quest_teleop.collection import EpisodeActions
-from quest_teleop.runtime.session import TeleopSession
+from embodied.inputs.gestures import Press, StickAction
+from legacy.quest_teleop.collection import EpisodeActions
+from legacy.quest_teleop.runtime.session import TeleopSession
 
 
 class PressTests(unittest.TestCase):

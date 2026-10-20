@@ -5,7 +5,7 @@ import unittest
 
 import numpy as np
 
-from arx5_control.cartesian import CartesianPlanner, CartesianPlanningError
+from legacy.arx5_control.cartesian import CartesianPlanner, CartesianPlanningError
 
 
 class CartesianPathQualityTest(unittest.TestCase):

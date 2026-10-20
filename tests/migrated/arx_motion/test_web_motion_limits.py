@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from arx5_backend.kernel.control import (
+from embodied.console.kernel.control import (
     WEB_MOTION_SAFETY,
     velocity_scale_from_params,
 )

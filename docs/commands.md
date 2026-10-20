@@ -1,8 +1,8 @@
 # 命令与控制器
 
-统一从根目录 `run.sh` 启动；启动器直接运行 `src/` 模块或 `scripts/` 工具。共享 Stanford X5 后端位于 `src/robot_control/hardware.py`，关节目标限幅与五次轨迹位于 `src/robot_control/trajectory.py`；调用方直接导入这些模块，Quest 控制流程与 A/B/Grip 行为不变。共享组件与独立标定、仿真的位置见 [源码分层](../src/README.md)。
+统一从根目录 `run.sh` 启动；启动器直接运行 `src/` 模块或 `scripts/` 工具。共享 Stanford X5 后端位于 `src/legacy/robot_control/hardware.py`，关节目标限幅与五次轨迹位于 `src/legacy/robot_control/trajectory.py`；调用方直接导入这些模块，Quest 控制流程与 A/B/Grip 行为不变。共享组件与独立标定、仿真的位置见 [源码分层](../src/README.md)。
 
-主控制器与预设状态机位于 `src/quest_teleop/controller.py` 和 `presets.py`；真机参数解析在 `src/quest_teleop/cli.py`，虚拟控制参数在 `src/robot_control/cli.py`，监看参数在 `src/robot_simulation/cli.py`。全部项目 X5 入口使用自己的 `X5TeleopBase`，不再导入 R5 控制器或 SDK，见 [X5 控制器说明](x5-controller.md)。
+主控制器与预设状态机位于 `src/legacy/quest_teleop/controller.py` 和 `presets.py`；真机参数解析在 `src/legacy/quest_teleop/cli.py`，虚拟控制参数在 `src/legacy/robot_control/cli.py`，监看参数在 `src/embodied/monitor/cli.py`。全部项目 X5 入口使用自己的 `X5TeleopBase`，不再导入 R5 控制器或 SDK，见 [X5 控制器说明](x5-controller.md)。
 
 | 命令 | 行为 |
 | --- | --- |
@@ -48,4 +48,4 @@ ARX 官方 SDK 曾出现非指令关节漂移，`teleop-x5-2025 --actuate` 仍�
 
 历史自定义控制器的 CSV 日志迁到 `outputs/logs/`，可由 `paths.log_dir` 配置。主 `teleop-presets-x5` 增加 `--enable-session` 后会输出会话诊断日志，并接受独立终端的原始 episode 录制命令；见 [采集说明](recording.md)。未开启时保留原来的终端诊断。既有 TXT 记录保存在 `docs/validation/`。
 
-源码位置见 [目录职责](layout.md)。虚拟控制由 `robot_control.cli` 运行；选择位姿输入时组合主 presets 控制器。真机与虚拟控制均通过 `robot_control.client` 连接服务，由服务通过 `robot_core.telemetry` 发布状态；独立监看在 `robot_simulation/cli.py` 和 `scene.py`；旧的继承式虚拟控制器和命令别名已移除。历史自定义控制器位于 `src/quest_teleop/legacy/`，提供独立实现。插件组合和接口见 [插件说明](plugins.md)。
+源码位置见 [目录职责](layout.md)。虚拟控制由 `legacy.robot_control.cli` 运行；选择位姿输入时组合主 presets 控制器。真机与虚拟控制均通过 `legacy.robot_control.client` 连接服务，由服务通过 `embodied.core.telemetry` 发布状态；独立监看在 `robot_simulation/cli.py` 和 `scene.py`；旧的继承式虚拟控制器和命令别名已移除。历史自定义控制器位于 `src/legacy/quest_teleop/legacy/`，提供独立实现。插件组合和接口见 [插件说明](plugins.md)。

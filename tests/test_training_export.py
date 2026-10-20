@@ -1,12 +1,12 @@
 """Offline raw H264, exact clocks and 50Hz state / 30FPS observation alignment."""
-from quest_teleop.mcap_io import read_records
+from embodied.data.episode.mcap_io import read_records
 from pathlib import Path
 import tempfile
 import time
 import unittest
 import numpy as np
-from quest_teleop.recording import EpisodeWriter
-from quest_teleop.video import read_frame
+from embodied.data.episode.recording import EpisodeWriter
+from embodied.data.episode.video import read_frame
 
 
 class TrainingExportTests(unittest.TestCase):

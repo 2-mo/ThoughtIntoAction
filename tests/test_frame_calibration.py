@@ -7,15 +7,15 @@ from unittest.mock import patch
 import numpy as np
 import meshcat.transformations as tf
 
-from quest_teleop.frame_calibration import fit_directions, validate_rotation, standby_snapshot, capture, main
-from quest_teleop.frames import R_CONTROLLER_TO_TOOL, operator_yaw_rotation
-from robot_core.model import RobotModel
-from quest_teleop.presets import DEFAULT_GRASP_READY_JOINTS
+from legacy.quest_teleop.frame_calibration import fit_directions, validate_rotation, standby_snapshot, capture, main
+from legacy.quest_teleop.frames import R_CONTROLLER_TO_TOOL, operator_yaw_rotation
+from embodied.core.model import RobotModel
+from legacy.quest_teleop.presets import DEFAULT_GRASP_READY_JOINTS
 
 
 class FrameCalibrationTests(unittest.TestCase):
     def test_quick_heading_maps_forward_left_and_up_for_any_yaw(self):
-        from quest_teleop.frame_calibration import heading_rotation
+        from legacy.quest_teleop.frame_calibration import heading_rotation
         for yaw in (-179, -90, 0, 45, 179):
             q = tf.quaternion_about_axis(np.radians(yaw), [0, 1, 0])
             rotation = tf.quaternion_matrix(q)[:3, :3]
@@ -29,14 +29,14 @@ class FrameCalibrationTests(unittest.TestCase):
                 heading_rotation(q)
 
     def test_quick_heading_save_and_explicit_reuse(self):
-        from quest_teleop.frames import R_CONTROLLER_TO_TOOL
+        from legacy.quest_teleop.frames import R_CONTROLLER_TO_TOOL
         with tempfile.TemporaryDirectory() as directory:
             config = {"runtime": {"socket": "unused"}, "paths": {"log_dir": directory}}
-            with patch("robot_core.project.load_config", return_value=config), \
-                 patch("quest_teleop.frame_calibration.standby_snapshot", return_value=({"session_id": "a", "rotation_frame": "base"}, np.zeros(3), 1)), \
-                 patch("quest_teleop.frame_calibration.capture_heading", return_value=R_CONTROLLER_TO_TOOL) as capture_quick, \
+            with patch("embodied.core.project.load_config", return_value=config), \
+                 patch("legacy.quest_teleop.frame_calibration.standby_snapshot", return_value=({"session_id": "a", "rotation_frame": "base"}, np.zeros(3), 1)), \
+                 patch("legacy.quest_teleop.frame_calibration.capture_heading", return_value=R_CONTROLLER_TO_TOOL) as capture_quick, \
                  patch("builtins.input", return_value=""), \
-                 patch("quest_teleop.frame_calibration.request") as apply:
+                 patch("legacy.quest_teleop.frame_calibration.request") as apply:
                 main([])
                 main(["--reuse"])
                 self.assertEqual(capture_quick.call_count, 1)
@@ -68,7 +68,7 @@ class FrameCalibrationTests(unittest.TestCase):
     def test_sampling_rejects_active_stale_or_restarted_session(self):
         status = {"session_id": "a", "state_age_s": 0., "recording": None,
                   "state": {"control_enabled": True}}
-        with patch("quest_teleop.frame_calibration.request", return_value=status):
+        with patch("legacy.quest_teleop.frame_calibration.request", return_value=status):
             with self.assertRaises(RuntimeError):
                 standby_snapshot("unused")
             status["state"]["control_enabled"] = False
@@ -76,8 +76,8 @@ class FrameCalibrationTests(unittest.TestCase):
                 standby_snapshot("unused")
             with self.assertRaises(RuntimeError):
                 standby_snapshot("unused", "b")
-        with patch("quest_teleop.frame_calibration.standby_snapshot", return_value=({}, np.zeros(3), 1)), \
-             patch("quest_teleop.frame_calibration.time.sleep"):
+        with patch("legacy.quest_teleop.frame_calibration.standby_snapshot", return_value=({}, np.zeros(3), 1)), \
+             patch("legacy.quest_teleop.frame_calibration.time.sleep"):
             with self.assertRaisesRegex(RuntimeError, "时间戳"):
                 capture("unused", "a")
 
@@ -85,11 +85,11 @@ class FrameCalibrationTests(unittest.TestCase):
         points = [np.zeros(3), np.array([0, 0, -.18]), np.ones(3), np.array([.85, 1, 1])]
         with tempfile.TemporaryDirectory() as directory:
             config = {"runtime": {"socket": "unused"}, "paths": {"log_dir": directory}}
-            with patch("robot_core.project.load_config", return_value=config), \
-                 patch("quest_teleop.frame_calibration.standby_snapshot", return_value=({"session_id": "a", "rotation_frame": "calibrated"}, points[0], 1)), \
-                 patch("quest_teleop.frame_calibration.capture", side_effect=points), \
+            with patch("embodied.core.project.load_config", return_value=config), \
+                 patch("legacy.quest_teleop.frame_calibration.standby_snapshot", return_value=({"session_id": "a", "rotation_frame": "calibrated"}, points[0], 1)), \
+                 patch("legacy.quest_teleop.frame_calibration.capture", side_effect=points), \
                  patch("builtins.input", return_value=""), \
-                 patch("quest_teleop.frame_calibration.request") as apply:
+                 patch("legacy.quest_teleop.frame_calibration.request") as apply:
                 main([])
             payload = apply.call_args.kwargs
             self.assertEqual(payload["session_id"], "a")

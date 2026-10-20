@@ -9,8 +9,8 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 
 from arm_service_fixture import ServiceFixture
-from robot_control.client import ArmClient
-from robot_control.service import rpc_listener
+from legacy.robot_control.client import ArmClient
+from legacy.robot_control.service import rpc_listener
 
 
 class ArmServiceTests(unittest.TestCase):
@@ -111,7 +111,7 @@ class ArmServiceTests(unittest.TestCase):
             ArmClient(self.fixture.robot, path=self.fixture.path, hardware=True)
         with patch.object(self.fixture.robot, "metadata", return_value={"wrong": True}):
             # A separate model avoids changing the server's own metadata.
-            from robot_core.model import RobotModel
+            from embodied.core.model import RobotModel
             with self.assertRaisesRegex(ValueError, "model/frame"):
                 ArmClient(RobotModel(), path=self.fixture.path, hardware=False)
         self.assertIsNone(self.fixture.service.owner)
@@ -312,13 +312,13 @@ class ArmServiceTests(unittest.TestCase):
 
     def test_native_control_enable_seeds_feedback_before_gains_and_damping_blocks_submit(self):
         import arx5_interface as arx5
-        from robot_control.hardware import OfficialX5HardwareAdapter
+        from legacy.robot_control.hardware import OfficialX5HardwareAdapter
         native = MagicMock()
         state = arx5.JointState(6)
         state.pos()[:] = [0.1, 1.1, 1.2, -1.0, .1, .2]
         state.gripper_pos = .035
         native.get_joint_state.return_value = state
-        from robot_control.online_motion import DEFAULTS
+        from legacy.robot_control.online_motion import DEFAULTS
         settings = {k:v for k,v in self.fixture.service.settings.items() if k not in DEFAULTS}
         with patch.object(arx5, "Arx5JointController", return_value=native):
             backend = OfficialX5HardwareAdapter(**settings, can_port="offline-service-enable", actuate=False)

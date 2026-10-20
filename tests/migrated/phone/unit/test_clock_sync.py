@@ -1,6 +1,6 @@
 import pytest
 
-from robot_teleop.protocol.clock_sync import (
+from embodied.phone.protocol.clock_sync import (
     ClockSampleError,
     ClockSyncEstimator,
     clock_sample,

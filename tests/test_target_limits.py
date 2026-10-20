@@ -4,7 +4,7 @@ import unittest
 import numpy as np
 import meshcat.transformations as tf
 
-from quest_teleop.target_limits import CartesianTargetLimiter, rotvec
+from legacy.quest_teleop.target_limits import CartesianTargetLimiter, rotvec
 
 
 class TargetLimitTests(unittest.TestCase):

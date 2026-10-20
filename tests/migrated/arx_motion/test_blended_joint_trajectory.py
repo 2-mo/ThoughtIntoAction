@@ -4,8 +4,8 @@ import unittest
 
 import numpy as np
 
-from arx5_control.motion import analyze_sampled_motion
-from arx5_control.motion.offline import plan_blended_joint_trajectory
+from embodied.motion import analyze_sampled_motion
+from embodied.motion.offline import plan_blended_joint_trajectory
 
 
 class BlendedJointTrajectoryTest(unittest.TestCase):

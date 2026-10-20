@@ -57,7 +57,7 @@ if sys.argv[1:3] == ["quest-wake", "start"] and os.environ["TEST_WAKE_FAIL"] == 
                 self.assertIn("usage:", result.stdout.lower())
 
     def test_daily_shortcuts_and_xr_page_resolve_from_other_directories(self):
-        from quest_teleop.xr_visualizer.cli import HTML_PATH
+        from legacy.quest_teleop.xr_visualizer.cli import HTML_PATH
         self.assertTrue(HTML_PATH.is_file())
         self.assertIn(str(ROOT / "src"), str(HTML_PATH))
         for script in ("启动遥操.sh", "scripts/viewer/启动仿真.sh", "启动机械臂服务.sh"):

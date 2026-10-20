@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from robot_teleop.transports.udp import (
+from embodied.phone.transports.udp import (
     UdpTransport,
     UdpTransportConfig,
     UdpTransportStateError,

@@ -35,13 +35,13 @@ import pinocchio as pin
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from reBotArm_control_py.actuator import RebotArm
-from reBotArm_control_py.dynamics import (
+from embodied.robots.rebot.actuator import RebotArm
+from embodied.robots.rebot.dynamics import (
     load_dynamics_model,
     compute_generalized_gravity,
     get_default_gravity,
 )
-from reBotArm_control_py.kinematics import load_robot_model, get_end_effector_frame, pad_q_for_model
+from embodied.robots.rebot.kinematics import load_robot_model, get_end_effector_frame, pad_q_for_model
 
 # ── 安全测试配置 ──────────────────────────────────────────────────────────────────
 # 只使能以下关节；留空 [] 则全部使能。用于逐个电机安全测试。

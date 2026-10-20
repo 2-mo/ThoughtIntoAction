@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from robot_teleop.controllers.cartesian_ruckig import CartesianServoConfig
+from embodied.phone.controllers.cartesian_ruckig import CartesianServoConfig
 
 
 def test_singularity_thresholds_are_explicit_pair() -> None:

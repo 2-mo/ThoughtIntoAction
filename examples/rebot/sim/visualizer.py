@@ -24,7 +24,7 @@ from pinocchio.visualize import MeshcatVisualizer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
-from reBotArm_control_py.kinematics import _resolve_urdf
+from embodied.robots.rebot.kinematics import _resolve_urdf
 
 
 class Visualizer:
@@ -203,7 +203,7 @@ class Visualizer:
             color:      RGB 颜色值
             name:       MeshCat 中的路径名
         """
-        from reBotArm_control_py.kinematics import compute_fk
+        from embodied.robots.rebot.kinematics import compute_fk
 
         positions = []
         for pt in joint_traj:

@@ -68,9 +68,9 @@ Rust 源码依据均在已导入的 [`rollio-source.tar.gz`](../control/native/r
 | --- | --- | --- |
 | [`NativeQuest`](../control/adapters/sources.py) 同时启动 input/coordinator/两个 router，并在 worker 中读取 XR 做接管门控 | `vr` 插件粒度过粗，混入了整条管线编排和控制权逻辑 | VR 适配负责发布输入；coordinator/router 复用原部件；管线组合由 supervisor/profile 完成；owner 门控属于命令入口。 |
 | [`NativeVR`](../src/component_api/contracts.py) 同时要求 `start_pipeline` 和 `poll` | 一个接口跨了进程装配与周期消费两个生命周期 | 分开表达输入设备、路由、命令入口的窄接口；保留组合启动的便捷入口。 |
-| [`workbench`](../src/workstation/workbench.py) 按 `source == 'quest'` 选择原生输入，所有 profile 都解析 VR 插件 | 插件名称承担了隐式依赖声明 | profile 声明需要的输入/路由组件；普通 CLI/手机组合只装配实际需要的部分。 |
+| [`workbench`](../src/embodied/workstation/workbench.py) 按 `source == 'quest'` 选择原生输入，所有 profile 都解析 VR 插件 | 插件名称承担了隐式依赖声明 | profile 声明需要的输入/路由组件；普通 CLI/手机组合只装配实际需要的部分。 |
 | [`worker`](../control/arx5_vr/worker.py) 和 [`CommandEngine`](../control/adapters/commands.py) 直接判断 Quest 来源 | 控制调度和裁决仍知道具体输入设备 | 输入适配提交带来源/新鲜度的候选命令；公共裁决处理 owner、epoch 和有效期。设备按键语义留在设备/协调层。 |
-| [`QuestSource`](../src/inputs/idle.py) 实际只维持 lease | 控制权会话与 VR 数据生产者需要在命名和契约上区分 | 明确 input device、teleop session 和 active owner 是三个角色，避免再次给 worker 引入设备职责。 |
+| [`QuestSource`](../src/embodied/inputs/idle.py) 实际只维持 lease | 控制权会话与 VR 数据生产者需要在命名和契约上区分 | 明确 input device、teleop session 和 active owner 是三个角色，避免再次给 worker 引入设备职责。 |
 | [`app.py`](../control/arx5_vr/app.py) 在 managed 模式把所有原生子进程退出都视作 optional | 故障隔离应与活动路由依赖联动 | 非活动 Quest 故障不打断手机；活动 Quest 必需的输入/coordinator/router 故障应撤销该路由许可，并验证停止/保持边界。复用现有 health/permit 闭环。 |
 
 最后一项是复核时的验证缺口：已有多源验收覆盖 CLI → phone → handeye，但没有验证 managed Quest 活动时分别退出 coordinator/arm/gripper 的行为。现有门控检查 XR 新鲜度不能代替 route health；不能把非活动组件退出的独立性测试等同于活动 Quest 故障验收。
@@ -89,8 +89,8 @@ Rust 源码依据均在已导入的 [`rollio-source.tar.gz`](../control/native/r
 - 原 `RobotBridge` 增加命令/反馈端口选择，默认完整行为保留。worker 始终发布反馈；无 VR 的手机/CLI 运行仍可连接原只读 viewer。
 - [`NativeIngress`](../control/adapters/sources.py)：只在 worker 中消费原 `RobotBridge`、输入、permit 和 route health，产出带 epoch/期限/输入序号的候选命令。没有启动进程、获取租约或求解 IK 的职责。
 - [`commands.py`](../control/adapters/commands.py) / [`gateway.py`](../control/adapters/gateway.py)：租约显式绑定 `ingress`，来源名称仅标记数据。裁决先处理当前 tick 的控制权变化，再取候选；过期或旧 epoch 候选不能跨接管边界。RPC 跟随数据由显式 `purpose=teleop` 标记。
-- [`NativeSession`](../src/inputs/idle.py)：只申请和维持入口租约，和 XR 数据生产者分开。取消原生会话后保持到释放/重新申请；该租约不能混入 RPC 运动。
-- [`workbench`](../src/workstation/workbench.py)：profile 的 `native` 声明 device/routing/ingress/channel；CLI/手机不再解析或创建 VR。原生 source 通过能力声明要求入口连接，公共装配不判断 Quest 名称。
+- [`NativeSession`](../src/embodied/inputs/idle.py)：只申请和维持入口租约，和 XR 数据生产者分开。取消原生会话后保持到释放/重新申请；该租约不能混入 RPC 运动。
+- [`workbench`](../src/embodied/workstation/workbench.py)：profile 的 `native` 声明 device/routing/ingress/channel；CLI/手机不再解析或创建 VR。原生 source 通过能力声明要求入口连接，公共装配不判断 Quest 名称。
 - `controller.arx.joint_target` 通过原有注入点在 real/sim 中选择；调优日志中的 IK 专用诊断为可选字段，不要求替代控制器实现原控制器的私有变量。
 
 活动入口检查 supervisor 心跳、输入时间与递增序号、原 coordinator permit 心跳和原 route health。进程退出或已就绪入口失去健康时，worker 撤回其 owner、清参考并反馈保持；其他入口的 owner 不受影响。初次等待头显数据时只保持；追踪恢复后须显式重新申请会话；若 coordinator 正等待 Disabled 确认，需操作者 A+B 回 Home 完成同步，再进入跟随。进程已退出则需重启 runtime 才能恢复该管线。没有在故障后自动重连或自动 Home。原 `Disabled` 的 Home 只接受当前 epoch 的 A+B 请求。

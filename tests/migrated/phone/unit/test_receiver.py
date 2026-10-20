@@ -1,18 +1,18 @@
 import threading
 import time
 
-from robot_teleop.core.capabilities import InputCapabilities
-from robot_teleop.core.models import (
+from embodied.phone.core.capabilities import InputCapabilities
+from embodied.phone.core.models import (
     Pose,
     Quaternion,
     TeleopInput,
     TrackingQuality,
     Vector3,
 )
-from robot_teleop.inputs.mock import MockInputSource
-from robot_teleop.runtime.latest_value import LatestValue
-from robot_teleop.runtime.metrics import RuntimeMetrics
-from robot_teleop.runtime.receiver import InputReceiver
+from embodied.phone.inputs.mock import MockInputSource
+from embodied.phone.runtime.latest_value import LatestValue
+from embodied.phone.runtime.metrics import RuntimeMetrics
+from embodied.phone.runtime.receiver import InputReceiver
 
 
 class BlockingInputSource:

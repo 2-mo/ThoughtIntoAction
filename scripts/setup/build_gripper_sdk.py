@@ -30,7 +30,7 @@ def main():
     parser.add_argument('--build-dir', type=Path, default=BUILD)
     parser.add_argument('--source-archive', type=Path, help='Pinned git archive supplied by the repository')
     parser.add_argument('--headers', type=Path, help='Extracted development include directory')
-    parser.add_argument('--patch-header', type=Path, default=ROOT / 'src/robot_control/gripper_turns.h')
+    parser.add_argument('--patch-header', type=Path, default=ROOT / 'src/legacy/robot_control/gripper_turns.h')
     args = parser.parse_args()
     BUILD = args.build_dir.resolve()
     SOURCE = BUILD / 'source'

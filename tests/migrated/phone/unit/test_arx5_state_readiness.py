@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from robot_teleop.core.models import Pose, Quaternion, Vector3
-from robot_teleop.robots.arx5 import Arx5BackendConfig
-from robot_teleop.tools.arx5_state_readiness import run_state_readiness
+from embodied.phone.core.models import Pose, Quaternion, Vector3
+from embodied.phone.robots.arx5 import Arx5BackendConfig
+from embodied.phone.tools.arx5_state_readiness import run_state_readiness
 
 ROOT = Path(__file__).resolve().parents[4]
 MODEL_CONFIG = ROOT / "configs/phone/robots/arx5.yaml"

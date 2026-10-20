@@ -10,7 +10,7 @@
 | `profiles/*.toml` | 某个命令的参数组合，如日常 presets、collection、virtual-arm |
 | `plugins.toml` | 受信任的插件工厂及能力声明；实现仍放在各自的 src 包 |
 
-`robot_core.project.load_config()` 先读取 `project.toml`，再叠加选定的本机配置。选定顺序为启动器 `--config`、`QUEST_TELEOP_CONFIG`、默认 `local.toml`；显式指定的文件缺失时报错。相对路径从项目根目录解析。
+`embodied.core.project.load_config()` 先读取 `project.toml`，再叠加选定的本机配置。选定顺序为启动器 `--config`、`QUEST_TELEOP_CONFIG`、默认 `local.toml`；显式指定的文件缺失时报错。相对路径从项目根目录解析。
 
 共享默认解释器为 `.venv/bin/python`，由根目录 `uv sync --locked` 创建。本机配置通常无需指定 Python；如需诊断其他环境，显式使用 `QUEST_TELEOP_PYTHON` 或 `[environment].teleop_python`。解释器缺失会提示同步环境，不自动回退到 Conda 或系统 Python 执行控制器。
 

@@ -8,18 +8,18 @@
 
 | 功能 | 唯一维护位置 | 入口/插件 |
 | --- | --- | --- |
-| 原生 Quest、手机接管、基础动作 | `control/`、`src/inputs/`、`src/operations/` | `workbench`、`phone`、`motion`，用法见 [工作台](plugin-workbench.md) |
-| Ruckig、圆弧/混合路径、碰撞、运动学 | `src/arx5_control/motion/`、`src/robot_teleop/controllers/`、`src/robot_teleop/kinematics/` | `trajectory`、`path`、`collision`、`servo_algorithm`、`kinematics` 库插件 |
-| B601 DM/RS、分组电机与夹爪 | `src/reBotArm_control_py/actuator/`、`configs/rebot/`、`assets/robots/rebot/` | `device.rebot_dm/rebot_rs`；`components run rebot.*` |
-| B601 运动学、动力学、SE(3)/CLIK | `src/reBotArm_control_py/{kinematics,dynamics,trajectory}/` | `kinematic_analysis.rebot`、`dynamics.pinocchio`、`path.se3_geodesic`、`trajectory.clik` |
-| B601 末端操作、拖动与自动保持、MeshCat | `src/reBotArm_control_py/controllers/`、`examples/rebot/` | `rebot.endpose/trajectory/gravity/stationary_hold`、`viewer.rebot_*` |
-| 浏览器手势、运动编辑、Ghost、任务页面 | `apps/console/`、`src/arx5_backend/features/` | `ui.build`、`ui.preview`、`ui.backend`、`ui.console` |
-| D405/D455 RGB-D、WebRTC、相机诊断 | `src/arx5_backend/features/camera/`、`src/arx_tools/` | `camera.rgbd`、`diagnostic.d405` |
-| 双相机手眼、夹爪、负载标定 | `src/hand_eye_calibration/`、`src/arx_tools/` | `calibration.handeye/gripper/payload`；两种安装方式的独立求解器插件 |
-| 方块感知、抓取/旋转/堆叠 | `src/arx_tools/rgb_cube_detector.py`、`src/experiments/`、`src/arx5_backend/features/cube/` | `perception.rgb_cube`、`task_planner.*`、`task.cube` |
-| 双相机采集、审核、GR00T 导出 | `src/isaac_groot_data_collection/` | `collection.groot`、`episode_store.groot`、`dataset_export.groot_v21` |
-| GR00T 权重检查、异步推理及动作分块 | `src/gr_zeroshot/`、`third_party/Isaac-GR00T/` | `policy.groot`、`policy_actions.groot`、`checkpoint.groot` |
-| 手机 mock/replay、握手、诊断、回放检查 | `src/robot_teleop/`、`configs/phone/`、`assets/phone/` | `input.mock/replay`、`test_robot.mock`、`diagnostic.*`、`phone.tools` |
+| 原生 Quest、手机接管、基础动作 | `control/`、`src/embodied/inputs/`、`src/embodied/operations/` | `workbench`、`phone`、`motion`，用法见 [工作台](plugin-workbench.md) |
+| Ruckig、圆弧/混合路径、碰撞、运动学 | `src/embodied/motion/`、`src/embodied/phone/controllers/`、`src/embodied/phone/kinematics/` | `trajectory`、`path`、`collision`、`servo_algorithm`、`kinematics` 库插件 |
+| B601 DM/RS、分组电机与夹爪 | `src/embodied/robots/rebot/actuator/`、`configs/rebot/`、`assets/robots/rebot/` | `device.rebot_dm/rebot_rs`；`components run rebot.*` |
+| B601 运动学、动力学、SE(3)/CLIK | `src/embodied/robots/rebot/{kinematics,dynamics,trajectory}/` | `kinematic_analysis.rebot`、`dynamics.pinocchio`、`path.se3_geodesic`、`trajectory.clik` |
+| B601 末端操作、拖动与自动保持、MeshCat | `src/embodied/robots/rebot/controllers/`、`examples/rebot/` | `rebot.endpose/trajectory/gravity/stationary_hold`、`viewer.rebot_*` |
+| 浏览器手势、运动编辑、Ghost、任务页面 | `apps/console/`、`src/embodied/console/features/` | `ui.build`、`ui.preview`、`ui.backend`、`ui.console` |
+| D405/D455 RGB-D、WebRTC、相机诊断 | `src/embodied/console/features/camera/`、`src/legacy/arx_tools/` | `camera.rgbd`、`diagnostic.d405` |
+| 双相机手眼、夹爪、负载标定 | `src/embodied/calibration/hand_eye/`、`src/legacy/arx_tools/` | `calibration.handeye/gripper/payload`；两种安装方式的独立求解器插件 |
+| 方块感知、抓取/旋转/堆叠 | `src/legacy/arx_tools/rgb_cube_detector.py`、`src/experiments/`、`src/embodied/console/features/cube/` | `perception.rgb_cube`、`task_planner.*`、`task.cube` |
+| 双相机采集、审核、GR00T 导出 | `src/embodied/data/groot/` | `collection.groot`、`episode_store.groot`、`dataset_export.groot_v21` |
+| GR00T 权重检查、异步推理及动作分块 | `src/embodied/policy/groot/`、`third_party/Isaac-GR00T/` | `policy.groot`、`policy_actions.groot`、`checkpoint.groot` |
+| 手机 mock/replay、握手、诊断、回放检查 | `src/embodied/phone/`、`configs/phone/`、`assets/phone/` | `input.mock/replay`、`test_robot.mock`、`diagnostic.*`、`phone.tools` |
 
 ### 一处选择和运行
 
@@ -32,10 +32,10 @@
 ./run.sh components run ui.build
 ```
 
-`components list` 同时列出插件与可执行操作。工厂登记在 `configs/components/migrated.json`，命令/环境登记在 `configs/components/commands.json`。可执行参数原样传递，不通过 shell 拼接；列举不会加载硬件 SDK。插件创建仍通过 `embodied_contracts.registry.Registry`，例如在 analysis 环境：
+`components list` 同时列出插件与可执行操作。工厂登记在 `configs/components/migrated.json`，命令/环境登记在 `configs/components/commands.json`。可执行参数原样传递，不通过 shell 拼接；列举不会加载硬件 SDK。插件创建仍通过 `embodied.contracts.registry.Registry`，例如在 analysis 环境：
 
 ```python
-from embodied_contracts.registry import Registry
+from embodied.contracts.registry import Registry
 planner = Registry().create("trajectory", "ruckig", runtime="analysis")
 # 使用 planner.plan_ruckig_joint_trajectory(...)，显式提供模型限制和起始状态。
 ```

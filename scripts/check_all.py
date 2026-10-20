@@ -32,7 +32,7 @@ GROUPS = {
     "groot": ("environments/arx_motion/.venv-web/bin/python", [
         [str(ROOT / "environments/arx_motion/.venv-web/bin/python"), "-B", "scripts/check_groot_export.py",
          "--output", str(EVIDENCE / "groot-export")]]),
-    # Pages of src/robot_simulation/web; Playwright from: npm install --prefix .cache/viewer-validation playwright
+    # Pages of src/embodied/monitor/web; Playwright from: npm install --prefix .cache/viewer-validation playwright
     "browser": (".cache/viewer-validation/node_modules/playwright/index.mjs",
                 [["node", str(path)] for path in sorted((ROOT / "tests").glob("browser_*.mjs"))]),
 }

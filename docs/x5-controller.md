@@ -1,14 +1,14 @@
 # 项目 X5 遥操控制器
 
-当前 `teleop-presets-x5` 使用本项目维护的 X5 控制器。A/B 采集按键与 Home和录制会话在 `src/quest_teleop/`；设备通信、待机反馈与命令提交在 `src/robot_control/service.py`；默认运行不导入上游 R5 控制器或 `arx_r5_python`。
+当前 `teleop-presets-x5` 使用本项目维护的 X5 控制器。A/B 采集按键与 Home和录制会话在 `src/legacy/quest_teleop/`；设备通信、待机反馈与命令提交在 `src/legacy/robot_control/service.py`；默认运行不导入上游 R5 控制器或 `arx_r5_python`。
 
 `target_limits.CartesianTargetLimiter` 在手柄坐标转换后、IK 前分别限制平移与旋转目标变化率，参数由 `启动遥操.sh` 的 `MAX_EEF_LINEAR_SPEED_M_S` 和 `MAX_EEF_ANGULAR_SPEED_RAD_S` 提供；0 表示不附加该项限制。旋转沿最短四元数路径推进，重新握持时清除旧目标差，循环卡顿不累积速度额度。预抓取和 Home 提交终点及独立速度／加速度／jerk 配置，由 arm-service 的 Ruckig 统一规划，仍遵守服务的关节速度、超前量与限位设置。参数语义和默认值见 [安装与启动](setup.md#遥操速度与响应参数)。
 
 ```text
-run.sh teleop-presets-x5 → quest_teleop.cli.presets_main
-  → quest_teleop.presets.PresetSingleX5Controller
-  → quest_teleop.controller.X5TeleopController
-  → quest_teleop.base_controller.X5TeleopBase
+run.sh teleop-presets-x5 → legacy.quest_teleop.cli.presets_main
+  → legacy.quest_teleop.presets.PresetSingleX5Controller
+  → legacy.quest_teleop.controller.X5TeleopController
+  → legacy.quest_teleop.base_controller.X5TeleopBase
   → XRoboToolkit 通用 HardwareTeleopController / BaseTeleopController
 
 控制端 arm 插件：service → ArmClient → 独立 arm-service
@@ -22,7 +22,7 @@ input 插件：quest → XrClient；idle → 离线未激活输入
 
 `controller.py` 维护 X5 服务接入、采集会话、指令来源记录和退出时的阻尼清理。`presets.py` 维护 A 开始／保存采集、B 预抓取／长按回 Home、右摇杆左开始／右暂停／上作废上一条／按下长按结束清零、Grip 取消预设并重建跟随参考。关节限速、可配置的指令超前限制、SDK preview、夹爪限力保持由共享后端处理；遥操脚本可覆盖当前会话的运动参数，硬件速度上限保留。
 
-参数解析在 `src/quest_teleop/cli.py`，启动器直接运行该模块。Python 调用方直接使用 `X5TeleopController`，旧文件转发和类名别名已移除。无预设基线的会话元数据类名为 `X5TeleopController`，主入口记录 `PresetSingleX5Controller`，控制参数和数据 schema 不变。
+参数解析在 `src/legacy/quest_teleop/cli.py`，启动器直接运行该模块。Python 调用方直接使用 `X5TeleopController`，旧文件转发和类名别名已移除。无预设基线的会话元数据类名为 `X5TeleopController`，主入口记录 `PresetSingleX5Controller`，控制参数和数据 schema 不变。
 
 `control-arm --input quest` 组合主 presets 控制器与虚拟后端，真机继续用现有 presets 入口。控制端只连接服务，不创建设备后端、状态发布器或三维场景；`scripts/viewer/启动仿真.sh` / `view-arm` 独立订阅与渲染，控制端退出或重启不会关闭监看。旧 `simulate` 命令已移除。历史 `teleop` / `teleop-dry-run` 保留独立实现，官方 X5 实验入口选用 `arx2025` 插件。官方 SDK 的真机位置执行禁用仍有效。主采集入口继续用 `--enable-session` 共享单 D435i；相机按配置中的 `driver` 加载，历史 `--enable-camera` 保留其已有采集实现。
 
@@ -34,7 +34,7 @@ input 插件：quest → XrClient；idle → 离线未激活输入
 
 复用逻辑来自 [XRoboToolkit-Teleop-Sample-Python](https://github.com/XR-Robotics/XRoboToolkit-Teleop-Sample-Python)，固定 commit `79e5cb8a56e3455515ce1b476e993c764ec58739` 的 `xrobotoolkit_teleop/hardware/arx_r5_teleop_controller.py`。迁入关节映射、反馈/命令与兼容日志方法，重写 X5 初始化配置；不迁入 R5 SDK 导入、R5 模型、示例 CAN/相机配置或自动回零行为。
 
-Copyright (c) 2025 XR Robotics，原 MIT 许可保存在 [LICENSE.XRoboToolkit](../src/quest_teleop/LICENSE.XRoboToolkit)。上游源码和锁定版本保持原样；项目对迁入代码的修改在主仓库维护。
+Copyright (c) 2025 XR Robotics，原 MIT 许可保存在 [LICENSE.XRoboToolkit](../src/legacy/quest_teleop/LICENSE.XRoboToolkit)。上游源码和锁定版本保持原样；项目对迁入代码的修改在主仓库维护。
 
 ## 验证边界
 

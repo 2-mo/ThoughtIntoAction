@@ -2,7 +2,7 @@
 
 import copy
 from mcap_fixture import write_records
-from quest_teleop.mcap_io import read_records
+from embodied.data.episode.mcap_io import read_records
 import json
 from pathlib import Path
 import subprocess
@@ -17,14 +17,14 @@ import urllib.request
 
 import numpy as np
 
-from robot_core.project import load_config
-from quest_teleop.datasets import image_path, label_episode, load_episode, nearest_indices, validate_episode
-from robot_core.model import RobotModel
-from quest_teleop.recording import EpisodeWriter
-from robot_core.local_server import LocalServer
-from robot_core.session_protocol import request
-from quest_teleop.runtime.monitor import make_server
-from quest_teleop.runtime.session import TeleopSession
+from embodied.core.project import load_config
+from embodied.data.datasets import image_path, label_episode, load_episode, nearest_indices, validate_episode
+from embodied.core.model import RobotModel
+from embodied.data.episode.recording import EpisodeWriter
+from embodied.core.local_server import LocalServer
+from embodied.core.session_protocol import request
+from legacy.quest_teleop.runtime.monitor import make_server
+from legacy.quest_teleop.runtime.session import TeleopSession
 
 Q = [0., 1.5, 1.45, -1.2, 0., 0.]
 
@@ -160,7 +160,7 @@ class SessionTests(unittest.TestCase):
             return {"states": [{**snapshot(sequence), "sample_sequence": sequence}], "latest": sequence}
         self.session.record_samples = samples
         self.session.control_metadata["recording_rate_hz"] = 240
-        with patch("quest_teleop.task_package.finalize_task") as export:
+        with patch("embodied.data.task_package.finalize_task") as export:
             saved = []
             for _ in range(3):
                 self.session.dispatch({"command": "collection.toggle_episode", "task": "pick place"})
@@ -191,7 +191,7 @@ class SessionTests(unittest.TestCase):
         raw = self.session.dataset_root / ".raw" / "example"
         raw.mkdir(parents=True)
         (raw / "episode.json").write_text(json.dumps({"task_run_id": self.session.task_run_id}))
-        with patch("quest_teleop.task_package.finalize_task", side_effect=RuntimeError("encoding failed")):
+        with patch("embodied.data.task_package.finalize_task", side_effect=RuntimeError("encoding failed")):
             with self.assertRaisesRegex(RuntimeError, "encoding failed"):
                 self.session.dispatch({"command": "collection.end_task"})
         self.assertTrue(self.session.task_active)
@@ -418,7 +418,7 @@ class SessionTests(unittest.TestCase):
         root = self.record_episode(outcome="unknown")
         report = validate_episode(root, settings=self.config["recording"], robot=self.robot)
         self.assertTrue(report["valid"], report)
-        with patch("quest_teleop.datasets.validate_episode", return_value=report):
+        with patch("embodied.data.datasets.validate_episode", return_value=report):
             label_episode(root, "success", "reviewed in replay")
         meta = json.loads((root / "episode.json").read_text())
         self.assertEqual(meta["outcome_history"][-1]["previous"], "unknown")

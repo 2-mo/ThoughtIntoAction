@@ -110,11 +110,11 @@ Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随�
 ## 配置与目录
 
 ```text
-src/robot_core/          共享模型、坐标变换、相机、设备锁与存储
-src/robot_control/       机械臂服务/客户端、平滑轨迹、X5 后端与夹爪控制
-src/handeye_calibration/ 手眼标定采样、计划、求解与验证
-src/robot_simulation/    独立运动学仿真、共享 Three.js 场景、FK/IK 与轨迹预览
-src/quest_teleop/        X5 遥操控制器、A/B 采集按键与 Home、采集会话与只读监看
+src/embodied/core/          共享模型、坐标变换、相机、设备锁与存储
+src/legacy/robot_control/       机械臂服务/客户端、平滑轨迹、X5 后端与夹爪控制
+src/embodied/calibration/wrist/ 手眼标定采样、计划、求解与验证
+src/embodied/monitor/    独立运动学仿真、共享 Three.js 场景、FK/IK 与轨迹预览
+src/legacy/quest_teleop/        X5 遥操控制器、A/B 采集按键与 Home、采集会话与只读监看
 scripts/                 启动器、Quest 工具、CAN/依赖安装、设备检查
 configs/project.toml     共享默认配置
 configs/local.toml       本机设备和存储路径，不提交

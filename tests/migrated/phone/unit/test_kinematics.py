@@ -4,20 +4,20 @@ from pathlib import Path
 
 import pytest
 
-from robot_teleop.core.frames import IDENTITY_QUATERNION
-from robot_teleop.core.models import Pose, Vector3
-from robot_teleop.kinematics.checks import KinematicTarget, check_pose_path
-from robot_teleop.kinematics.config import (
+from embodied.phone.core.frames import IDENTITY_QUATERNION
+from embodied.phone.core.models import Pose, Vector3
+from embodied.phone.kinematics.checks import KinematicTarget, check_pose_path
+from embodied.phone.kinematics.config import (
     ModelConfigurationError,
     load_model_config,
 )
-from robot_teleop.kinematics.models import (
+from embodied.phone.kinematics.models import (
     IKResult,
     JacobianDiagnostics,
     JointLimits,
     RobotModel,
 )
-from robot_teleop.tools.phase4_kinematics_check import build_relative_targets
+from embodied.phone.tools.phase4_kinematics_check import build_relative_targets
 
 
 def test_x5_model_config_is_offline_and_matches_the_copied_urdf() -> None:

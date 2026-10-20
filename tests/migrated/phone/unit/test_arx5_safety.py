@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from robot_teleop.core.frames import IDENTITY_QUATERNION
-from robot_teleop.core.models import Pose, Twist, Vector3
-from robot_teleop.robots.arx5_safety import (
+from embodied.phone.core.frames import IDENTITY_QUATERNION
+from embodied.phone.core.models import Pose, Twist, Vector3
+from embodied.phone.robots.arx5_safety import (
     Arx5SafetyEnvelope,
     Arx5SafetyViolation,
     validate_interface_name,

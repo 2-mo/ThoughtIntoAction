@@ -45,8 +45,8 @@ elif '--runtime' in sys.argv:
                           '--input-plugin', 'arx.workbench', '--routing-plugin', 'arx.workbench', '--ingress-plugin', 'arx.workbench']))
 else:
     import numpy as np
-    from embodied_contracts.runtime import RuntimeReader
-    from embodied_contracts.runtime.control import ControlSession
+    from embodied.contracts.runtime import RuntimeReader
+    from embodied.contracts.runtime.control import ControlSession
     output = ROOT.parent / 'outputs/logs/workbench-native-check.log'
     child = subprocess.Popen([sys.executable, __file__, '--runtime'], cwd=ROOT, stdout=output.open('w'), stderr=subprocess.STDOUT)
     session = reader = None

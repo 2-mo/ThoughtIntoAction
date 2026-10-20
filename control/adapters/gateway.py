@@ -10,7 +10,7 @@ import threading
 import time
 from collections import OrderedDict
 
-from embodied_contracts.rpc import receive, send
+from embodied.contracts.rpc import receive, send
 from .commands import CommandEngine, MotionPlanner
 
 # Robot facts clients read instead of keeping their own copies (todo C-01, R-01).

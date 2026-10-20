@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from experiments.cube_pick_rotate_place.config import load_config
-from experiments.cube_pick_rotate_place.planner import (
+from embodied.tasks.cube.config import load_config
+from embodied.tasks.cube.planner import (
     maximum_plausible_contact_width_m,
 )
 

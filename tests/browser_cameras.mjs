@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {chromium} from '../.cache/viewer-validation/node_modules/playwright/index.mjs';
-const server = spawn('.venv/bin/python', ['-u', '-B', '-c', `from robot_core.model import RobotModel
-from robot_simulation.scene import Scene
+const server = spawn('.venv/bin/python', ['-u', '-B', '-c', `from embodied.core.model import RobotModel
+from embodied.monitor.scene import Scene
 import threading
 scene = Scene(RobotModel())
 threading.Event().wait()`], {env:{...process.env, PYTHONPATH:'src'}, stdio:['ignore','pipe','pipe']});

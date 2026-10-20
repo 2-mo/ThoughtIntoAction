@@ -4,17 +4,17 @@ import tempfile
 import unittest
 import numpy as np
 from mcap.reader import make_reader
-from quest_teleop.recording import EpisodeWriter
-from quest_teleop.datasets import load_episode
-from quest_teleop.replay import RecordedEpisode, WebReplay
-from quest_teleop.export_lerobot import load_episode as load_training
-from robot_core.model import RobotModel
+from embodied.data.episode.recording import EpisodeWriter
+from embodied.data.datasets import load_episode
+from embodied.data.replay import RecordedEpisode, WebReplay
+from embodied.data.export.lerobot import load_episode as load_training
+from embodied.core.model import RobotModel
 from unittest.mock import patch, MagicMock
 from types import SimpleNamespace
 
 class McapRecordingTests(unittest.TestCase):
     def test_roundtrip_video_replay_training_and_clock(self):
-        from robot_control.hardware import OfficialX5HardwareAdapter
+        from legacy.robot_control.hardware import OfficialX5HardwareAdapter
         backend = OfficialX5HardwareAdapter.__new__(OfficialX5HardwareAdapter)
         backend.arm = MagicMock()
         self.addCleanup(setattr, backend, 'arm', None)
@@ -70,7 +70,7 @@ class McapRecordingTests(unittest.TestCase):
             self.assertEqual(review['command_details']['gripper_sdk_cmd_pos'], .03)
             self.assertTrue(review['image_base64'])
             self.assertIsNone(review['target_q'])
-            with patch('quest_teleop.replay.time.monotonic', return_value=10) as clock:
+            with patch('embodied.data.replay.time.monotonic', return_value=10) as clock:
                 replay = WebReplay(episode)
                 replay.control('speed', speed=.25)
                 clock.return_value = 10.1

@@ -31,7 +31,7 @@ QuestArmTeleop/
 
 `run.sh` 直接调用 `src/` 模块或 `scripts/` 文件。普通命令的 `PYTHONPATH` 只有本项目 `src/` 和固定版本 XRoboToolkit；官方 X5 实验命令按需补充其 SDK 路径。项目维护当前入口和模块路径，不设旧接口兼容层。`myTeleop/`、旧根目录工具转发脚本与 `simulate-r5` 别名均已移除。
 
-配置和公共路径统一由 `src/robot_core/project.py` 读取，只依赖 Python 标准库。各包直接导入这个模块；旧配置读取模块和路径导出模块已移除。采集源码指纹覆盖 `src/` 和 `scripts/` 中的 Python 文件。
+配置和公共路径统一由 `src/embodied/core/project.py` 读取，只依赖 Python 标准库。各包直接导入这个模块；旧配置读取模块和路径导出模块已移除。采集源码指纹覆盖 `src/` 和 `scripts/` 中的 Python 文件。
 
 插件注册表在 `configs/plugins.toml`，加载器在 `robot_core/plugins.py`。实现仍归入所属能力包：机械臂后端在 `robot_control/backends/`，位姿输入在 `quest_teleop/inputs.py`，状态发布在 `robot_core/telemetry.py`，独立监看在 `robot_simulation/`。设备通信与控制客户端在 `robot_control/service.py` 和 `client.py`；控制进程不创建后端或场景，见 [插件说明](plugins.md)。
 

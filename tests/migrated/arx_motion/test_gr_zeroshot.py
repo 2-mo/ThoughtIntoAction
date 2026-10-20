@@ -21,22 +21,22 @@ ZERO_SHOT_ROOT = PROJECT_ROOT / "src" / "gr-zeroshot"
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(ZERO_SHOT_ROOT))
 
-from gr_zeroshot.checkpoint import (  # noqa: E402
+from embodied.policy.groot.checkpoint import (  # noqa: E402
     CheckpointError,
     select_checkpoint,
 )
-from gr_zeroshot.cameras import (  # noqa: E402
+from embodied.policy.groot.cameras import (  # noqa: E402
     CameraError,
     DualFrameBuffer,
     RgbFrame,
     default_camera_specs,
 )
-from gr_zeroshot.policy import (  # noqa: E402
+from embodied.policy.groot.policy import (  # noqa: E402
     NumericSerializer,
     PolicyClient,
     PolicyWorker,
 )
-from gr_zeroshot.runtime import (  # noqa: E402
+from embodied.policy.groot.runtime import (  # noqa: E402
     ACTION_PERIOD_NS,
     ActionRejected,
     ScheduledActionTarget,
@@ -47,12 +47,12 @@ from gr_zeroshot.runtime import (  # noqa: E402
     synthetic_observation,
     to_servo_target,
 )
-import gr_zeroshot.runtime as runtime_module  # noqa: E402
-from gr_zeroshot.cli import parse_args, parse_live_key  # noqa: E402
-from arx5_control import GripperState, WorkspaceBounds  # noqa: E402
-from arx5_control.cartesian import rpy_to_quaternion_xyzw  # noqa: E402
-from arx5_control.teleoperation import quaternion_multiply_xyzw  # noqa: E402
-from isaac_groot_data_collection.geometry import pose_6d_to_eef_9d  # noqa: E402
+import embodied.policy.groot.runtime as runtime_module  # noqa: E402
+from embodied.policy.groot.cli import parse_args, parse_live_key  # noqa: E402
+from legacy.arx5_control import GripperState, WorkspaceBounds  # noqa: E402
+from legacy.arx5_control.cartesian import rpy_to_quaternion_xyzw  # noqa: E402
+from legacy.arx5_control.teleoperation import quaternion_multiply_xyzw  # noqa: E402
+from embodied.data.groot.geometry import pose_6d_to_eef_9d  # noqa: E402
 
 
 class FineTunedCheckpointTest(unittest.TestCase):

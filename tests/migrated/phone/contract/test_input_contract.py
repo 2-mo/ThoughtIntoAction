@@ -2,16 +2,16 @@ from dataclasses import replace
 
 import pytest
 
-from robot_teleop.core.capabilities import InputCapabilities
-from robot_teleop.core.models import (
+from embodied.phone.core.capabilities import InputCapabilities
+from embodied.phone.core.models import (
     Pose,
     Quaternion,
     TeleopInput,
     TrackingQuality,
     Vector3,
 )
-from robot_teleop.inputs.mock import InputSourceStateError, MockInputSource
-from robot_teleop.inputs.replay import ReplayInputSource
+from embodied.phone.inputs.mock import InputSourceStateError, MockInputSource
+from embodied.phone.inputs.replay import ReplayInputSource
 
 CAPABILITIES = InputCapabilities(
     pose_6dof=True,

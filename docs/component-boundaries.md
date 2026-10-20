@@ -16,7 +16,7 @@
 | 当前依据 | 对独立优化的影响 | 处理 |
 | --- | --- | --- |
 | `robot_core/collection_motion.py` 用正则读取 `启动遥操.sh`，推理和恢复流程调用它 | 改启动脚本会改变其他功能的运动参数 | 参数成为具名配置；启动器和各功能读取同一份解析结果 |
-| `infer_after_sft/run.py` 插入 `src/zero-shot`，导入 real、rollout、worker_client | 微调推理依赖实验目录的控制编排、模块名和文件布局 | 保留模型加载实现，提取正式的策略适配和执行编排；两个入口使用公开接口 |
+| `infer_after_sft/run.py` 插入 `src/embodied/policy/pi05_zeroshot`，导入 real、rollout、worker_client | 微调推理依赖实验目录的控制编排、模块名和文件布局 | 保留模型加载实现，提取正式的策略适配和执行编排；两个入口使用公开接口 |
 | `zero-shot/compute_stats.py`、`infer.py` 从 quest_teleop 导入导出、对齐和视频工具 | 离线训练工具仍绑定遥操包 | 提取独立文件读写、数据转换与视频解码，旧入口暂时转发 |
 | `camera_control.check_legacy_session()` 查询遥操会话，camera-service 调用它 | 相机启停规则依赖某个采集产品的状态结构 | 最终改为通用的使用租约和配置约束；迁移期间保留旧兼容检查 |
 | `scripts/launch.py` 对多种命令统一设置 XR、SDK 的 Python/动态库路径 | 离线工具或控制新环境可能继承无关 ABI 和设备依赖 | 按功能选择解释器和环境；控制入口沿用 arx 自己的环境装配 |
@@ -31,17 +31,17 @@
 | 部件与建议位置 | 输入、输出 | 拥有的状态 | 独立运行或验证方式 |
 | --- | --- | --- | --- |
 | 控制单元 `control/` | 原生 Quest 或后续授权命令；机器人反馈、提交结果、状态事件 | SDK、周期、模式、活动目标、IK 状态及后续 owner | 原 arx demo/MuJoCo；真实 Quest 接仿真；适配前后行为比较 |
-| 设备输入 `src/inputs/`、`apps/ios/` | 原始帧/按键；映射后的目标或操作事件 | 设备 session、追踪状态、离合锚点、mapping profile | 协议金样本、输入回放与 Ghost；不需要真机械臂 |
-| 运动操作 `src/operations/` | 点动、计划、执行、取消；计划文件、进度与结果 | 操作生命周期、计划身份；worker 拥有执行进度的权威状态 | 固定起点/模型的离线规划与仿真执行 |
+| 设备输入 `src/embodied/inputs/`、`apps/ios/` | 原始帧/按键；映射后的目标或操作事件 | 设备 session、追踪状态、离合锚点、mapping profile | 协议金样本、输入回放与 Ghost；不需要真机械臂 |
+| 运动操作 `src/embodied/operations/` | 点动、计划、执行、取消；计划文件、进度与结果 | 操作生命周期、计划身份；worker 拥有执行进度的权威状态 | 固定起点/模型的离线规划与仿真执行 |
 | 传感器 `src/sensors/` | 设备数据和显式启停请求；原始帧、内参、诊断 | 设备连接、stream epoch、帧序号、使用租约 | 录制文件或合成帧替代设备；相机可单独运行 |
-| 观测对齐 `src/observations/` | 有时间和身份的状态/图像；有效观测或缺失原因 | 有界时间窗口，无设备所有权 | 固定时间序列验证帧选择、年龄与缺口 |
-| 采集 `src/collection/` | 机器人/相机流、按键事件；episode 和任务状态 | 录制起止、任务计数、缓冲、失败原因 | 合成流或回放流录制，不需要 Quest/CAN |
-| 数据文件 `src/episode_io/` | 版本化记录；MCAP、视频、元数据的读写 | 文件句柄、提交状态、完整性索引 | 小型历史/新版 fixture 读写和中断恢复 |
-| 数据处理 `src/dataset_tools/` | 已封存的数据；校验、标注、打包、LeRobot 数据与统计 | 离线任务和转换规则 | 没有控制/相机环境的批处理 |
-| 手眼标定 `src/handeye_calibration/` | 计划、原始 RGB、模型反馈；采样会话与外参 | 标定流程、样本划分和结果 | 合成真值、历史样本离线求解；动作经 operations 接入 |
+| 观测对齐 `src/embodied/data/alignment/` | 有时间和身份的状态/图像；有效观测或缺失原因 | 有界时间窗口，无设备所有权 | 固定时间序列验证帧选择、年龄与缺口 |
+| 采集 `src/embodied/data/capture/` | 机器人/相机流、按键事件；episode 和任务状态 | 录制起止、任务计数、缓冲、失败原因 | 合成流或回放流录制，不需要 Quest/CAN |
+| 数据文件 `src/embodied/data/episode/` | 版本化记录；MCAP、视频、元数据的读写 | 文件句柄、提交状态、完整性索引 | 小型历史/新版 fixture 读写和中断恢复 |
+| 数据处理 `src/embodied/data/export/` | 已封存的数据；校验、标注、打包、LeRobot 数据与统计 | 离线任务和转换规则 | 没有控制/相机环境的批处理 |
+| 手眼标定 `src/embodied/calibration/wrist/` | 计划、原始 RGB、模型反馈；采样会话与外参 | 标定流程、样本划分和结果 | 合成真值、历史样本离线求解；动作经 operations 接入 |
 | 策略 `src/policies/`，保留现有推理后端 | 带身份的观测、任务、模型配置；明确语义的动作块 | 模型、预处理/统计、推理请求 | 录制观测输入、无动作预测、仿真 rollout |
 | 监看与回放 `src/monitoring/` | 公共状态/历史记录；页面、趋势、Ghost | 显示与播放游标 | 无设备的历史回放；关闭页面不影响生产者 |
-| 装配与维护 `src/workstation/`、`scripts/` | 启动选项和配置；进程组、连接准备与状态 | 进程身份、依赖关系、启动结果 | 配置解析、只读诊断、缺少可选组件时的启动检查 |
+| 装配与维护 `src/embodied/workstation/`、`scripts/` | 启动选项和配置；进程组、连接准备与状态 | 进程身份、依赖关系、启动结果 | 配置解析、只读诊断、缺少可选组件时的启动检查 |
 
 `operations` 负责通用的计划/执行/取消；标定的“到位后采图”、采集的任务流程和策略的“观测后预测”各自归功能模块。工作台可以装配完整工作流，但不把所有功能状态机集中到一个 manager。
 
@@ -170,4 +170,4 @@
 
 新接口只在首个调用者迁移时建立；旧接口保留到最后一个调用者退出。每次交付一个能运行、能测量的功能切片，避免一次搬完目录却没有可用入口。
 
-**源码依据与本轮验证范围。** 已阅读 [边界测试](../tests/test_package_boundaries.py)、[启动器](../scripts/launch.py)、[插件注册](../configs/plugins.toml)、[采集会话](../src/quest_teleop/runtime/session.py)、[相机服务](../src/robot_core/camera_service.py)、[相机关闭规则](../src/robot_core/camera_control.py)、[脚本参数读取](../src/robot_core/collection_motion.py)、[微调推理入口](../src/infer_after_sft/run.py)、[实验 rollout](../src/zero-shot/rollout.py) 及 arx 的 app/worker/settings；另做静态导入关系盘点。进一步核对 arx 的 model/real/IPC，补充 IK 部分解、取消边界和资源预算的设计约束。本页记录架构审查依据；后续代码、环境和仿真验证见实施记录。验收表描述完整迁移要求，不代表当前均已满足。
+**源码依据与本轮验证范围。** 已阅读 [边界测试](../tests/test_package_boundaries.py)、[启动器](../scripts/launch.py)、[插件注册](../configs/plugins.toml)、[采集会话](../src/legacy/quest_teleop/runtime/session.py)、[相机服务](../src/embodied/sensors/service.py)、[相机关闭规则](../src/embodied/sensors/control.py)、[脚本参数读取](../src/embodied/core/collection_motion.py)、[微调推理入口](../src/embodied/policy/pi05_sft/run.py)、[实验 rollout](../src/embodied/policy/pi05_zeroshot/rollout.py) 及 arx 的 app/worker/settings；另做静态导入关系盘点。进一步核对 arx 的 model/real/IPC，补充 IK 部分解、取消边界和资源预算的设计约束。本页记录架构审查依据；后续代码、环境和仿真验证见实施记录。验收表描述完整迁移要求，不代表当前均已满足。

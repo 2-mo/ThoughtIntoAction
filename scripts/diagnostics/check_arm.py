@@ -7,9 +7,9 @@ import time
 
 import numpy as np
 
-from robot_control.client import ArmClient
-from robot_core.model import RobotModel
-from robot_core.project import load_config, resolve_path
+from legacy.robot_control.client import ArmClient
+from embodied.core.model import RobotModel
+from embodied.core.project import load_config, resolve_path
 
 
 def main():

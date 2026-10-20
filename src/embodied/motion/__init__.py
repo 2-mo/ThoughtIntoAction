@@ -1,0 +1,147 @@
+"""Trajectory profiles, derivative limits, and Ruckig planners.
+
+This package is hardware-independent. SDK submission and feedback monitoring
+remain in :mod:`legacy.arx5_control.controller` and :mod:`legacy.arx5_control.servo`.
+"""
+
+from embodied.motion.limits import (
+    DEFAULT_DERIVATIVE_SCALE_FLOOR,
+    MAX_CARTESIAN_WAYPOINTS,
+    MIN_CARTESIAN_WAYPOINTS,
+    SampledMotion,
+    analyze_sampled_motion,
+    derivative_scales,
+    scaled_derivative_limits,
+)
+from embodied.motion.offline import (
+    MAX_SAMPLED_WAYPOINTS,
+    RuckigJointTrajectory,
+    plan_blended_joint_trajectory,
+    plan_ruckig_joint_trajectory,
+)
+from embodied.motion.online import JointRuckigPlanner, JointServoCommand
+from embodied.motion.cartesian_time import (
+    MAX_PROGRESS_SAMPLES,
+    ScalarProgressTrajectory,
+    plan_scalar_progress,
+)
+from embodied.motion.collision import (
+    AabbObstacle,
+    CollisionCheck,
+    PrimitiveObstacle,
+    SphereObstacle,
+    check_tcp_path,
+)
+from embodied.motion.jacobian import (
+    JacobianDiagnostics,
+    analyze_jacobian,
+    numerical_jacobian,
+    singularity_speed_scale,
+)
+from embodied.motion.geometry import (
+    CartesianGeometryPath,
+    CartesianWaypoint,
+    build_cartesian_path,
+    build_circular_path,
+    concatenate_cartesian_paths,
+    quaternion_distance_rad,
+    slerp_quaternion_xyzw,
+)
+from embodied.motion.contracts import (
+    CartesianPathMode,
+    CartesianPathSegment,
+    MotionContext,
+    MotionPlan,
+    MotionType,
+    Payload,
+    Pose,
+    ReferenceFrame,
+    ToolCenterPoint,
+    quaternion_multiply_xyzw,
+    rotate_vector_xyzw,
+)
+from embodied.motion.link_collision import (
+    LinkCapsule,
+    LinkCollisionCheck,
+    PinocchioCollisionModel,
+    default_x5_capsules,
+)
+from embodied.motion.pinocchio_backend import PinocchioKinematics, PinocchioUnavailableError
+from embodied.motion.profiles import (
+    TrajectorySample,
+    cosine_fraction,
+    cosine_segment,
+    minimum_cosine_duration,
+    minimum_smoothstep9_duration,
+    round_trip,
+    smoothstep9_fraction,
+    via_point,
+)
+from embodied.motion.interpolation import (
+    MAX_RESAMPLED_SAMPLES,
+    resample_cubic_hermite,
+    resample_quintic_hermite,
+)
+
+__all__ = [
+    "DEFAULT_DERIVATIVE_SCALE_FLOOR",
+    "MAX_CARTESIAN_WAYPOINTS",
+    "MAX_SAMPLED_WAYPOINTS",
+    "MIN_CARTESIAN_WAYPOINTS",
+    "RuckigJointTrajectory",
+    "SampledMotion",
+    "TrajectorySample",
+    "JointRuckigPlanner",
+    "JointServoCommand",
+    "MAX_PROGRESS_SAMPLES",
+    "MAX_RESAMPLED_SAMPLES",
+    "ScalarProgressTrajectory",
+    "JacobianDiagnostics",
+    "CartesianGeometryPath",
+    "CartesianWaypoint",
+    "CartesianPathMode",
+    "CartesianPathSegment",
+    "MotionContext",
+    "MotionPlan",
+    "MotionType",
+    "Payload",
+    "Pose",
+    "ReferenceFrame",
+    "ToolCenterPoint",
+    "LinkCapsule",
+    "LinkCollisionCheck",
+    "PinocchioCollisionModel",
+    "PinocchioKinematics",
+    "PinocchioUnavailableError",
+    "analyze_jacobian",
+    "analyze_sampled_motion",
+    "cosine_fraction",
+    "cosine_segment",
+    "derivative_scales",
+    "minimum_cosine_duration",
+    "minimum_smoothstep9_duration",
+    "plan_blended_joint_trajectory",
+    "plan_ruckig_joint_trajectory",
+    "round_trip",
+    "resample_cubic_hermite",
+    "resample_quintic_hermite",
+    "scaled_derivative_limits",
+    "numerical_jacobian",
+    "singularity_speed_scale",
+    "plan_scalar_progress",
+    "AabbObstacle",
+    "CollisionCheck",
+    "PrimitiveObstacle",
+    "SphereObstacle",
+    "check_tcp_path",
+    "build_cartesian_path",
+    "build_circular_path",
+    "concatenate_cartesian_paths",
+    "default_x5_capsules",
+    "quaternion_distance_rad",
+    "slerp_quaternion_xyzw",
+    "quaternion_multiply_xyzw",
+    "rotate_vector_xyzw",
+    "smoothstep9_fraction",
+    "via_point",
+]

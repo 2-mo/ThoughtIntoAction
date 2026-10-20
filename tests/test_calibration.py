@@ -11,14 +11,14 @@ from unittest.mock import MagicMock, patch
 import cv2
 import numpy as np
 
-from robot_core.model import RobotModel
-from robot_core.transforms import from_rt, inverse, pose_error, transform
-from robot_control.trajectory import trajectory
-from robot_control.motion import move_and_settle
-from handeye_calibration.motion import execute_plan, make_plan, validate_plan
-from handeye_calibration.session import Session
-from handeye_calibration.solver import solve
-from handeye_calibration.target import MarkerDetector, marker_svg, normalize_pixels, square_pose, target_spec
+from embodied.core.model import RobotModel
+from embodied.core.transforms import from_rt, inverse, pose_error, transform
+from legacy.robot_control.trajectory import trajectory
+from legacy.robot_control.motion import move_and_settle
+from embodied.calibration.wrist.motion import execute_plan, make_plan, validate_plan
+from embodied.calibration.wrist.session import Session
+from embodied.calibration.wrist.solver import solve
+from embodied.calibration.wrist.target import MarkerDetector, marker_svg, normalize_pixels, square_pose, target_spec
 
 
 def synthetic():
@@ -140,7 +140,7 @@ class ModelTests(unittest.TestCase):
                 trajectory(self.robot, self.q, end, speed=speed)
 
     def test_replay_starts_at_plan_reference_not_a_default_preset(self):
-        from robot_control.cli import replay_points
+        from legacy.robot_control.cli import replay_points
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "plan.json"
             path.write_text(json.dumps({"robot": self.robot.metadata(), "center": self.q.tolist(),
@@ -150,7 +150,7 @@ class ModelTests(unittest.TestCase):
             np.testing.assert_allclose(qs[1], self.q + .01)
 
     def test_shared_can_lease_rejects_second_owner_and_releases(self):
-        from embodied_contracts.device_lease import DeviceLease
+        from embodied.contracts.device_lease import DeviceLease
         first = DeviceLease("offline-test-can-only")
         try:
             with self.assertRaisesRegex(RuntimeError, "owned"):
@@ -310,7 +310,7 @@ class MotionTests(unittest.TestCase):
             self.assertEqual(json.loads((session.directory / "session.json").read_text())["status"], "complete")
 
     def test_offline_commands_do_not_import_arm_xr_or_camera_drivers(self):
-        from handeye_calibration.cli import main
+        from embodied.calibration.wrist.cli import main
         import builtins
         original = builtins.__import__
         def guarded(name, *args, **kwargs):
@@ -327,7 +327,7 @@ class MotionTests(unittest.TestCase):
 class SharedBackendTests(unittest.TestCase):
     def test_arm_and_gripper_submit_once_with_zero_extra_torque(self):
         import arx5_interface as arx5
-        from robot_control.hardware import OfficialX5HardwareAdapter
+        from legacy.robot_control.hardware import OfficialX5HardwareAdapter
         state = arx5.JointState(6)
         state.pos()[:] = [0, 1.5, 1.45, -1.2, 0, 0]
         state.gripper_pos = .04
@@ -371,8 +371,8 @@ class SharedBackendTests(unittest.TestCase):
 
     def test_partial_initialization_failure_damps_and_releases_lease(self):
         import arx5_interface as arx5
-        from robot_control.hardware import OfficialX5HardwareAdapter
-        from embodied_contracts.device_lease import DeviceLease
+        from legacy.robot_control.hardware import OfficialX5HardwareAdapter
+        from embodied.contracts.device_lease import DeviceLease
         native = MagicMock()
         native.get_joint_state.side_effect = RuntimeError("feedback failed")
         with patch.object(arx5, "Arx5JointController", return_value=native):

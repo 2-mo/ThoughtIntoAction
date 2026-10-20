@@ -1,11 +1,11 @@
-from robot_teleop.core.models import (
+from embodied.phone.core.models import (
     Pose,
     Quaternion,
     TeleopInput,
     TrackingQuality,
     Vector3,
 )
-from robot_teleop.tools.control_observations import ControlObservations
+from embodied.phone.tools.control_observations import ControlObservations
 
 
 def sample(

@@ -2,7 +2,7 @@
 
 主环境使用 uv、Python 3.12 和项目内 `.venv`，当前支持 Linux x86_64。`run.sh` 使用 `/usr/bin/python3`（3.11+）解析配置，然后直接启动 `.venv/bin/python`，不受终端中 Conda 激活状态影响。启动不自动安装或升级依赖。
 
-独立 `view-arm` / `scripts/viewer/启动仿真.sh` 通过 Python 标准库启动 Three.js 本地服务，独立机械臂服务通过锁定的 pyzmq 发布状态。前端模块和材质随仓库保存，无需安装 Node/npm，也不依赖 CDN；浏览器需支持 WebGL 2。场景资产来源与可选浏览器测试见 [共享场景说明](../src/robot_simulation/web/README.md)。
+独立 `view-arm` / `scripts/viewer/启动仿真.sh` 通过 Python 标准库启动 Three.js 本地服务，独立机械臂服务通过锁定的 pyzmq 发布状态。前端模块和材质随仓库保存，无需安装 Node/npm，也不依赖 CDN；浏览器需支持 WebGL 2。场景资产来源与可选浏览器测试见 [共享场景说明](../src/embodied/monitor/web/README.md)。
 
 ## 首次安装
 

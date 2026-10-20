@@ -7,9 +7,9 @@ import unittest
 
 import numpy as np
 
-from robot_core.model import RobotModel
-from robot_core.telemetry import LocalPublisher, StateSubscriber
-from robot_simulation.scene import Scene
+from embodied.core.model import RobotModel
+from embodied.core.telemetry import LocalPublisher, StateSubscriber
+from embodied.monitor.scene import Scene
 
 
 class TelemetryTests(unittest.TestCase):

@@ -2,10 +2,10 @@ import time
 import unittest
 from unittest.mock import Mock
 import numpy as np
-from robot_control.service import ArmService
-from robot_control.online_motion import OnlineMotion
-from robot_core.model import RobotModel
-from robot_core.project import load_config
+from legacy.robot_control.service import ArmService
+from legacy.robot_control.online_motion import OnlineMotion
+from embodied.core.model import RobotModel
+from embodied.core.project import load_config
 
 
 class StoppedHoldRecoveryTests(unittest.TestCase):

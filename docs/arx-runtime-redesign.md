@@ -216,7 +216,7 @@ observer 为监看提供 latest-only 状态，为 collection 提供保序、带�
 
 命令带 source、owner_epoch、sequence、接收端有效期和 model identity，并验证有限值、维度和设备限制。预设动作可独立使用轨迹规划器；VR 模式保留 arx 原始关节目标逻辑。切换来源要先撤销旧 owner、处理当前运动、确认反馈、清理旧目标并重新捕获参考，再显式授予新 owner。正常切换保持 SDK 和 worker 生命周期，不隐式回 Home；这需要新增并验收 arx 入口的模式交接适配。SDK 停止锁存后的故障恢复不可用普通来源切换绕过。
 
-**自动手眼标定已有实现，迁移时保留完整流程。** 当前 `src/handeye_calibration/` 提供 D435i 眼在手上标定，入口已注册到 `./run.sh handeye`。它与 Quest 方向对齐、夹爪上电跨圈修复、负载质量/质心辨识是不同功能。
+**自动手眼标定已有实现，迁移时保留完整流程。** 当前 `src/embodied/calibration/wrist/` 提供 D435i 眼在手上标定，入口已注册到 `./run.sh handeye`。它与 Quest 方向对齐、夹爪上电跨圈修复、负载质量/质心辨识是不同功能。
 
 | 现有文件 | 已有能力 | 迁移处理 |
 | --- | --- | --- |
@@ -303,8 +303,8 @@ observer 为监看提供 latest-only 状态，为 collection 提供保序、带�
 | `robot_simulation/scene.py`、`web/` | 改订阅数据来源，保留 UI；生成模型经统一资产适配供网页读取 |
 | `handeye_calibration/` | 保留现有包和 marker/manual/plan/auto/solve 全流程；阶段五替换 CalibrationArm 与相机装配，迁移计划执行、静止采样及退出行为 |
 | `quest_teleop/frame_calibration.py` | 保留方向测量算法与历史配置读取；新链路需要方向对齐时适配原生输入与配置，避免重复执行坐标变换 |
-| `src/infer_after_sft/`、`integrations/openpi/` | 保留现有本地工作；先审查设备执行依赖，阶段五迁移在线执行端，训练环境不并入 control |
-| `src/zero-shot/` 及其与微调推理的交叉导入 | 实验入口保留；共享观测、策略动作和操作能力逐项迁入正式模块，不再以实验目录作为生产依赖 |
+| `src/embodied/policy/pi05_sft/`、`integrations/openpi/` | 保留现有本地工作；先审查设备执行依赖，阶段五迁移在线执行端，训练环境不并入 control |
+| `src/embodied/policy/pi05_zeroshot/` 及其与微调推理的交叉导入 | 实验入口保留；共享观测、策略动作和操作能力逐项迁入正式模块，不再以实验目录作为生产依赖 |
 | `robot_core/collection_motion.py`、`camera_control.py` | 分别移除反向解析启动脚本、查询遥操内部会话的最终依赖；由明确配置和通用相机使用租约替代，旧兼容保留到迁移完成 |
 
 完成后，控制单元应能在没有 camera、collection、viewer、LeRobot 的环境中独立运行；工作台应能只打开历史数据而不加载 XR/CAN SDK。两边以明确的数据契约和显式操作模式协作。
@@ -315,9 +315,9 @@ observer 为监看提供 latest-only 状态，为 collection 提供保序、带�
 - arx `native_config.py`、`ipc/`、`worker.py`：右手通道、未启用的采集 topic、模式/状态总线与控制循环。
 - arx `real.py`、`model.py`、`sim.py`、`recording.py`：直接 SDK 提交、反馈/命令顺序、模式/IK、物理仿真与调试日志。
 - arx `native/rollio-source.tar.gz` 内 `robots/xrobot/README.md`、`src/bin/device.rs`、`src/config.rs`、`src/frame.rs`：SDK 动态符号、左右手通道、输入字段及时间语义。
-- Quest [会话采集](../src/quest_teleop/runtime/session.py)、[控制器快照](../src/quest_teleop/controller.py)、[MCAP](../src/quest_teleop/mcap_io.py)、[导出](../src/quest_teleop/export_lerobot.py)、[多频率数据](../src/quest_teleop/multirate.py)：旧录制耦合和动作/时间语义。
-- Quest [夹爪修复](gripper-startup.md)、[SDK 构建](../scripts/setup/build_gripper_sdk.py)、[标定机械臂](../src/handeye_calibration/arm.py)、[设备锁](../src/robot_core/device_lease.py)：迁移时需要保留或适配的设备行为。
-- Quest 手眼标定：[操作说明](simulation-calibration.md)、[CLI](../src/handeye_calibration/cli.py)、[计划与执行](../src/handeye_calibration/motion.py)、[静止采样](../src/handeye_calibration/session.py)、[求解](../src/handeye_calibration/solver.py)、[既有测试](../tests/test_calibration.py)。这些是当前实现依据，不表示已迁移到 arx。
+- Quest [会话采集](../src/legacy/quest_teleop/runtime/session.py)、[控制器快照](../src/legacy/quest_teleop/controller.py)、[MCAP](../src/embodied/data/episode/mcap_io.py)、[导出](../src/embodied/data/export/lerobot.py)、[多频率数据](../src/embodied/data/export/multirate.py)：旧录制耦合和动作/时间语义。
+- Quest [夹爪修复](gripper-startup.md)、[SDK 构建](../scripts/setup/build_gripper_sdk.py)、[标定机械臂](../src/embodied/calibration/wrist/arm.py)、[设备锁](../src/embodied/core/device_lease.py)：迁移时需要保留或适配的设备行为。
+- Quest 手眼标定：[操作说明](simulation-calibration.md)、[CLI](../src/embodied/calibration/wrist/cli.py)、[计划与执行](../src/embodied/calibration/wrist/motion.py)、[静止采样](../src/embodied/calibration/wrist/session.py)、[求解](../src/embodied/calibration/wrist/solver.py)、[既有测试](../tests/test_calibration.py)。这些是当前实现依据，不表示已迁移到 arx。
 - 新增参考仓库的具体实现、已发现的不能照搬之处与分功能优先级，见 [多输入与运动功能接入方案](control-inputs-and-motion.md)。
 - 进一步的功能边界、隐式依赖、相机注册纠正与独立优化验收，见 [组件边界与独立优化方案](component-boundaries.md)。
 

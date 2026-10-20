@@ -4,9 +4,9 @@ import unittest
 from unittest.mock import Mock, patch
 from urllib.request import ProxyHandler, Request, build_opener
 
-from robot_core.model import RobotModel
-from robot_simulation.arx_preview import Simulation, preview_packet
-from robot_simulation.scene import Scene
+from embodied.core.model import RobotModel
+from embodied.monitor.arx_preview import Simulation, preview_packet
+from embodied.monitor.scene import Scene
 
 
 class ArxPreviewTests(unittest.TestCase):
@@ -36,7 +36,7 @@ class ArxPreviewTests(unittest.TestCase):
         scene = Scene(RobotModel(), simulation=simulation)
         self.addCleanup(scene.close)
         http = build_opener(ProxyHandler({}))
-        with patch('robot_core.session_protocol.request') as physical_request:
+        with patch('embodied.core.session_protocol.request') as physical_request:
             with http.open(scene.url + 'api/replay', timeout=2) as response:
                 self.assertEqual(json.load(response), {})
             request = Request(scene.url + 'api/replay', data=b'{"action":"load_last"}',

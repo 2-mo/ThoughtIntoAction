@@ -11,17 +11,17 @@ verify = "./run.sh control verify"
 
 [[vendored]]
 name = "robot-teleop-phone"
-path = "src/robot_teleop"
+path = "src/embodied/phone"
 commit = "864d6501a3eeef99b7facdc8f592d80e0ff52843"
 manifest = "third_party/phone_input/PROVENANCE.json"
 snapshot = "working tree including local changes; iOS, protocol, mapping and UDP only"
 
 [[vendored]]
 name = "arx5-test-motion"
-path = "src/operations/vendor/arx_motion"
+path = "src/embodied/contracts/vendor/arx_motion"
 commit = "a18d6b67906e450411d56e3d0fd08fd18a01675c"
-manifest = "src/operations/vendor/arx_motion/PROVENANCE.json"
-patches = "src/operations/vendor/arx_motion/LOCAL_PATCHES.json"
+manifest = "src/embodied/contracts/vendor/arx_motion/PROVENANCE.json"
+patches = "src/embodied/contracts/vendor/arx_motion/LOCAL_PATCHES.json"
 snapshot = "working tree pure motion math; no device runtime"
 
 [[repositories]]
@@ -82,7 +82,7 @@ required = true
 
 [[vendored]]
 name = "consolidated-motion"
-path = "src/arx5_control"
+path = "src/legacy/arx5_control"
 commit = "a18d6b67906e450411d56e3d0fd08fd18a01675c"
 manifest = "third_party/migration/manifest.json"
 patches = "third_party/migration/patches.json"
@@ -90,7 +90,7 @@ snapshot = "Full functional source, assets and tests; original working tree reta
 
 [[vendored]]
 name = "consolidated-rebot"
-path = "src/reBotArm_control_py"
+path = "src/embodied/robots/rebot"
 commit = "0324b734c86866ea23d6ea4c097833739329d6d3"
 manifest = "third_party/migration/manifest.json"
 patches = "third_party/migration/patches.json"
@@ -98,7 +98,7 @@ snapshot = "Full functional source, assets and tests; original working tree reta
 
 [[vendored]]
 name = "consolidated-phone"
-path = "src/robot_teleop"
+path = "src/embodied/phone"
 commit = "864d6501a3eeef99b7facdc8f592d80e0ff52843"
 manifest = "third_party/migration/manifest.json"
 patches = "third_party/migration/patches.json"

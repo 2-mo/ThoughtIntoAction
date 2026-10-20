@@ -6,9 +6,9 @@ import pytest
 
 pytest.importorskip("pinocchio")
 
-from robot_teleop.kinematics.config import load_model_config
-from robot_teleop.kinematics.pinocchio import PinocchioKinematics
-from robot_teleop.tools.phase4_kinematics_check import write_kinematics_check
+from embodied.phone.kinematics.config import load_model_config
+from embodied.phone.kinematics.pinocchio import PinocchioKinematics
+from embodied.phone.tools.phase4_kinematics_check import write_kinematics_check
 
 
 def test_x5_pinocchio_model_runs_fk_and_seeded_ik(tmp_path: Path) -> None:

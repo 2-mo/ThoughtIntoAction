@@ -1,7 +1,7 @@
 import struct
 
-from robot_teleop.protocol.flags import PacketFlags
-from robot_teleop.protocol.version import (
+from embodied.phone.protocol.flags import PacketFlags
+from embodied.phone.protocol.version import (
     ESTOP_RESET_PACKET_SIZE,
     HEADER_FORMAT,
     HEADER_SIZE,

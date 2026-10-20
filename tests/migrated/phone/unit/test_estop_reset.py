@@ -1,12 +1,12 @@
-from robot_teleop.core.models import (
+from embodied.phone.core.models import (
     Pose,
     Quaternion,
     TeleopInput,
     TrackingQuality,
     Vector3,
 )
-from robot_teleop.protocol.packet import EStopResetRequestPacket, SourceType
-from robot_teleop.runtime.estop_reset import EStopResetGate
+from embodied.phone.protocol.packet import EStopResetRequestPacket, SourceType
+from embodied.phone.runtime.estop_reset import EStopResetGate
 
 
 def safe_release(

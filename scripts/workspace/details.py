@@ -10,8 +10,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from robot_core.terminal_keys import terminal_keys, read_key
-from robot_simulation.control import status as viewer_status
+from embodied.core.terminal_keys import terminal_keys, read_key
+from embodied.monitor.control import status as viewer_status
 
 
 def render(role, info, mode, message):

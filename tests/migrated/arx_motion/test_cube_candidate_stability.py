@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from arx_tools.rgb_cube_detector import CubeDetection, RgbCubeDetector
+from legacy.arx_tools.rgb_cube_detector import CubeDetection, RgbCubeDetector
 
 
 class CubeCandidateStabilityTest(unittest.TestCase):

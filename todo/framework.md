@@ -72,6 +72,8 @@ C-01 为它们写 schema 与金样本。新增 `describe` 动作，返回机器�
 
 ## 5. L2 平台包
 
+已完成目录重组（2026-10-21）：`src/embodied/` 与 `src/legacy/`，结构见 `src/README.md`。下表是各子包的职责与后续归档范围。
+
 平台包名为 `embodied`，下表中的 `<pkg>` 即 `embodied`。
 
 | 子包 | 职责 | 主要来源 | 不再迁入（阶段 3 后归档） |

@@ -261,7 +261,7 @@ class MotionPlanner:
         if kind != 'movel':
             if np.any(goal < self.model.lower) or np.any(goal > self.model.upper):
                 raise ValueError('Target exceeds model limits')
-            from embodied_contracts.vendor.arx_motion.profiles import minimum_smoothstep9_duration, smoothstep9_fraction
+            from embodied.contracts.vendor.arx_motion.profiles import minimum_smoothstep9_duration, smoothstep9_fraction
             duration = max(.4, minimum_smoothstep9_duration(goal-start, velocity_limit=speed, acceleration_limit=.5, jerk_limit=2.))
             times = np.linspace(0, duration, min(4000, int(duration*250)+2))
             u = times / duration
@@ -270,7 +270,7 @@ class MotionPlanner:
             # Smooth the IK path, then stretch time until sampled joint derivatives
             # satisfy the same velocity/acceleration/jerk bounds as MoveJ.
             from scipy.interpolate import CubicSpline
-            from embodied_contracts.vendor.arx_motion.profiles import smoothstep9_fraction
+            from embodied.contracts.vendor.arx_motion.profiles import smoothstep9_fraction
             curve = CubicSpline(np.linspace(0, 1, len(qs)), qs, axis=0)
             u = np.linspace(0, 1, 2001)
             qs = curve([smoothstep9_fraction(float(a)) for a in u])

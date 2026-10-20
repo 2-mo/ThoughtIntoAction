@@ -11,7 +11,7 @@
 
 **先直接复用完整 arx Quest 链路，再接入本页功能。** 包括 XR 输入、coordinator/router、相对映射和按键状态机在内的上游实现均优先保留。手机、点动、通用动作 API 和控制权切换从主方案阶段五开始实施；本页“第一批”指扩展的第一批，不是整个迁移的第一批。每项先尝试配置或边界适配，确需修改 worker 时登记局部补丁，并保留原 Quest 基线的独立回归入口。
 
-所有选用代码统一交付在 QuestArmTeleop：Swift App/Xcode 工程放入 `apps/ios/`，协议与设备适配放入 `src/inputs/`，运动算法按环境边界纳入操作模块或 `control/motion/`。来源和补丁固定记录，构建及运行不引用兄弟仓库。现有 `src/handeye_calibration/` 的手动/自动采样、计划、求解与独立验证同样保留，详见主方案的自动手眼标定迁移；它与后续负载辨识分别交付。
+所有选用代码统一交付在 QuestArmTeleop：Swift App/Xcode 工程放入 `apps/ios/`，协议与设备适配放入 `src/embodied/inputs/`，运动算法按环境边界纳入操作模块或 `control/motion/`。来源和补丁固定记录，构建及运行不引用兄弟仓库。现有 `src/embodied/calibration/wrist/` 的手动/自动采样、计划、求解与独立验证同样保留，详见主方案的自动手眼标定迁移；它与后续负载辨识分别交付。
 
 各功能的依赖方向、状态所有权和独立验证见 [组件边界与独立优化方案](component-boundaries.md)。运动操作接口供手机、网页、标定和策略使用；相机、采集、标定流程与模型推理保留各自模块，不集中到一个操作管理器。
 
@@ -148,8 +148,8 @@ SE(3) 测地线与 Cartesian 直线也不是同一种路径。复用 reBot 的�
 
 **源码依据与验证范围。** 以下链接指向当前本地参考工作区，不构成运行时路径依赖。
 
-- arx5_test：[动作契约](../src/arx5_control/motion/contracts.py)、[几何](../src/arx5_control/motion/geometry.py)、[速度参数](../src/arx5_control/motion/limits.py)、[机械臂操作目录](../src/arx5_backend/features/arm/commands.py)、[前端手势](../apps/console/src/features/teleoperation/runtime.ts)、[负载标定](../src/arx_tools/calibrate_payload.py)。
-- reBotArm：[末端控制器](../src/reBotArm_control_py/controllers/rebotarm_endpose_controller.py)、[轨迹采样](../src/reBotArm_control_py/trajectory/sampler.py)、[CLIK](../src/reBotArm_control_py/trajectory/clik_tracker.py)、[停稳保持示例](../examples/rebot/10_gravity_compensation_lock.py)。
-- robot-teleop：[ARKit 采样](../apps/ios/RobotTeleop/Tracking/ARKitPoseProvider.swift)、[协议适配](../src/robot_teleop/inputs/arkit.py)、[相对映射](../src/robot_teleop/policies/relative_pose.py)、[协议约定](../docs/imported/robot-teleop/docs/protocol.md)、[手机 profile](../configs/phone/profiles/arkit_arx5.yaml)。
+- arx5_test：[动作契约](../src/embodied/motion/contracts.py)、[几何](../src/embodied/motion/geometry.py)、[速度参数](../src/embodied/motion/limits.py)、[机械臂操作目录](../src/embodied/console/features/arm/commands.py)、[前端手势](../apps/console/src/features/teleoperation/runtime.ts)、[负载标定](../src/legacy/arx_tools/calibrate_payload.py)。
+- reBotArm：[末端控制器](../src/embodied/robots/rebot/controllers/rebotarm_endpose_controller.py)、[轨迹采样](../src/embodied/robots/rebot/trajectory/sampler.py)、[CLIK](../src/embodied/robots/rebot/trajectory/clik_tracker.py)、[停稳保持示例](../examples/rebot/10_gravity_compensation_lock.py)。
+- robot-teleop：[ARKit 采样](../apps/ios/RobotTeleop/Tracking/ARKitPoseProvider.swift)、[协议适配](../src/embodied/phone/inputs/arkit.py)、[相对映射](../src/embodied/phone/policies/relative_pose.py)、[协议约定](../docs/imported/robot-teleop/docs/protocol.md)、[手机 profile](../configs/phone/profiles/arkit_arx5.yaml)。
 
 设计阶段完成源码审阅和上述 TRAPEZOID 标量验算；后续已完成基础插件链路的仿真验收，具体证据见实施记录。Swift/真实设备尚未验收；浏览器手势、MoveC/混合路径及负载实验仍属扩展目录。兄弟原项目未被更改。

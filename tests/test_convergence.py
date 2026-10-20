@@ -39,8 +39,8 @@ def source_files():
 
 
 def control_imports_of_src(files):
-    """Control kernel modules importing platform packages from src/; only L0 embodied_contracts is allowed (todo K-03)."""
-    packages = {path.name for path in (ROOT / "src").iterdir() if (path / "__init__.py").is_file()} - {"embodied_contracts"}
+    """Control kernel imports of platform code in src/; only L0 embodied.contracts is allowed (todo K-03)."""
+    packages = {path.name for path in (ROOT / "src").iterdir() if (path / "__init__.py").is_file()}
     found = set()
     for relative, path in files:
         if not relative.startswith("control/") or path.suffix != ".py":
@@ -52,7 +52,9 @@ def control_imports_of_src(files):
                 names = [node.module]
             else:
                 continue
-            found.update(f"{relative}:{name.split('.')[0]}" for name in names if name.split(".")[0] in packages)
+            for name in names:
+                if name.split(".")[0] in packages and not (name == "embodied.contracts" or name.startswith("embodied.contracts.")):
+                    found.add(f"{relative}:{'.'.join(name.split('.')[:2])}")
     return found
 
 

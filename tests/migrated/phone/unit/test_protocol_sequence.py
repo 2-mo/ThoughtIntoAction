@@ -1,6 +1,6 @@
 import pytest
 
-from robot_teleop.protocol.sequence import (
+from embodied.phone.protocol.sequence import (
     SequenceError,
     SequenceErrorCode,
     SequenceTracker,

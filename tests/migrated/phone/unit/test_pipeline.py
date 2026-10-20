@@ -1,7 +1,7 @@
 from dataclasses import replace
 
-from robot_teleop.core.capabilities import InputCapabilities
-from robot_teleop.core.models import (
+from embodied.phone.core.capabilities import InputCapabilities
+from embodied.phone.core.models import (
     ControlMode,
     Pose,
     Quaternion,
@@ -11,9 +11,9 @@ from robot_teleop.core.models import (
     TrackingQuality,
     Vector3,
 )
-from robot_teleop.core.pipeline import TeleopPipeline
-from robot_teleop.core.safety import TargetSafetyLimits
-from robot_teleop.policies.no_compliance import NoCompliancePolicy
+from embodied.phone.core.pipeline import TeleopPipeline
+from embodied.phone.core.safety import TargetSafetyLimits
+from embodied.phone.policies.no_compliance import NoCompliancePolicy
 
 IDENTITY = Quaternion(0.0, 0.0, 0.0, 1.0)
 ZERO_POSE = Pose(Vector3(0.0, 0.0, 0.0), IDENTITY)

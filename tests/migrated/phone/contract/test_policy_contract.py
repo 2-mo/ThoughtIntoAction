@@ -4,13 +4,13 @@ from dataclasses import replace
 
 import pytest
 
-from robot_teleop.core.capabilities import InputCapabilities
-from robot_teleop.core.frames import (
+from embodied.phone.core.capabilities import InputCapabilities
+from embodied.phone.core.frames import (
     quaternion_angular_distance,
     quaternion_from_axis_angle,
 )
-from robot_teleop.core.mapping import AxisMapping, MappingScales, PoseMapping
-from robot_teleop.core.models import (
+from embodied.phone.core.mapping import AxisMapping, MappingScales, PoseMapping
+from embodied.phone.core.models import (
     ControlMode,
     Pose,
     Quaternion,
@@ -19,12 +19,12 @@ from robot_teleop.core.models import (
     TrackingQuality,
     Vector3,
 )
-from robot_teleop.core.pipeline import TeleopPipeline
-from robot_teleop.core.safety import TargetSafetyLimits
-from robot_teleop.core.state_machine import TeleopState
-from robot_teleop.policies.no_compliance import NoCompliancePolicy
-from robot_teleop.policies.relative_pose import RelativePosePolicy
-from robot_teleop.runtime.mapping_settings import MappingSettingsStore
+from embodied.phone.core.pipeline import TeleopPipeline
+from embodied.phone.core.safety import TargetSafetyLimits
+from embodied.phone.core.state_machine import TeleopState
+from embodied.phone.policies.no_compliance import NoCompliancePolicy
+from embodied.phone.policies.relative_pose import RelativePosePolicy
+from embodied.phone.runtime.mapping_settings import MappingSettingsStore
 
 IDENTITY = Quaternion(0.0, 0.0, 0.0, 1.0)
 ZERO_POSITION = Vector3(0.0, 0.0, 0.0)

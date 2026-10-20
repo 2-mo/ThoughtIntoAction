@@ -4,15 +4,15 @@ from dataclasses import replace
 
 import pytest
 
-from robot_teleop.core.capabilities import InputCapabilities
-from robot_teleop.core.models import (
+from embodied.phone.core.capabilities import InputCapabilities
+from embodied.phone.core.models import (
     Pose,
     Quaternion,
     TrackingQuality,
     Vector3,
 )
-from robot_teleop.protocol.flags import PacketFlags
-from robot_teleop.protocol.packet import (
+from embodied.phone.protocol.flags import PacketFlags
+from embodied.phone.protocol.packet import (
     EStopResetAckPacket,
     EStopResetRequestPacket,
     PacketDecodeError,
@@ -27,7 +27,7 @@ from robot_teleop.protocol.packet import (
     decode_packet,
     encode_packet,
 )
-from robot_teleop.protocol.version import (
+from embodied.phone.protocol.version import (
     ESTOP_RESET_PACKET_SIZE,
     HEADER_STRUCT,
     PING_PACKET_SIZE,

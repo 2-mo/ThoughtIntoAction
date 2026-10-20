@@ -7,20 +7,20 @@ import pytest
 pytest.importorskip("pinocchio")
 pytest.importorskip("ruckig")
 
-from robot_teleop.controllers.cartesian_ruckig import (
+from embodied.phone.controllers.cartesian_ruckig import (
     CartesianRuckigServo,
     CartesianTargetRejected,
 )
-from robot_teleop.controllers.ruckig_servo import (
+from embodied.phone.controllers.ruckig_servo import (
     JointServoLimits,
     JointServoState,
     RuckigJointServo,
 )
-from robot_teleop.core.models import Pose, Vector3
-from robot_teleop.kinematics.config import load_model_config
-from robot_teleop.kinematics.pinocchio import PinocchioKinematics
-from robot_teleop.tools.phase4_kinematics_check import build_relative_targets
-from robot_teleop.tools.phase5_motion_preflight import (
+from embodied.phone.core.models import Pose, Vector3
+from embodied.phone.kinematics.config import load_model_config
+from embodied.phone.kinematics.pinocchio import PinocchioKinematics
+from embodied.phone.tools.phase4_kinematics_check import build_relative_targets
+from embodied.phone.tools.phase5_motion_preflight import (
     run_motion_preflight,
 )
 

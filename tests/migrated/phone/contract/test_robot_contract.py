@@ -1,13 +1,13 @@
 import pytest
 
-from robot_teleop.core.models import (
+from embodied.phone.core.models import (
     ControlMode,
     Pose,
     Quaternion,
     RobotCommand,
     Vector3,
 )
-from robot_teleop.robots.mock import (
+from embodied.phone.robots.mock import (
     MockRobotBackend,
     MockRobotConfig,
     RobotConnectionError,

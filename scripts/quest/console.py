@@ -14,7 +14,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.layout import Layout
 from rich.live import Live
-from robot_core.terminal_keys import terminal_keys, read_key
+from embodied.core.terminal_keys import terminal_keys, read_key
 
 rich_console = RichConsole()
 print = rich_console.print

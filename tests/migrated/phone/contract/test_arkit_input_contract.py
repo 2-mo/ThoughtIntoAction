@@ -3,19 +3,19 @@ import struct
 import threading
 from collections.abc import Callable, Iterator
 
-from robot_teleop.core.mapping import MappingScales
-from robot_teleop.core.models import (
+from embodied.phone.core.mapping import MappingScales
+from embodied.phone.core.models import (
     Pose,
     Quaternion,
     TrackingQuality,
     Vector3,
 )
-from robot_teleop.inputs.arkit import (
+from embodied.phone.inputs.arkit import (
     ARKIT_CAPABILITIES,
     ArkitInputSource,
     ArkitPacketDecoder,
 )
-from robot_teleop.protocol.packet import (
+from embodied.phone.protocol.packet import (
     PingPacket,
     PongPacket,
     PosePacket,
@@ -25,7 +25,7 @@ from robot_teleop.protocol.packet import (
     decode_packet,
     encode_packet,
 )
-from robot_teleop.transports.mock import MockTransport
+from embodied.phone.transports.mock import MockTransport
 
 
 class BatchMockTransport:

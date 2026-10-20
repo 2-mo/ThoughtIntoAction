@@ -8,10 +8,10 @@ import unittest
 
 import numpy as np
 
-from collection.capture import capture
-from dataset_tools.runtime_v2 import load_episode
-from episode_io.runtime_episode import RuntimeEpisodeWriter, split_tick
-from observations.runtime_alignment import align
+from embodied.data.capture.capture import capture
+from embodied.data.export.runtime_v2 import load_episode
+from embodied.data.episode.runtime_episode import RuntimeEpisodeWriter, split_tick
+from embodied.data.alignment.runtime_alignment import align
 
 
 def tick(sequence, stamp, *, terminal=False, mode=3):

@@ -1,7 +1,7 @@
 """Gaps between kept camera anchors are recorded, not hidden (todo D-01)."""
 import unittest
 
-from dataset_tools.exporters import anchor_gaps, annotate
+from embodied.data.export.exporters import anchor_gaps, annotate
 
 
 def rows(stamps_ms):

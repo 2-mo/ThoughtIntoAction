@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from robot_teleop.tools.phase5_hold_current import run_hold_current
+from embodied.phone.tools.phase5_hold_current import run_hold_current
 
 ROOT = Path(__file__).resolve().parents[4]
 MODEL_CONFIG = ROOT / "configs/phone/robots/arx5.yaml"

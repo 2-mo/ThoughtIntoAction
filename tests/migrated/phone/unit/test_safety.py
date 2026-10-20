@@ -2,12 +2,12 @@ import math
 
 import pytest
 
-from robot_teleop.core.capabilities import InputCapabilities
-from robot_teleop.core.frames import (
+from embodied.phone.core.capabilities import InputCapabilities
+from embodied.phone.core.frames import (
     quaternion_angular_distance,
     quaternion_from_axis_angle,
 )
-from robot_teleop.core.models import (
+from embodied.phone.core.models import (
     ControlMode,
     Pose,
     Quaternion,
@@ -17,7 +17,7 @@ from robot_teleop.core.models import (
     TrackingQuality,
     Vector3,
 )
-from robot_teleop.core.safety import (
+from embodied.phone.core.safety import (
     InputSafetyLimits,
     InputSafetyValidator,
     SafetyViolation,

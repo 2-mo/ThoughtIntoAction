@@ -14,15 +14,15 @@ import xml.etree.ElementTree as ET
 
 import arx5_interface as arx5
 import numpy as np
-from robot_control.backends.simulated import SimulatedX5
-from robot_control.hardware import OfficialX5HardwareAdapter
-from robot_core.model import RobotModel
-from quest_teleop import cli
-from quest_teleop import controller as x5_controller
-from quest_teleop import presets as preset_logic
-from quest_teleop.base_controller import DEFAULT_X5_MANIPULATOR_CONFIG, X5TeleopBase
+from legacy.robot_control.backends.simulated import SimulatedX5
+from legacy.robot_control.hardware import OfficialX5HardwareAdapter
+from embodied.core.model import RobotModel
+from legacy.quest_teleop import cli
+from legacy.quest_teleop import controller as x5_controller
+from legacy.quest_teleop import presets as preset_logic
+from legacy.quest_teleop.base_controller import DEFAULT_X5_MANIPULATOR_CONFIG, X5TeleopBase
 import tyro
-from robot_core.project import X5_2025_URDF
+from embodied.core.project import X5_2025_URDF
 
 
 class FakeXR:
@@ -61,7 +61,7 @@ class OfflineControllerTests(unittest.TestCase):
         self.stack.callback(self.service.close)
         self.stack.enter_context(patch.dict(os.environ, {"QUEST_TELEOP_CONFIG": str(self.service.config)}))
         self.xr = FakeXR()
-        self.stack.enter_context(patch("quest_teleop.inputs.quest", return_value=self.xr))
+        self.stack.enter_context(patch("legacy.quest_teleop.inputs.quest", return_value=self.xr))
 
     def test_tool_rotation_option_reaches_controller_and_recording_metadata(self):
         def run(controller):
@@ -160,7 +160,7 @@ class OfflineControllerTests(unittest.TestCase):
 
     def test_table_floor_clamps_cartesian_target_without_changing_xy_or_rotation(self):
         def run(controller):
-            from robot_core.safety import TablePlane
+            from embodied.core.safety import TablePlane
             controller._table_plane = TablePlane(0., 0.)
             controller._control_enabled = True
             self.xr.grip = 1.
@@ -182,7 +182,7 @@ class OfflineControllerTests(unittest.TestCase):
                              max_eef_linear_speed_m_s=0.)
 
     def test_legacy_wrist_rotation_and_fingertip_floor(self):
-        from robot_core.safety import TablePlane
+        from embodied.core.safety import TablePlane
         def run(controller):
             self.assertEqual(controller.manipulator_config["right_arm"]["link_name"], "link6")
             self.xr.grip = 1.
@@ -213,7 +213,7 @@ class OfflineControllerTests(unittest.TestCase):
                              max_eef_linear_speed_m_s=0.)
 
     def test_quick_base_alignment_updates_both_pose_maps_and_clears_grip_anchor(self):
-        from quest_teleop.frames import R_CONTROLLER_TO_TOOL, operator_yaw_rotation
+        from legacy.quest_teleop.frames import R_CONTROLLER_TO_TOOL, operator_yaw_rotation
         def run(controller):
             self.xr.get_timestamp_ns = Mock(return_value=1000)
             controller._session = Mock(id="quick-test", recording=None)
@@ -235,7 +235,7 @@ class OfflineControllerTests(unittest.TestCase):
 
     def test_calibrated_tcp_targets_decouple_rotation_from_translation(self):
         import meshcat.transformations as tf
-        from quest_teleop.frames import R_CONTROLLER_TO_TOOL
+        from legacy.quest_teleop.frames import R_CONTROLLER_TO_TOOL
         def run(controller):
             self.assertEqual(controller.manipulator_config["right_arm"]["link_name"], "eef_link")
             controller._session = Mock(id="calibration-test", recording=None)
@@ -573,8 +573,8 @@ class OfflineControllerTests(unittest.TestCase):
             cli.presets_main(actuate=False)
 
     def test_cli_operator_yaw_reaches_controller_and_recording_metadata(self):
-        from quest_teleop.frames import operator_yaw_rotation
-        from quest_teleop.base_controller import R_HEADSET_TO_WORLD
+        from legacy.quest_teleop.frames import operator_yaw_rotation
+        from legacy.quest_teleop.base_controller import R_HEADSET_TO_WORLD
         def run(controller):
             controller._control_enabled = True  # Existing tests exercise already-enabled controls.
             np.testing.assert_allclose(controller.R_headset_world,
@@ -614,7 +614,7 @@ class OfflineControllerTests(unittest.TestCase):
             controller._shutdown_robot()
             completed.append(True)
         with patch.object(cli.PresetSingleX5Controller, "run", run):
-            from robot_control.cli import main as simulate
+            from legacy.robot_control.cli import main as simulate
             virtual = ServiceFixture()
             self.stack.callback(virtual.close)
             simulate(["--service-socket", str(virtual.path), "--input", "idle", "--control-mode", "position"])

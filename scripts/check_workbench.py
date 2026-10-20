@@ -15,11 +15,11 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
-from embodied_contracts.runtime.control import ControlClient, ControlSession
-from inputs.phone import PhoneController
-from robot_teleop.protocol.golden import GOLDEN_POSE
-from robot_teleop.protocol.packet import encode_packet
-from robot_teleop.core.models import Pose, Vector3, Quaternion
+from embodied.contracts.runtime.control import ControlClient, ControlSession
+from embodied.inputs.phone import PhoneController
+from embodied.phone.protocol.golden import GOLDEN_POSE
+from embodied.phone.protocol.packet import encode_packet
+from embodied.phone.core.models import Pose, Vector3, Quaternion
 
 
 def until(predicate, timeout=20):
@@ -93,7 +93,7 @@ def main():
                 if collector and collector.poll() is None:
                     collector.send_signal(signal.SIGINT); collector.wait(timeout=8)
                 sender_stop.set(); sender.join(timeout=2); phone.stop()
-            from dataset_tools.exporters import Schema2
+            from embodied.data.export.exporters import Schema2
             episode = next((output/'episodes').glob('*/episode.json')).parent
             meta, rows, report, raw = Schema2().prepare(episode)
             assert len(rows) >= 30, report
@@ -101,16 +101,16 @@ def main():
             assert meta['source_metadata_events'][-1]['metadata']['mapping'] == 'phone_tool'
             result['episode'], result['alignment'] = str(episode), report
             until(lambda: client.status()['owner'] is None and max(map(abs, client.status()['dq'])) < .02)
-            from handeye_calibration.arx_arm import ArxCalibrationArm
-            from robot_core.model import RobotModel
+            from embodied.calibration.wrist.arx_arm import ArxCalibrationArm
+            from embodied.core.model import RobotModel
             model = RobotModel(Path(client.parameters['model']['xml_path']).with_suffix('.urdf'))
             with ArxCalibrationArm(model, directory, manual=False) as arm:
                 if args.calibration:
-                    from handeye_calibration.motion import make_plan, execute_plan
-                    from handeye_calibration.session import Session
-                    from handeye_calibration.solver import solve
-                    from robot_core.synthetic_camera import SyntheticCamera
-                    from robot_core.transforms import inverse
+                    from embodied.calibration.wrist.motion import make_plan, execute_plan
+                    from embodied.calibration.wrist.session import Session
+                    from embodied.calibration.wrist.solver import solve
+                    from embodied.sensors.synthetic import SyntheticCamera
+                    from embodied.core.transforms import inverse
                     center = arm.snapshot()['q']
                     plan = make_plan(model, center, bounds=[[-1,1],[-1,1],[-1,1]], step=.2)
                     known = np.eye(4); known[:3,3] = [.03,.01,.05]
@@ -130,7 +130,7 @@ def main():
                     (output/'calibration/result.json').write_text(json.dumps(solved,indent=2))
                     result['calibration'] = '26 arx-driven waypoints, stationary bursts, synthetic detections, held-out solve validated'
                 else:
-                    from robot_control.motion import move_and_settle
+                    from legacy.robot_control.motion import move_and_settle
                     arm.enable()
                     q = np.array(arm.snapshot()['q']); q[0] += .015
                     move_and_settle(arm, model, q, {'speed':.15,'acceleration':.3,'hz':50,'margin':.05})

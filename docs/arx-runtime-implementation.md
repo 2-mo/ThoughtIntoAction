@@ -19,7 +19,7 @@
 | 遥测/客户端 | 固定布局 RobotTickV2 增加 source/epoch/输入序号/operation。只读 observer 与命令 socket 分开；标准库客户端保持 v1 档案兼容。 |
 | 相机/采集 | 复用独立 SharedCamera 服务，增加 synthetic 插件；`collection` 独立消费完整 tick 与图像；检测序号、stream ID、掉帧、EOF 和 owner 变化。 |
 | 文件/对齐 | `episode_io` 保存 MCAP、PNG、元数据和完成边界；`observations` 分别选择因果反馈与命令，原始时间不被改写。旧存储模块保留兼容入口。 |
-| LeRobot | `dataset_tools.exporters` 注册 schema 1/2 适配器，复用原视频转换流水线；schema 2 导出 `aligned30_raw250_v2`，保留完整原始 sidecar。OpenPI 数据适配识别新布局和 action 定义。任务 ZIP 可带两种 schema 的独立转换工具，禁止混装不同 action 定义。 |
+| LeRobot | `embodied.data.export.exporters` 注册 schema 1/2 适配器，复用原视频转换流水线；schema 2 导出 `aligned30_raw250_v2`，保留完整原始 sidecar。OpenPI 数据适配识别新布局和 action 定义。任务 ZIP 可带两种 schema 的独立转换工具，禁止混装不同 action 定义。 |
 | 自动手眼标定 | `handeye --runtime <RUN>` 使用 arx 模型及控制适配器；原 marker/manual/plan/auto/solve、工作区检查、静止采样、验证集求解保留。旧标定入口仍可使用。 |
 
 基本功能的使用不再以“后续迁移”为前提。仍保留旧默认入口，是因为旧采集按键、任务页面、回放和策略执行尚未接新 runtime；不会把原页面或旧策略自动转成新动作定义。MoveC/混合路径、浏览器手势、限扭矩夹爪和负载实验属于扩展能力，本次未实现。

@@ -6,18 +6,18 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from isaac_groot_data_collection.config import load_collection_config
-from isaac_groot_data_collection.exporter import (
+from embodied.data.groot.config import load_collection_config
+from embodied.data.groot.exporter import (
     _build_absolute_action,
     _initial_arm_motion_trim_index,
 )
-from isaac_groot_data_collection.raw_episode import RawEpisodeStore, atomic_json
-from isaac_groot_data_collection.recording import (
+from embodied.data.groot.raw_episode import RawEpisodeStore, atomic_json
+from embodied.data.groot.recording import (
     ArmStateRecorder,
     CameraEpisodeRecorder,
     SharedFrameTimeline,
 )
-from isaac_groot_data_collection.validator import (
+from embodied.data.groot.validator import (
     shared_timeline_frame_selection,
     uniform_frame_timestamps,
     unique_source_frame_indices,

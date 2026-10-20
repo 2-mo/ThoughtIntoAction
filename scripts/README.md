@@ -15,7 +15,7 @@
 | `viewer/` | 带自定义参数的网页监看入口 |
 | `diagnostics/` | 相机检查、机械臂反馈检查与关节跟踪测试 |
 
-控制器、仿真和网页实现位于 `src/`；脚本通过 `robot_core.project` 使用共享配置。`scripts/` 不加入正常运行的 `PYTHONPATH`，`src/` 不反向导入脚本。
+控制器、仿真和网页实现位于 `src/`；脚本通过 `embodied.core.project` 使用共享配置。`scripts/` 不加入正常运行的 `PYTHONPATH`，`src/` 不反向导入脚本。
 
 ## 快捷入口
 

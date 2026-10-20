@@ -3,8 +3,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parents[3]
-CORE = ROOT / "src/robot_teleop/core"
-RUNTIME = ROOT / "src/robot_teleop/runtime"
+CORE = ROOT / "src/embodied/phone/core"
+RUNTIME = ROOT / "src/embodied/phone/runtime"
 FORBIDDEN = {
     "arx5",
     "fastapi",
@@ -37,7 +37,7 @@ def test_core_imports_only_standard_library_and_itself() -> None:
                 root = module.partition(".")[0]
                 if node.level > 1 or (
                     root not in sys.stdlib_module_names
-                    and not module.startswith("robot_teleop.core")
+                    and not module.startswith("embodied.phone.core")
                 ):
                     violations.append(f"{path.name}: from {'.' * node.level}{module}")
 
@@ -60,4 +60,4 @@ def test_runtime_does_not_import_offline_kinematics_tools() -> None:
         path.read_text(encoding="utf-8") for path in sorted(RUNTIME.glob("*.py"))
     )
 
-    assert "robot_teleop.kinematics" not in source
+    assert "embodied.phone.kinematics" not in source
