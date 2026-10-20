@@ -6,6 +6,7 @@ import tempfile
 import os
 from arm_service_fixture import ServiceFixture
 import threading
+import time
 import unittest
 from unittest.mock import patch, Mock
 
@@ -98,6 +99,10 @@ class PluginTests(unittest.TestCase):
             self.assertTrue(controller._should_keep_running())
         with patch.object(cli.PresetSingleX5Controller, "run", run):
             simulate(["--input", "probe"])
+        # Exit requests a jerk-limited stop; the service releases the lease once settled (172982f).
+        deadline = time.monotonic() + 3
+        while self.service.service.owner is not None and time.monotonic() < deadline:
+            time.sleep(.02)
         self.assertIsNone(self.service.service.owner)
         self.assertFalse(self.service.arm.closed)
         self.assertTrue(ProbeInput.instances[0].closed)
