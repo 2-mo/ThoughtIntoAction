@@ -7,7 +7,6 @@ src/
 ├── robot_core/             共享基础
 │   ├── project.py          标准库实现的根路径、配置读取与路径解析
 │   ├── plugins.py          显式插件注册表、延迟加载和设备类型检查
-│   ├── interfaces.py       后端、位姿输入、状态输出、显示与相机契约
 │   ├── telemetry.py        单向状态发布/订阅，不依赖显示进程
 │   ├── model.py            当前 URDF、FK/IK、关节限位、模型元数据
 │   ├── transforms.py       坐标变换与姿态计算

@@ -18,7 +18,7 @@
 
 ## 工厂契约
 
-结构接口在 `robot_core/interfaces.py`，实现不必继承公共基类。
+实现不必继承公共基类，注册表只检查工厂与能力声明。
 
 - 设备后端：`factory(settings=..., initial_q=None)`。六轴加夹爪反馈和指令采用 rad/m；提供 `set_control_enabled(bool)`、`set_motion_limit(speed)`、`set_to_damping()`、`close()`。硬件另需 `get_recording_snapshot()`，含反馈、SDK 输出及时间戳。可供独立服务加载的插件声明 `service_device` 能力。`initial_q` 仅用于虚拟后端。
 - 服务客户端：`ArmClient` 读取反馈、申请/释放控制权、提交关节和夹爪目标；不导入设备 SDK。先设置六轴目标，再设置夹爪，合并成一条服务请求。

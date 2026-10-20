@@ -6,32 +6,32 @@
 
 以下各项审查时已核对：在 `src/`、`control/`、`scripts/`、`configs/`、`apps/` 中没有运行时引用，只出现在 `third_party/migration/manifest.json` 中。
 
-- [ ] **X-01** `src/operations/vendor/arx_motion/{contracts,geometry,interpolation,limits}.py`
+- [x] **X-01** `src/operations/vendor/arx_motion/{contracts,geometry,interpolation,limits}.py`（f1f0425）
   - 与 `src/arx5_control/motion/` 中的同名文件逐字节相同，没有任何导入。
   - 内核只使用 `profiles.py`（`control/adapters/commands.py:262,271`），该文件不依赖包内其他模块，并带有 Python 3.10 的 cbrt 补丁，保留。
   - 同步更新 `PROVENANCE.json`。
 
-- [ ] **X-02** `tests/migrated/phone/golden/`
+- [x] **X-02** `tests/migrated/phone/golden/`（0956677）
   - 与 `tests/golden/` 逐字节相同。`scripts/phone/generate_golden.py` 写入 `tests/golden`，iOS 工程也引用 `tests/golden`。
   - 两份 `test_golden_vectors.py` 同名，会造成 pytest 收集冲突。
 
-- [ ] **X-03** `src/backend/`
+- [x] **X-03** `src/backend/`（e479344）
   - 只有 `__init__.py` 和一份 README，README 中是过时命令（`.venv-handeye`、`-m backend.arx5_backend`）。
   - 它与 `src/infer_after_sft/backend.py` 同名，目前因脚本目录优先而没有冲突。
 
-- [ ] **X-04** `src/quest_teleop/auto_dataset.py`
+- [x] **X-04** `src/quest_teleop/auto_dataset.py`（89a90f1）
   - 没有引用。其中的 `finalize_task` 与 `task_package.py` 中的同名函数重复。
 
-- [ ] **X-05** `src/arx5_control/{trajectory,ruckig_motion}.py`
+- [x] **X-05** `src/arx5_control/{trajectory,ruckig_motion}.py`（89a90f1）
   - 兼容层，没有引用。
 
-- [ ] **X-06** `src/arx_tools/legacy/{move_slightly,read_state}.py`
+- [x] **X-06** `src/arx_tools/legacy/{move_slightly,read_state}.py`（58eb062）
   - 不拿设备锁，直接打开 SDK（C-03）。
 
-- [ ] **X-07** `src/robot_core/interfaces.py`
+- [x] **X-07** `src/robot_core/interfaces.py`（89a90f1）
   - 没有引用。`ArmBackend` 中带有 X5 夹爪专用方法，不适合作为平台契约。
 
-- [ ] **X-08** `src/下载JAX版本.py`
+- [x] **X-08** `src/下载JAX版本.py`（f479fbd）
   - 这是下载脚本，不属于 `src/`；移到 `scripts/` 或删除。
 
 ## 替代完成后删除

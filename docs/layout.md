@@ -33,7 +33,7 @@ QuestArmTeleop/
 
 配置和公共路径统一由 `src/robot_core/project.py` 读取，只依赖 Python 标准库。各包直接导入这个模块；旧配置读取模块和路径导出模块已移除。采集源码指纹覆盖 `src/` 和 `scripts/` 中的 Python 文件。
 
-插件注册表在 `configs/plugins.toml`，结构接口和加载器在 `robot_core/interfaces.py`、`robot_core/plugins.py`。实现仍归入所属能力包：机械臂后端在 `robot_control/backends/`，位姿输入在 `quest_teleop/inputs.py`，状态发布在 `robot_core/telemetry.py`，独立监看在 `robot_simulation/`。设备通信与控制客户端在 `robot_control/service.py` 和 `client.py`；控制进程不创建后端或场景，见 [插件说明](plugins.md)。
+插件注册表在 `configs/plugins.toml`，加载器在 `robot_core/plugins.py`。实现仍归入所属能力包：机械臂后端在 `robot_control/backends/`，位姿输入在 `quest_teleop/inputs.py`，状态发布在 `robot_core/telemetry.py`，独立监看在 `robot_simulation/`。设备通信与控制客户端在 `robot_control/service.py` 和 `client.py`；控制进程不创建后端或场景，见 [插件说明](plugins.md)。
 
 新增功能放置原则：可复用实现归入相应 `src` 包；安装、设备准备和单次诊断入口归入 `scripts`；三维监看归入 `robot_simulation`，虚拟控制 CLI 归入 `robot_control`，选择位姿输入后延迟加载 `quest_teleop` 的控制器；网页跟随所属功能包保存。
 
