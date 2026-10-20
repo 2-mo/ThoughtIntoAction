@@ -53,7 +53,9 @@
 
 - [ ] **G-07** 基线上失败的两项测试 `P1`
   - 现状：在 `172982f` 上用 unittest 同样失败，与测试运行器无关。
-    - `tests/test_package_boundaries.py::test_monitor_never_imports_a_controller_or_device_sdk`：`robot_simulation.cli.main([])` 绑定默认端口 18081，本机已有服务在监听，导致 `OSError`。测试依赖本机环境，应传入 `--port 0`。
+    - `tests/test_package_boundaries.py::test_monitor_never_imports_a_controller_or_device_sdk`：两个原因。
+      - 绑定默认端口 18081，本机工作台运行时会冲突（`OSError`）。测试应传入 `--port 0`。
+      - 端口空闲时暴露真正的边界违规：`robot_simulation.cli` → `arx_preview.py:43` → `session.py:6` 导入 `quest_teleop.collection`（`Press`、`StickAction`），监看进程因此依赖旧遥操包。由 `172982f` 引入。按键解析应移到采集或 L0，不留在 `quest_teleop`。
     - `tests/test_plugins.py::test_control_inputs_use_same_service_and_release_only_the_lease`（`:101`）：`--input probe` 结束后服务仍保留 owner，日志为 "X5 stop-and-hold requested"。测试期望释放，实际是停止后保持；需确认是 `172982f` 改变了停止语义而测试未更新，还是 `release_after_stop` 期间 owner 无法清除（`src/robot_control/service.py:89,247`）。
   - 偶发失败：`tests/test_camera_lifecycle.py::test_real_graceful_shutdown_of_dummy_socket_owner` 在一次 `check-all` 全量运行中失败（"相机服务尚未退出"），单独运行 3 次都通过，属于时序不稳定。
   - 完成：两项通过，或注明属于旧内核、随 K-10 退役；偶发项稳定通过。
