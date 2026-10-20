@@ -25,7 +25,6 @@
 
 ```bash
 ./run.sh components list
-./run.sh components verify
 ./run.sh components run calibration.handeye --help
 ./run.sh components run collection.groot --help
 ./run.sh components run diagnostic.phase3_mock_validation
@@ -71,7 +70,7 @@ GR00T 导出使用独立的双相机/Rot6D/16 维数据定义，关节 action �
 
 ## 来源、修复和验证
 
-`third_party/migration/manifest.json` 逐项记录 1,297 个原文件、目标位置、原始 SHA256 与导入状态；`patches.json` 记录迁入后的路径适配和修复。已有实现遇到同名文件时保留本地版本，原文件仍可由恢复归档核查。GR00T 依赖来源另记在 `groot.json`。
+`third_party/migration/manifest.json` 逐项记录 1,297 个原文件、目标位置、原始 SHA256 与导入状态；`patches.json` 记录迁入后的路径适配和修复。已有实现遇到同名文件时保留本地版本，原文件仍可由恢复归档核查。GR00T 依赖来源另记在 `groot.json`。迁移已完成，这两份清单作为历史记录保留；迁入代码此后按平台代码正常修改，不再校验与导入时逐字节一致（arx-televr 的 `control/` 仍与上游同步，保留哈希台账）。
 
 迁移中修复了 reBot 梯形时间剖面越界/不连续、关节限位用 joint ID 错位索引、MeshCat 轨迹数组方向和 Pinocchio 重力读取；自动保持积分按 dt 换算原 500 Hz 增益。运动学与动力学库加载不再隐式导入电机 SDK。相关能力仍须按各机器人实际设备验收，B601 特定增益不应用到 X5。
 

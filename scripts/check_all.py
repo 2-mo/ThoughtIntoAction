@@ -10,6 +10,9 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 RUN = str(ROOT / "run.sh")
+# End-to-end checks write evidence to a new directory per run.
+EVIDENCE = ROOT / "outputs/checks" / time.strftime("%Y%m%d-%H%M%S")
+PLATFORM = ["env", "PYTHONPATH=src", "OPENBLAS_NUM_THREADS=1", "OMP_NUM_THREADS=1", str(ROOT / ".venv/bin/python"), "-B"]
 # name: (file that must exist, commands)
 GROUPS = {
     "control": ("control/.venv/bin/python", [[RUN, "control", "verify"], [RUN, "control", "check"]]),
@@ -17,6 +20,18 @@ GROUPS = {
     "motion": ("environments/arx_motion/.venv/bin/python", [[RUN, "components", "run", "test.motion"]]),
     "phone": ("environments/arx_motion/.venv/bin/python", [[RUN, "components", "run", "test.phone"]]),
     "rebot": ("environments/rebot/.venv/bin/python", [[RUN, "components", "run", "test.rebot"]]),
+    # MuJoCo end to end: native routers + workbench buttons, component faults, capture, plugins + calibration.
+    "sim": ("control/.venv/bin/python", [
+        [str(ROOT / "control/.venv/bin/python"), "-B", str(ROOT / "control/scripts/check_workbench_teleop.py")],
+        [str(ROOT / "control/.venv/bin/python"), "-B", str(ROOT / "control/scripts/check_native_components.py"),
+         "--quick", "--output", str(EVIDENCE / "native-components")],
+        [*PLATFORM, "scripts/check_control_runtime.py", "--output", str(EVIDENCE / "control-runtime")],
+        [*PLATFORM, "scripts/check_workbench.py", "--calibration", "--output", str(EVIDENCE / "workbench")],
+    ]),
+    # Dual-video GR00T export through the official loader, synthetic measured-state episode.
+    "groot": ("environments/arx_motion/.venv-web/bin/python", [
+        [str(ROOT / "environments/arx_motion/.venv-web/bin/python"), "-B", "scripts/check_groot_export.py",
+         "--output", str(EVIDENCE / "groot-export")]]),
     # Pages of src/robot_simulation/web; Playwright from: npm install --prefix .cache/viewer-validation playwright
     "browser": (".cache/viewer-validation/node_modules/playwright/index.mjs",
                 [["node", str(path)] for path in sorted((ROOT / "tests").glob("browser_*.mjs"))]),

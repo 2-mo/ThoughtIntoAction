@@ -46,7 +46,6 @@ def main(argv=None):
     sub.add_parser('list')
     setup = sub.add_parser('setup'); setup.add_argument('environment')
     run = sub.add_parser('run'); run.add_argument('name'); run.add_argument('arguments', nargs=argparse.REMAINDER)
-    sub.add_parser('verify')
     args = parser.parse_args(argv)
     try:
         catalog = json.loads(CATALOG.read_text())
@@ -61,8 +60,6 @@ def main(argv=None):
             if spec.get('prepare'):
                 subprocess.run(spec['prepare'], cwd=ROOT, check=True)
             return subprocess.call(spec['setup'], cwd=ROOT)
-        if args.action == 'verify':
-            return subprocess.call([sys.executable, str(ROOT / 'scripts/migration/consolidate.py'), 'verify'])
         arguments = args.arguments[1:] if args.arguments[:1] == ['--'] else args.arguments
         cmd, cwd, env = command(args.name, arguments)
         os.chdir(cwd)
