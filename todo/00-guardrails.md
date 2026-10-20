@@ -58,7 +58,7 @@
       - 端口空闲时暴露真正的边界违规：`robot_simulation.cli` → `arx_preview.py:43` → `session.py:6` 导入 `quest_teleop.collection`（`Press`、`StickAction`），监看进程因此依赖旧遥操包。由 `172982f` 引入。按键解析应移到采集或 L0，不留在 `quest_teleop`。
     - 监看边界：已修复。测试改用 `--mode real --port 0`，并单独检查仿真模块可导入；`session.py` 不再导入 `quest_teleop`（K-04）。
     - `tests/test_plugins.py::test_control_inputs_use_same_service_and_release_only_the_lease`：已修复（2b39eff）。`172982f` 把遥操退出改为平滑停止后保持，服务停稳后才释放租约，测试却立即断言。改为最多等待 3 s；实测停稳后释放，此场景下不存在停止后卡住的问题。
-  - 浏览器测试：`tests/browser_telemetry.mjs:100` 力矩图高度断言在基线上同样失败；另外它只去掉 `sensors.js` 的第一条 import，`172982f` 增加第二条后手柄部分不再加载。
+  - 浏览器测试：已修复。`tests/browser_*.mjs` 测的是日常 18081 监看页，此前没有任何入口运行它们，因此多处期望已过时：`browser_scene` 未指定模式（继承工作台持久化的仿真模式），且仍按 66822fc 之前的 1440/1366/1024 视口和已移入详情面板的元素断言，并期望遥操退出后为阻尼（172982f 起为保持）；`browser_telemetry` 力矩图阈值 24 px 早于 66822fc 布局（实测真实页面 22.25 px，改为不塌缩的 20 px），且只去掉 `sensors.js` 的第一条 import。已加入 `check-all` 的 `browser` 组，7 项全部通过。页面随 U-01 退役时一并删除这些测试。
   - 偶发失败：`tests/test_camera_lifecycle.py::test_real_graceful_shutdown_of_dummy_socket_owner` 在一次 `check-all` 全量运行中失败（"相机服务尚未退出"），单独运行 3 次都通过，属于时序不稳定。
   - 完成：两项通过，或注明属于旧内核、随 K-10 退役；偶发项稳定通过。
 

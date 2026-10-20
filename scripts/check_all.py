@@ -3,19 +3,23 @@
 
 import argparse
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
 RUN = str(ROOT / "run.sh")
-# name: (interpreter that must exist, commands)
+# name: (file that must exist, commands)
 GROUPS = {
     "control": ("control/.venv/bin/python", [[RUN, "control", "verify"], [RUN, "control", "check"]]),
     "platform": (".venv/bin/python", [[RUN, "test", "-q"]]),
     "motion": ("environments/arx_motion/.venv/bin/python", [[RUN, "components", "run", "test.motion"]]),
     "phone": ("environments/arx_motion/.venv/bin/python", [[RUN, "components", "run", "test.phone"]]),
     "rebot": ("environments/rebot/.venv/bin/python", [[RUN, "components", "run", "test.rebot"]]),
+    # Pages of src/robot_simulation/web; Playwright from: npm install --prefix .cache/viewer-validation playwright
+    "browser": (".cache/viewer-validation/node_modules/playwright/index.mjs",
+                [["node", str(path)] for path in sorted((ROOT / "tests").glob("browser_*.mjs"))]),
 }
 
 
@@ -36,6 +40,9 @@ def main(argv=None):
             continue
         if not (ROOT / python).is_file():
             results.append((name, "SKIP", f"missing {python}"))
+            continue
+        if missing := next((c[0] for c in commands if c[0] != RUN and not shutil.which(c[0])), None):
+            results.append((name, "SKIP", f"missing {missing}"))
             continue
         print(f"== {name}", flush=True)
         started = time.monotonic()

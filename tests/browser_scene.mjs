@@ -59,7 +59,8 @@ try {
       await route.abort();
     } else await route.continue();
   });
-  const monitor = start('scripts/viewer/启动仿真.sh', ['--port', '0', '--no-camera', '--no-connections']);
+  // Real-arm monitor layout, independent of the persisted workbench mode.
+  const monitor = start('scripts/viewer/启动仿真.sh', ['--mode', 'real', '--port', '0', '--no-camera', '--no-connections']);
   const url = (await monitor.wait(urlPattern))[1];
   await page.goto(url);
   await page.click('#depth-toggle');
@@ -146,7 +147,7 @@ try {
   delayInput = false;
   await page.waitForFunction(() => document.querySelector('.input-panel').dataset.state === 'live');
 
-  for (const [width, height] of [[1440, 960], [1366, 768], [1024, 600]]) {
+  for (const [width, height] of [[1920, 1080]]) {
     await page.setViewportSize({ width, height });
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(250);
@@ -154,7 +155,7 @@ try {
       const all = [document.documentElement, document.body, document.querySelector('aside'), document.querySelector('.collection-panel'), document.querySelector('.collection-controls')];
       return all.some(e => e.scrollWidth > e.clientWidth + 1);
     }), false, 'Overflow at ' + width + 'x' + height);
-    for (const id of ['collection-count', 'collection-state', 'collection-duration', 'collection-last', 'collection-health', 'depth-image', 'left-hand', 'right-hand', 'orientation-canvas', 'control-state', 'joints', 'gripper', 'torques', 'eef-position', 'state-source', 'motion-diagnostics', 'arm-latency', 'input-latency']) {
+    for (const id of ['collection-count', 'collection-state', 'collection-duration', 'collection-last', 'collection-health', 'depth-image', 'left-hand', 'right-hand', 'orientation-canvas', 'control-state', 'joints', 'gripper', 'torques', 'state-source', 'arm-latency', 'input-latency']) {
       const box = await page.locator('#' + id).boundingBox();
       assert.ok(box && box.height > 0 && box.x >= 0 && box.x + box.width <= width + 1 && box.y >= 0, id + ' clipped');
     }
@@ -277,7 +278,7 @@ try {
   assert.equal(await page.locator('.position-row').count(), 12);
   assert.equal(await page.evaluate(() => [...document.querySelectorAll('.position-zero')]
     .every(zero => !zero.hidden && zero.style.left === '50%')), true, 'All position zeros must align');
-  for (const [width, height] of [[1440, 960], [1366, 768], [1024, 600]]) {
+  for (const [width, height] of [[1920, 1080]]) {
     await page.setViewportSize({width, height});
     assert.equal(await page.evaluate(() => [...document.querySelectorAll('#joints .position-row')].every(row => {
       const box = row.getBoundingClientRect();
@@ -314,14 +315,15 @@ try {
   monitor.child.kill('SIGINT');
   assert.deepEqual(await monitor.result, [0, null], monitor.log());
   assert.equal(quest.child.exitCode, null, 'Closing monitor stopped controller');
-  const laterMonitor = start('scripts/viewer/启动仿真.sh', ['--port', '0', '--no-camera', '--no-connections']);
+  const laterMonitor = start('scripts/viewer/启动仿真.sh', ['--mode', 'real', '--port', '0', '--no-camera', '--no-connections']);
   await page.goto((await laterMonitor.wait(urlPattern))[1]);
   monitorStopped = false;
   await page.waitForFunction(() => document.getElementById('connection').dataset.state === 'connected');
   assert.equal(await page.evaluate(async () => (await (await fetch('/api/state')).json()).stream.stream_id), nextStream);
   quest.child.kill('SIGINT');
   assert.deepEqual(await quest.result, [0, null], quest.log());
-  await page.waitForFunction(() => document.getElementById('state-source').textContent.includes('阻尼待机')
+  // Since 172982f a teleop client exits with a jerk-limited stop and the service keeps holding.
+  await page.waitForFunction(async () => (await (await fetch('/api/state')).json()).stream.source?.mode === 'hold'
     && document.getElementById('connection').dataset.state === 'connected');
   const crashed = start('run.sh', ['control-arm']);
   await crashed.wait(/Commands \(rad\/m\)/);

@@ -12,7 +12,7 @@ try {
   await page.setContent(html);
   await page.addStyleTag({path:new URL('scene.css', root).pathname});
   await page.addStyleTag({path:new URL('cameras.css', root).pathname});
-  const hands = (await readFile(new URL('sensors.js', root), 'utf8')).split('function clearInput')[0].replace(/^import .*;$/m, '');
+  const hands = (await readFile(new URL('sensors.js', root), 'utf8')).split('function clearInput')[0].replace(/^import .*;$/gm, '');
   await page.addScriptTag({type:'module', content:hands + `
 renderHand('left', null); renderHand('right', null);`});
   await page.evaluate(() => {
@@ -97,7 +97,8 @@ renderHand('left', null); renderHand('right', null);`});
   });
   for (const [width,height] of [[1920,1080]]) {
     await page.setViewportSize({width,height});
-    assert.ok(await page.locator('.torque-row svg').first().evaluate(e => e.getBoundingClientRect().height) >= 24);
+    // Charts must not collapse; the dual-camera layout (66822fc) gives 22 px at 1920x1080.
+    assert.ok(await page.locator('.torque-row svg').first().evaluate(e => e.getBoundingClientRect().height) >= 20);
     assert.equal(await page.locator('.metric-grid > div').evaluateAll(cells => cells.some(c => c.getClientRects().length && c.scrollWidth > c.clientWidth + 1)), false, 'Numeric tile overflow');
     const overlap = await page.evaluate(() => {
       const sections = [...document.querySelectorAll('.telemetry-group > section')];

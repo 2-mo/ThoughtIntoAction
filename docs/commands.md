@@ -26,7 +26,7 @@
 | `check-xr` / `visualize-xr` | XR 检查与浏览器可视化 |
 | `check-arm` | 只读服务反馈，不申请控制权；`--virtual` 读取虚拟服务 |
 | `fetch-dependencies` / `check-dependencies` | 使用系统 Python 获取/检查锁定源码，创建 `.venv` 前也可用 |
-| `test` / `check-all` | `test` 在主环境运行 pytest；`check-all` 依次运行 control、platform、motion、phone、rebot 各组离线检查，缺少环境的组显示 SKIP；`--only`、`--simulation`、`--print` |
+| `test` / `check-all` | `test` 在主环境运行 pytest；`check-all` 依次运行 control、platform、motion、phone、rebot、browser 各组离线检查，缺少环境的组显示 SKIP；`--only`、`--simulation`、`--print` |
 | `rebuild-xr-sdk` | 保存旧 CMake 缓存并用 uv 重建 Quest 绑定，适用于移动仓库后的修复 |
 | `plugins` | 查看可替换后端、输入、场景和相机的注册信息，不初始化设备 |
 
