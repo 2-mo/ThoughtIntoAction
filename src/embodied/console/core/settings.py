@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from embodied.core.project import port
 
 
 @dataclass(frozen=True, slots=True)
 class BackendSettings:
     host: str = "127.0.0.1"
-    port: int = 8766
+    port: int = field(default_factory=lambda: port('console_backend'))
     interface: str = "can0"
     cert: Path | None = None
     key: Path | None = None
@@ -22,9 +24,5 @@ class BackendSettings:
 
     @property
     def allowed_origins(self) -> tuple[str, ...]:
-        return self.origins or (
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:8000",
-            "http://127.0.0.1:8000",
-        )
+        return self.origins or tuple(f"http://{host}:{port(name)}" for name in ("frontend_dev", "console")
+                                     for host in ("localhost", "127.0.0.1"))

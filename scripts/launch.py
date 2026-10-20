@@ -71,6 +71,7 @@ MODULE_COMMANDS = {
     "dataset": "embodied.data.datasets",
     "doctor": "legacy.quest_teleop.diagnostics",
     "monitor": "legacy.quest_teleop.runtime.monitor",
+    "ports": "embodied.workstation.ports",
 }
 BOOTSTRAP_COMMANDS = {"control": "embodied.workstation.control", "components": "embodied.workstation.components.cli"}
 HARDWARE_COMMANDS = {

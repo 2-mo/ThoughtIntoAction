@@ -95,3 +95,16 @@ checkpoint_format = "lerobot"
 [viewer_service]
 port = 18081
 camera = true
+
+# Every TCP / UDP port the platform listens on. `./run.sh ports` shows owners and conflicts.
+# The monitor port is [viewer_service].port and the legacy telemetry port is [telemetry].endpoint.
+[ports]
+console = 8000            # apps/console 网页与后端（web console）
+console_backend = 8766    # 控制台后端单独运行（python -m embodied.console）
+vision = 8765             # 手势识别 WebSocket
+camera_webrtc = 8767      # 相机 WebRTC 信令
+collection_camera = 8768  # 采集相机信令
+frontend_dev = 5173       # Vite 开发服务器（web preview）
+phone_udp = 5005          # iPhone 位姿 UDP（phone run）
+xr_service = 63901        # XRoboToolkit PC Service，经 adb reverse 连接 Quest
+

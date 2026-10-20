@@ -7,12 +7,13 @@ import uvicorn
 
 from embodied.console.app import create_app
 from embodied.console.core.settings import BackendSettings
+from embodied.core.project import port
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="ARX5 FastAPI backend")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8766)
+    parser.add_argument("--port", type=int, default=port("console_backend"))
     parser.add_argument("--interface", default="can0")
     parser.add_argument("--cert", type=Path)
     parser.add_argument("--key", type=Path)

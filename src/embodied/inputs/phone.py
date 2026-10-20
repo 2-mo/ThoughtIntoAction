@@ -12,6 +12,7 @@ from embodied.phone.core.models import Pose, Quaternion, Vector3, RobotState, Tr
 from embodied.phone.policies.relative_pose import RelativePosePolicy
 from embodied.phone.transports.udp import UdpTransport, UdpTransportConfig
 from embodied.contracts.runtime.control import ControlClient, ControlSession
+from embodied.core.project import port
 
 
 class PhoneInput(ArkitInputSource):
@@ -184,7 +185,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', required=True)
     parser.add_argument('--bind-host', default='127.0.0.1')
-    parser.add_argument('--port', type=int, default=5005)
+    parser.add_argument('--port', type=int, default=port('phone_udp'))
     parser.add_argument('--mapping', choices=('phone_tool', 'phone_base'), default='phone_tool')
     parser.add_argument('--ghost', action='store_true')
     parser.add_argument('--duration', type=float, default=0)

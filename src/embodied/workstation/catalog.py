@@ -122,6 +122,7 @@ GROUPS = {
         "test": ("主环境 pytest", ("run", ["test"])),
         "deps": ("核对锁定的源码依赖", ("run", ["check-dependencies"])),
         "doctor": ("旧链路设备与环境诊断", ("run", ["doctor"])),
+        "ports": ("端口与 socket：登记、占用进程、冲突", ("run", ["ports"])),
     }),
     "setup": ("安装与设备准备", {
         "deps": ("获取锁定的源码依赖", ("run", ["fetch-dependencies"])),

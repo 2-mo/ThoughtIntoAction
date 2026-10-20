@@ -46,6 +46,7 @@ X5 的参数和模型以 arx-televr 为准：`control/config/robot.json`、`cont
   - 完成：修改 `启动遥操.sh` 不再影响策略或恢复流程的运动。
 
 - [ ] **R-05** 硬编码路径、端口和相机序列号 `P2`
+  - 端口已完成（2026-10-21）：`configs/project.toml` 的 `[ports]` 是唯一登记表（监看页与旧遥测沿用 `[viewer_service].port`、`[telemetry].endpoint`），控制台后端、手势、相机信令、采集信令与手机 UDP 的默认端口从这里读取；`./run.sh check ports` 显示占用进程与冲突，工作台启动时提示冲突，总控页显示端口状态。`apps/console` 前端的 8765 / 8767 仍写死，随 U-01 处理。路径与相机序列号仍待做。
   - 现状：
     - `/home/r2`：`src/infer_after_sft/checkpoint.py:8,53`、`src/zero-shot/infer.py:101`、`src/zero-shot/policy_worker.py:25`、`apps/console/src/features/collection/runtime.ts:215`、`apps/console/src/features/collection/shell.html:184`。
     - `~/work`：`src/arx5_paths.py:11-13`（被 17 个文件引用）、`scripts/datasets/convert.sh:4`、`src/zero-shot/compute_stats.py:19`。

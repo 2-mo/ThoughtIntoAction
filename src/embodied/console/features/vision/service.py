@@ -13,6 +13,8 @@ from pathlib import Path
 import ssl
 import time
 from typing import Any
+
+from embodied.core.project import port
 from urllib.parse import parse_qs, urlsplit
 
 from websockets.asyncio.server import ServerConnection, serve
@@ -34,7 +36,7 @@ def parse_args() -> argparse.Namespace:
         description="Mac 浏览器 MediaPipe 数据接收桥（不会连接机械臂）"
     )
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--port", type=int, default=port("vision"))
     parser.add_argument("--cert", type=Path)
     parser.add_argument("--key", type=Path)
     parser.add_argument("--origin", action="append", dest="origins")
@@ -172,8 +174,8 @@ async def handle_client(
 
 async def run_server(args: argparse.Namespace) -> None:
     origins = args.origins or [
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
+        f"http://localhost:{port('console')}",
+        f"http://127.0.0.1:{port('console')}",
     ]
     ssl_context = None
     if args.cert is not None:

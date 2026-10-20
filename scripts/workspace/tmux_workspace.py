@@ -232,6 +232,9 @@ def start():
         return
     if not (ROOT / ".venv/bin/python").exists() and not os.environ.get("QUEST_TELEOP_PYTHON"):
         raise RuntimeError("项目 Python 环境不存在，请先按 README 安装依赖。")
+    from embodied.workstation.ports import conflicts
+    if found := conflicts(load_config()):
+        print("端口冲突：" + "；".join(found) + "。详情：./run.sh check ports", file=sys.stderr)
     tmux("new-session", "-d", "-s", SESSION, "-n", ROLES["arm"], "-c", str(ROOT), pane_command("arm"))
     tmux("set-option", "-t", SESSION, "base-index", "1")
     first = tmux("display-message", "-p", "-t", SESSION + ":^", "#{window_index}").stdout.strip()

@@ -45,7 +45,7 @@ trap 'exit 143' TERM
 
 setsid python3 -B -m legacy.arx_tools.web_service_supervisor --name 控制 -- \
   "$CONTROL_PYTHON" -B -m embodied.console \
-  --port 8000 --frontend-directory "$FRONTEND_DIST" --auto-connect-arm \
+  --port "$("$CONTROL_PYTHON" -B -c "from embodied.core.project import port; print(port('console'))")" --frontend-directory "$FRONTEND_DIST" --auto-connect-arm \
   --camera-url "ws://127.0.0.1:8768/api/v1/cameras/collection" &
 CONTROL_PID=$!
 setsid python3 -B -m legacy.arx_tools.web_service_supervisor --name 视觉 -- \

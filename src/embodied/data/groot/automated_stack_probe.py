@@ -12,6 +12,8 @@ import subprocess
 import time
 from typing import Any
 
+from embodied.core.project import port
+
 import numpy as np
 from websockets.sync.client import connect as websocket_connect
 
@@ -45,7 +47,7 @@ from embodied.data.groot.recording import ArmStateRecorder
 from embodied.data.groot.validator import validate_raw_episode
 
 
-CAMERA_URL = "ws://127.0.0.1:8768/api/v1/cameras/collection"
+CAMERA_URL = f"ws://127.0.0.1:{port('collection_camera')}/api/v1/cameras/collection"
 HOME_VELOCITY_SCALE = 0.75
 TRANSIT_VELOCITY_SCALE = 0.55
 PRECISION_VELOCITY_SCALE = 0.18
@@ -74,7 +76,7 @@ def _wait_for_port(process: subprocess.Popen[bytes], timeout_s: float = 15.0) ->
         if process.poll() is not None:
             raise RuntimeError("双相机服务启动失败")
         try:
-            with socket.create_connection(("127.0.0.1", 8768), timeout=0.25):
+            with socket.create_connection(("127.0.0.1", port("collection_camera")), timeout=0.25):
                 return
         except OSError:
             time.sleep(0.1)

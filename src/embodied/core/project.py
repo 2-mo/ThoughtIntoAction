@@ -37,3 +37,9 @@ def load_config(local_path: str | None = None) -> dict:
         with path.open("rb") as stream:
             config = merge(config, tomllib.load(stream))
     return config
+
+
+def port(name: str, config: dict | None = None) -> int:
+    """Registered port from [ports] (configs/project.toml, overridable in configs/local.toml)."""
+    return int((config or load_config())["ports"][name])
+

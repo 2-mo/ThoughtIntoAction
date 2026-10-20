@@ -33,11 +33,13 @@ import numpy as np
 import pyrealsense2 as rs
 from websockets.asyncio.server import ServerConnection, serve
 
+from embodied.core.project import port
+
 
 SIGNAL_PATH = "/api/v1/cameras/d455/webrtc"
 COLLECTION_SIGNAL_PATH = "/api/v1/cameras/collection"
 COLLECTION_SIGNAL_HOST = "127.0.0.1"
-COLLECTION_SIGNAL_PORT = 8768
+COLLECTION_SIGNAL_PORT = port("collection_camera")
 COLLECTION_CAMERA_MESSAGE_TYPES = frozenset(
     {
         "collection_camera_start",
@@ -1899,7 +1901,7 @@ class RealSenseVideoTrack(VideoStreamTrack):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="D455 WebRTC RGB-D 视频服务")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8767)
+    parser.add_argument("--port", type=int, default=port("camera_webrtc"))
     parser.add_argument("--cert", type=Path)
     parser.add_argument("--key", type=Path)
     parser.add_argument("--origin", action="append", dest="origins")
@@ -2485,8 +2487,8 @@ async def handle_client(
 
 async def run_server(args: argparse.Namespace) -> bool:
     origins = args.origins or [
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
+        f"http://localhost:{port('console')}",
+        f"http://127.0.0.1:{port('console')}",
     ]
     ssl_context = None
     if args.cert is not None:

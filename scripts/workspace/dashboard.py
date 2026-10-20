@@ -63,6 +63,13 @@ def overview():
         except (OSError, ValueError, RuntimeError) as exc:
             state, color, hint = "状态读取异常", "red", str(exc)
         rows.append((workspace.ROLES[role], Text(state, style=color), Text(hint)))
+    try:
+        from embodied.core.project import load_config
+        from embodied.workstation.ports import summary
+        text, problem = summary(load_config())
+        rows.append(("端口", Text(text, style="red" if problem else "green"), Text("./run.sh check ports 查看详情")))
+    except (OSError, ValueError, KeyError) as exc:
+        rows.append(("端口", Text("读取失败", style="red"), Text(str(exc))))
     return rows
 
 
@@ -143,7 +150,7 @@ def render(rows, message, failed=False):
     ]:
         menu.add_row(*(Text(item, style="cyan") for item in row))
     return Group(
-        Panel(table, title="QuestArm · 统一工作台 · " + workspace.MODES[workspace.selected_mode()], border_style="cyan"),
+        Panel(table, title="具身平台 · 工作台 · " + workspace.MODES[workspace.selected_mode()], border_style="cyan"),
         Panel(menu, title="直接按键 · 无需回车", border_style="dim"),
         Text(message, style="red" if failed else "yellow", overflow="fold"),
         Text("Ctrl+B 再按 4 返回总控。切仿真时退出真机遥操并保持位置；切回后需重新启用。", style="dim"),
