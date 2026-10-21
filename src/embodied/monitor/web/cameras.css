@@ -8,9 +8,9 @@ aside { display:contents; }
 aside > .camera-panel { grid-column:2 !important; grid-row:2 !important; display:flex; padding:10px; }
 aside > .input-panel { grid-column:3 !important; grid-row:2 !important; display:flex; padding:10px; }
 .telemetry-group { grid-column:1 / -1 !important; grid-row:3 !important; min-height:0; overflow:visible; }
-.input-panel > .orientation-panel { flex:0 0 auto; height:170px; min-height:45px; padding-top:5px; margin-top:5px; }
+.input-panel > .orientation-panel { flex:0 0 auto; height:250px; min-height:45px; padding-top:5px; margin-top:5px; }
 .input-panel > .display-panel { margin-top:auto; }
-.input-panel #orientation-canvas { min-height:20px; max-height:110px; }
+.input-panel #orientation-canvas { min-height:20px; max-height:190px; }
 .input-panel .operation-note { margin-top:4px; padding-top:0; }
 .input-panel .controller-shell { padding:5px; }
 .input-panel .controller-meter { margin-top:3px; font-size:10px; }

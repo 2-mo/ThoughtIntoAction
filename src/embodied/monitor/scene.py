@@ -221,7 +221,13 @@ class Scene:
             gripper_max = load_config().get("telemetry", {}).get("gripper_torque_max_nm")
             if gripper_max is not None and (not np.isfinite(gripper_max) or gripper_max <= 0):
                 raise ValueError("Invalid gripper display torque limit")
-            self._manifest["velocity_limits"] = robot.model.velocityLimit.tolist()
+            velocity = robot.model.velocityLimit
+            if simulation is not None and getattr(self, "_hardware_velocity", None) is not None:
+                # The kernel URDF carries placeholder limits (1000 / 10 rad/s); chart against the real motors.
+                velocity = np.minimum(velocity, self._hardware_velocity)
+            elif simulation is None:
+                self._hardware_velocity = velocity.copy()
+            self._manifest["velocity_limits"] = velocity.tolist()
             self._manifest["torque_limits"] = [*robot.model.effortLimit.tolist(), gripper_max]
             reference = np.zeros(6)
             self._manifest["reference"] = {"sequence": 0, "actual": self._pose(reference),

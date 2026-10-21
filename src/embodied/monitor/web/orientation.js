@@ -7,30 +7,66 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true 
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const camera = new THREE.PerspectiveCamera(40, 1, .01, 10);
 camera.up.set(0, 0, 1);
-camera.position.set(.32, -.5, .3);
+camera.position.set(.3, -.44, .26);
 const controls = new OrbitControls(camera, canvas);
 controls.enablePan = false;
 controls.enableZoom = false;
 const scenes = [], models = [];
+// Look (todo U-05): translucent device with glowing edges, long RGB axes through its origin.
+const AXIS_LENGTH = .15;
+const AXES = [[new THREE.Vector3(1, 0, 0), 0xff5a4a], [new THREE.Vector3(0, 1, 0), 0x86e33f], [new THREE.Vector3(0, 0, 1), 0x45aaff]];
+function axisRod(direction, color, radius, opacity) {
+  const rod = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 2 * AXIS_LENGTH, 10, 1, true),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending }));
+  rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+  return rod;
+}
+function deviceAxes() {
+  const group = new THREE.Group();
+  for (const [direction, color] of AXES) {
+    group.add(axisRod(direction, color, .0016, 1), axisRod(direction, color, .0055, .16));
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(.0045, 12, 8), new THREE.MeshBasicMaterial({ color }));
+    tip.position.copy(direction).multiplyScalar(AXIS_LENGTH);
+    group.add(tip);
+  }
+  return group;
+}
+function glowingDevice(color, kind) {
+  const group = new THREE.Group();
+  const fill = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .13, depthWrite: false, side: THREE.DoubleSide });
+  const edge = new THREE.LineBasicMaterial({ color, transparent: true, opacity: .95 });
+  const halo = new THREE.LineBasicMaterial({ color, transparent: true, opacity: .3, depthWrite: false, blending: THREE.AdditiveBlending });
+  function part(geometry, position, rotation = [0, 0, 0]) {
+    const edges = new THREE.EdgesGeometry(geometry, 25);
+    const outline = new THREE.LineSegments(edges, halo);
+    outline.scale.setScalar(1.08);
+    for (const node of [new THREE.Mesh(geometry, fill), new THREE.LineSegments(edges, edge), outline]) {
+      node.position.set(...position); node.rotation.set(...rotation); group.add(node);
+    }
+  }
+  if (kind === 'controller') {
+    part(new THREE.BoxGeometry(.105, .044, .03), [-.042, 0, 0]);                         // face along controller forward
+    part(new THREE.BoxGeometry(.034, .036, .085), [-.083, 0, -.045], [0, -.35, 0]);      // grip
+    part(new THREE.TorusGeometry(.034, .007, 8, 32), [.03, 0, .006], [0, Math.PI / 2, 0]); // tracking ring
+  } else {
+    part(new THREE.BoxGeometry(.032, .1, .042), [-.072, 0, 0]);                          // palm
+    for (const y of [-.034, .034]) part(new THREE.BoxGeometry(.086, .013, .028), [-.016, y, 0]); // fingers
+    part(new THREE.CylinderGeometry(.012, .012, .05, 16), [-.112, 0, 0], [0, 0, Math.PI / 2]);  // flange
+  }
+  group.add(deviceAxes());
+  group.visible = false;
+  return group;
+}
+function referenceRing() {
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.125, .127, 64),
+    new THREE.MeshBasicMaterial({ color: 0x9fb3bf, transparent: true, opacity: .14, side: THREE.DoubleSide, depthWrite: false }));
+  ring.position.z = -.075;
+  return ring;
+}
 for (const [i, color] of [0x55dcec, 0xffb84c, 0xe5edf2].entries()) {
   const scene = new THREE.Scene();
-  const model = new THREE.Group();
-  const material = new THREE.MeshBasicMaterial({ color, wireframe: false });
-  function box(x, y, z, a, b, c) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(a, b, c), material);
-    mesh.position.set(x, y, z); model.add(mesh);
-  }
-  if (i === 0) {
-    box(-.035, 0, 0, .10, .05, .025);
-    box(-.065, 0, -.04, .025, .025, .08);
-  } else {
-    box(-.065, 0, 0, .025, .09, .035);
-    for (const y of [-.035, .035]) box(-.022, y, 0, .08, .012, .025);
-  }
-  model.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), .13, color, .025, .015));
-  box(0, 0, .035, .009, .009, .07);
-  model.visible = false;
-  scene.add(model, new THREE.AxesHelper(.065));
+  const model = glowingDevice(color, i === 0 ? 'controller' : 'gripper');
+  scene.add(model, referenceRing());
   scenes.push(scene); models.push(model);
 }
 // Canonical model +X is controller forward (-Z), +Z is controller up (+Y).
