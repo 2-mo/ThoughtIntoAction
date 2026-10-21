@@ -44,6 +44,7 @@ uv sync --locked           # 平台环境（Python 3.12）
 | 手眼、夹爪、负载标定 | `./run.sh calib wrist`、`calib handeye`、`calib gripper`、`calib payload` |
 | 相机服务与检查 | `./run.sh camera service`、`camera check` |
 | 浏览器控制台 | `./run.sh web console` |
+| 宣传网站（本地预览） | `./run.sh web site`，或直接打开 `site/index.html` |
 
 `<RUN>` 是内核启动时打印的 `control/run/<目录>`。
 

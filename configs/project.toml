@@ -107,4 +107,5 @@ collection_camera = 8768  # 采集相机信令
 frontend_dev = 5173       # Vite 开发服务器（web preview）
 phone_udp = 5005          # iPhone 位姿 UDP（phone run）
 xr_service = 63901        # XRoboToolkit PC Service，经 adb reverse 连接 Quest
+site = 8090               # 宣传网站本地预览（web site）
 

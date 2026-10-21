@@ -26,6 +26,7 @@ DESCRIPTIONS = {
     "frontend_dev": ("tcp", "Vite 开发服务器", "./run.sh web preview"),
     "phone_udp": ("udp", "iPhone 位姿", "./run.sh phone run --run <RUN>"),
     "xr_service": ("tcp", "XRoboToolkit PC Service（Quest 经 adb reverse）", "./run.sh quest service"),
+    "site": ("tcp", "宣传网站本地预览", "./run.sh web site"),
 }
 SOCKETS = {  # config section: (purpose, owning command)
     "camera_service": ("共享相机服务", "./run.sh camera service"),

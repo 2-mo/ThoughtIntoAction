@@ -1,4 +1,4 @@
-"""Relative links in maintained Markdown resolve (history and third-party copies excluded)."""
+"""Relative links in maintained Markdown and the site resolve (history and third-party copies excluded)."""
 import re
 import subprocess
 from pathlib import Path
@@ -20,6 +20,12 @@ class DocumentationLinkTests(unittest.TestCase):
                 if not re.match(r"^[a-z]+:", target) and not target.startswith(("/", "<")) \
                         and not (ROOT / name).parent.joinpath(target).exists():
                     broken.append(f"{name}: {target}")
+        self.assertEqual(broken, [])
+
+    def test_site_links_and_assets_resolve(self):
+        page = ROOT / "site/index.html"
+        targets = re.findall(r'(?:href|src)="([^"#]+)"', page.read_text(encoding="utf-8"))
+        broken = [t for t in targets if not re.match(r"^[a-z]+:", t) and not (page.parent / t).exists()]
         self.assertEqual(broken, [])
 
 

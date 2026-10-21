@@ -113,6 +113,7 @@ GROUPS = {
         "preview": ("控制台前端预览", ("component", "ui.preview")),
         "lan": ("局域网 HTTPS 发布", ("component", "deployment.lan")),
         "tailnet": ("Tailscale 发布", ("component", "deployment.tailnet")),
+        "site": ("本地预览宣传网站（site/）", ("bash", "scripts/web/site.sh", [])),
     }),
     "task": ("任务程序", {
         "cube": ("方块抓取 / 旋转 / 堆叠", ("component", "task.cube")),
