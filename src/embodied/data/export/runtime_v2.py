@@ -16,9 +16,10 @@ from embodied.data.alignment.runtime_alignment import align
 
 def load_episode(path):
     path = Path(path)
-    meta = json.loads((path / 'episode.json').read_text())
-    if meta.get('schema_version') != 2 or meta.get('kind') not in ('quest_runtime_episode', 'quest_runtime_trace'):
-        raise ValueError('Expected runtime schema 2')
+    from embodied.data.episode.schema import RUNTIME, read
+    schema, meta = read(path)
+    if schema != RUNTIME:
+        raise ValueError(f'Expected a {RUNTIME} episode, found {schema}')
     if meta.get('action_definition') != ACTION:
         raise ValueError('Unsupported action definition')
     if meta.get('lifecycle') != 'complete' or meta.get('error'):

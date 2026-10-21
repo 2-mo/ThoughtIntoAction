@@ -19,9 +19,10 @@ FEATURE_NAMES = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6', 'gr
 
 def load_episode(path, max_gap_s=.1):
     """Read and validate one episode; do not retain all episodes in memory."""
-    meta = json.loads((path / 'episode.json').read_text())
-    if meta.get('kind') != 'quest_teleop_episode' or meta.get('schema_version') != 1:
-        raise ValueError('Unknown episode format')
+    from embodied.data.episode.schema import TELEOP, read
+    schema, meta = read(path)
+    if schema != TELEOP:
+        raise ValueError(f'Expected a {TELEOP} episode, found {schema}')
     if meta.get('lifecycle') != 'complete' or meta.get('outcome') in ('discarded', 'failure'):
         raise ValueError('Episode is not complete or is discarded/failed')
     if meta.get('error') or any(meta.get('dropped', {}).values()):

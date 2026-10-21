@@ -17,9 +17,10 @@ from embodied.data.episode.quality import inspect_camera, nearest_skew
 
 def load_episode(path):
     root = Path(path).expanduser().resolve()
-    manifest = json.loads((root / "episode.json").read_text())
-    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1 or manifest.get("kind") != "quest_teleop_episode":
-        raise ValueError("Unknown episode schema")
+    from embodied.data.episode.schema import TELEOP, read
+    schema, manifest = read(root)
+    if schema != TELEOP:
+        raise ValueError(f"Expected a {TELEOP} episode, found {schema}")
     if manifest.get("record_storage", {}).get("format") != "mcap":
         raise ValueError("Only MCAP episodes are supported")
     from embodied.data.episode.mcap_io import read_records
@@ -242,9 +243,9 @@ def replay(path, *, speed=1., headless=False, telemetry="local"):
 
 
 def runtime_schema(path):
-    """True for kernel (schema 2) episodes; they are read with embodied.data.export.runtime_v2."""
-    manifest = json.loads((Path(path).expanduser().resolve() / "episode.json").read_text())
-    return isinstance(manifest, dict) and manifest.get("schema_version") == 2
+    """True for kernel (x5.runtime/2) episodes; they are read with embodied.data.export.runtime_v2."""
+    from embodied.data.episode.schema import RUNTIME, read
+    return read(Path(path).expanduser().resolve())[0] == RUNTIME
 
 
 def validate_runtime(path):

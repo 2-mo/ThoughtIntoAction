@@ -41,7 +41,8 @@
   - 现状：OpenPI 导出使用请求宽度（力保持之前，≤ 0.082 m，`export_lerobot.py:64`）；GR00T 导出使用下一帧测量宽度（`exporter.py:167`）；`arx5_control` 按 SDK 出厂宽度 0.088 换算。同一个电机位置在不同数据集里对应不同宽度。
   - 做法：在 D-02 元数据中标明；不同来源的数据不能混合训练。
 
-- [ ] **D-04** schema 标识冲突 `P1`
+- [x] **D-04** schema 标识冲突 `P1`
+  - 已做（2026-10-22）：`embodied.data.episode.schema.identify` 返回带命名空间的格式 id：`x5.teleop/1`（旧机械臂服务录制）、`x5.runtime/2`（内核录制）、`groot.raw/1`（GR00T 原始 episode）。新的内核 episode 写入 `schema` 字段，旧数据按 `kind` 与文件结构识别；LeRobot 导出、校验、回放都按 id 分派，GR00T 原始 episode 交给 LeRobot 导出时提示改用 `collect groot export`。导出回归摘要不变（`export` 组）。
   - 现状：Quest episode、GR00T 原始 episode 和 tuning 日志都写 `schema_version: 1`；`dataset_tools/exporters.py:71` 只按数字选择适配器。
   - 做法：改用带命名空间的标识，如 `x5.episode/3`；旧数据按 `kind` 和文件结构识别。
 

@@ -144,11 +144,12 @@ class Schema2:
 
 
 def for_episode(path, registry=None):
-    meta = json.loads((path / 'episode.json').read_text())
-    version = meta.get('schema_version')
-    if version not in (1, 2):
-        raise ValueError('Unsupported episode schema')
+    from embodied.data.episode.schema import GROOT_RAW, LEROBOT_EXPORTERS, read
+    schema, _ = read(path)
+    if schema not in LEROBOT_EXPORTERS:
+        hint = '; export it with ./run.sh collect groot export' if schema == GROOT_RAW else ''
+        raise ValueError(f'{path.name}: {schema} episodes have no LeRobot adapter{hint}')
     # Data selects a schema, never a Python factory. Factory choices belong to
     # the trusted project registry, so a deployment can replace its exporter.
     from embodied.contracts.registry import Registry
-    return (registry or Registry()).create('exporter', f'schema{version}')
+    return (registry or Registry()).create('exporter', LEROBOT_EXPORTERS[schema])

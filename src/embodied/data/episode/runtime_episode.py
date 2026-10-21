@@ -8,6 +8,7 @@ import uuid
 from mcap.writer import Writer, CompressionType
 from embodied.core.storage import save_json
 from embodied.data.episode.cameras import camera_topic
+from embodied.data.episode.schema import RUNTIME
 
 ACTION = 'sent_joint_position + sent_gripper_width'
 TOPICS = {'tick': '/robot/tick', 'state': '/robot/state', 'command': '/robot/command',
@@ -67,7 +68,7 @@ class RuntimeEpisodeWriter:
         self.terminal = False
         self.owner_context = None
         self.manifest = {
-            'schema_version': 2, 'kind': 'quest_runtime_episode' if camera else 'quest_runtime_trace',
+            'schema': RUNTIME, 'schema_version': 2, 'kind': 'quest_runtime_episode' if camera else 'quest_runtime_trace',
             'id': self.path.name, 'task': task.strip(), 'lifecycle': 'recording', 'outcome': 'unknown',
             'started_monotonic_ns': time.monotonic_ns(), 'started_unix_ns': time.time_ns(),
             'record_storage': {'format': 'mcap', 'file': 'episode.mcap'},
