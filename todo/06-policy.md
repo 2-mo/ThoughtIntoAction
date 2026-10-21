@@ -56,6 +56,7 @@
 ## 结构
 
 - [ ] **P-06** 统一策略运行时 `P1`
+  - 第一步已完成（2026-10-21）：`embodied.policy.kernel_runner`（`./run.sh policy kernel --run <RUN> --prompt ...`）沿用现有 OpenPI worker 与观测文件，动作经 `ControlSession` 的 `joint` 流式命令进入内核，块间命令过期即由内核保持；限位、桌面平面与步长由内核负责。`scripts/check_policy_kernel.py` 在 MuJoCo 内核上用替身策略验证（已加入 `check-all` 的 `sim` 组）。尚未接入：零样本 runner、GR00T（P-08）、外部相机观测。
   - 做法：
     - 新建 policy 包，包含 spec / observation / executor / client / sinks。
     - 现有 `ArmClient` runner 的检查（`zero-shot/rollout.py:58,114,124,134,137`）逐项归类：观测时序类（图像与状态时间差、观测年龄、推理超时）留在 executor；安全类（偏离观测 > 0.2 rad、分布外状态、单步限幅）移入内核，或确认内核已覆盖后删除。

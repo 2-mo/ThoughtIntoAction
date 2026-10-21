@@ -72,6 +72,7 @@ MODULE_COMMANDS = {
     "doctor": "legacy.quest_teleop.diagnostics",
     "monitor": "legacy.quest_teleop.runtime.monitor",
     "ports": "embodied.workstation.ports",
+    "policy-kernel": "embodied.policy.kernel_runner",
 }
 BOOTSTRAP_COMMANDS = {"control": "embodied.workstation.control", "components": "embodied.workstation.components.cli"}
 HARDWARE_COMMANDS = {

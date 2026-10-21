@@ -31,6 +31,7 @@ GROUPS = {
          "--quick", "--output", str(EVIDENCE / "native-components")],
         [*PLATFORM, "scripts/check_control_runtime.py", "--output", str(EVIDENCE / "control-runtime")],
         [*PLATFORM, "scripts/check_workbench.py", "--calibration", "--output", str(EVIDENCE / "workbench")],
+        [*PLATFORM, "scripts/check_policy_kernel.py", "--output", str(EVIDENCE / "policy-kernel")],
     ]),
     # Dual-video GR00T export through the official loader, synthetic measured-state episode.
     "groot": ("environments/arx_motion/.venv-web/bin/python", [

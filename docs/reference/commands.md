@@ -120,7 +120,8 @@
 | 命令 | 说明 |
 | --- | --- |
 | `./run.sh policy pi05` | π0.5 零样本 |
-| `./run.sh policy pi05-sft` | π0.5 微调模型（PyTorch） |
+| `./run.sh policy kernel` | π0.5 微调模型经 arx 内核执行：--run <RUN> --prompt <任务>（动作由内核统一限位） |
+| `./run.sh policy pi05-sft` | π0.5 微调模型（PyTorch，旧机械臂服务） |
 | `./run.sh policy pi05-sft-jax` | π0.5 微调模型（JAX） |
 | `./run.sh policy groot` | GR00T 推理 |
 | `./run.sh policy pregrasp` | 前往预抓取位 |
