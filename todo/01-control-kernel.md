@@ -94,6 +94,7 @@
   - 完成：两种方式启动真机时补丁状态与环境相同。
 
 - [ ] **K-08** 真机验收 `P1` `阶段 3`
+  - 已准备：`./run.sh kernel real`（确认后准备 Quest USB 与 CAN，以上游原生模式启动，带遥测供采集）与 `docs/guides/real-arm-acceptance.md` 清单。
   - 内容：
     - 上游 README 的启动、模式切换、Grip 跟随、A+B Home、Trigger、Ctrl+C 阻尼；
     - 工作台 managed 模式与租约；

@@ -61,5 +61,5 @@ uv sync --locked           # 平台环境（Python 3.12）
 ## 现状
 
 - 仿真：遥操、采集、导出、手机、动作、标定适配均经过内核，`./run.sh check all` 的 MuJoCo 端到端检查覆盖这些链路。
-- 真机：日常仍走 `src/legacy/` 中的旧机械臂服务；内核真机入口已具备，待一次真机验收后切换（`todo/01-control-kernel.md` K-08、K-09）。
+- 真机：日常仍走 `src/legacy/` 中的旧机械臂服务；内核真机入口 `./run.sh kernel real` 已具备，按 [真机验收清单](docs/guides/real-arm-acceptance.md) 验收后切换（`todo/01-control-kernel.md` K-08、K-09）。
 - 推进计划见 [todo/](todo/README.md)；日常操作细节见 [docs/guides/operation.md](docs/guides/operation.md)；命令说明见 [docs/reference/commands.md](docs/reference/commands.md)。

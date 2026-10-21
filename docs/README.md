@@ -12,6 +12,7 @@
 | --- | --- |
 | [安装](guides/setup.md) | 环境、依赖、设备驱动与权限 |
 | [日常操作](guides/operation.md) | tmux 工作台、总控按键、真机与仿真切换 |
+| [真机验收（arx 内核）](guides/real-arm-acceptance.md) | 切换到内核前的现场验收清单 |
 | [内核工作台](guides/plugin-workbench.md) | 内核 profile、多来源控制权、MoveJ / MoveL、手机与标定适配 |
 | [采集与监看](guides/recording.md) | 采集按键、episode、回放与校验 |
 | [机械臂服务与监看](guides/monitoring.md) | 旧机械臂服务、三维监看、反馈与断流 |

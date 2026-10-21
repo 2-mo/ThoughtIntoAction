@@ -39,6 +39,7 @@
 | 命令 | 说明 |
 | --- | --- |
 | `./run.sh kernel start` | 启动内核：--backend sim|real，--input quest|demo，--managed 接受多来源 |
+| `./run.sh kernel real` | 真机 · 上游操控：准备 Quest USB 与 CAN 后启动（先确认安全，待验收） |
 | `./run.sh kernel viewer` | 附加只读 MuJoCo 窗口 |
 | `./run.sh kernel observe` | 读取运行中内核的遥测：--run <RUN> |
 | `./run.sh kernel verify` | 核对上游文件与本地补丁台账 |

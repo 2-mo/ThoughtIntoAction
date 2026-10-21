@@ -24,6 +24,7 @@ GROUPS = {
     }),
     "kernel": ("arx-televr 控制内核（control/，唯一 SDK 所有者）", {
         "start": ("启动内核：--backend sim|real，--input quest|demo，--managed 接受多来源", ("run", ["control", "start"])),
+        "real": ("真机 · 上游操控：准备 Quest USB 与 CAN 后启动（先确认安全，待验收）", ("bash", "scripts/arm/kernel_real.sh", [])),
         "viewer": ("附加只读 MuJoCo 窗口", ("run", ["control", "viewer"])),
         "observe": ("读取运行中内核的遥测：--run <RUN>", ("run", ["control", "observe"])),
         "verify": ("核对上游文件与本地补丁台账", ("run", ["control", "verify"])),
