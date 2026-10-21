@@ -70,7 +70,7 @@ GROUPS = {
         "console": ("浏览器动作编辑台", ("component", "motion.console")),
     }),
     "collect": ("数据采集", {
-        "run": ("从运行中的内核采集：--run <RUN> --task <任务>", ("run", ["collect"])),
+        "run": ("从运行中的内核采集：--run <RUN> --task <任务> [--cameras wrist_rgb,exterior_rgb]（默认存 MP4）", ("run", ["collect"])),
         "session": ("旧链路采集会话：status | demo | ...", ("run", ["session"])),
         "record": ("旧链路录制开始 / 结束", ("run", ["record"])),
         "groot": ("GR00T 双相机采集", ("component", "collection.groot")),

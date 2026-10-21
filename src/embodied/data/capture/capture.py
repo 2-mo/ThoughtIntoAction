@@ -12,27 +12,31 @@ from embodied.data.episode.runtime_episode import RuntimeEpisodeWriter
 from embodied.contracts.runtime import RuntimeReader
 
 
-def capture(reader, root, task, duration, camera=None):
+def capture(reader, root, task, duration, camera=None, *, cameras=None, video=False):
+    """`cameras` maps camera IDs (wrist_rgb first) to camera objects; `camera` alone is the wrist camera."""
     if not math.isfinite(duration) or duration < 0:
         raise ValueError('Duration must be finite and nonnegative')
     if reader.mode != 'full':
         raise ValueError('Collection requires the full runtime stream')
-    writer = RuntimeEpisodeWriter(root, reader.descriptor, task, camera.metadata if camera else None)
+    cameras = cameras or ({'wrist_rgb': camera} if camera else {})
+    writer = RuntimeEpisodeWriter(root, reader.descriptor, task,
+                                  cameras={key: source.metadata for key, source in cameras.items()}, video=video)
     print(f'Recording: {writer.path}', flush=True)
     stop = threading.Event()
-    frames, failures = queue.Queue(maxsize=64), queue.Queue(maxsize=1)
+    frames, failures = queue.Queue(maxsize=64 * max(1, len(cameras))), queue.Queue(maxsize=len(cameras) or 1)
 
-    def camera_loop():
+    def camera_loop(camera_id, source):
         try:
             while not stop.is_set():
-                frame = camera.read()
+                frame = source.read()
                 if not stop.is_set():
-                    frames.put_nowait(frame)
+                    frames.put_nowait((camera_id, frame))
         except Exception as exc:
-            failures.put_nowait(f'Camera failed: {type(exc).__name__}: {exc}')
+            failures.put_nowait(f'{camera_id} failed: {type(exc).__name__}: {exc}')
 
-    thread = threading.Thread(target=camera_loop, name='collection-camera', daemon=True) if camera else None
-    if thread:
+    threads = [threading.Thread(target=camera_loop, args=item, name=f'collection-{item[0]}', daemon=True)
+               for item in cameras.items()]
+    for thread in threads:
         thread.start()
     deadline = time.monotonic() + duration if duration else float('inf')
     reason, error = 'duration', None
@@ -42,7 +46,8 @@ def capture(reader, root, task, duration, camera=None):
             tick = reader.read()
             writer.add_tick(tick)
             while not frames.empty():
-                writer.add_frame(frames.get_nowait())
+                camera_id, frame = frames.get_nowait()
+                writer.add_frame(frame, camera_id)
             if not failures.empty():
                 raise RuntimeError(failures.get_nowait())
             if tick['error']:
@@ -59,17 +64,18 @@ def capture(reader, root, task, duration, camera=None):
     finally:
         end_ns = time.monotonic_ns()
         stop.set()
-        if thread:
+        for thread in threads:
             thread.join(timeout=4)
             if thread.is_alive():
-                error = error or 'Camera reader did not stop'
+                error = error or f'{thread.name} did not stop'
+        if threads:
             if not failures.empty():
                 error = error or failures.get_nowait()
             try:
                 while not frames.empty():
-                    frame = frames.get_nowait()
+                    camera_id, frame = frames.get_nowait()
                     if frame['host_received_monotonic_ns'] <= end_ns:
-                        writer.add_frame(frame)
+                        writer.add_frame(frame, camera_id)
             except Exception as exc:
                 error = error or str(exc)
         manifest = writer.close(reason, error)
@@ -85,13 +91,30 @@ def main(argv=None):
     parser.add_argument('--camera', default='none',
                         help='none creates a diagnostic trace, wrist subscribes to the shared camera service')
     parser.add_argument('--camera-options', default='{}', help='JSON constructor options for the camera plugin')
+    parser.add_argument('--cameras', help='Comma-separated configured camera IDs from the shared camera service, '
+                        'e.g. wrist_rgb,exterior_rgb (replaces --camera)')
+    parser.add_argument('--rgb', choices=('mp4', 'png'), default='mp4', help='Image storage with --cameras')
     args = parser.parse_args(argv)
     if not math.isfinite(args.duration) or args.duration < 0:
         parser.error('duration must be finite and nonnegative')
     try:
         with ExitStack() as stack:
-            camera = None
-            if args.camera != 'none':
+            camera, cameras = None, {}
+            if args.cameras:
+                from embodied.contracts.registry import Registry
+                from embodied.sensors.control import recording_guard
+                from embodied.core.project import load_config
+                config, registry = load_config(), Registry()
+                ids = [key.strip() for key in args.cameras.split(',') if key.strip()]
+                if not ids or ids[0] != 'wrist_rgb' or len(set(ids)) != len(ids) or any(k not in config['cameras'] for k in ids):
+                    parser.error('--cameras lists unique configured IDs starting with wrist_rgb')
+                stack.enter_context(closing(recording_guard()))
+                for key in ids:
+                    options = config['cameras'][key]
+                    driver = options.get('driver', config['cameras']['wrist_rgb']['driver'])
+                    selected = {k: options[k] for k in ('serial', 'width', 'height', 'fps')}
+                    cameras[key] = stack.enter_context(registry.create('camera', driver, **selected))
+            elif args.camera != 'none':
                 from embodied.contracts.registry import Registry
                 from embodied.sensors.control import recording_guard
                 from embodied.core.project import load_config
@@ -105,7 +128,8 @@ def main(argv=None):
                 selected.update(json.loads(args.camera_options))
                 camera = stack.enter_context(registry.create('camera', driver, **selected))
             reader = stack.enter_context(RuntimeReader(args.run, 'full'))
-            path, meta = capture(reader, args.output, args.task, args.duration, camera)
+            path, meta = capture(reader, args.output, args.task, args.duration, camera,
+                                 cameras=cameras or None, video=bool(cameras) and args.rgb == 'mp4')
         print(json.dumps({'path': str(path), 'lifecycle': meta['lifecycle'],
                           'counts': meta['counts'], 'error': meta['error']}, ensure_ascii=False))
         return int(meta['lifecycle'] != 'complete')

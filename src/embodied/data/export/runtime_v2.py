@@ -8,7 +8,8 @@ from mcap.reader import make_reader
 from mcap.exceptions import McapError
 from zstandard import ZstdError
 
-from embodied.data.episode.runtime_episode import ACTION, TOPICS, split_tick
+from embodied.data.episode.cameras import camera_topic
+from embodied.data.episode.runtime_episode import ACTION, TOPICS, frame_kind, split_tick
 from embodied.data.episode.video import media_path
 from embodied.data.alignment.runtime_alignment import align
 
@@ -24,13 +25,15 @@ def load_episode(path):
         raise ValueError('Runtime recording is incomplete or failed')
     if meta.get('record_storage') != {'format': 'mcap', 'file': 'episode.mcap'}:
         raise ValueError('Unsupported record storage')
-    rows = {key: [] for key in TOPICS}
-    lookup = {topic: key for key, topic in TOPICS.items()}
+    cameras = meta.get('cameras') or ({'wrist_rgb': meta['camera']} if meta.get('camera') else {})
+    topics = {**TOPICS, **{frame_kind(c): camera_topic(c) for c in cameras}}
+    rows = {key: [] for key in topics}
+    lookup = {topic: key for key, topic in topics.items()}
     try:
         with (path / 'episode.mcap').open('rb') as stream:
             for schema, channel, message in make_reader(stream, validate_crcs=True).iter_messages(log_time_order=False):
                 kind = lookup.get(channel.topic)
-                if kind is None or schema is None or schema.name != f'quest_runtime.{kind}.v2':
+                if kind is None or schema is None or schema.name != f"quest_runtime.{kind.split(':')[0]}.v2":
                     raise ValueError('Unknown runtime MCAP channel/schema')
                 row = json.loads(message.data)
                 if not isinstance(row, dict) or message.sequence != len(rows[kind]):
@@ -75,20 +78,20 @@ def load_episode(path):
         raise ValueError('Terminal boundary disagrees')
     if meta['stop_reason'] == 'runtime-terminal' and not meta['terminal_received']:
         raise ValueError('Missing runtime terminal')
-    camera = meta['camera']
-    previous, stamp = None, 0
-    if meta['kind'] == 'quest_runtime_episode' and (not camera or not rows['frame']):
+    if meta['kind'] == 'quest_runtime_episode' and (not cameras or not rows['frame']):
         raise ValueError('Missing camera data')
-    if meta['kind'] == 'quest_runtime_trace' and (camera or rows['frame']):
+    if meta['kind'] == 'quest_runtime_trace' and (cameras or rows['frame']):
         raise ValueError('Diagnostic trace unexpectedly contains a camera')
-    for frame in rows['frame']:
-        number, now = frame['frame_number'], frame['host_received_monotonic_ns']
-        if (not camera.get('stream_id') or frame.get('stream_id') != camera['stream_id']
-                or (previous is not None and number != previous + 1) or now <= stamp):
-            raise ValueError('Camera stream changed or contains gaps')
-        if not frame.get('image') or not media_path(path, frame).is_file():
-            raise ValueError('Missing source image')
-        previous, stamp = number, now
+    for camera_id, camera in cameras.items():
+        previous, stamp = None, 0
+        for frame in rows[frame_kind(camera_id)]:
+            number, now = frame['frame_number'], frame['host_received_monotonic_ns']
+            if (not camera.get('stream_id') or frame.get('stream_id') != camera['stream_id']
+                    or (previous is not None and number != previous + 1) or now <= stamp):
+                raise ValueError(f'{camera_id}: camera stream changed or contains gaps')
+            if not (frame.get('image') or frame.get('video')) or not media_path(path, frame).is_file():
+                raise ValueError(f'{camera_id}: missing source image or video')
+            previous, stamp = number, now
     return meta, rows
 
 

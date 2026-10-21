@@ -100,7 +100,7 @@
 
 | 命令 | 说明 |
 | --- | --- |
-| `./run.sh collect run` | 从运行中的内核采集：--run <RUN> --task <任务> |
+| `./run.sh collect run` | 从运行中的内核采集：--run <RUN> --task <任务> [--cameras wrist_rgb,exterior_rgb]（默认存 MP4） |
 | `./run.sh collect session` | 旧链路采集会话：status | demo | ... |
 | `./run.sh collect record` | 旧链路录制开始 / 结束 |
 | `./run.sh collect groot` | GR00T 双相机采集 |

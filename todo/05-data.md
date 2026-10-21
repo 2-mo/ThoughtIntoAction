@@ -62,6 +62,7 @@
   - 做法：`dataset_tools/exporters/{openpi_lerobot,groot_lerobot}` 接收 `Episode`；3 份 GR00T modality 配置改为由 spec 生成（X-25）。
 
 - [ ] **D-09** 真机采集切换到内核 `P1`
+  - 双相机已具备（2026-10-21）：内核采集 `collect run --cameras wrist_rgb,exterior_rgb` 经共享相机服务录制两路 H.264 MP4（`--rgb png` 保留旧格式）；schema 2 读取器按相机校验连续性，导出按 60 ms 内最近前帧对齐外部相机并报告重复帧与最大延迟。LeRobot 真加载器验证两路视图。接入真机工作台见 K-09。
   - 现状：仿真采集已从内核写入 schema 2（`robot_simulation/session.py`）；真机采集仍走旧 `TeleopSession`。
   - 做法：随 K-09 阶段 2 一起写好并在仿真中验证；阶段 3 真机验收后作为默认。
 

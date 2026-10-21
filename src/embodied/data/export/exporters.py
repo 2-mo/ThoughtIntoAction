@@ -24,6 +24,39 @@ def anchor_gaps(rows, fps=30):
     return gaps
 
 
+def match_cameras(rows, others, max_skew_ns=60_000_000):
+    """Attach each other camera's latest frame at or before the wrist anchor, within max_skew_ns.
+
+    Anchors without a frame from every camera are dropped (counted as camera-unmatched).
+    """
+    clocks = {key: np.asarray([f['host_received_monotonic_ns'] for f in frames], np.int64) for key, frames in others.items()}
+    kept, unmatched = [], 0
+    for observation, action, root, wrist, source in rows:
+        stamp, matched = wrist['host_received_monotonic_ns'], {'wrist_rgb': wrist}
+        for key, clock in clocks.items():
+            index = int(np.searchsorted(clock, stamp, side='right') - 1)
+            if index < 0 or stamp - clock[index] > max_skew_ns:
+                break
+            matched[key] = others[key][index]
+        if len(matched) == len(others) + 1:
+            kept.append((observation, action, root, {**wrist, 'camera_frames': matched}, source))
+        else:
+            unmatched += 1
+    return kept, unmatched
+
+
+def camera_report(rows, frames):
+    """Per camera: source frames, repeated images and the largest age behind the wrist anchor."""
+    report = {}
+    for key, source in frames.items():
+        used = [row[3].get('camera_frames', {'wrist_rgb': row[3]})[key] for row in rows]
+        report[key] = {'source_frames': len(source),
+                       'repeated_images': len(used) - len({f['host_received_monotonic_ns'] for f in used}),
+                       'max_age_ms': max(r[3]['host_received_monotonic_ns'] - f['host_received_monotonic_ns']
+                                         for r, f in zip(rows, used)) / 1e6}
+    return report
+
+
 def annotate(report, rows, *, control_stack, backend):
     gaps = anchor_gaps(rows)
     report.update(control_stack=control_stack, backend=backend, gaps=gaps, anomaly=bool(gaps))
@@ -77,6 +110,14 @@ class Schema2:
                       'state_sequence': anchor['state_sequence'], 'action_sequence': anchor['action_sequence']}
             rows.append((np.asarray(anchor['observation'], np.float32), np.asarray(anchor['action'], np.float32),
                          path, {**anchor['frame'], 'wrist_valid': True}, source))
+        from embodied.data.episode.runtime_episode import frame_kind
+        frames = {key: raw[frame_kind(key)] for key in (meta.get('cameras') or {'wrist_rgb': meta['camera']})}
+        if len(frames) > 1:
+            rows, unmatched = match_cameras(rows, {k: v for k, v in frames.items() if k != 'wrist_rgb'})
+            if unmatched:
+                excluded = {**excluded, 'camera-unmatched': unmatched}
+            if len(rows) < 2:
+                raise ValueError('Insufficient anchors with every camera')
         report = {'id': meta['id'], 'task': meta['task'], 'source': str(path), 'outcome': meta['outcome'],
                   'samples': len(rows), 'robot_samples': len(raw['state']), 'observation_samples': len(rows),
                   'excluded_camera_anchors': len(raw['frame'])-len(rows), 'exclusion_reasons': excluded,
@@ -84,7 +125,8 @@ class Schema2:
                   'end_monotonic_ns': rows[-1][3]['host_received_monotonic_ns'],
                   'state_max_age_ms': max(r[3]['host_received_monotonic_ns']-r[4]['host_monotonic_ns'] for r in rows)/1e6,
                   'action_max_age_ms': max(r[3]['host_received_monotonic_ns']-r[4]['requested_monotonic_ns'] for r in rows)/1e6,
-                  'image_max_age_ms': 0, 'repeated_images': 0, 'action_definition': self.identity[1]}
+                  'image_max_age_ms': 0, 'repeated_images': 0, 'action_definition': self.identity[1],
+                  'cameras': camera_report(rows, frames)}
         annotate(report, rows, control_stack='arx-televr kernel: sent_q at 250 Hz',
                  backend=meta['runtime']['backend'])
         return meta, rows, report, raw
