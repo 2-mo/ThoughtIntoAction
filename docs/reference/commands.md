@@ -135,7 +135,7 @@
 | 命令 | 说明 |
 | --- | --- |
 | `./run.sh calib wrist` | 腕部 D435i 手眼：marker | plan | manual | auto | solve；--runtime <RUN> 经内核 |
-| `./run.sh calib handeye` | D455 / D405 双相机手眼 |
+| `./run.sh calib handeye` | D455 / D405 双相机手眼：capture --confirm-safe [--auto] [--kernel [--run <RUN>]] | solve | validate | enable |
 | `./run.sh calib gripper` | 夹爪零点 |
 | `./run.sh calib payload` | 负载辨识 |
 

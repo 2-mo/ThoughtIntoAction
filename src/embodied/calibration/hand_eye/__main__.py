@@ -45,6 +45,8 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="网页双阶段自动采集：先桌面板 D405，再夹爪板 D455",
     )
+    capture.add_argument("--kernel", action="store_true", help="经运行中的 arx 内核控制机械臂，不直接打开 CAN")
+    capture.add_argument("--run", type=Path, help="配合 --kernel：control/run/<RUN>（默认最新运行中的内核）")
 
     solve = subparsers.add_parser("solve", help="从已有 samples.json 离线求解")
     solve.add_argument("--session", required=True, help="会话目录名或绝对路径")
@@ -117,10 +119,22 @@ def main() -> int:
                 )
             name = args.session or dt.datetime.now().strftime("%Y%m%d-%H%M%S")
             session = CalibrationSession((output_root / "sessions" / name).resolve())
-            collector = ManualEyeToHandCollector(config, session)
             if args.auto and not config.get("hand_camera", {}).get("serial"):
                 raise ValueError("双相机自动标定缺少 hand_camera.serial")
-            result = collector.run_automatic() if args.auto else collector.run()
+            if args.run and not args.kernel:
+                raise ValueError("--run 需要 --kernel")
+            controller = None
+            if args.kernel:
+                from embodied.calibration.hand_eye.kernel_arm import KernelArm
+                controller = KernelArm(args.run)
+                if args.auto:
+                    controller.connect(stabilize=True)  # Manual capture connects itself into damping.
+            try:
+                collector = ManualEyeToHandCollector(config, session, controller=controller)
+                result = collector.run_automatic() if args.auto else collector.run()
+            finally:
+                if controller is not None:
+                    controller.close()
             return 0 if result is not None else 3
         if args.command == "solve":
             requested = Path(args.session)

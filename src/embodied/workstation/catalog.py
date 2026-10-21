@@ -96,7 +96,7 @@ GROUPS = {
     }),
     "calib": ("标定", {
         "wrist": ("腕部 D435i 手眼：marker | plan | manual | auto | solve；--runtime <RUN> 经内核", ("run", ["handeye"])),
-        "handeye": ("D455 / D405 双相机手眼", ("component", "calibration.handeye")),
+        "handeye": ("D455 / D405 双相机手眼：capture --confirm-safe [--auto] [--kernel [--run <RUN>]] | solve | validate | enable", ("component", "calibration.handeye")),
         "gripper": ("夹爪零点", ("component", "calibration.gripper")),
         "payload": ("负载辨识", ("component", "calibration.payload")),
     }),

@@ -65,6 +65,9 @@
   - 依赖：C-01。
 
 - [ ] **C-06** 合并两个手眼标定包 `P1`
+  - 已做（2026-10-21）：双相机采集器经内核运行——`embodied.calibration.hand_eye.kernel_arm.KernelArm` 实现采集器用到的 ArmController 子集（状态、限位、FK / IK、MoveJ / MoveL 预览与执行、示教、夹爪、急停），FK / IK 用内核自己的 URDF 与 `tcp_link`（即旧 `eef_link`，link6 + 0.145 m），存储的 `T_base_eef` 与求解结果坐标系不变。入口：`./run.sh calib handeye capture --confirm-safe [--auto] --kernel [--run <RUN>]`。内核 `free-drive` 新增可选 `gripper_width`（手臂自由、夹爪保持）。`scripts/check_handeye_kernel.py` 在 MuJoCo 上用采集器自己的运动函数验证（已加入 `sim` 组）。
+  - 差异（真机验收确认，见 real-arm-acceptance.md 第五节）：阻尼为内核 free-drive；急停为取消并保持；夹板力来自比接触宽度小 1.5 mm 的位置目标，而非力矩前馈。
+  - 待做：网页手眼流程（旧 `ControlKernel` 的 handeye_*）改用 `KernelArm`；求解库合并（`relative_svd` 并入 `core/solver.py`）后删除 `calibration/wrist` 的重复部分（X-10）；`collector.py` 拆分。
   - 现状：
     - `src/hand_eye_calibration/`（8.4k 行）：D455 eye-to-hand 与 D405 eye-in-hand，带多样性、留一和 bootstrap 检查；直接打开机械臂（`collector.py:128`）和相机。
     - `src/handeye_calibration/`（747 行）：腕部 D435i，已通过 `arx_arm.py` 的 `ControlSession` 接入内核，另有 `relative_svd` 求解（`solver.py:25-56`）。
