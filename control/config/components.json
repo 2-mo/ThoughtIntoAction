@@ -84,26 +84,6 @@
       ]
     }
   },
-  "calibration_arm": {
-    "arx": {
-      "factory": "embodied.calibration.wrist.arx_arm:ArxCalibrationArm",
-      "capabilities": [
-        "snapshot",
-        "joint",
-        "hold",
-        "free-drive"
-      ]
-    },
-    "legacy": {
-      "factory": "embodied.calibration.wrist.arm:CalibrationArm",
-      "capabilities": [
-        "snapshot",
-        "joint",
-        "hold",
-        "free-drive"
-      ]
-    }
-  },
   "exporter": {
     "schema1": {
       "factory": "embodied.data.export.exporters:Schema1",

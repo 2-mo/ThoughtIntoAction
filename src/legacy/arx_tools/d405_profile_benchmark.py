@@ -23,7 +23,7 @@ import numpy as np
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from embodied.calibration.hand_eye.core.camera_profiles import (
+from legacy.hand_eye.core.camera_profiles import (
     ColorStreamProfile,
     find_device,
     format_profiles,

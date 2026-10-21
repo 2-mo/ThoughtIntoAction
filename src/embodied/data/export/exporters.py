@@ -126,7 +126,7 @@ class Schema2:
                   'state_max_age_ms': max(r[3]['host_received_monotonic_ns']-r[4]['host_monotonic_ns'] for r in rows)/1e6,
                   'action_max_age_ms': max(r[3]['host_received_monotonic_ns']-r[4]['requested_monotonic_ns'] for r in rows)/1e6,
                   'image_max_age_ms': 0, 'repeated_images': 0, 'action_definition': self.identity[1],
-                  'cameras': camera_report(rows, frames)}
+                  'cameras': camera_report(rows, frames), 'hand_eye': meta.get('hand_eye')}
         annotate(report, rows, control_stack='arx-televr kernel: sent_q at 250 Hz',
                  backend=meta['runtime']['backend'])
         return meta, rows, report, raw

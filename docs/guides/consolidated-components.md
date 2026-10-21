@@ -15,7 +15,8 @@
 | B601 末端操作、拖动与自动保持、MeshCat | `src/embodied/robots/rebot/controllers/`、`examples/rebot/` | `rebot.endpose/trajectory/gravity/stationary_hold`、`viewer.rebot_*` |
 | 浏览器手势、运动编辑、Ghost、任务页面 | `apps/console/`、`src/embodied/console/features/` | `ui.build`、`ui.preview`、`ui.backend`、`ui.console` |
 | D405/D455 RGB-D、WebRTC、相机诊断 | `src/embodied/console/features/camera/`、`src/legacy/arx_tools/` | `camera.rgbd`、`diagnostic.d405` |
-| 双相机手眼、夹爪、负载标定 | `src/embodied/calibration/hand_eye/`、`src/legacy/arx_tools/` | `calibration.handeye/gripper/payload`；两种安装方式的独立求解器插件 |
+| 手眼标定（经内核） | `src/embodied/calibration/` | `./run.sh calib handeye`；旧 D405/D455 采集器在 `src/legacy/hand_eye/`（随 K-10 删除） |
+| 夹爪、负载标定 | `src/legacy/arx_tools/` | `calibration.gripper/payload` |
 | 方块感知、抓取/旋转/堆叠 | `src/legacy/arx_tools/rgb_cube_detector.py`、`src/experiments/`、`src/embodied/console/features/cube/` | `perception.rgb_cube`、`task_planner.*`、`task.cube` |
 | 双相机采集、审核、GR00T 导出 | `src/embodied/data/groot/` | `collection.groot`、`episode_store.groot`、`dataset_export.groot_v21` |
 | GR00T 权重检查、异步推理及动作分块 | `src/embodied/policy/groot/`、`third_party/Isaac-GR00T/` | `policy.groot`、`policy_actions.groot`、`checkpoint.groot` |

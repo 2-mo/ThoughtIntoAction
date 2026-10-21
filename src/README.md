@@ -21,14 +21,14 @@ src/
 │   │   ├── groot/      GR00T 双相机采集与导出
 │   │   └── datasets.py、replay.py、task_package.py
 │   ├── policy/         pi05_zeroshot、pi05_sft（OpenPI）、groot；模型代码在各自环境运行
-│   ├── calibration/    hand_eye（D455 / D405）、wrist（腕部 D435i，经内核）
+│   ├── calibration/    手眼标定：标定板、采样计划、静止采样、求解（腕部 / 固定相机，经内核）
 │   ├── monitor/        18081 监看页与 MuJoCo 工作台
 │   ├── console/        apps/console 的后端
 │   ├── workstation/    工作台装配、内核启动、组件注册与命令
-│   ├── tasks/cube/     方块抓取 / 旋转 / 堆叠任务
 │   └── robots/rebot/   B601（实验，尚未接入内核）
 └── legacy/             robot_control（旧机械臂服务）、quest_teleop（旧遥操）、
-                        arx5_control（直连 SDK 控制器）、arx_tools
+                        arx5_control（直连 SDK 控制器）、arx_tools、hand_eye（旧 D405/D455 采集器）、
+                        cube（方块演示，仅旧控制台）
 ```
 
 依赖方向：`control/` → `embodied.contracts`；`embodied.*` 之间只通过 `contracts` 交换数据，不导入彼此的业务状态机；新代码不再导入 `legacy`。`tests/test_package_boundaries.py` 与 `tests/test_convergence.py` 检查这些规则。

@@ -3,9 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 import unittest
 
-from embodied.console.features.cube.stack import speed_partitioned_motion_runs
-from embodied.tasks.cube.config import load_config
-from embodied.tasks.cube.planner import (
+from legacy.cube.stack import speed_partitioned_motion_runs
+from legacy.cube.config import load_config
+from legacy.cube.planner import (
     Action,
     build_stack_actions,
     consecutive_move_runs,

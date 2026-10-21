@@ -45,7 +45,6 @@ flowchart LR
 | `mapping` | `phone_tool`、`phone_base` | 原相对位姿算法；活动映射在抓取参考时锁定 |
 | `planner` | `arx.basic` | Python 3.10；`factory(config, model_id).plan(request, snapshot, now)`，独立的可变 IK 数据 |
 | `camera` | `realsense`、`synthetic` | Python 3.12；上下文生命周期、`metadata/read()`；RealSense 沿用独立共享相机服务 |
-| `calibration_arm` | `arx`、`legacy` | `snapshot/enable/command/damp`；原标定求解与采样流程不依赖 SDK |
 | `exporter` | `schema1`、`schema2` | 独立 LeRobot 环境；`prepare/save_sidecar`，数据只能选择 schema，不能指定 Python 工厂 |
 
 注册表在 `configs/plugins.toml` 和 `control/config/components.json`。共享实现为 L0 契约包 `src/embodied/contracts/`；旧 `embodied.core.plugins` 保留兼容模块身份。`api_version=1` 和 `runtime=workstation/control` 在加载前检查，列举、校验 profile 不导入硬件 SDK。控制端只读 JSON，避免向 Python 3.10 引入 Python 3.12 的依赖。

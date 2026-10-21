@@ -106,10 +106,6 @@
     }
   },
   "commands": {
-    "calibration.handeye": {
-      "environment": "analysis",
-      "module": "embodied.calibration.hand_eye"
-    },
     "calibration.payload": {
       "environment": "analysis",
       "module": "legacy.arx_tools.calibrate_payload"
@@ -140,7 +136,7 @@
     },
     "task.cube": {
       "environment": "analysis",
-      "module": "embodied.tasks.cube"
+      "module": "legacy.cube"
     },
     "collection.groot": {
       "environment": "web",

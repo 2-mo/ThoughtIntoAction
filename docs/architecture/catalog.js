@@ -208,32 +208,6 @@ window.ARCHITECTURE_CATALOG = {
       ]
     },
     {
-      "kind": "calibration_arm",
-      "name": "arx",
-      "origin": "arx 工作台",
-      "registry": "control/config/components.json",
-      "factory": "embodied.calibration.wrist.arx_arm:ArxCalibrationArm",
-      "capabilities": [
-        "snapshot",
-        "joint",
-        "hold",
-        "free-drive"
-      ]
-    },
-    {
-      "kind": "calibration_arm",
-      "name": "legacy",
-      "origin": "arx 工作台",
-      "registry": "control/config/components.json",
-      "factory": "embodied.calibration.wrist.arm:CalibrationArm",
-      "capabilities": [
-        "snapshot",
-        "joint",
-        "hold",
-        "free-drive"
-      ]
-    },
-    {
       "kind": "exporter",
       "name": "schema1",
       "origin": "arx 工作台",
@@ -822,11 +796,6 @@ window.ARCHITECTURE_CATALOG = {
   ],
   "commands": [
     {
-      "name": "calibration.handeye",
-      "environment": "analysis",
-      "module": "embodied.calibration.hand_eye"
-    },
-    {
       "name": "calibration.payload",
       "environment": "analysis",
       "module": "legacy.arx_tools.calibrate_payload"
@@ -864,7 +833,7 @@ window.ARCHITECTURE_CATALOG = {
     {
       "name": "task.cube",
       "environment": "analysis",
-      "module": "embodied.tasks.cube"
+      "module": "legacy.cube"
     },
     {
       "name": "collection.groot",

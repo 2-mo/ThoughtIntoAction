@@ -101,41 +101,41 @@ def main():
             assert meta['source_metadata_events'][-1]['metadata']['mapping'] == 'phone_tool'
             result['episode'], result['alignment'] = str(episode), report
             until(lambda: client.status()['owner'] is None and max(map(abs, client.status()['dq'])) < .02)
-            from embodied.calibration.wrist.arx_arm import ArxCalibrationArm
-            from embodied.core.model import RobotModel
-            model = RobotModel(Path(client.parameters['model']['xml_path']).with_suffix('.urdf'))
-            with ArxCalibrationArm(model, directory, manual=False) as arm:
+            from embodied.calibration.arm import CalibrationArm
+            with CalibrationArm(directory) as arm:
                 if args.calibration:
-                    from embodied.calibration.wrist.motion import make_plan, execute_plan
-                    from embodied.calibration.wrist.session import Session
-                    from embodied.calibration.wrist.solver import solve
-                    from embodied.sensors.synthetic import SyntheticCamera
+                    from embodied.calibration.plan import kernel_model, make_plan, run_plan
+                    from embodied.calibration.session import Session, pose_matrix
+                    from embodied.calibration.solver import solve
                     from embodied.core.transforms import inverse
-                    center = arm.snapshot()['q']
-                    plan = make_plan(model, center, bounds=[[-1,1],[-1,1],[-1,1]], step=.2)
+                    from embodied.sensors.synthetic import SyntheticCamera
+                    arm.hold()
+                    model = kernel_model(Path(client.parameters['model']['xml_path']).with_suffix('.urdf'))
+                    plan = make_plan(model, arm.snapshot()['q'], step=.2)
                     known = np.eye(4); known[:3,3] = [.03,.01,.05]
                     board = np.eye(4); board[:3,3] = [.4,0,.2]
                     class Detector:
                         def detect(self, image):
-                            return {'T_camera_target': inverse(known) @ inverse(model.fk(arm.snapshot()['q'])) @ board,
+                            tcp = pose_matrix(arm.snapshot()['pose'])
+                            return {'T_camera_target': inverse(known) @ inverse(tcp) @ board,
                                     'reprojection_error_undistorted_px':0., 'synthetic':True}
                     with SyntheticCamera() as camera:
-                        session = Session(output/'calibration',model,camera.metadata,{'synthetic':True})
+                        session = Session(output/'calibration', 'wrist_rgb', 'wrist', camera.metadata, {'synthetic':True}, arm.robot)
                         session.data['plan'] = plan
-                        execute_plan(arm,model,plan,lambda split,i: session.capture(camera,arm,Detector(),split,i))
+                        taken = run_plan(arm, plan, lambda split, i: session.capture(camera, arm, Detector(), split, i), speed=.5)
                         session.finish('complete')
-                    solved = solve(session.data['samples'])
+                    solved = solve(session.data['samples'], 'wrist')
                     assert solved['status'] == 'validated', solved
                     np.testing.assert_allclose(solved['T_eef_camera'],known,atol=.001)
                     (output/'calibration/result.json').write_text(json.dumps(solved,indent=2))
-                    result['calibration'] = '26 arx-driven waypoints, stationary bursts, synthetic detections, held-out solve validated'
+                    result['calibration'] = (f'{taken}/{len(plan["waypoints"])} kernel-previewed waypoints, stationary bursts, '
+                                             'synthetic detections, held-out solve validated')
                 else:
-                    from legacy.robot_control.motion import move_and_settle
-                    arm.enable()
+                    arm.hold()
                     q = np.array(arm.snapshot()['q']); q[0] += .015
-                    move_and_settle(arm, model, q, {'speed':.15,'acceleration':.3,'hz':50,'margin':.05})
-                    arm.damp()
-                    result['calibration'] = 'arx adapter feedback, enable, bounded move, hold and release'
+                    arm.move(q, .15)
+                    arm.teach(); time.sleep(.3); arm.hold()
+                    result['calibration'] = 'kernel calibration arm: hold, previewed move, teaching, release'
             result['stop'] = client.request('stop')
             assert runtime.wait(timeout=15) == 0, (output/'runtime.log').read_text()
             result['runtime_report'] = json.loads((directory/'report.json').read_text())

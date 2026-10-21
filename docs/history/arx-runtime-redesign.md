@@ -316,8 +316,8 @@ observer 为监看提供 latest-only 状态，为 collection 提供保序、带�
 - arx `real.py`、`model.py`、`sim.py`、`recording.py`：直接 SDK 提交、反馈/命令顺序、模式/IK、物理仿真与调试日志。
 - arx `native/rollio-source.tar.gz` 内 `robots/xrobot/README.md`、`src/bin/device.rs`、`src/config.rs`、`src/frame.rs`：SDK 动态符号、左右手通道、输入字段及时间语义。
 - Quest [会话采集](../../src/legacy/quest_teleop/runtime/session.py)、[控制器快照](../../src/legacy/quest_teleop/controller.py)、[MCAP](../../src/embodied/data/episode/mcap_io.py)、[导出](../../src/embodied/data/export/lerobot.py)、[多频率数据](../../src/embodied/data/export/multirate.py)：旧录制耦合和动作/时间语义。
-- Quest [夹爪修复](../guides/gripper-startup.md)、[SDK 构建](../../scripts/setup/build_gripper_sdk.py)、[标定机械臂](../../src/embodied/calibration/wrist/arm.py)、[设备锁](../../src/embodied/contracts/device_lease.py)：迁移时需要保留或适配的设备行为。
-- Quest 手眼标定：[操作说明](../guides/simulation-calibration.md)、[CLI](../../src/embodied/calibration/wrist/cli.py)、[计划与执行](../../src/embodied/calibration/wrist/motion.py)、[静止采样](../../src/embodied/calibration/wrist/session.py)、[求解](../../src/embodied/calibration/wrist/solver.py)、[既有测试](../../tests/test_calibration.py)。这些是当前实现依据，不表示已迁移到 arx。
+- Quest [夹爪修复](../guides/gripper-startup.md)、[SDK 构建](../../scripts/setup/build_gripper_sdk.py)、标定机械臂（`src/embodied/calibration/wrist/arm.py`，已删除）、[设备锁](../../src/embodied/contracts/device_lease.py)：迁移时需要保留或适配的设备行为。
+- Quest 手眼标定：操作说明（`docs/guides/simulation-calibration.md`，已删除）、CLI（`src/embodied/calibration/wrist/cli.py`，已删除）、计划与执行（`src/embodied/calibration/wrist/motion.py`，已删除）、静止采样（`src/embodied/calibration/wrist/session.py`，已删除）、求解（`src/embodied/calibration/wrist/solver.py`，已删除）、[既有测试](../../tests/test_calibration.py)。这些是当前实现依据，不表示已迁移到 arx。
 - 新增参考仓库的具体实现、已发现的不能照搬之处与分功能优先级，见 [多输入与运动功能接入方案](../architecture/control-inputs-and-motion.md)。
 - 进一步的功能边界、隐式依赖、相机注册纠正与独立优化验收，见 [组件边界与独立优化方案](../architecture/component-boundaries.md)。
 

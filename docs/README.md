@@ -18,7 +18,7 @@
 | [机械臂服务与监看](guides/monitoring.md) | 旧机械臂服务、三维监看、反馈与断流 |
 | [网页与相机控制](guides/viewer-camera-controls.md) | 18081 监看页的相机与视图 |
 | [训练数据导出](guides/openpi-dataset.md) | LeRobot 导出与 π0.5 训练 |
-| [仿真与手眼标定](guides/simulation-calibration.md) | 独立仿真、D435i 眼在手上标定 |
+| [手眼标定](guides/calibration.md) | 腕部与固定相机手眼标定（经内核） |
 | [组件与环境](guides/consolidated-components.md) | 合并进来的算法、设备、标定、GR00T 组件及其环境 |
 | [Quest 发现广播](guides/quest-discovery.md) | 头显发现广播开关 |
 | [夹爪上电修正](guides/gripper-startup.md) | 夹爪跨圈读数修复与 SDK 编译 |

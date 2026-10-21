@@ -5,6 +5,7 @@
     "scripts/diagnostics/joint_tracking.py",
     "src/embodied/console/__main__.py",
     "src/embodied/console/core/settings.py",
+    "src/embodied/policy/groot/runtime.py",
     "src/legacy/arx5_control/controller.py",
     "src/legacy/arx5_control/gripper_calibration.py",
     "src/legacy/arx_tools/calibrate_gripper_guided.py",
@@ -14,9 +15,8 @@
     "src/legacy/arx_tools/gripper_force_test.py",
     "src/legacy/arx_tools/gripper_position_test.py",
     "src/legacy/arx_tools/show_state.py",
-    "src/embodied/tasks/cube/config.py",
-    "src/embodied/policy/groot/runtime.py",
-    "src/embodied/calibration/hand_eye/collector.py",
+    "src/legacy/cube/config.py",
+    "src/legacy/hand_eye/collector.py",
     "src/legacy/quest_teleop/experimental/arx2025.py",
     "src/legacy/quest_teleop/legacy/controller.py"
   ],
@@ -63,9 +63,7 @@
     "scripts/check_workbench.py",
     "scripts/launch.py",
     "scripts/workspace/tmux_workspace.py",
-    "src/legacy/arx_tools/d405_profile_benchmark.py",
     "src/embodied/policy/groot/cli.py",
-    "src/legacy/robot_control/backends/arx2025.py",
     "src/embodied/policy/pi05_zeroshot/compute_stats.py",
     "src/embodied/policy/pi05_zeroshot/infer.py",
     "src/embodied/policy/pi05_zeroshot/real.py",
@@ -74,6 +72,8 @@
     "src/embodied/policy/pi05_zeroshot/test_experiment.py",
     "src/embodied/policy/pi05_zeroshot/test_real.py",
     "src/embodied/policy/pi05_zeroshot/test_recover.py",
-    "src/embodied/policy/pi05_zeroshot/test_rollout.py"
+    "src/embodied/policy/pi05_zeroshot/test_rollout.py",
+    "src/legacy/arx_tools/d405_profile_benchmark.py",
+    "src/legacy/robot_control/backends/arx2025.py"
   ]
 }

@@ -41,7 +41,8 @@ uv sync --locked           # 平台环境（Python 3.12）
 | 查看、回放、标注数据 | `./run.sh data review` |
 | 导出 LeRobot 数据集 | `./run.sh data export --source <目录>` |
 | π0.5 / GR00T 推理 | `./run.sh policy pi05-sft`、`./run.sh policy groot` |
-| 手眼、夹爪、负载标定 | `./run.sh calib wrist`、`calib handeye`、`calib gripper`、`calib payload` |
+| 手眼标定（经内核，每个相机一个结果） | `./run.sh calib handeye capture <相机> --auto`，见 [手眼标定](docs/guides/calibration.md) |
+| 夹爪、负载标定（旧链路） | `./run.sh calib gripper`、`calib payload` |
 | 相机服务与检查 | `./run.sh camera service`、`camera check` |
 | 浏览器控制台（接入运行中的内核） | `./run.sh web console`；负载 / 夹爪标定与方块任务暂用 `web legacy` |
 | 宣传网站（本地预览） | `./run.sh web site`，或直接打开 `site/index.html` |

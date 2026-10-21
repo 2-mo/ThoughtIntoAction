@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from embodied.tasks.cube.config import load_config
-from embodied.tasks.cube.planner import (
+from legacy.cube.config import load_config
+from legacy.cube.planner import (
     maximum_plausible_contact_width_m,
 )
 

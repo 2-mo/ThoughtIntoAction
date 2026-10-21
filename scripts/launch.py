@@ -65,7 +65,7 @@ MODULE_COMMANDS = {
     "arx-preview": "embodied.monitor.arx_preview",
     "control-arm": "legacy.robot_control.cli",
     "arm-service": "legacy.robot_control.service",
-    "handeye": "embodied.calibration.wrist.cli",
+    "handeye": "embodied.calibration.cli",
     "session": "legacy.quest_teleop.runtime.cli",
     "record": "legacy.quest_teleop.runtime.cli",
     "dataset": "embodied.data.datasets",

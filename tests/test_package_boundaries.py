@@ -59,9 +59,10 @@ class PackageBoundaryTests(unittest.TestCase):
             from embodied.core.model import RobotModel
             from embodied.sensors.realsense import RealSenseCamera
             from legacy.robot_control.motion import move_and_settle
-            from embodied.calibration.wrist.arm import CalibrationArm
-            from embodied.calibration.wrist.session import Session
-            from embodied.calibration.wrist.cli import main as handeye
+            from embodied.calibration.arm import CalibrationArm
+            from embodied.calibration.session import Session
+            from embodied.calibration.plan import kernel_model, make_plan
+            from embodied.calibration.cli import main as handeye
             from legacy.robot_control.cli import main as simulation
             from unittest.mock import patch
 
@@ -72,12 +73,9 @@ class PackageBoundaryTests(unittest.TestCase):
             simulation(["--input", "quest", "--headless"])
 
             with tempfile.TemporaryDirectory() as directory:
-                plan = Path(directory) / "plan.json"
-                handeye(["plan", "--center", "0", "1.0", "1.0", "-0.9", "0", "0",
-                         "--output", str(plan)])
-                handeye(["auto", "--plan", str(plan)])
-                simulation(["--headless", "--replay", str(plan)])
-                assert json.loads(plan.read_text())["robot"] == RobotModel().metadata()
+                handeye(["marker", "--size-m", "0.1", "--output", str(Path(directory) / "marker.svg")])
+                plan = make_plan(kernel_model(), [0, 1.0, 1.0, -0.9, 0, 0])
+                assert plan["robot"] == kernel_model().metadata() and len(plan["waypoints"]) == 26
             ''',
         )
 

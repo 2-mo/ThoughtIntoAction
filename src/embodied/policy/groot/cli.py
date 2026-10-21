@@ -22,7 +22,7 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from embodied.core.arx5_paths import OUTPUTS_ROOT, PROJECT_ROOT as PATHS_PROJECT_ROOT  # noqa: E402
-from embodied.policy.groot.cameras import DualRgbCamera, default_camera_specs  # noqa: E402
+from embodied.policy.groot.cameras import CAMERA_IDS, DualRgbCamera, SharedRgbCameras, default_camera_specs  # noqa: E402
 from embodied.policy.groot.checkpoint import (  # noqa: E402
     ACTION_HORIZON,
     CheckpointError,
@@ -238,10 +238,7 @@ def run(argv: list[str] | None = None) -> int:
     active_specs = tuple(
         spec for spec in specs if f"{spec.name}_rgb" in checkpoint.video_keys
     )
-    camera_names = " / ".join(
-        f"{'D455' if spec.name == 'exterior' else 'D405'} {spec.serial}"
-        for spec in active_specs
-    )
+    camera_names = " / ".join(f"{CAMERA_IDS[spec.name]} {spec.serial}" for spec in active_specs)
     print(f"模型视觉输入：{', '.join(checkpoint.video_keys)}")
     print(f"模型状态/动作：{', '.join(checkpoint.state_keys)}")
     print(f"相机：{camera_names}")
@@ -280,7 +277,9 @@ def run(argv: list[str] | None = None) -> int:
             print("GPU smoke 通过；未打开相机或 CAN。")
             return 0
         print(f"正在启动 {camera_names}...")
-        with DualRgbCamera(active_specs) as cameras:
+        # On the kernel, frames come from the shared camera service; the legacy path opens the devices itself.
+        names = tuple(spec.name for spec in active_specs)
+        with (SharedRgbCameras(names) if options.run else DualRgbCamera(active_specs)) as cameras:
             print("相机数据通过。")
             if options.run:
                 return _run_on_kernel(options, checkpoint, cameras, server.port)

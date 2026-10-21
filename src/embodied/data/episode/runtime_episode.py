@@ -37,7 +37,7 @@ class RuntimeEpisodeWriter:
     A process crash leaves lifecycle=recording. Only explicit close boundaries
     commit complete; an observed stream or storage failure commits failed.
     """
-    def __init__(self, root, descriptor, task, camera=None, *, cameras=None, video=False):
+    def __init__(self, root, descriptor, task, camera=None, *, cameras=None, video=False, hand_eye=None):
         """`camera` is the wrist metadata; `cameras` maps camera IDs (wrist_rgb required) to metadata.
 
         video=True stores each camera as H.264 MP4 with per-frame indices; otherwise one PNG per frame.
@@ -77,6 +77,8 @@ class RuntimeEpisodeWriter:
             'raw_input_recorded': False, 'counts': dict(self.counts)}
         if len(self.cameras) > 1:
             self.manifest['cameras'] = self.cameras
+        if hand_eye is not None:  # camera id -> extrinsics at recording time, or None if uncalibrated
+            self.manifest['hand_eye'] = hand_eye
         self.offset = self.manifest['started_unix_ns'] - self.manifest['started_monotonic_ns']
         save_json(self.path / 'episode.json', self.manifest)
         self.stream = (self.path / 'episode.mcap').open('xb')

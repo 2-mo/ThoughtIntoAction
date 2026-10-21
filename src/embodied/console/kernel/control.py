@@ -61,17 +61,17 @@ from legacy.arx5_control.gripper_calibration import (
     save_gripper_open_readout,
 )
 from legacy.arx5_control.payload_profiles import PayloadProfileReader, validate_profile_name
-from embodied.calibration.hand_eye.collector import ManualEyeToHandCollector
-from embodied.calibration.hand_eye.__main__ import load_config as load_handeye_config
-from embodied.calibration.hand_eye.core.storage import CalibrationSession
-from embodied.calibration.hand_eye.core.validation import (
+from legacy.hand_eye.collector import ManualEyeToHandCollector
+from legacy.hand_eye.__main__ import load_config as load_handeye_config
+from legacy.hand_eye.core.storage import CalibrationSession
+from legacy.hand_eye.core.validation import (
     disable_result,
     enable_validated_result,
     read_json,
     validate_cached_result,
 )
-from embodied.tasks.cube.config import load_config
-from embodied.tasks.cube.planner import (
+from legacy.cube.config import load_config
+from legacy.cube.planner import (
     Action as CubeAction,
     CubePlanError,
     blended_linear_actions,
@@ -95,7 +95,7 @@ from embodied.data.groot.validator import (
     validate_raw_episode,
 )
 from embodied.console.features.collection.camera_client import CollectionCameraClient
-from embodied.console.features.cube.stack import (
+from legacy.cube.stack import (
     CUBE_STACK_PREVIEW_TIMEOUT_S,
     CubeStackPlan,
     execute_cube_stack,

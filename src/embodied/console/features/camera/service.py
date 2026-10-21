@@ -83,8 +83,12 @@ DEPTH_PRESET_VALUES = {
     "high-accuracy": 3.0,
     "high-density": 4.0,
 }
-DEFAULT_D455_SERIAL = "239222300444"
-DEFAULT_EYE_IN_HAND_SERIAL = "230322274781"
+
+
+def configured_serial(camera_id: str) -> str | None:
+    """Serial of [cameras.<camera_id>] in configs/local.toml."""
+    from embodied.core.project import load_config
+    return load_config().get("cameras", {}).get(camera_id, {}).get("serial") or None
 
 
 @dataclass(frozen=True)
@@ -1908,15 +1912,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--token", help="局域网配对令牌")
     parser.add_argument(
         "--serial",
-        default=os.environ.get("ARX5_REALSENSE_SERIAL", DEFAULT_D455_SERIAL),
-        help="指定 RealSense 序列号（也可设置 ARX5_REALSENSE_SERIAL）",
+        default=os.environ.get("ARX5_REALSENSE_SERIAL") or configured_serial("exterior_rgb"),
+        help="外部相机序列号（默认 cameras.exterior_rgb.serial；也可设置 ARX5_REALSENSE_SERIAL）",
     )
     parser.add_argument(
         "--eye-in-hand-serial",
-        default=os.environ.get(
-            "ARX5_EYE_IN_HAND_SERIAL", DEFAULT_EYE_IN_HAND_SERIAL
-        ),
-        help="指定眼在手 RealSense 序列号（也可设置 ARX5_EYE_IN_HAND_SERIAL）",
+        default=os.environ.get("ARX5_EYE_IN_HAND_SERIAL") or configured_serial("wrist_rgb"),
+        help="腕部相机序列号（默认 cameras.wrist_rgb.serial；也可设置 ARX5_EYE_IN_HAND_SERIAL）",
     )
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)

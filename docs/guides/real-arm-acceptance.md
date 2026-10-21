@@ -74,20 +74,18 @@
 ## 五、标定（可选）
 
 ```bash
-./run.sh calib wrist --runtime control/run/<RUN> plan --help
-./run.sh calib handeye capture --confirm-safe --auto --kernel      # D405 + D455，经内核
+./run.sh calib handeye capture wrist_rgb --auto       # 标定板固定在桌面
+./run.sh calib handeye capture exterior_rgb --auto    # 标定板夹在夹爪中
+./run.sh calib handeye status
 ```
 
-网页控制台（`./run.sh web console`）的“手眼标定”同样经内核运行。
-
-先做离线 `plan`，确认工作空间检查通过后再按标定说明执行。双相机手眼经内核时：
+步骤见 [手眼标定](calibration.md)。
 
 | 检查 | 通过条件 |
 | --- | --- |
-| 示教 | D405 阶段手臂可手推，夹爪保持张开宽度 |
-| 夹板 | 夹住标定板后目标宽度比接触宽度小 1.5 mm（`CLAMP_SQUEEZE_M`），板不滑动、电机不过热 |
-| 自动采样 | 每个采样位到位后保持，采样稳定性门通过；急停取消运动并保持 |
-| 结果 | 与旧链路同一块板的 `T_eef_camera` / `T_base_camera` 相差 ≤ 2 mm / 0.5° |
+| 示教 | 手臂可手推，夹爪保持当前宽度（夹住的标定板不掉） |
+| 自动采样 | 每个采样位到位后保持，静止采样通过；被内核拒绝的目标跳过；Ctrl+C / 急停后原地保持 |
+| 结果 | 两个相机均为 `validated`；网页控制台三维场景中相机位置与实物一致 |
 
 ## 结论
 

@@ -12,6 +12,14 @@ from embodied.data.episode.runtime_episode import RuntimeEpisodeWriter
 from embodied.contracts.runtime import RuntimeReader
 
 
+def hand_eye(camera_id, metadata):
+    """Extrinsics of a real camera at recording time (embodied.calibration); synthetic cameras have none."""
+    if not metadata.get('serial'):
+        return None
+    from embodied import calibration
+    return calibration.extrinsics(camera_id, metadata['serial'])
+
+
 def capture(reader, root, task, duration, camera=None, *, cameras=None, video=False):
     """`cameras` maps camera IDs (wrist_rgb first) to camera objects; `camera` alone is the wrist camera."""
     if not math.isfinite(duration) or duration < 0:
@@ -20,7 +28,8 @@ def capture(reader, root, task, duration, camera=None, *, cameras=None, video=Fa
         raise ValueError('Collection requires the full runtime stream')
     cameras = cameras or ({'wrist_rgb': camera} if camera else {})
     writer = RuntimeEpisodeWriter(root, reader.descriptor, task,
-                                  cameras={key: source.metadata for key, source in cameras.items()}, video=video)
+                                  cameras={key: source.metadata for key, source in cameras.items()}, video=video,
+                                  hand_eye={key: hand_eye(key, source.metadata) for key, source in cameras.items()})
     print(f'Recording: {writer.path}', flush=True)
     stop = threading.Event()
     frames, failures = queue.Queue(maxsize=64 * max(1, len(cameras))), queue.Queue(maxsize=len(cameras) or 1)
@@ -113,6 +122,8 @@ def main(argv=None):
                     options = config['cameras'][key]
                     driver = options.get('driver', config['cameras']['wrist_rgb']['driver'])
                     selected = {k: options[k] for k in ('serial', 'width', 'height', 'fps')}
+                    if 'shared-service' in registry.spec('camera', driver).capabilities:
+                        selected['camera_id'] = key  # Otherwise the service answers for its default camera.
                     cameras[key] = stack.enter_context(registry.create('camera', driver, **selected))
             elif args.camera != 'none':
                 from embodied.contracts.registry import Registry

@@ -12,9 +12,7 @@ import pyrealsense2 as rs
 
 from embodied.data.groot.config import load_collection_config
 
-
-DEFAULT_D455_SERIAL = "239222300444"
-DEFAULT_D405_SERIAL = "230322274781"
+CAMERA_IDS = {"exterior": "exterior_rgb", "wrist": "wrist_rgb"}  # GR00T view -> configured camera id
 MAXIMUM_SKEW_NS = 50_000_000
 MAXIMUM_AGE_NS = 200_000_000
 AUTO_WARMUP_FRAMES = 30
@@ -129,13 +127,16 @@ class DualFrameBuffer:
 
 
 def default_camera_specs() -> tuple[CameraSpec, CameraSpec]:
+    """Exposure from the GR00T collection config; serials from [cameras.<id>] in configs/local.toml."""
+    from embodied.core.project import load_config
+    serials = {view: load_config()["cameras"][camera_id]["serial"] for view, camera_id in CAMERA_IDS.items()}
     config = load_collection_config()
     exterior = config.camera
     wrist = config.wrist_camera
     return (
         CameraSpec(
             "exterior",
-            DEFAULT_D455_SERIAL,
+            serials["exterior"],
             exterior.width,
             exterior.height,
             exterior.fps,
@@ -145,7 +146,7 @@ def default_camera_specs() -> tuple[CameraSpec, CameraSpec]:
         ),
         CameraSpec(
             "wrist",
-            DEFAULT_D405_SERIAL,
+            serials["wrist"],
             wrist.width,
             wrist.height,
             wrist.fps,
@@ -154,6 +155,60 @@ def default_camera_specs() -> tuple[CameraSpec, CameraSpec]:
             wrist.white_balance_k,
         ),
     )
+
+
+class SharedRgbCameras:
+    """The GR00T views from the shared camera service by configured camera id; it owns the devices."""
+
+    def __init__(self, names: tuple[str, ...] = ("exterior", "wrist")) -> None:
+        from contextlib import ExitStack
+        self._names, self._stack = names, ExitStack()
+        self.frames = DualFrameBuffer()
+        self._stop, self._threads, self._errors = threading.Event(), [], {}
+
+    def __enter__(self) -> "SharedRgbCameras":
+        from embodied.core.project import load_config
+        from embodied.sensors.client import SharedCamera
+        cameras = load_config()["cameras"]
+        try:
+            for name in self._names:
+                options = cameras[CAMERA_IDS[name]]
+                camera = self._stack.enter_context(SharedCamera(
+                    options["serial"], options["width"], options["height"], options["fps"], camera_id=CAMERA_IDS[name]))
+                thread = threading.Thread(target=self._capture, args=(name, camera), name=f"groot-{name}", daemon=True)
+                self._threads.append(thread)
+                thread.start()
+            if not self.frames.wait_ready(5.0) and not self._errors:
+                raise CameraError("共享相机服务没有产生 RGB 帧")
+            self.latest()
+            return self
+        except BaseException:
+            self.__exit__()
+            raise
+
+    def _capture(self, name: str, camera: Any) -> None:
+        try:
+            while not self._stop.is_set():
+                frame = camera.read()
+                self.frames.add(name, RgbFrame(frame["image"], frame["host_received_monotonic_ns"],
+                                               float(frame.get("device_timestamp_ms") or 0.0),
+                                               int(frame.get("frame_number") or 0)))
+        except Exception as error:
+            self._errors[name] = error
+
+    def latest(self) -> SynchronizedFrames:
+        if self._errors:
+            name, error = next(iter(self._errors.items()))
+            raise CameraError(f"{name} camera failed: {error}") from error
+        if self._names == ("wrist",):
+            return SynchronizedFrames(None, self.frames.latest_frame("wrist"))
+        return self.frames.latest_pair()
+
+    def __exit__(self, *exc) -> None:
+        self._stop.set()
+        for thread in self._threads:
+            thread.join(3.0)
+        self._stack.close()
 
 
 def _find_color_sensor(profile: Any) -> Any:

@@ -112,7 +112,7 @@ Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随�
 ```text
 src/embodied/core/          共享模型、坐标变换、相机、设备锁与存储
 src/legacy/robot_control/       机械臂服务/客户端、平滑轨迹、X5 后端与夹爪控制
-src/embodied/calibration/wrist/ 手眼标定采样、计划、求解与验证
+src/embodied/calibration/       手眼标定：标定板、采样计划、静止采样、求解与结果
 src/embodied/monitor/    独立运动学仿真、共享 Three.js 场景、FK/IK 与轨迹预览
 src/legacy/quest_teleop/        X5 遥操控制器、A/B 采集按键与 Home、采集会话与只读监看
 scripts/                 启动器、Quest 工具、CAN/依赖安装、设备检查
@@ -160,7 +160,7 @@ uv sync --locked
 
 更多入口见 [命令说明](../reference/commands.md)，后续采集和策略边界见 [重构记录](../history/refactor.md)。
 
-独立仿真、手动/自动手眼标定的命令与边界见 [仿真与标定](simulation-calibration.md)。桌面实现的检查结果见 [迁移审查](../history/migration-review.md)。
+手眼标定见 [手眼标定](calibration.md)。桌面实现的检查结果见 [迁移审查](../history/migration-review.md)。
 
 数据采集、虚拟演练、回放、校验与只读网页见 [采集操作说明](recording.md)。无需设备即可先运行 `./run.sh session demo`，再从另一终端运行 `./run.sh monitor --port 0`。
 

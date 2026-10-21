@@ -96,8 +96,7 @@ GROUPS = {
         "setup-sft-jax": ("安装微调推理环境（JAX）", ("bash", "src/embodied/policy/pi05_sft/setup_jax.sh", [])),
     }),
     "calib": ("标定", {
-        "wrist": ("腕部 D435i 手眼：marker | plan | manual | auto | solve；--runtime <RUN> 经内核", ("run", ["handeye"])),
-        "handeye": ("D455 / D405 双相机手眼：capture --confirm-safe [--auto] [--kernel [--run <RUN>]] | solve | validate | enable", ("component", "calibration.handeye")),
+        "handeye": ("手眼标定（经内核）：marker | capture <相机> [--auto] | solve <会话> | status", ("run", ["handeye"])),
         "gripper": ("夹爪零点", ("component", "calibration.gripper")),
         "payload": ("负载辨识", ("component", "calibration.payload")),
     }),
@@ -122,7 +121,7 @@ GROUPS = {
         "site": ("本地预览宣传网站（site/）", ("bash", "scripts/web/site.sh", [])),
     }),
     "task": ("任务程序", {
-        "cube": ("方块抓取 / 旋转 / 堆叠", ("component", "task.cube")),
+        "cube": ("方块抓取演示（旧链路，直连 CAN）", ("component", "task.cube")),
     }),
     "check": ("离线检查", {
         "all": ("全部检查组：--only <组>", ("run", ["check-all"])),

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Console backend in kernel mode on the MuJoCo kernel, through the public WebSocket protocol the page uses.
 
-Hand-eye calibration runs the browser flow with a stand-in collector (no cameras) that drives the real
-KernelArm on the console's lease; no calibration files are read or written.
+Hand-eye results are written to a temporary directory only.
 """
 import argparse
 import itertools
@@ -10,14 +9,16 @@ import json
 import math
 from pathlib import Path
 import socket
+import tempfile
 import threading
 import time
 
+import numpy as np
 import uvicorn
 from websockets.sync.client import connect
 
+from embodied import calibration
 from embodied.console.app import create_app
-from embodied.console.features.calibration import handeye
 from embodied.console.core.settings import BackendSettings
 from embodied.contracts.runtime.control import ControlClient
 from embodied.workstation.control import sim_kernel
@@ -41,11 +42,6 @@ class Page:
         self.socket.send(json.dumps({'type': 'command', 'request_id': request_id, 'feature': feature,
                                      'command': command, 'payload': payload or {}}))
         return request_id
-
-    def until(self, match):
-        while not match(event := self.receive()):
-            pass
-        return event
 
     def command(self, action, payload=None, *, ok=True):
         request_id = self.send(action, payload)
@@ -71,27 +67,6 @@ class Page:
             if event['type'] in ('teleoperation.state', 'servo.state') and event['data'].get('seq') == sequence:
                 assert event.get('ok') is True, event
                 return event['data']
-
-
-class StandInCollector:
-    """The collector's controller calls for one D405 phase: hold, wait for READY, teach, one move."""
-
-    def __init__(self, config, session, *, controller, commands, on_stage, on_event):
-        self.controller, self.commands, self.on_stage, self.on_event = controller, commands, on_stage, on_event
-
-    def run_automatic_phase(self, role):
-        arm = self.controller
-        arm.hold_current()
-        self.on_stage('ready')
-        assert self.commands.get(timeout=20) == 'READY'
-        arm.teach_with_gripper_hold()
-        time.sleep(.3)
-        arm.hold_current()
-        q = arm.get_state().joint_position.copy()
-        q[0] += .1
-        arm.movej(q, velocity_scale=.5, allow_large_motion=True)
-        self.on_event({'type': 'progress', 'progress': {'phase': role, 'valid': 1}})
-        return {'calibration_type': role, 'residual': {}, 'leave_one_out_stability': {}}
 
 
 def tcp(state):
@@ -179,29 +154,19 @@ def main():
             error = page.command('payload_calibration_start', ok=False)[0]['error']
             assert '尚未迁到' in error, error
 
-            # Hand-eye: refused without the safety confirmation, then one stand-in phase on the kernel.
-            handeye.ManualEyeToHandCollector, handeye.CalibrationSession = StandInCollector, lambda path: path
-            error = page.command('handeye_calibration_start', {'mode': 'eye_in_hand'}, ok=False)[0]['error']
-            assert '确认' in error, error
-            joint1 = page.command('state')[0]['state']['joint_position_deg'][0]
-            start = page.send('handeye_calibration_start', {'mode': 'eye_in_hand', 'safety_confirmed': True,
-                                                            'return_to_reference_after_complete': False})
-            page.until(lambda e: e['type'] == 'calibration.hand-eye' and e['data']['calibration']['stage'] == 'ready')
-            page.command('move_joint', {'joint': 1, 'delta_deg': 1}, ok=False)  # the calibration owns the arm
-            page.command('handeye_calibration_confirm', {'stage': 'ready'})
-            done = page.until(lambda e: e.get('request_id') == start and e['type'].startswith('command.'))
-            assert done['ok'] is True, done
-            time.sleep(.3)
-            state = page.command('state')[0]['state']
-            assert state['mode'] == 'active' and not state['busy'], state['mode']
-            assert abs(state['joint_position_deg'][0] - joint1 - math.degrees(.1)) < 1, state['joint_position_deg']
-            assert state['handeye_calibration']['stage'] == 'done', state['handeye_calibration']
-            page.command('move_joint', {'joint': 1, 'delta_deg': -2, 'speed_percent': 100})  # control is back
+            # Hand-eye runs in the CLI; a saved fixed-camera result places that camera in the scene.
+            assert 'calib handeye' in page.command('handeye_calibration_start', ok=False)[0]['error']
+            known = np.eye(4); known[:3, 3] = [.6, .1, .5]
+            with tempfile.TemporaryDirectory() as results:
+                calibration.RESULTS = Path(results)
+                calibration.save('exterior_rgb', {'status': 'validated', 'mount': 'fixed', 'T_base_camera': known.tolist()})
+                shown = page.command('state')[0]['state']['handeye_validation']
+            assert shown['enabled'] and shown['T_base_camera'] == known.tolist(), shown
             page.command('disconnect')
             assert ControlClient(directory).status()['owner'] is None, 'lease not released'
             page.socket.close()
-            print(f'PASS: console on kernel {directory.name}: joint, pose, park, gripper, teleoperation, drag and a '
-                  f'hand-eye phase through /api/v1/control; pose move {pose_move:.1f} mm, lease released.')
+            print(f'PASS: console on kernel {directory.name}: joint, pose, park, gripper, teleoperation, drag and '
+                  f'hand-eye results through /api/v1/control; pose move {pose_move:.1f} mm, lease released.')
         finally:
             server.should_exit = True
             thread.join(timeout=10)

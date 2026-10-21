@@ -38,7 +38,7 @@
 
 | ID | 冗余 | 保留 | 删除条件 | 关联 |
 | --- | --- | --- | --- | --- |
-| X-10 | `src/handeye_calibration/` 与 `src/hand_eye_calibration/` | `hand_eye_calibration`（求解库），合入 `arx_arm.py` 和 `relative_svd` | 两个入口都改用合并后的包 | C-06 |
+| X-10 | ~~`src/handeye_calibration/` 与 `src/hand_eye_calibration/`~~ 已完成（2026-10-22） | `embodied.calibration`（一个求解器，腕部 / 固定两种安装） | 旧 D405/D455 采集器在 `src/legacy/hand_eye/`，K-10 删除 | C-06 |
 | ~~X-11~~ 已完成 | `src/robot_core/device_lease.py` 与 `control/adapters/device_lease.py`（同一锁键） | 共享包中的一份 | K-03 共享包建立 | K-03 |
 | X-12 | `src/robot_control/gripper_turns.h` 与 `control/vendor/arx5-sdk/gripper_turns.h`（当前内容相同） | `control/vendor/` | 旧链路退役，`scripts/setup/build_gripper_sdk.py:33` 改指向 | K-10 |
 | X-13 | `scripts/setup/can_up.sh`（57 行）与 `src/arx_tools/can_up.sh`（191 行，引用不存在的 `./arx5`） | 合并为一个 | 网页启动脚本不再调用旧版本 | B-02 |

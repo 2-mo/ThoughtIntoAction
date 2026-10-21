@@ -54,7 +54,7 @@
 - [ ] **C-05** 网页后端改为内核客户端 `P1`
   - 已做（2026-10-21）：`embodied.console.kernel.arx.ArxConsole`（`./run.sh web console`，`embodied.console --kernel [--run <RUN>]`）沿用页面协议，经一个 `ControlSession` 驱动内核：关节 / 末端 XYZ / 回参考位为内核预览后执行（gateway 预览新增 TCP 路径 `tcp`，供页面画轨迹），夹爪、阻尼（free-drive）、拖动伺服与手势遥操为短 TTL 目标流；页面只接入运行中的内核，断开只释放租约（U-02）。`scripts/check_console_kernel.py` 在 MuJoCo 上经 `/api/v1/control` 验证（已加入 `sim` 组），真实页面已在浏览器中连接确认。顺带修复：WebSocket 适配层此前丢弃 `teleoperation.state` / `servo.state` 的 `ok`。
   - 差异：内核夹爪为位置控制，“限扭夹取”按位置流到停滞为止，不限力矩；状态中无关节力矩与增益（显示为 —）；`preview_xyz` 一律走内核 MoveL（页面的“平滑曲线”同为直线）。真机验收时确认。
-  - 待做：负载 / 夹爪标定与方块任务仍在旧 `ControlKernel`（`./run.sh web legacy`，直连 CAN），随 C-06、C-09 迁移后删除 `kernel/control.py`；浏览器采集页由 `collect run` 替代。
+  - 待做：负载 / 夹爪标定与方块演示仍在旧 `ControlKernel`（`./run.sh web legacy`，直连 CAN），随 K-10 与 `kernel/control.py` 一起删除；浏览器采集页由 `collect run` 替代。
   - 现状：
     - `src/arx5_backend/kernel/control.py` 共 6002 行。`ControlKernel` 约 100 个方法、50 个 `action ==` 分支，直接持有 `ArmController`，同时导入机械臂、手眼、方块和 GR00T。
     - `src/arx_tools/web.sh:48` 传入 `--auto-connect-arm`，启动网页即占用 CAN。
@@ -64,15 +64,13 @@
     - 可先在仿真内核上完成。
   - 依赖：C-01。
 
-- [ ] **C-06** 合并两个手眼标定包 `P1`
-  - 已做（2026-10-21）：双相机采集器经内核运行——`embodied.calibration.hand_eye.kernel_arm.KernelArm` 实现采集器用到的 ArmController 子集（状态、限位、FK / IK、MoveJ / MoveL 预览与执行、示教、夹爪、急停），FK / IK 用内核自己的 URDF 与 `tcp_link`（即旧 `eef_link`，link6 + 0.145 m），存储的 `T_base_eef` 与求解结果坐标系不变。入口：`./run.sh calib handeye capture --confirm-safe [--auto] --kernel [--run <RUN>]`。内核 `free-drive` 新增可选 `gripper_width`（手臂自由、夹爪保持）。`scripts/check_handeye_kernel.py` 在 MuJoCo 上用采集器自己的运动函数验证（已加入 `sim` 组）。
-  - 差异（真机验收确认，见 real-arm-acceptance.md 第五节）：阻尼为内核 free-drive；急停为取消并保持；夹板力来自比接触宽度小 1.5 mm 的位置目标，而非力矩前馈。
-  - 网页手眼流程已做：`console/features/calibration/handeye.py`（`HandEyeFlow`，阶段、命令与提示沿用旧控制台）在内核控制台中以共享租约的 `KernelArm` 运行采集器；标定期间其他运动命令被拒绝，结束后交还控制。`check_console_kernel.py` 用替身采集器经页面协议验证。
-  - 待做：求解库合并（`relative_svd` 并入 `core/solver.py`）后删除 `calibration/wrist` 的重复部分（X-10）；`collector.py` 拆分。
-  - 现状：
-    - `src/hand_eye_calibration/`（8.4k 行）：D455 eye-to-hand 与 D405 eye-in-hand，带多样性、留一和 bootstrap 检查；直接打开机械臂（`collector.py:128`）和相机。
-    - `src/handeye_calibration/`（747 行）：腕部 D435i，已通过 `arx_arm.py` 的 `ControlSession` 接入内核，另有 `relative_svd` 求解（`solver.py:25-56`）。
-  - 做法：以 `hand_eye_calibration/core` 为求解库，`handeye_calibration/arx_arm.py` 作为机械臂端口，并入 `relative_svd`。合并后删除 `handeye_calibration`（X-10）。`collector.py`（5315 行）按采样计划、运动、采图拆分。
+- [x] **C-06** 手眼标定只保留一套 `P1`
+  - 已做（2026-10-22）：用户确认可以重新标定，重点是代码清晰好用。
+    - `embodied.calibration`（target / solver / session / plan / arm / cli，约 700 行）：同一个 A X C = Z 求解器处理腕部（`T_eef_camera`）与固定相机（`T_base_camera`）；机器人位姿取内核的 `tcp_link`；自动采样在示教的中心姿态周围生成 26 个关节目标，每步由内核预览，被拒绝或看不到标定板的姿态跳过；结果按相机 id 存于 `calibrations/hand_eye/<id>.json` 并绑定序列号。入口 `./run.sh calib handeye marker | capture <相机> [--auto] | solve | status`，说明见 `docs/guides/calibration.md`。
+    - 采集的 episode 记录每个相机的外参（`episode.json` 的 `hand_eye`），导出摘要随之带出；网页控制台用保存的结果在三维场景中显示相机。
+    - 旧 D405 / D455 浏览器采集器（5.3k 行）移到 `src/legacy/hand_eye/`，仍由 `web legacy` 使用，随 K-10 删除；为它写的内核适配（KernelArm、HandEyeFlow）不再需要，已删除。`calibration/wrist` 并入新包（X-10）。
+    - 验证：`tests/test_calibration.py`（两种安装方式、计划、静止采样、结果、CLI）；`check_workbench.py --calibration`（`sim` 组）在 MuJoCo 内核上完成 26/26 个预览后执行的采样位并通过留出验证。
+  - 待做：网页控制台的标定页随 U-01 在新包上重做（目前页面提示使用 CLI）。
 
 - [ ] **C-07** 运动规划库 `P2`
   - 现状：MoveJ / MoveL 已由 gateway 执行。在线 Ruckig 封装有 3 套：`arx5_control/motion/online.py`、`robot_control/online_motion.py`、`robot_teleop/controllers/ruckig_servo.py`。停止到停止的 profile 分散在 `robot_control/trajectory.py`（五次）和 `arx5_control/motion/profiles.py`（smoothstep9，另有 vendored 副本）。
@@ -81,9 +79,8 @@
 - [ ] **C-08** 策略执行 `P1`
   - 见 `06-policy.md` 的 P-06、P-08。
 
-- [ ] **C-09** 方块实验 `P2`
-  - 现状：`src/experiments/cube_pick_rotate_place/run.py:234` 直接使用 `ArmController`。
-  - 做法：改为内核客户端，或移到 `examples/`。
+- [x] **C-09** 方块实验 `P2`
+  - 决定（用户，2026-10-22）：只是演示功能，不迁到内核。`tasks/cube`、`console/features/cube/stack.py`、`data/groot/automated_stack_probe.py` 移到 `src/legacy/cube/`，只由旧控制台（`web legacy`）和 `./run.sh task cube` 使用，随 K-10 删除。
 
 - [ ] **C-10** 第二种机器人（reBot B601） `P3`
   - 现状：

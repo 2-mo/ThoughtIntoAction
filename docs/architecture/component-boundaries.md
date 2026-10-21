@@ -38,7 +38,7 @@
 | 采集 `src/embodied/data/capture/` | 机器人/相机流、按键事件；episode 和任务状态 | 录制起止、任务计数、缓冲、失败原因 | 合成流或回放流录制，不需要 Quest/CAN |
 | 数据文件 `src/embodied/data/episode/` | 版本化记录；MCAP、视频、元数据的读写 | 文件句柄、提交状态、完整性索引 | 小型历史/新版 fixture 读写和中断恢复 |
 | 数据处理 `src/embodied/data/export/` | 已封存的数据；校验、标注、打包、LeRobot 数据与统计 | 离线任务和转换规则 | 没有控制/相机环境的批处理 |
-| 手眼标定 `src/embodied/calibration/wrist/` | 计划、原始 RGB、模型反馈；采样会话与外参 | 标定流程、样本划分和结果 | 合成真值、历史样本离线求解；动作经 operations 接入 |
+| 手眼标定 `src/embodied/calibration/` | 计划、原始 RGB、模型反馈；采样会话与外参 | 标定流程、样本划分和结果 | 合成真值、历史样本离线求解；动作经 operations 接入 |
 | 策略 `src/policies/`，保留现有推理后端 | 带身份的观测、任务、模型配置；明确语义的动作块 | 模型、预处理/统计、推理请求 | 录制观测输入、无动作预测、仿真 rollout |
 | 监看与回放 `src/monitoring/` | 公共状态/历史记录；页面、趋势、Ghost | 显示与播放游标 | 无设备的历史回放；关闭页面不影响生产者 |
 | 装配与维护 `src/embodied/workstation/`、`scripts/` | 启动选项和配置；进程组、连接准备与状态 | 进程身份、依赖关系、启动结果 | 配置解析、只读诊断、缺少可选组件时的启动检查 |
