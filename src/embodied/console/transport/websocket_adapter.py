@@ -147,6 +147,6 @@ class ApiWebSocket:
         if "action" in raw:
             event["feature"] = feature
             event["command"] = command
-        if event_type == "command_result":
-            event["ok"] = bool(raw.get("ok"))
+        if "ok" in raw:  # command results and teleoperation / servo replies
+            event["ok"] = bool(raw["ok"])
         return event

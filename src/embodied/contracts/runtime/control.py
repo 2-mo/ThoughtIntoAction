@@ -1,10 +1,26 @@
 """Command client with explicit leases. Does not import a robot or VR SDK."""
 import json
+import os
 from pathlib import Path
 import threading
 import time
 
 from embodied.contracts.rpc import request
+
+
+def live_runs(root):
+    """Kernel run directories under `root` (control/run) of this boot whose supervisor is alive, oldest first."""
+    boot = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+    runs = []
+    for path in sorted(Path(root).glob('*/commands.sock')):
+        try:
+            identity = json.loads((path.parent / 'runtime.json').read_text())
+            os.kill(identity['supervisor_pid'], 0)
+        except (OSError, ValueError, KeyError):
+            continue
+        if identity.get('boot_id') == boot and (path.parent / 'runtime.ready').exists():
+            runs.append(path.parent)
+    return runs
 
 
 class ControlClient:

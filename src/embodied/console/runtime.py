@@ -2,22 +2,25 @@ from __future__ import annotations
 
 from typing import Any
 
-from embodied.console.kernel.control import (
-    ControlKernel,
-    TELEOPERATION_CONFIG_PATH,
-    load_teleoperation_config,
-)
-
 from embodied.console.core.settings import BackendSettings
 from embodied.console.protocol import CommandCatalog
 
 
 class ControlRuntime:
-    """Own the single hardware session used by all API feature modules."""
+    """Own the single control session used by all API feature modules: the arx kernel or the legacy arm."""
 
     def __init__(self, settings: BackendSettings, catalog: CommandCatalog) -> None:
         self.settings = settings
         self.catalog = catalog
+        if settings.kernel:
+            from embodied.console.kernel.arx import ArxConsole
+            self.session = ArxConsole(settings.run, settings.token)
+            return
+        from embodied.console.kernel.control import (  # Opens the arm directly (legacy).
+            ControlKernel,
+            TELEOPERATION_CONFIG_PATH,
+            load_teleoperation_config,
+        )
         self.session = ControlKernel(
             settings.interface,
             settings.token,

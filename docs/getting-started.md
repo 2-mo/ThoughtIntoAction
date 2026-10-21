@@ -44,6 +44,12 @@ uv sync --locked           # 平台环境：Python 3.12，安装到 .venv/
 ./run.sh kernel start --backend sim --input demo --headless --duration 12
 ```
 
+浏览器控制台（`apps/console`）接入运行中的内核，页面上点“连接”；关节、末端 XYZ、回参考位、夹爪和手势遥操都经内核执行，关闭页面只释放控制，内核保持当前位置：
+
+```bash
+./run.sh web console        # http://127.0.0.1:8000
+```
+
 ## 3. 第一次真机
 
 真机日常链路仍是旧机械臂服务（`src/legacy/`），内核真机入口待验收后切换。

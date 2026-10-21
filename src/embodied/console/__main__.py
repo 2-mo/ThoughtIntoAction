@@ -25,7 +25,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--frontend-directory", type=Path)
     parser.add_argument("--ca", type=Path, dest="ca_cert")
     parser.add_argument("--auto-connect-arm", action="store_true")
+    parser.add_argument("--kernel", action="store_true", help="drive the arm through a running arx kernel")
+    parser.add_argument("--run", type=Path, help="with --kernel: control/run/<RUN> (default: newest running kernel)")
     args = parser.parse_args()
+    if args.kernel and args.auto_connect_arm:
+        parser.error("--kernel and --auto-connect-arm are exclusive")
+    if args.run and not args.kernel:
+        parser.error("--run needs --kernel")
     if (args.cert is None) != (args.key is None):
         parser.error("--cert and --key must be provided together")
     return args
@@ -47,6 +53,8 @@ def main() -> int:
         frontend_directory=args.frontend_directory,
         ca_cert=args.ca_cert,
         auto_connect_arm=args.auto_connect_arm,
+        kernel=args.kernel,
+        run=args.run,
     )
     uvicorn.run(
         create_app(settings),

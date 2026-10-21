@@ -1,15 +1,41 @@
 """Run the vendored arx control application in its own Python environment."""
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
+import signal
 import sys
 import subprocess
+import time
 
 ROOT = Path(__file__).resolve().parents[3]
 CONTROL = ROOT / "control"
+
+
+@contextmanager
+def sim_kernel(log_path, timeout=20):
+    """A headless MuJoCo kernel without an input device, for checks; yields its run directory."""
+    with Path(log_path).open("w") as log:
+        runtime = subprocess.Popen([str(ROOT / "run.sh"), "control", "start", "--backend", "sim", "--input", "idle",
+                                    "--managed", "--headless"], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
+        try:
+            deadline, directory = time.monotonic() + timeout, None
+            while directory is None and time.monotonic() < deadline:
+                if runtime.poll() is not None:
+                    raise RuntimeError(Path(log_path).read_text())
+                for path in (CONTROL / "run").glob("*/runtime.json"):
+                    if json.loads(path.read_text())["supervisor_pid"] == runtime.pid and (path.parent / "backend.ready").exists():
+                        directory = path.parent
+                time.sleep(.05)
+            if directory is None:
+                raise RuntimeError("kernel did not start")
+            yield directory
+        finally:
+            runtime.send_signal(signal.SIGINT)
+            runtime.wait(timeout=30)
 
 
 def verify_sources(directory=CONTROL):

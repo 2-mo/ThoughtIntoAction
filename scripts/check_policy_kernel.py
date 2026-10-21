@@ -3,7 +3,6 @@
 import argparse
 import json
 from pathlib import Path
-import subprocess
 import time
 
 import numpy as np
@@ -11,8 +10,7 @@ import numpy as np
 from embodied.contracts.runtime.control import ControlSession
 from embodied.policy.kernel_runner import run
 from embodied.sensors.synthetic import SyntheticCamera
-
-ROOT = Path(__file__).resolve().parents[1]
+from embodied.workstation.control import sim_kernel
 
 
 class StandInPolicy:
@@ -37,36 +35,21 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     output = parser.parse_args().output.resolve()
     output.mkdir(parents=True, exist_ok=False)
-    with (output / 'runtime.log').open('w') as log:
-        runtime = subprocess.Popen([str(ROOT / 'run.sh'), 'control', 'start', '--backend', 'sim', '--input', 'idle',
-                                    '--managed', '--headless'], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
-        try:
-            deadline, directory = time.monotonic() + 20, None
-            while directory is None and time.monotonic() < deadline:
-                if runtime.poll() is not None:
-                    raise RuntimeError((output / 'runtime.log').read_text())
-                for path in (ROOT / 'control/run').glob('*/runtime.json'):
-                    if json.loads(path.read_text())['supervisor_pid'] == runtime.pid and (path.parent / 'backend.ready').exists():
-                        directory = path.parent
-                time.sleep(.05)
-            assert directory, 'kernel did not start'
-            with ControlSession(directory, source='policy', purpose='operation') as session:
-                start = np.asarray(session.status()['q'])
-                (output / 'policy').mkdir()
-                with SyntheticCamera(width=64, height=48) as camera:
-                    summary = run(session, StandInPolicy(), camera, output / 'policy', 'stand-in', seconds=3, chunk_steps=10)
-                time.sleep(.3)
-                end = np.asarray(session.status()['q'])
-            moved = float(end[0] - start[0])
-            assert summary['status'] == 'time_limit', summary
-            assert summary['cycles'] >= 2 and summary['commands'] >= 20, summary
-            assert moved > .02, f'joint 1 moved only {moved:.4f} rad'
-            assert np.max(np.abs(end[1:] - start[1:])) < .02, 'other joints drifted'
-            print(f'PASS: {summary["cycles"]} chunks, {summary["commands"]} actions through the gateway, '
-                  f'joint 1 moved {moved:.3f} rad, kernel holding afterwards. {directory}')
-        finally:
-            runtime.send_signal(2)
-            runtime.wait(timeout=30)
+    with sim_kernel(output / 'runtime.log') as directory:
+        with ControlSession(directory, source='policy', purpose='operation') as session:
+            start = np.asarray(session.status()['q'])
+            (output / 'policy').mkdir()
+            with SyntheticCamera(width=64, height=48) as camera:
+                summary = run(session, StandInPolicy(), camera, output / 'policy', 'stand-in', seconds=3, chunk_steps=10)
+            time.sleep(.3)
+            end = np.asarray(session.status()['q'])
+        moved = float(end[0] - start[0])
+        assert summary['status'] == 'time_limit', summary
+        assert summary['cycles'] >= 2 and summary['commands'] >= 20, summary
+        assert moved > .02, f'joint 1 moved only {moved:.4f} rad'
+        assert np.max(np.abs(end[1:] - start[1:])) < .02, 'other joints drifted'
+        print(f'PASS: {summary["cycles"]} chunks, {summary["commands"]} actions through the gateway, '
+              f'joint 1 moved {moved:.3f} rad, kernel holding afterwards. {directory}')
 
 
 if __name__ == '__main__':

@@ -10,6 +10,8 @@ import threading
 import time
 from collections import OrderedDict
 
+import numpy as np
+
 from embodied.contracts.rpc import receive, send
 from .commands import CommandEngine, MotionPlanner
 
@@ -93,8 +95,9 @@ class Gateway:
                             self.plans[plan['plan_id']] = plan
                             while len(self.plans) > 64:
                                 self.plans.popitem(last=False)
+                            tcp = self._tcp_path(plan['q'])
                         workspace = getattr(self.planner, 'workspace', None)
-                        result = {**plan, 'q': plan['q'].tolist(), 'collision_check': 'none',
+                        result = {**plan, 'q': plan['q'].tolist(), 'collision_check': 'none', 'tcp': tcp,
                                   'workspace': workspace.describe() if workspace else None}
                     else:
                         if action in ('cartesian', 'joint'):
@@ -139,6 +142,14 @@ class Gateway:
         return {'protocol': 1, 'runtime_id': self.engine.runtime_id, 'model_id': self.model_id,
                 'robot': {k: list(v) if isinstance(v, tuple) else v for k, v in robot.items()},
                 'workspace': workspace.describe() if workspace else None, 'actions': list(ACTIONS)}
+
+    def _tcp_path(self, qs, points=160):
+        """Base TCP poses [x, y, z, qx, qy, qz, qw] along a plan, at most `points` samples, ending at the goal."""
+        fk = getattr(getattr(self.planner, 'model', None), 'fk', None)
+        if fk is None:
+            return None
+        index = sorted({*np.linspace(0, len(qs) - 1, min(points, len(qs))).round().astype(int).tolist()})
+        return [np.asarray(fk(qs[i]), dtype=float).tolist() for i in index]
 
     def _check_workspace(self, action, request):
         # Streamed targets from any gateway source; the robot thread only arbitrates.

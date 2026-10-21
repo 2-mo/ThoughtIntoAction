@@ -24,7 +24,8 @@ GROUPS = {
     "browser": (".cache/viewer-validation/node_modules/playwright/index.mjs",
                 [["node", str(path)] for path in sorted((ROOT / "tests/browser").glob("*.mjs"))]),
     # Heavy MuJoCo groups last: the legacy services in the browser group are timing-sensitive under load.
-    # MuJoCo end to end: native routers + workbench buttons, component faults, capture, plugins + calibration.
+    # MuJoCo end to end: native routers + workbench buttons, component faults, capture, plugins + calibration,
+    # policy executors and the console backend on the kernel.
     "sim": ("control/.venv/bin/python", [
         [str(ROOT / "control/.venv/bin/python"), "-B", str(ROOT / "control/scripts/check_workbench_teleop.py")],
         [str(ROOT / "control/.venv/bin/python"), "-B", str(ROOT / "control/scripts/check_native_components.py"),
@@ -32,6 +33,8 @@ GROUPS = {
         [*PLATFORM, "scripts/check_control_runtime.py", "--output", str(EVIDENCE / "control-runtime")],
         [*PLATFORM, "scripts/check_workbench.py", "--calibration", "--output", str(EVIDENCE / "workbench")],
         [*PLATFORM, "scripts/check_policy_kernel.py", "--output", str(EVIDENCE / "policy-kernel")],
+        ["env", "PYTHONPATH=src", "OPENBLAS_NUM_THREADS=1", str(ROOT / "environments/arx_motion/.venv/bin/python"), "-B",
+         "scripts/check_console_kernel.py", "--output", str(EVIDENCE / "console-kernel")],
         ["env", "PYTHONPATH=src", "OPENBLAS_NUM_THREADS=1", str(ROOT / "environments/arx_motion/.venv/bin/python"), "-B",
          "scripts/check_groot_kernel.py", "--output", str(EVIDENCE / "groot-kernel")],
     ]),

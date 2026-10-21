@@ -110,8 +110,10 @@ GROUPS = {
     "web": ("网页", {
         "monitor": ("18081 监看页（含共享相机）", ("run", ["view-arm", "--camera"])),
         "control": ("监看页启停：start | stop | status | camera-on | camera-off", ("run", ["viewer-control"])),
-        "console": ("apps/console 控制台", ("component", "ui.console")),
+        "console": ("apps/console 控制台，接入运行中的内核：[--run <RUN>]", ("bash", "scripts/web/console.sh", [])),
+        "legacy": ("旧控制台（直连 CAN；标定与方块任务，内核化前使用）", ("component", "ui.console")),
         "backend": ("控制台后端", ("component", "ui.backend")),
+        "vision": ("控制台手势识别服务（8765）", ("component", "input.hand_service")),
         "build": ("构建控制台前端", ("component", "ui.build")),
         "preview": ("控制台前端预览", ("component", "ui.preview")),
         "lan": ("局域网 HTTPS 发布", ("component", "deployment.lan")),

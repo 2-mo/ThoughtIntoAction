@@ -21,6 +21,8 @@ class BackendSettings:
     frontend_directory: Path | None = None
     ca_cert: Path | None = None
     auto_connect_arm: bool = False
+    kernel: bool = False
+    run: Path | None = None
 
     @property
     def allowed_origins(self) -> tuple[str, ...]:

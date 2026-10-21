@@ -20,7 +20,7 @@ DESCRIPTIONS = {
     "telemetry": ("tcp", "旧机械臂服务状态发布（ZMQ）", "./run.sh arm service"),
     "console": ("tcp", "apps/console 网页与后端", "./run.sh web console"),
     "console_backend": ("tcp", "控制台后端单独运行", "./run.sh web backend"),
-    "vision": ("tcp", "手势识别 WebSocket", "./run.sh web console"),
+    "vision": ("tcp", "手势识别 WebSocket", "./run.sh web vision"),
     "camera_webrtc": ("tcp", "相机 WebRTC 信令", "./run.sh camera rgbd"),
     "collection_camera": ("tcp", "采集相机信令", "./run.sh collect groot"),
     "frontend_dev": ("tcp", "Vite 开发服务器", "./run.sh web preview"),
