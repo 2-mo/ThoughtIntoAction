@@ -62,7 +62,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="加载模型并执行一次合成观测推理，不打开相机或 CAN",
     )
-    return parser.parse_args(argv)
+    parser.add_argument("--run", type=Path, help="经 arx 内核执行（control/run/<RUN>）；不直接打开 CAN")
+    parser.add_argument("--task", help="与 --run 一起使用的任务描述")
+    parser.add_argument("--seconds", type=float, default=60.0, help="与 --run 一起使用的运行时长，秒")
+    options = parser.parse_args(argv)
+    if options.run and not (options.task or options.check or options.smoke):
+        parser.error("--run 需要 --task")
+    if not 0 < options.seconds <= 300:
+        parser.error("--seconds 范围 0..300")
+    return options
 
 
 def parse_live_key(value: str) -> str | None:
@@ -274,6 +282,8 @@ def run(argv: list[str] | None = None) -> int:
         print(f"正在启动 {camera_names}...")
         with DualRgbCamera(active_specs) as cameras:
             print("相机数据通过。")
+            if options.run:
+                return _run_on_kernel(options, checkpoint, cameras, server.port)
             runtime = FineTunedRuntime(
                 cameras,
                 policy_host="127.0.0.1",
@@ -285,6 +295,25 @@ def run(argv: list[str] | None = None) -> int:
                 return _interactive(runtime)
             finally:
                 runtime.close()
+
+
+def _run_on_kernel(options, checkpoint, cameras, port: int) -> int:
+    """One task through the arx kernel; S or Q in the terminal stops it and the kernel holds."""
+    from embodied.contracts.runtime.control import ControlSession
+    from embodied.policy.groot.kernel_runtime import run as run_on_kernel
+    from embodied.policy.groot.policy import PolicyWorker
+    worker = PolicyWorker("127.0.0.1", port, timeout_s=1.0)
+    try:
+        with ControlSession(options.run, source="policy", purpose="operation",
+                            metadata={"policy": "groot", "checkpoint": str(checkpoint.path)}) as session, LiveKeys() as keys:
+            print(f"经内核执行：{options.task}；S / Q 停止，机械臂保持。")
+            summary = run_on_kernel(session, worker, cameras, options.task, seconds=options.seconds,
+                                    poll_command=keys.poll, video_keys=checkpoint.video_keys,
+                                    state_keys=checkpoint.state_keys)
+    finally:
+        worker.close()
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0 if summary["status"] in ("time_limit", "stopped", "interrupted") else 1
 
 
 def main() -> int:

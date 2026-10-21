@@ -68,5 +68,6 @@
   - 做法：并入 policy 包，测试移到 `tests/`，shell 入口并入统一 CLI。
 
 - [ ] **P-08** GR00T 改为内核客户端 `P1`
+  - 已做（2026-10-21）：`embodied.policy.groot.kernel_runtime` 复用 `runtime.py` 的动作解码、单步跳变限制、工作空间投影与调度，状态取自内核，目标以 30 Hz `cartesian` 流发往 gateway；`policy groot --run <RUN> --task ...` 使用它。ArmController 的末端与内核 TCP 同为 link6 前 0.145 m。差异：内核夹爪为位置控制（开 0.080 m / 合 0 m），旧伺服为 0.15 Nm 限力闭合，真机验收时确认。`scripts/check_groot_kernel.py` 在 MuJoCo 中用替身策略验证（已加入 `sim` 组）。旧直连交互（含回零、训练起始位）待真机验收后删除；相机仍由 GR00T 自己打开（S-02）。
   - 做法：`gr_zeroshot` 改名（如 `policy_groot`），通过 P-06 的 sink 执行，不再直接使用 `ArmController`。
   - 依赖：P-03、P-06。

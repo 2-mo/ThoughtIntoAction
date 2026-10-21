@@ -87,7 +87,7 @@ GROUPS = {
         "kernel": ("π0.5 经 arx 内核执行：--run <RUN> --prompt <任务> [--policy sft|zeroshot]（动作由内核统一限位）", ("run", ["policy-kernel"])),
         "pi05-sft": ("π0.5 微调模型（PyTorch，旧机械臂服务）", ("bash", "src/embodied/policy/pi05_sft/run.sh", [])),
         "pi05-sft-jax": ("π0.5 微调模型（JAX）", ("bash", "src/embodied/policy/pi05_sft/run_jax.sh", [])),
-        "groot": ("GR00T 推理", ("component", "policy.groot")),
+        "groot": ("GR00T 推理：--run <RUN> --task <任务> 经 arx 内核；不带 --run 为旧直连交互", ("component", "policy.groot")),
         "pregrasp": ("前往预抓取位", ("bash", "src/embodied/policy/pi05_sft/pregrasp.sh", [])),
         "stop": ("停止并恢复", ("bash", "scripts/inference/stop_pi05.sh", [])),
         "setup-pi05": ("安装零样本推理环境", ("bash", "src/embodied/policy/pi05_zeroshot/setup.sh", [])),

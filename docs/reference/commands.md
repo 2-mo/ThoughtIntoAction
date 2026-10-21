@@ -123,7 +123,7 @@
 | `./run.sh policy kernel` | π0.5 经 arx 内核执行：--run <RUN> --prompt <任务> [--policy sft|zeroshot]（动作由内核统一限位） |
 | `./run.sh policy pi05-sft` | π0.5 微调模型（PyTorch，旧机械臂服务） |
 | `./run.sh policy pi05-sft-jax` | π0.5 微调模型（JAX） |
-| `./run.sh policy groot` | GR00T 推理 |
+| `./run.sh policy groot` | GR00T 推理：--run <RUN> --task <任务> 经 arx 内核；不带 --run 为旧直连交互 |
 | `./run.sh policy pregrasp` | 前往预抓取位 |
 | `./run.sh policy stop` | 停止并恢复 |
 | `./run.sh policy setup-pi05` | 安装零样本推理环境 |
