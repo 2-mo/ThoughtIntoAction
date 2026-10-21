@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import deque
 import json
 from pathlib import Path
-import sys
 import tempfile
 import threading
 import time
@@ -17,26 +16,23 @@ import zmq
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-ZERO_SHOT_ROOT = PROJECT_ROOT / "src" / "gr-zeroshot"
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
-sys.path.insert(0, str(ZERO_SHOT_ROOT))
 
-from embodied.policy.groot.checkpoint import (  # noqa: E402
+from embodied.policy.groot.checkpoint import (
     CheckpointError,
     select_checkpoint,
 )
-from embodied.policy.groot.cameras import (  # noqa: E402
+from embodied.policy.groot.cameras import (
     CameraError,
     DualFrameBuffer,
     RgbFrame,
     default_camera_specs,
 )
-from embodied.policy.groot.policy import (  # noqa: E402
+from embodied.policy.groot.policy import (
     NumericSerializer,
     PolicyClient,
     PolicyWorker,
 )
-from embodied.policy.groot.runtime import (  # noqa: E402
+from embodied.policy.groot.runtime import (
     ACTION_PERIOD_NS,
     ActionRejected,
     ScheduledActionTarget,
@@ -47,12 +43,12 @@ from embodied.policy.groot.runtime import (  # noqa: E402
     synthetic_observation,
     to_servo_target,
 )
-import embodied.policy.groot.runtime as runtime_module  # noqa: E402
-from embodied.policy.groot.cli import parse_args, parse_live_key  # noqa: E402
-from legacy.arx5_control import GripperState, WorkspaceBounds  # noqa: E402
-from legacy.arx5_control.cartesian import rpy_to_quaternion_xyzw  # noqa: E402
-from legacy.arx5_control.teleoperation import quaternion_multiply_xyzw  # noqa: E402
-from embodied.data.groot.geometry import pose_6d_to_eef_9d  # noqa: E402
+import embodied.policy.groot.runtime as runtime_module
+from embodied.policy.groot.cli import parse_args, parse_live_key
+from legacy.arx5_control import GripperState, WorkspaceBounds
+from legacy.arx5_control.cartesian import rpy_to_quaternion_xyzw
+from legacy.arx5_control.teleoperation import quaternion_multiply_xyzw
+from embodied.data.groot.geometry import pose_6d_to_eef_9d
 
 
 class FineTunedCheckpointTest(unittest.TestCase):
