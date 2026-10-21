@@ -140,7 +140,13 @@ class CommandEngine:
         if type(source_sequence) is not int or not -1 <= source_sequence < 2**63:
             raise ValueError('Invalid source sequence')
         if action == 'free-drive':
-            self.command = ControlCommand(Mode.FREE_DRIVE, gripper_mode=Mode.FREE_DRIVE)
+            # Optional gripper_width keeps the gripper position-controlled while the arm is free (teaching).
+            width = request.get('gripper_width')
+            if width is not None and (isinstance(width, bool) or not isinstance(width, (int, float))
+                                      or not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width):
+                raise ValueError('Invalid gripper width in metres')
+            self.command = (ControlCommand(Mode.FREE_DRIVE, gripper_mode=Mode.FREE_DRIVE) if width is None else
+                            ControlCommand(Mode.FREE_DRIVE, gripper_mode=Mode.COMMAND_FOLLOWING, gripper_target=float(width)))
         elif action in ('joint', 'cartesian', 'gripper'):
             q = None
             pose = None

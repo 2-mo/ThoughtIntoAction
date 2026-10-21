@@ -56,6 +56,17 @@ class CommandsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'source sequence'):
             self.request('joint', q=self.state.q.tolist(), source_sequence=2**64)
 
+    def test_free_drive_optionally_holds_the_gripper(self):
+        self.request('free-drive')
+        command = self.engine.next(self.state, self.now)
+        self.assertEqual((command.mode, command.gripper_mode), (Mode.FREE_DRIVE, Mode.FREE_DRIVE))
+        self.request('free-drive', gripper_width=.03)
+        command = self.engine.next(self.state, self.now)
+        self.assertEqual((command.mode, command.gripper_mode, command.gripper_target),
+                         (Mode.FREE_DRIVE, Mode.COMMAND_FOLLOWING, .03))
+        with self.assertRaisesRegex(ValueError, 'gripper width'):
+            self.request('free-drive', gripper_width=self.config.gripper_max_width + .01)
+
     def test_lease_expiry_cancel_and_stop_hold_without_home(self):
         self.request('joint', q=self.state.q.tolist())
         self.now += .51

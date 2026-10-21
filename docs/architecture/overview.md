@@ -31,7 +31,7 @@ L0 契约     src/embodied/contracts/：注册表、RPC、内核客户端、设�
 
 | 接口 | 用途 |
 | --- | --- |
-| `commands.sock` | 长度前缀 JSON。`describe`（只读：限位、频率、模型、工作空间）、`status`、`acquire` / `heartbeat` / `release`（租约，带 epoch 和 TTL）、`joint` / `cartesian` / `gripper` / `free-drive`（流式目标）、`preview` / `execute` / `cancel`（MoveJ / MoveL / Home）、`hold` / `stop` |
+| `commands.sock` | 长度前缀 JSON。`describe`（只读：限位、频率、模型、工作空间）、`status`、`acquire` / `heartbeat` / `release`（租约，带 epoch 和 TTL）、`joint` / `cartesian` / `gripper` / `free-drive`（流式目标；`free-drive` 可带 `gripper_width`，手臂自由、夹爪保持）、`preview` / `execute` / `cancel`（MoveJ / MoveL / Home；预览返回关节路径与 TCP 路径 `tcp`）、`hold` / `stop` |
 | `observer.sock` | RobotTickV2 流：反馈、命令、来源、owner epoch、操作 ID；`latest` 或 `full` 模式 |
 | `embodied.contracts.runtime` | `ControlClient`、`ControlSession`、`RuntimeReader`，平台侧唯一的内核客户端 |
 

@@ -135,8 +135,9 @@ class SimulationSession:
                     operation = session.execute(plan)['operation_id']
                     while not self.cancel.wait(.03):
                         status = session.status()
-                        item = next(item for item in status['operations'] if item['operation_id'] == operation)
-                        if item['status'] != 'running':
+                        # The execute ACK can precede the first snapshot that lists the operation.
+                        item = next((item for item in status['operations'] if item['operation_id'] == operation), None)
+                        if item is not None and item['status'] != 'running':
                             if item['status'] != 'completed':
                                 raise RuntimeError(item.get('reason') or item['status'])
                             break
