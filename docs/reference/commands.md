@@ -110,7 +110,7 @@
 
 | 命令 | 说明 |
 | --- | --- |
-| `./run.sh data review` | 查看、检查、回放与标注 episode |
+| `./run.sh data review` | inspect | validate | label | replay；旧格式与内核 episode 都支持（replay 仅旧格式） |
 | `./run.sh data runtime` | 内核 episode（schema 2）检查 |
 | `./run.sh data export` | 导出 LeRobot v2.1（首次自动安装导出环境） |
 | `./run.sh data export-setup` | 安装导出环境 |

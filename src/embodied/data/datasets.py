@@ -241,7 +241,49 @@ def replay(path, *, speed=1., headless=False, telemetry="local"):
             cv2.destroyAllWindows()
 
 
+def runtime_schema(path):
+    """True for kernel (schema 2) episodes; they are read with embodied.data.export.runtime_v2."""
+    manifest = json.loads((Path(path).expanduser().resolve() / "episode.json").read_text())
+    return isinstance(manifest, dict) and manifest.get("schema_version") == 2
+
+
+def validate_runtime(path):
+    """Schema 2: storage integrity, then the training view the exporter would produce."""
+    from embodied.data.export.runtime_v2 import load_episode as load_runtime
+    from embodied.data.export.exporters import Schema2
+    root = Path(path).expanduser().resolve()
+    report = {"episode": root.name, "schema_version": 2, "errors": []}
+    try:
+        meta, rows = load_runtime(root)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return {**report, "valid": False, "errors": [str(exc)]}
+    report.update(kind=meta["kind"], outcome=meta["outcome"], counts=meta["counts"],
+                  cameras=sorted(meta.get("cameras") or ({"wrist_rgb": 1} if meta.get("camera") else {})))
+    if meta["kind"] == "quest_runtime_episode":
+        try:
+            _, anchors, export, _ = Schema2().prepare(root)
+            report["training"] = {key: export[key] for key in ("samples", "exclusion_reasons", "gaps", "anomaly",
+                                                               "control_stack", "backend") if key in export}
+        except (OSError, ValueError, KeyError) as exc:
+            report["training"] = {"eligible": False, "reason": str(exc)}
+    return {**report, "valid": True}
+
+
 def label_episode(path, outcome, note=""):
+    if runtime_schema(path):
+        root = Path(path).expanduser().resolve()
+        meta = json.loads((root / "episode.json").read_text())
+        if meta.get("lifecycle") != "complete":
+            raise ValueError("Only complete runtime episodes can be labelled")
+        if outcome not in {"success", "failure", "unknown", "discarded"}:
+            raise ValueError("Invalid outcome")
+        if outcome == "success" and not validate_runtime(root)["valid"]:
+            raise ValueError("Episode failed validation")
+        meta.setdefault("outcome_history", []).append({"previous": meta["outcome"], "outcome": outcome,
+                                                       "note": note, "unix_ns": time.time_ns()})
+        meta["outcome"] = outcome
+        save_json(root / "episode.json", meta)
+        return {"episode": meta["id"], "outcome": outcome}
     root, meta, _, _ = load_episode(path)
     if meta["lifecycle"] == "recording":
         raise ValueError("Cannot label a recording/unfinalized episode")
@@ -279,11 +321,18 @@ def main(argv=None):
         print(json.dumps(label_episode(args.episode, args.outcome, args.note), ensure_ascii=False, indent=2))
         return 0
     if args.command == "validate":
-        result = validate_episode(args.episode)
+        result = validate_runtime(args.episode) if runtime_schema(args.episode) else validate_episode(args.episode)
         if args.output:
             save_json(args.output, result)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result["valid"] else 1
+    if args.command == "inspect" and runtime_schema(args.episode):
+        from embodied.data.export.runtime_v2 import load_episode as load_runtime
+        meta, rows = load_runtime(args.episode)
+        print(json.dumps({**meta, "stored": {key: len(value) for key, value in rows.items()}}, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "replay" and runtime_schema(args.episode):
+        raise ValueError("Replay publishes schema 1 episodes only; inspect runtime episodes with `data review inspect`")
     if args.command == "inspect":
         _, meta, states, frames = load_episode(args.episode)
         print(json.dumps({**meta, "stored_states": len(states), "stored_frames": len(frames)}, ensure_ascii=False, indent=2))

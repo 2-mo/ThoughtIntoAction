@@ -77,7 +77,7 @@ GROUPS = {
         "groot": ("GR00T 双相机采集", ("component", "collection.groot")),
     }),
     "data": ("数据查看、回放与导出", {
-        "review": ("查看、检查、回放与标注 episode", ("run", ["dataset"])),
+        "review": ("inspect | validate | label | replay；旧格式与内核 episode 都支持（replay 仅旧格式）", ("run", ["dataset"])),
         "runtime": ("内核 episode（schema 2）检查", ("run", ["runtime-data"])),
         "export": ("导出 LeRobot v2.1（首次自动安装导出环境）", ("bash", "scripts/datasets/convert.sh", [])),
         "export-setup": ("安装导出环境", ("bash", "scripts/datasets/setup_export.sh", [])),

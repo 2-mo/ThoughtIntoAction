@@ -70,7 +70,8 @@
   - 现状：`quest_teleop/runtime/session.py` 同时管理机器人快照、相机、任务、录制、回放和打包。
   - 做法：拆为采集、文件读写、只读回放，设备只通过客户端访问。
 
-- [ ] **D-11** schema 2 工具补齐 `P2`
+- [x] **D-11** schema 2 工具补齐 `P2`
+  - 已做（2026-10-21）：`data review inspect / validate / label` 按 `schema_version` 分派；schema 2 的 validate 报告存储完整性与导出视图（可用帧、缺口、控制栈），label 记录 outcome 历史。replay 仍只支持 schema 1。
   - 现状：回放、标注和质量检查只支持 schema 1（`quest_teleop/datasets.py:21`）。
   - 依赖：D-06。
 
