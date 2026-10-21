@@ -47,7 +47,8 @@
 
 ## 结构
 
-- [ ] **D-05** 导出回归样本 `P1`
+- [x] **D-05** 导出回归样本 `P1`
+  - 已做（2026-10-21）：`tests/test_export_golden.py` 用固定的 schema 1 与 schema 2 小样本导出，比对对齐帧（parquet 各列）与全频率机器人侧文件的摘要（`tests/golden/export_digests.json`，不含视频字节与墙钟元数据）；有意修改导出后用 `UPDATE_GOLDEN=1` 重新生成并审阅差异。与 LeRobot 导出测试一起组成 `check-all` 的 `export` 组（`outputs/envs/lerobot-export`）。
   - 做法：用现有各格式的小样本建立 golden 测试，确保后续重构导出结果不变。必须在 D-06 – D-08 之前完成。
 
 - [ ] **D-06** 单一 MCAP 写入与读取 `P2`

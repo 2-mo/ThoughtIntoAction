@@ -20,6 +20,9 @@ GROUPS = {
     "motion": ("environments/arx_motion/.venv/bin/python", [[RUN, "components", "run", "test.motion"]]),
     "phone": ("environments/arx_motion/.venv/bin/python", [[RUN, "components", "run", "test.phone"]]),
     "rebot": ("environments/rebot/.venv/bin/python", [[RUN, "components", "run", "test.rebot"]]),
+    # LeRobot export end to end, and the export regression digests (tests/golden/export_digests.json).
+    "export": ("outputs/envs/lerobot-export/bin/python", [["env", "PYTHONPATH=src:tests", str(ROOT / "outputs/envs/lerobot-export/bin/python"),
+                                                       "-B", "-m", "unittest", "test_export_package", "test_export_golden"]]),
     # Pages of src/embodied/monitor/web; Playwright from: npm install --prefix .cache/viewer-validation playwright
     "browser": (".cache/viewer-validation/node_modules/playwright/index.mjs",
                 [["node", str(path)] for path in sorted((ROOT / "tests/browser").glob("*.mjs"))]),
