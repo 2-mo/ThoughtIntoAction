@@ -54,8 +54,12 @@ def quaternion_matrix(xyzw):
 
 
 class KernelArm:
-    def __init__(self, directory: Path | None = None, source: str = 'handeye') -> None:
-        runs = [Path(directory)] if directory else live_runs(PROJECT_ROOT / 'control/run')
+    """Acquires its own lease on `directory` (default: newest running kernel), or uses a caller's `session`."""
+
+    def __init__(self, directory: Path | None = None, source: str = 'handeye', *,
+                 session: ControlSession | None = None) -> None:
+        self.shared = session
+        runs = [session.directory] if session else [Path(directory)] if directory else live_runs(PROJECT_ROOT / 'control/run')
         if not runs:
             raise RuntimeError('没有运行中的内核：先运行 ./run.sh kernel sim 或 ./run.sh kernel real。')
         self.directory, self.source = runs[-1], source
@@ -76,8 +80,9 @@ class KernelArm:
 
     def connect(self, stabilize: bool = False) -> None:
         if self.session is None:
-            session = ControlSession(self.directory, source=self.source, purpose='operation')
-            session.__enter__()
+            session = self.shared or ControlSession(self.directory, source=self.source, purpose='operation')
+            if self.shared is None:
+                session.__enter__()
             self.session, self.fault = session, None
             self.robot = session.describe()['robot']
             self.stop.clear()
@@ -98,7 +103,10 @@ class KernelArm:
             self.keepalive = None
         if self.session is not None:
             session, self.session = self.session, None
-            session.close()  # The kernel holds the measured pose.
+            if self.shared is None:
+                session.close()  # The kernel holds the measured pose.
+            elif self.fault is None:
+                session.command('hold')  # Hand the held arm back to the lease owner.
         self.stream = None
         self.mode = ControllerMode.CLOSED
 

@@ -156,7 +156,7 @@
 | `./run.sh web monitor` | 18081 监看页（含共享相机） |
 | `./run.sh web control` | 监看页启停：start | stop | status | camera-on | camera-off |
 | `./run.sh web console` | apps/console 控制台，接入运行中的内核：[--run <RUN>] |
-| `./run.sh web legacy` | 旧控制台（直连 CAN；标定与方块任务，内核化前使用） |
+| `./run.sh web legacy` | 旧控制台（直连 CAN；负载 / 夹爪标定与方块任务，内核化前使用） |
 | `./run.sh web backend` | 控制台后端 |
 | `./run.sh web vision` | 控制台手势识别服务（8765） |
 | `./run.sh web build` | 构建控制台前端 |

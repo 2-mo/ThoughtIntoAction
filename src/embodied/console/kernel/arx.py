@@ -4,8 +4,9 @@ Speaks the console's WebSocket protocol (hello, state, command lifecycle, teleop
 streams) and reaches the arm only through one ControlSession. Joint, pose and park moves are kernel
 previews that the kernel executes; the gripper, damping and live drags are short-TTL kernel
 targets. Joint limits, the table plane, step limits and hold when targets stop are the kernel's;
-the page attaches to a running kernel and never starts or stops it. Calibration, cube and browser
-collection are not on the kernel yet (C-06, C-09, `collect run`) and fail here with a message.
+the page attaches to a running kernel and never starts or stops it. Hand-eye calibration runs the
+collector on a KernelArm sharing this lease. Payload / gripper calibration, cube and browser
+collection are not on the kernel yet (`web legacy`, C-09, `collect run`) and fail here with a message.
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
 
+from embodied.console.features.calibration.handeye import HandEyeFlow, validation_state
 from embodied.contracts.runtime.control import ControlSession, live_runs
 from embodied.core.arx5_paths import CONFIG_ROOT, PROJECT_ROOT
 from legacy.arx5_control.teleoperation import load_teleoperation_config
@@ -33,9 +35,9 @@ MAX_JOINT_SPEED = .5  # rad/s at 100 %, the kernel planner's bound
 MAX_GRIPPER_MM = 88.
 GRIPPER_SPEED_MM_S = 40.  # gripper drag at 100 %
 TTL_MS = 200
-LEGACY_ONLY = {
-    'payload_calibration': '负载标定', 'gripper_calibration': '夹爪标定', 'handeye': '手眼标定', 'cube': '方块任务',
-}
+LEGACY_ONLY = {'payload_calibration': '负载标定', 'gripper_calibration': '夹爪标定', 'cube': '方块任务'}
+HANDEYE_FILE_ACTIONS = ('handeye_validate', 'handeye_enable', 'handeye_disable')
+DURING_HANDEYE = ('state', 'emergency', 'handeye_calibration_confirm', 'handeye_calibration_cancel')
 COLLECTION = {'stage': 'unavailable', 'active': False, 'message': '内核采集：./run.sh collect run --run <RUN>'}
 
 
@@ -117,6 +119,7 @@ class ArxConsole:
         self.reference = None
         self.preview: dict[str, Any] | None = None
         self.last_status = None
+        self.handeye = HandEyeFlow(self.state_payload)
         self.handlers = {
             'connect': self.connect, 'disconnect': self.disconnect, 'activate': self.activate,
             'damping': self.damping, 'clear_fault': self.clear_fault, 'set_reference': self.set_reference,
@@ -177,7 +180,7 @@ class ArxConsole:
         stream = self.stream
         teleoperation = stream is not None and stream['kind'] == 'teleoperation'
         payload: dict[str, Any] = {
-            'connected': self.session is not None, 'mode': self.mode, 'busy': self.busy,
+            'connected': self.session is not None, 'mode': self.mode, 'busy': self.busy or self.handeye.active,
             'servo_active': stream is not None and not stream.get('preview_only'), 'servo_stopping': False,
             'servo_kind': None if stream is None else
             'teleoperation_preview' if stream.get('preview_only') else stream['kind'],
@@ -191,8 +194,9 @@ class ArxConsole:
                 'servo_period_ms': 1000 / self.robot['control_hz'] if self.robot else None,
                 'gripper_contact_latched': False,
             },
-            'payload_calibration': None, 'gripper_calibration': None, 'handeye_calibration': None,
-            'handeye_validation': None, 'cube_manipulation': {'stage': 'idle'}, 'collection': COLLECTION,
+            'payload_calibration': None, 'gripper_calibration': None,
+            'handeye_calibration': self.handeye.calibration_state(), 'handeye_validation': validation_state(),
+            'cube_manipulation': {'stage': 'idle'}, 'collection': COLLECTION,
         }
         status = status if status is not None else self.last_status
         if self.session is None or status is None:
@@ -268,6 +272,23 @@ class ArxConsole:
             await self.emergency()
             await self.reply(websocket, request_id, action)
             return
+        if self.handeye.active and action not in DURING_HANDEYE:
+            await self.reply(websocket, request_id, action, error='手眼标定进行中，请先完成或取消。')
+            return
+        send = lambda event: self.send(websocket, event)
+        if action in HANDEYE_FILE_ACTIONS:
+            await self.handeye.file_action(send, request_id, action, params)
+            return
+        if action == 'handeye_calibration_start':
+            await self.start_handeye(websocket, request_id, params)
+            return
+        if action == 'handeye_calibration_confirm':
+            await self.handeye.confirm(send, request_id, params)
+            return
+        if action == 'handeye_calibration_cancel':
+            await self.handeye.cancel(return_home=True)
+            await self.reply(websocket, request_id, action)
+            return
         if action == 'preview_xyz_live':
             try:
                 result = await self.preview_xyz(params, live=True)
@@ -304,6 +325,35 @@ class ArxConsole:
             self.busy = False
             await self.reply(websocket, request_id, action, result=result)
 
+    # Hand-eye calibration: the collector drives the arm through a KernelArm on this lease.
+
+    async def start_handeye(self, websocket, request_id, params):
+        from embodied.calibration.hand_eye.kernel_arm import KernelArm
+        action = 'handeye_calibration_start'
+        if self.session is None or self.mode == 'fault':
+            await self.reply(websocket, request_id, action, error='请先连接机械臂；标定将复用当前内核控制。')
+            return
+        if self.stream is not None or (self.task is not None and not self.task.done()):
+            await self.reply(websocket, request_id, action, error='机械臂仍在运动或实时控制中，不能开始手眼标定。')
+            return
+        self.stop_free_drive()
+        arm = KernelArm(session=self.session)
+        await self.call(arm.connect, True)
+        self.mode = 'active'
+        error = await self.handeye.start(lambda event: self.send(websocket, event), request_id, params, arm,
+                                         self.reference[0] if self.reference else None)
+        if error is not None:
+            await self.call(arm.close)
+            await self.reply(websocket, request_id, action, error=error)
+            return
+
+        async def hand_back():
+            await asyncio.wait({self.handeye.task})
+            await self.call(arm.close)
+            if arm.fault is not None:
+                self.enter_fault(arm.fault)
+        asyncio.create_task(hand_back())
+
     # Session and modes
 
     async def connect(self, params, **_):
@@ -324,6 +374,9 @@ class ArxConsole:
         return None
 
     async def disconnect(self, params, **_):
+        if self.handeye.active:  # Stop the arm before the lease goes; the collector then unwinds.
+            await self.emergency()
+            await self.handeye.cancel()
         if self.task is not None and self.task is not asyncio.current_task():
             self.task.cancel()
         self.stop_free_drive()
@@ -335,6 +388,7 @@ class ArxConsole:
         return None
 
     async def emergency(self):
+        await self.call(self.handeye.emergency)
         if self.task is not None and not self.task.done():
             self.task.cancel()
         self.stop_free_drive()

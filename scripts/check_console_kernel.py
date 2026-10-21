@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Console backend in kernel mode on the MuJoCo kernel, through the public WebSocket protocol the page uses."""
+"""Console backend in kernel mode on the MuJoCo kernel, through the public WebSocket protocol the page uses.
+
+Hand-eye calibration runs the browser flow with a stand-in collector (no cameras) that drives the real
+KernelArm on the console's lease; no calibration files are read or written.
+"""
 import argparse
 import itertools
 import json
@@ -13,6 +17,7 @@ import uvicorn
 from websockets.sync.client import connect
 
 from embodied.console.app import create_app
+from embodied.console.features.calibration import handeye
 from embodied.console.core.settings import BackendSettings
 from embodied.contracts.runtime.control import ControlClient
 from embodied.workstation.control import sim_kernel
@@ -30,11 +35,20 @@ class Page:
     def receive(self):
         return json.loads(self.socket.recv(timeout=30))
 
-    def command(self, action, payload=None, *, ok=True):
+    def send(self, action, payload=None):
         feature, command = self.catalog.public_name(action)
         request_id = next(self.ids)
         self.socket.send(json.dumps({'type': 'command', 'request_id': request_id, 'feature': feature,
                                      'command': command, 'payload': payload or {}}))
+        return request_id
+
+    def until(self, match):
+        while not match(event := self.receive()):
+            pass
+        return event
+
+    def command(self, action, payload=None, *, ok=True):
+        request_id = self.send(action, payload)
         progress = 0
         while True:
             event = self.receive()
@@ -57,6 +71,27 @@ class Page:
             if event['type'] in ('teleoperation.state', 'servo.state') and event['data'].get('seq') == sequence:
                 assert event.get('ok') is True, event
                 return event['data']
+
+
+class StandInCollector:
+    """The collector's controller calls for one D405 phase: hold, wait for READY, teach, one move."""
+
+    def __init__(self, config, session, *, controller, commands, on_stage, on_event):
+        self.controller, self.commands, self.on_stage, self.on_event = controller, commands, on_stage, on_event
+
+    def run_automatic_phase(self, role):
+        arm = self.controller
+        arm.hold_current()
+        self.on_stage('ready')
+        assert self.commands.get(timeout=20) == 'READY'
+        arm.teach_with_gripper_hold()
+        time.sleep(.3)
+        arm.hold_current()
+        q = arm.get_state().joint_position.copy()
+        q[0] += .1
+        arm.movej(q, velocity_scale=.5, allow_large_motion=True)
+        self.on_event({'type': 'progress', 'progress': {'phase': role, 'valid': 1}})
+        return {'calibration_type': role, 'residual': {}, 'leave_one_out_stability': {}}
 
 
 def tcp(state):
@@ -103,6 +138,7 @@ def main():
             assert preview['ik_position_error_mm'] < 1, preview
             moved = page.command('move_xyz', {'x_mm': 0, 'y_mm': 30, 'z_mm': 0, 'speed_percent': 50,
                                               'path_mode': 'linear', 'mode_after_motion': 'active'})[0]
+            pose_move = math.dist(start, tcp(moved['state']))
             assert moved['result']['final_position_error_mm'] < 3, moved['result']
             page.command('move_xyz', {'x_mm': 0, 'y_mm': 30, 'z_mm': 0, 'speed_percent': 50}, ok=False)  # preview used
 
@@ -140,13 +176,32 @@ def main():
             state = page.command('park', {'speed_percent': 100})[0]['state']
             assert max(abs(a - b) for a, b in zip(state['joint_position_deg'], state['reference_joint_position_deg'])) < 1
 
-            error = page.command('handeye_validate', ok=False)[0]['error']
+            error = page.command('payload_calibration_start', ok=False)[0]['error']
             assert '尚未迁到' in error, error
+
+            # Hand-eye: refused without the safety confirmation, then one stand-in phase on the kernel.
+            handeye.ManualEyeToHandCollector, handeye.CalibrationSession = StandInCollector, lambda path: path
+            error = page.command('handeye_calibration_start', {'mode': 'eye_in_hand'}, ok=False)[0]['error']
+            assert '确认' in error, error
+            joint1 = page.command('state')[0]['state']['joint_position_deg'][0]
+            start = page.send('handeye_calibration_start', {'mode': 'eye_in_hand', 'safety_confirmed': True,
+                                                            'return_to_reference_after_complete': False})
+            page.until(lambda e: e['type'] == 'calibration.hand-eye' and e['data']['calibration']['stage'] == 'ready')
+            page.command('move_joint', {'joint': 1, 'delta_deg': 1}, ok=False)  # the calibration owns the arm
+            page.command('handeye_calibration_confirm', {'stage': 'ready'})
+            done = page.until(lambda e: e.get('request_id') == start and e['type'].startswith('command.'))
+            assert done['ok'] is True, done
+            time.sleep(.3)
+            state = page.command('state')[0]['state']
+            assert state['mode'] == 'active' and not state['busy'], state['mode']
+            assert abs(state['joint_position_deg'][0] - joint1 - math.degrees(.1)) < 1, state['joint_position_deg']
+            assert state['handeye_calibration']['stage'] == 'done', state['handeye_calibration']
+            page.command('move_joint', {'joint': 1, 'delta_deg': -2, 'speed_percent': 100})  # control is back
             page.command('disconnect')
             assert ControlClient(directory).status()['owner'] is None, 'lease not released'
             page.socket.close()
-            print(f'PASS: console on kernel {directory.name}: joint, pose, park, gripper, teleoperation and drag '
-                  f'through /api/v1/control; pose move {math.dist(start, tcp(moved["state"])):.1f} mm, lease released.')
+            print(f'PASS: console on kernel {directory.name}: joint, pose, park, gripper, teleoperation, drag and a '
+                  f'hand-eye phase through /api/v1/control; pose move {pose_move:.1f} mm, lease released.')
         finally:
             server.should_exit = True
             thread.join(timeout=10)

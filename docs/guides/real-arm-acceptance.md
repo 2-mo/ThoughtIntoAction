@@ -78,6 +78,8 @@
 ./run.sh calib handeye capture --confirm-safe --auto --kernel      # D405 + D455，经内核
 ```
 
+网页控制台（`./run.sh web console`）的“手眼标定”同样经内核运行。
+
 先做离线 `plan`，确认工作空间检查通过后再按标定说明执行。双相机手眼经内核时：
 
 | 检查 | 通过条件 |

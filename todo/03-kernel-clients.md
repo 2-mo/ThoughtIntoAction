@@ -54,7 +54,7 @@
 - [ ] **C-05** 网页后端改为内核客户端 `P1`
   - 已做（2026-10-21）：`embodied.console.kernel.arx.ArxConsole`（`./run.sh web console`，`embodied.console --kernel [--run <RUN>]`）沿用页面协议，经一个 `ControlSession` 驱动内核：关节 / 末端 XYZ / 回参考位为内核预览后执行（gateway 预览新增 TCP 路径 `tcp`，供页面画轨迹），夹爪、阻尼（free-drive）、拖动伺服与手势遥操为短 TTL 目标流；页面只接入运行中的内核，断开只释放租约（U-02）。`scripts/check_console_kernel.py` 在 MuJoCo 上经 `/api/v1/control` 验证（已加入 `sim` 组），真实页面已在浏览器中连接确认。顺带修复：WebSocket 适配层此前丢弃 `teleoperation.state` / `servo.state` 的 `ok`。
   - 差异：内核夹爪为位置控制，“限扭夹取”按位置流到停滞为止，不限力矩；状态中无关节力矩与增益（显示为 —）；`preview_xyz` 一律走内核 MoveL（页面的“平滑曲线”同为直线）。真机验收时确认。
-  - 待做：负载 / 夹爪 / 手眼标定与方块任务仍在旧 `ControlKernel`（`./run.sh web legacy`，直连 CAN），随 C-06、C-09 迁移后删除 `kernel/control.py`；浏览器采集页由 `collect run` 替代。
+  - 待做：负载 / 夹爪标定与方块任务仍在旧 `ControlKernel`（`./run.sh web legacy`，直连 CAN），随 C-06、C-09 迁移后删除 `kernel/control.py`；浏览器采集页由 `collect run` 替代。
   - 现状：
     - `src/arx5_backend/kernel/control.py` 共 6002 行。`ControlKernel` 约 100 个方法、50 个 `action ==` 分支，直接持有 `ArmController`，同时导入机械臂、手眼、方块和 GR00T。
     - `src/arx_tools/web.sh:48` 传入 `--auto-connect-arm`，启动网页即占用 CAN。
@@ -67,7 +67,8 @@
 - [ ] **C-06** 合并两个手眼标定包 `P1`
   - 已做（2026-10-21）：双相机采集器经内核运行——`embodied.calibration.hand_eye.kernel_arm.KernelArm` 实现采集器用到的 ArmController 子集（状态、限位、FK / IK、MoveJ / MoveL 预览与执行、示教、夹爪、急停），FK / IK 用内核自己的 URDF 与 `tcp_link`（即旧 `eef_link`，link6 + 0.145 m），存储的 `T_base_eef` 与求解结果坐标系不变。入口：`./run.sh calib handeye capture --confirm-safe [--auto] --kernel [--run <RUN>]`。内核 `free-drive` 新增可选 `gripper_width`（手臂自由、夹爪保持）。`scripts/check_handeye_kernel.py` 在 MuJoCo 上用采集器自己的运动函数验证（已加入 `sim` 组）。
   - 差异（真机验收确认，见 real-arm-acceptance.md 第五节）：阻尼为内核 free-drive；急停为取消并保持；夹板力来自比接触宽度小 1.5 mm 的位置目标，而非力矩前馈。
-  - 待做：网页手眼流程（旧 `ControlKernel` 的 handeye_*）改用 `KernelArm`；求解库合并（`relative_svd` 并入 `core/solver.py`）后删除 `calibration/wrist` 的重复部分（X-10）；`collector.py` 拆分。
+  - 网页手眼流程已做：`console/features/calibration/handeye.py`（`HandEyeFlow`，阶段、命令与提示沿用旧控制台）在内核控制台中以共享租约的 `KernelArm` 运行采集器；标定期间其他运动命令被拒绝，结束后交还控制。`check_console_kernel.py` 用替身采集器经页面协议验证。
+  - 待做：求解库合并（`relative_svd` 并入 `core/solver.py`）后删除 `calibration/wrist` 的重复部分（X-10）；`collector.py` 拆分。
   - 现状：
     - `src/hand_eye_calibration/`（8.4k 行）：D455 eye-to-hand 与 D405 eye-in-hand，带多样性、留一和 bootstrap 检查；直接打开机械臂（`collector.py:128`）和相机。
     - `src/handeye_calibration/`（747 行）：腕部 D435i，已通过 `arx_arm.py` 的 `ControlSession` 接入内核，另有 `relative_svd` 求解（`solver.py:25-56`）。
