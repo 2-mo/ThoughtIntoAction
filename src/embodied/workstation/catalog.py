@@ -84,7 +84,7 @@ GROUPS = {
     }),
     "policy": ("策略推理（真机）", {
         "pi05": ("π0.5 零样本", ("bash", "scripts/inference/start_pi05_zeroshot.sh", [])),
-        "kernel": ("π0.5 微调模型经 arx 内核执行：--run <RUN> --prompt <任务>（动作由内核统一限位）", ("run", ["policy-kernel"])),
+        "kernel": ("π0.5 经 arx 内核执行：--run <RUN> --prompt <任务> [--policy sft|zeroshot]（动作由内核统一限位）", ("run", ["policy-kernel"])),
         "pi05-sft": ("π0.5 微调模型（PyTorch，旧机械臂服务）", ("bash", "src/embodied/policy/pi05_sft/run.sh", [])),
         "pi05-sft-jax": ("π0.5 微调模型（JAX）", ("bash", "src/embodied/policy/pi05_sft/run_jax.sh", [])),
         "groot": ("GR00T 推理", ("component", "policy.groot")),

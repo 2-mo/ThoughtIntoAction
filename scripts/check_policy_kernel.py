@@ -27,7 +27,8 @@ class StandInPolicy:
         state = np.asarray(observation['state_physical'])
         actions = np.repeat(state[None], 15, axis=0)
         actions[:, 0] += .004 * np.arange(1, 16)
-        np.savez(cycle / 'prediction.npz', actions_x5=actions)
+        # Alternate the fine-tuned and zero-shot output keys.
+        np.savez(cycle / 'prediction.npz', **{'actions_x5' if self.calls % 2 else 'actions_x5_experimental': actions})
         return {'arm_service_id': observation['arm_service_id'], 'rgb_monotonic_ns': observation['rgb_monotonic_ns']}
 
 
