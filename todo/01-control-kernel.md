@@ -123,6 +123,7 @@
   - 现状：仿真时由 viewer 进程启动内核（`src/robot_simulation/arx_preview.py:125-128` 执行 `control start --managed`），并轮询 `runtime.json`、`workbench-request.json` 等文件。
   - 做法：由工作台或 CLI 启动内核；viewer 只订阅状态。
 
-- [ ] **K-12** `control/run/` 清理 `P3`
+- [x] **K-12** `control/run/` 清理 `P3`
+  - 已做（2026-10-21）：`./run.sh kernel clean [--keep 20] [--yes]` 删除最新 N 个以外的运行目录，运行中的内核（supervisor 存活）不受影响；无 `--yes` 时列出并要求输入 yes。
   - 现状：审查时 67 个运行目录、213 MB，没有清理机制。
   - 做法：保留最近 N 次，或按天数清理。

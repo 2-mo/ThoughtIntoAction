@@ -2,7 +2,7 @@
 
 中文 [一屏架构图](../architecture/index.html)：在浏览器打开即可总览控制源、arx 核心、机械臂、相机和数据流，支持点击部件、全屏与高清海报导出。插件与命令、目录和整理建议保留在 [详细导览](../architecture/explorer.html)；离线使用与更新方法见 [导览说明](../architecture/README.md)。
 
-`arx5_test`、`reBotArm_control_py`、`robot-teleop` 已集中迁入本仓库，三个原位置无需保留。算法、设备、标定、相机、数据与操作入口见 [合并后的组件说明](consolidated-components.md)；统一入口为 `./run.sh components list`。默认 Quest 遥操继续使用 arx 原生链路。完整原工作树保存在本仓库 `archives/migration/originals/`，仅作恢复归档。
+`arx5_test`、`reBotArm_control_py`、`robot-teleop` 已集中迁入本仓库，三个原位置无需保留。算法、设备、标定、相机、数据与操作入口见 [合并后的组件说明](consolidated-components.md)；统一入口为 `./run.sh components list`。真机日常仍走旧机械臂服务（`src/legacy/`），内核真机入口验收后切换（见 [真机验收](real-arm-acceptance.md)）。迁移前的原工作树曾归档在本机 `archives/migration/originals/`（未纳入 git）。
 
 Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随、Trigger 控制夹爪、任务开启后 A 预抓取并开始采集、B 保存／长按回 Home、右摇杆左开始／右暂停／上作废上一条／按下长按结束清零；Grip 可取消预设动作。
 
@@ -98,7 +98,7 @@ Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随�
 
 服务参数优先级：项目默认配置、本机覆盖、命令行。控制参数优先级：控制器默认值、profile、命令行；控制端显式传入的速度覆盖服务默认速度。启动器参数放在命令之前，具体命令参数放在命令之后。
 
-日常比例和速度可直接编辑 `启动遥操.sh` 顶部的 `SCALE_FACTOR=1.0` 和 `MAX_JOINT_SPEED_RAD_S=2.0`。它们覆盖 presets profile，脚本后附加的命令行参数优先级更高。控制端传入的速度优先，未传时才使用 `[arm_service]` 默认速度。修改脚本后重启遥操即可；首次使用这一优先级规则时需先重启服务加载新代码。
+日常比例和速度可直接编辑 `启动遥操.sh` 顶部的 `SCALE_FACTOR=1.0` 和 `MAX_JOINT_SPEED_RAD_S=0`（0 表示使用 SDK 各关节速度上限）。它们覆盖 presets profile，脚本后附加的命令行参数优先级更高。控制端传入的速度优先，未传时才使用 `[arm_service]` 默认速度。修改脚本后重启遥操即可；首次使用这一优先级规则时需先重启服务加载新代码。
 
 ```bash
 # 仅显示最终命令，不加载硬件 SDK、不执行。

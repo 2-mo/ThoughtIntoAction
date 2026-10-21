@@ -149,6 +149,32 @@ def command_for(args):
     return cmd
 
 
+def stale_runs(keep, root=None):
+    """Run directories beyond the newest `keep`, never one whose supervisor is still alive (todo K-12)."""
+    from embodied.contracts.runtime.control import live_runs
+    root = Path(root or CONTROL / "run")
+    runs = sorted(path.parent for path in root.glob("*/runtime.json"))
+    live = {path.resolve() for path in live_runs(root)}
+    return [path for path in runs[:max(0, len(runs) - keep)] if path.resolve() not in live]
+
+
+def clean(keep, yes):
+    import shutil
+    stale = stale_runs(keep)
+    size = sum(f.stat().st_size for path in stale for f in path.rglob("*") if f.is_file())
+    print(f"{len(stale)} 个旧运行目录（{size / 1e6:.0f} MB），保留最新 {keep} 个与运行中的内核。")
+    if not stale:
+        return 0
+    if not yes:
+        if not sys.stdin.isatty() or input("删除这些目录？输入 yes 确认：").strip() != "yes":
+            print("未删除。非交互使用时加 --yes。")
+            return 1
+    for path in stale:
+        shutil.rmtree(path)
+    print(f"已删除 {len(stale)} 个。")
+    return 0
+
+
 def runtime_directory(selected=None):
     if selected is not None:
         return Path(selected).resolve()
@@ -192,6 +218,9 @@ def main(argv=None):
     for child in (doctor, start):
         child.add_argument("--config", help="arx robot JSON; root launcher resolves paths from the repository")
         child.add_argument("--vr-config", help="arx VR JSON")
+    cleaner = sub.add_parser("clean", help="Delete old control/run directories; keeps the newest and running ones")
+    cleaner.add_argument("--keep", type=int, default=20, help="Newest run directories to keep (default 20)")
+    cleaner.add_argument("--yes", action="store_true", help="Do not ask for confirmation")
     observe = sub.add_parser("observe", help="Read telemetry without loading control or device libraries")
     observe.add_argument("--run", type=Path, help="Run directory; defaults to the newest active observer")
     observe.add_argument("--mode", choices=("latest", "full"), default="latest")
@@ -199,6 +228,10 @@ def main(argv=None):
     observe.add_argument("--output", type=Path, help="New JSONL file; existing files are never replaced")
     args = parser.parse_args(argv)
     try:
+        if args.command == "clean":
+            if args.keep < 0:
+                raise ValueError("--keep must be nonnegative")
+            return clean(args.keep, args.yes)
         if args.command == "observe":
             from embodied.contracts.runtime.client import RuntimeReader
             if args.count < 0:

@@ -1,6 +1,7 @@
 # 文档与仓库
 
-- [ ] **O-01** 修正 README 与代码不符之处 `P1`
+- [x] **O-01** 修正 README 与代码不符之处 `P1`
+  - 已做（2026-10-21）：README 重写后，三处事实在移出的 `docs/guides/operation.md`、`consolidated-components.md` 中修正（真机仍走旧链路、`MAX_JOINT_SPEED_RAD_S=0`、归档目录未纳入 git）。
   - 现状：
     - README 第 5 行称"默认 Quest 遥操继续使用 arx 原生链路"，`docs/consolidated-components.md:5` 说法相同。实际真机日常仍走旧链路，README 第 50 行"未更换真机控制核心"才是准确的。
     - README 第 101 行写 `MAX_JOINT_SPEED_RAD_S=2.0`，脚本中为 0。

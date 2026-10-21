@@ -45,6 +45,7 @@
 | `./run.sh kernel verify` | 核对上游文件与本地补丁台账 |
 | `./run.sh kernel check` | 上游离线检查；--simulation 加跑 MuJoCo 链路 |
 | `./run.sh kernel doctor` | 检查依赖与模型，不连接设备 |
+| `./run.sh kernel clean` | 清理旧运行目录 control/run：[--keep 20] [--yes]；运行中的内核不受影响 |
 | `./run.sh kernel setup` | 创建 Python 3.10 内核环境 |
 | `./run.sh kernel build-sdk` | 编译带夹爪修正的 SDK |
 | `./run.sh kernel profiles` | 工作台组合 profile：plugins | validate | start | status | stop |
