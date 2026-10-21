@@ -27,7 +27,7 @@
 ./run.sh components list
 ./run.sh components run calibration.handeye --help
 ./run.sh components run collection.groot --help
-./run.sh components run diagnostic.phase3_mock_validation
+./run.sh components run diagnostic.phone_reset_console --help
 ./run.sh components run test.rebot
 ./run.sh components run ui.build
 ```

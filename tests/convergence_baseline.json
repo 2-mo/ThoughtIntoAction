@@ -33,9 +33,7 @@
     "src/legacy/arx5_control/controller.py",
     "src/legacy/arx_tools/calibrate_gripper_guided.py",
     "src/legacy/quest_teleop/legacy/controller.py",
-    "src/legacy/robot_control/hardware.py",
-    "src/embodied/phone/tools/phase5_hold_current.py",
-    "src/embodied/phone/tools/phase5_safe_stop.py"
+    "src/legacy/robot_control/hardware.py"
   ],
   "sys_path": [
     "control/arx5_vr/app.py",

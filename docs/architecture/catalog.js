@@ -922,19 +922,14 @@ window.ARCHITECTURE_CATALOG = {
       "module": "embodied.phone.tools.control_observations"
     },
     {
-      "name": "diagnostic.phase3_mock_validation",
+      "name": "diagnostic.phone_reset_console",
       "environment": "analysis",
-      "module": "embodied.phone.tools.phase3_mock_validation"
+      "module": "embodied.phone.tools.phase3_mock_session"
     },
     {
       "name": "diagnostic.phase4_kinematics_check",
       "environment": "analysis",
       "module": "embodied.phone.tools.phase4_kinematics_check"
-    },
-    {
-      "name": "diagnostic.phase4_ghost_review",
-      "environment": "analysis",
-      "module": "embodied.phone.tools.phase4_ghost_review"
     },
     {
       "name": "diagnostic.arx5_sdk_inspect",
@@ -1231,6 +1226,7 @@ window.ARCHITECTURE_CATALOG = {
     "integrations/",
     "outputs/",
     "scripts/",
+    "site/",
     "src/",
     "tests/",
     "third_party/",

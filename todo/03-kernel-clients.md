@@ -23,8 +23,6 @@
     | `src/robot_control/hardware.py` | 旧真机服务 | K-10 |
     | `src/arx5_control/controller.py:703`（`ArmController`） | 网页内核、手眼 collector、方块实验、GR00T、`arx_tools` 6 个脚本、`isaac_groot_data_collection/automated_stack_probe.py` | C-05、C-06、C-09、P-08 |
     | `src/quest_teleop/legacy/controller.py:56` | `teleop` / `teleop-dry-run` 命令 | X-18 |
-    | `src/robot_teleop/tools/phase5_hold_current.py:291` | 手机阶段工具，不拿锁 | C-03 / X-16 |
-    | `src/robot_teleop/tools/phase5_safe_stop.py:288` | 手机阶段工具，不拿锁 | C-03 / X-16 |
     | `src/arx_tools/calibrate_gripper_guided.py` | 夹爪标定，锁路径错误 | C-03 |
     | `src/arx_tools/legacy/move_slightly.py:276` | 不拿锁 | X-06 |
     | `src/arx_tools/legacy/read_state.py:23` | 不拿锁 | X-06 |
