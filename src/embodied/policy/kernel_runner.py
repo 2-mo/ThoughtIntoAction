@@ -89,15 +89,6 @@ def run(session, worker, camera, output, prompt, *, seconds, chunk_steps, max_ag
     return summary
 
 
-def load_flat(path):
-    """Import a module from the flat policy directories without changing sys.path."""
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(path.stem, path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def interrupt(signum, frame):
     raise KeyboardInterrupt
 
@@ -116,9 +107,8 @@ def main(argv=None):
     parser.add_argument('--output', type=Path)
     args = parser.parse_args(argv)
     import os
-    policy_root = Path(__file__).resolve().parent
-    checkpoint_module = load_flat(policy_root / 'pi05_sft' / 'checkpoint.py')  # flat worker modules (todo P-07)
-    PolicyWorker = load_flat(policy_root / 'pi05_zeroshot' / 'worker_client.py').PolicyWorker
+    from embodied.policy.pi05_sft import checkpoint as checkpoint_module
+    from embodied.policy.pi05_zeroshot.worker_client import PolicyWorker
     ROOT = checkpoint_module.ROOT
     if not 0 < args.seconds <= 300:
         parser.error('seconds must be within 0..300')
@@ -127,7 +117,7 @@ def main(argv=None):
     if args.policy == 'zeroshot':
         stats = args.stats or ROOT / 'outputs/zero-shot-assets/x5_quantiles_h50.json'
         if not stats.is_file():
-            parser.error(f'{stats} missing; compute it with src/embodied/policy/pi05_zeroshot/compute_stats.py')
+            parser.error(f'{stats} missing; compute it with python -m embodied.policy.pi05_zeroshot.compute_stats')
         robot = json.loads(stats.read_text())['robot']
         # The statistics name the legacy hybrid URDF; the policy reads and writes joint angles and
         # gripper width only, so the joint convention is what must match the kernel.
@@ -154,7 +144,7 @@ def main(argv=None):
         (output / 'norm_stats.json').write_bytes(Path(spec['stats']).read_bytes())
         python = Path(os.environ.get('PI05_JAX_PYTHON' if args.backend == 'jax' else 'PI05_SFT_PYTHON',
                                      str(ROOT / 'outputs/envs' / ('pi05-jax' if args.backend == 'jax' else 'pi05-sft') / 'bin/python')))
-        worker = PolicyWorker(output / 'norm_stats.json', python=python, script=policy_root / 'pi05_sft' / 'worker.py',
+        worker = PolicyWorker(output / 'norm_stats.json', python=python, module='embodied.policy.pi05_sft.worker',
                               extra_args=('--checkpoint', str(Path(spec['checkpoint']).resolve()), '--backend', args.backend,
                                           '--jax-horizon', str(args.jax_horizon)),
                               startup_timeout=600 if args.backend == 'jax' else 180)

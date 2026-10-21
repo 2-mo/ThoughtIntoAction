@@ -22,13 +22,13 @@ def main():
     p.add_argument("--jax-horizon",type=int,default=15)
     args=p.parse_args()
     if args.backend == 'jax':
-        from backend_jax import load_backend
+        from embodied.policy.pi05_sft.backend_jax import load_backend
         policy,spec,stats=load_backend(args.checkpoint,horizon=args.jax_horizon)
         synchronize=lambda: None  # Policy.infer converts outputs to NumPy, synchronizing JAX.
         inference_context=nullcontext
     else:
         import torch
-        from backend import load_backend
+        from embodied.policy.pi05_sft.backend import load_backend
         policy,spec,stats=load_backend(args.checkpoint)
         torch.manual_seed(42)
         synchronize=torch.cuda.synchronize

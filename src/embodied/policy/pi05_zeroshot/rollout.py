@@ -10,15 +10,14 @@ import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(ROOT/'src'))
 import numpy as np
-from real import MOTION, move_pregrasp, checked_state, stop_and_hold
+from embodied.policy.pi05_zeroshot.real import MOTION, move_pregrasp, checked_state, stop_and_hold
 from embodied.core.project import load_config, resolve_path
 from embodied.core.model import RobotModel
 from embodied.sensors.client import SharedCamera
 from legacy.robot_control.client import ArmClient
-from worker_client import PolicyWorker
-from x5_mapping import X5Mapping
+from embodied.policy.pi05_zeroshot.worker_client import PolicyWorker
+from embodied.policy.pi05_zeroshot.x5_mapping import X5Mapping
 
 DEFAULT_PROMPT = 'Pick up the blue cube and place it in the white target area beyond the cube, farther away from the robot base.'
 
@@ -211,7 +210,7 @@ def main():
         or not 0 < args.speed <= .5 or not 0 < args.gripper_speed <= .05):
         p.error('参数越界：seconds 0..300, chunk-steps 1..15, speed 0..0.5, gripper-speed 0..0.05')
     if not args.stats.exists():
-        subprocess.run([sys.executable, str(ROOT/'src/embodied/policy/pi05_zeroshot/compute_stats.py'), '--output', str(args.stats)], check=True)
+        subprocess.run([sys.executable, '-m', 'embodied.policy.pi05_zeroshot.compute_stats', '--output', str(args.stats)], check=True)
     robot = RobotModel(resolve_path(load_config()['robot']['urdf']))
     mapping = X5Mapping(args.stats)
     if mapping.data['robot'] != robot.metadata():

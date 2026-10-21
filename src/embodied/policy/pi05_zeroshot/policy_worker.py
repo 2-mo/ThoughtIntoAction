@@ -10,9 +10,9 @@ import cv2
 import numpy as np
 import sentencepiece
 import torch
-from infer import load_policy
-from tokenizer import DEFAULT_PATH, verify, tokenize
-from x5_mapping import X5Mapping
+from embodied.policy.pi05_zeroshot.infer import load_policy
+from embodied.policy.pi05_zeroshot.tokenizer import DEFAULT_PATH, verify, tokenize
+from embodied.policy.pi05_zeroshot.x5_mapping import X5Mapping
 
 
 def emit(value):

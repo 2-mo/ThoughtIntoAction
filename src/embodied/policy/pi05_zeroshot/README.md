@@ -77,7 +77,7 @@ bash src/embodied/policy/pi05_zeroshot/run.sh --image /path/to/wrist.png \
 ## 检查
 
 ```bash
-outputs/envs/pi05-zero-shot/bin/python -m unittest discover -s src/embodied/policy/pi05_zeroshot -p 'test_infer.py' -v
+./run.sh test tests/policy          # 映射、统计、推理与旧链路入口（主环境）
 bash src/embodied/policy/pi05_zeroshot/run.sh --help
 ```
 
@@ -118,7 +118,7 @@ bash src/embodied/policy/pi05_zeroshot/real.sh --move-pregrasp --infer --prompt 
 真机入口的设备隔离测试：
 
 ```bash
-PYTHONPATH=src:tests .venv/bin/python -m unittest discover -s src/embodied/policy/pi05_zeroshot -p test_real.py -v
+./run.sh test tests/policy/test_zeroshot_real.py
 ```
 
 ## 使用 X5 分位数统计做一次小幅策略试探
@@ -128,7 +128,7 @@ PYTHONPATH=src:tests .venv/bin/python -m unittest discover -s src/embodied/polic
 先用遥操环境计算统计（无需解码视频、无需 LeRobot/PyTorch）：
 
 ```bash
-.venv/bin/python src/embodied/policy/pi05_zeroshot/compute_stats.py \
+PYTHONPATH=src .venv/bin/python -m embodied.policy.pi05_zeroshot.compute_stats \
   --output outputs/zero-shot-assets/x5_quantiles_h50.json
 ```
 

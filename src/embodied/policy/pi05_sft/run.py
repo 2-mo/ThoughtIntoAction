@@ -6,17 +6,16 @@ from pathlib import Path
 import signal
 import sys
 import time
-from checkpoint import ROOT,DEFAULT_CHECKPOINT,inspect_checkpoint,DEFAULT_JAX_CHECKPOINT,inspect_jax_checkpoint
-sys.path[:0]=[str(ROOT/'src'),str(ROOT/'src/embodied/policy/pi05_zeroshot')]
+from embodied.policy.pi05_sft.checkpoint import ROOT,DEFAULT_CHECKPOINT,inspect_checkpoint,DEFAULT_JAX_CHECKPOINT,inspect_jax_checkpoint
 import numpy as np
 from embodied.core.model import RobotModel
 from embodied.core.project import load_config,resolve_path
 from embodied.sensors.client import SharedCamera
 from embodied.core.collection_motion import collection_motion
 from legacy.robot_control.client import ArmClient
-from real import move_pregrasp,stop_and_hold
-from rollout import connect,control_loop,capture_owned,DEFAULT_PROMPT
-from worker_client import PolicyWorker
+from embodied.policy.pi05_zeroshot.real import move_pregrasp,stop_and_hold
+from embodied.policy.pi05_zeroshot.rollout import connect,control_loop,capture_owned,DEFAULT_PROMPT
+from embodied.policy.pi05_zeroshot.worker_client import PolicyWorker
 
 
 def main():
@@ -67,7 +66,7 @@ def main():
                 raise RuntimeError(f'机械臂服务尚不可用：mode={probe.info["mode"]}, owner={probe.info["owner"]}；'
                                    '请先处理原控制会话；未加载模型或开始运动')
         finally:probe.close()
-    worker=PolicyWorker(output/'norm_stats.json',python=python,script=ROOT/'src/embodied/policy/pi05_sft/worker.py',
+    worker=PolicyWorker(output/'norm_stats.json',python=python,module='embodied.policy.pi05_sft.worker',
                         extra_args=('--checkpoint',str(args.checkpoint.resolve()),'--backend',args.backend,
                                     '--jax-horizon',str(args.jax_horizon)),
                         startup_timeout=600 if args.backend == 'jax' else 180)

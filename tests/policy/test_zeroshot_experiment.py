@@ -7,13 +7,12 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import numpy as np
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / 'tests'))
 from arm_service_fixture import ServiceFixture
 from legacy.robot_control.client import ArmClient
 from embodied.core.model import RobotModel
 from embodied.core.presets import DEFAULT_GRASP_READY_JOINTS
-from real import MOTION, move_pregrasp
-from experiment import require_fresh, step_target, execute_step
+from embodied.policy.pi05_zeroshot.real import MOTION, move_pregrasp
+from embodied.policy.pi05_zeroshot.experiment import require_fresh, step_target, execute_step
 
 
 class ExperimentTests(unittest.TestCase):

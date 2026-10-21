@@ -3,11 +3,10 @@ import sys
 import unittest
 from unittest.mock import patch
 import numpy as np
-sys.path.insert(0,str(Path(__file__).resolve().parents[4]/'tests'))
 from arm_service_fixture import ServiceFixture
 from legacy.robot_control.client import ArmClient
-from recover import HOME_SPEED, HOME_MOTION, home, hold, move_pregrasp, damping
-import recover
+from embodied.policy.pi05_zeroshot.recover import HOME_SPEED, HOME_MOTION, home, hold, move_pregrasp, damping
+from embodied.policy.pi05_zeroshot import recover
 
 
 class RecoveryTests(unittest.TestCase):

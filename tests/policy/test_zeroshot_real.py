@@ -5,8 +5,7 @@ import unittest
 import time
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / 'tests'))
-from real import MOTION, move_pregrasp, stop_and_hold
+from embodied.policy.pi05_zeroshot.real import MOTION, move_pregrasp, stop_and_hold
 from legacy.robot_control.client import ArmClient
 from arm_service_fixture import ServiceFixture
 

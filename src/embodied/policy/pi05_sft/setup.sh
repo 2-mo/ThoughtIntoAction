@@ -22,5 +22,5 @@ assert transformers.__version__=='4.53.2'
 shutil.copytree(Path(sys.argv[1])/'src/openpi/models_pytorch/transformers_replace',
                 Path(transformers.__file__).parent,dirs_exist_ok=True)
 PY
-"$ENV_DIR/bin/python" "$ROOT/src/embodied/policy/pi05_zeroshot/tokenizer.py"
+env PYTHONPATH="$ROOT/src" "$ENV_DIR/bin/python" -m embodied.policy.pi05_zeroshot.tokenizer
 printf 'SFT 环境准备完成。运行 bash src/embodied/policy/pi05_sft/run.sh --preview 验证现场推理。\n'

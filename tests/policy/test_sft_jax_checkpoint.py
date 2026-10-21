@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from checkpoint import inspect_jax_checkpoint
+from embodied.policy.pi05_sft.checkpoint import inspect_jax_checkpoint
 
 
 class JaxCheckpointTests(unittest.TestCase):

@@ -1,7 +1,7 @@
 import io
 import pickle
 import unittest
-from checkpoint import DEFAULT_CHECKPOINT,inspect_checkpoint,MetadataReader
+from embodied.policy.pi05_sft.checkpoint import DEFAULT_CHECKPOINT,inspect_checkpoint,MetadataReader
 
 
 class CheckpointTests(unittest.TestCase):

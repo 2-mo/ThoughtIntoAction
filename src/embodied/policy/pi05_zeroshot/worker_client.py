@@ -11,16 +11,23 @@ import time
 ROOT = Path(__file__).resolve().parents[4]
 
 
+def source_environment():
+    """Environment for `python -m embodied...` in another interpreter: the project source on PYTHONPATH."""
+    paths = [str(ROOT / 'src'), *filter(None, os.environ.get('PYTHONPATH', '').split(os.pathsep))]
+    return {**os.environ, 'PYTHONPATH': os.pathsep.join(dict.fromkeys(paths))}
+
+
 class PolicyWorker:
-    def __init__(self, stats, *, python=None, script=None, extra_args=(), startup_timeout=180):
+    def __init__(self, stats, *, python=None, module='embodied.policy.pi05_zeroshot.policy_worker', extra_args=(),
+                 startup_timeout=180):
         self.stats = Path(stats).resolve()
         self.digest = hashlib.sha256(self.stats.read_bytes()).hexdigest()
         self.sequence = 0
         self.messages = queue.Queue()
         python = python or os.environ.get('PI05_PYTHON', str(ROOT / 'outputs/envs/pi05-zero-shot/bin/python'))
-        script = script or ROOT/'src/embodied/policy/pi05_zeroshot/policy_worker.py'
-        self.process = subprocess.Popen([str(python), str(script), '--stats', str(self.stats), *map(str,extra_args)],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        self.process = subprocess.Popen([str(python), '-m', module, '--stats', str(self.stats), *map(str,extra_args)],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
+            env=source_environment())
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
         try:

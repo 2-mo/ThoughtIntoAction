@@ -8,5 +8,5 @@ if [[ ! -d "$ROOT/outputs/inference/openpi-215abfb217dbac7d5f1273282331b9b1866c0
 fi
 if [[ ! -x "$ENV_DIR/bin/python" ]]; then uv venv --python 3.12 "$ENV_DIR"; fi
 uv pip install --python "$ENV_DIR/bin/python" -r "$ROOT/src/embodied/policy/pi05_sft/requirements-jax.txt" --extra-index-url https://download.pytorch.org/whl/cu128 --index-strategy unsafe-best-match
-"$ENV_DIR/bin/python" "$ROOT/src/embodied/policy/pi05_zeroshot/tokenizer.py"
+env PYTHONPATH="$ROOT/src" "$ENV_DIR/bin/python" -m embodied.policy.pi05_zeroshot.tokenizer
 JAX_PLATFORMS=cuda "$ENV_DIR/bin/python" -c 'import jax; print(jax.devices())'

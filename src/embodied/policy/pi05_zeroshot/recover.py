@@ -7,14 +7,13 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(ROOT/'src'))
 import numpy as np
 from embodied.core.model import RobotModel
 from embodied.core.presets import DEFAULT_HOME_JOINTS
 from embodied.core.collection_motion import collection_motion
 from embodied.core.project import load_config, resolve_path
 from legacy.robot_control.client import ArmClient
-from real import checked_state, stop_and_hold, move_pregrasp
+from embodied.policy.pi05_zeroshot.real import checked_state, stop_and_hold, move_pregrasp
 
 POLICY_SCRIPTS = {str(ROOT/'src/embodied/policy/pi05_zeroshot'/name) for name in ('real.py','rollout.py','policy_worker.py','infer.py')}
 POLICY_SCRIPTS |= {str(ROOT/'src/embodied/policy/pi05_sft'/name) for name in ('run.py','worker.py')}

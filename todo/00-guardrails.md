@@ -70,7 +70,7 @@
     - 三个端到端验收脚本此前没有入口运行，`check_control_runtime.py` 因日志文案改动已失效（已修正）；`check_workbench.py` 暴露真实缺陷：手机来源的元数据超过 gateway 8 KiB 上限，自 `22d0ae8` 起 `./run.sh phone --run` 无法获取内核控制权（已修复）。连同 `check_workbench_teleop.py`、`check_native_components.py --quick` 组成 `sim` 组；`check_groot_export.py` 为 `groot` 组。
     - LeRobot 导出测试此前在 platform 组中因缺少 lerobot 全部跳过，现由 `export` 组在 `outputs/envs/lerobot-export` 中运行（含 D-05 回归摘要）。
     - 删除：`prepare_episode` 及其测试（X-24）；迁移期的冻结校验 `components verify`、`scripts/migration/{consolidate,check_isolation}.py`（迁移已完成，原项目不再同步；清单保留为历史记录）。
-  - 待做：`src/zero-shot/test_*.py`、`src/infer_after_sft/test_*.py` 需要推理环境，随 P-07 移入 `tests/` 并加入对应组；手机 phase 工具已随 X-16 处理；旧真机链路的测试随 K-10 一起删除。
+  - 策略测试已随 P-07 移入 `tests/policy/`（platform 组与新的 `policy` 组）；手机 phase 工具已随 X-16 处理；旧真机链路的测试随 K-10 一起删除。
 
 - [ ] **G-06** CI 或本地 pre-commit `P2`
   - 现状：没有 `.github`、pre-commit、ruff、mypy 或 pyright 配置（只有 `environments/phone/pyproject.toml` 有）。

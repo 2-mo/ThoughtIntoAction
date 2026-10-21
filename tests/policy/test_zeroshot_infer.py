@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 import numpy as np
 
-from infer import episode_observations, prepare_state
-from tokenizer import tokenize
+from embodied.policy.pi05_zeroshot.infer import episode_observations, prepare_state
+from embodied.policy.pi05_zeroshot.tokenizer import tokenize
 
 
 class InputsTest(unittest.TestCase):

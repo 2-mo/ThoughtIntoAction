@@ -64,7 +64,8 @@
     - JAX 的 horizon 与模型配置从 checkpoint 读取，不在代码中假设（`infer_after_sft/checkpoint.py:76-81`）。
   - 依赖：C-01。先在 MuJoCo 内核上执行验证，真机执行放到阶段 3。
 
-- [ ] **P-07** 整理目录 `P2`
+- [x] **P-07** 整理目录 `P2`
+  - 已做（2026-10-22）：`pi05_zeroshot`、`pi05_sft` 成为正常包（同目录导入改为 `embodied.policy.*`，删除 9 处 `sys.path` 插入）；所有入口与子进程（策略 worker、统计、tokenizer、shell 启动器）改为 `python -m` 加 `PYTHONPATH=src`；`kernel_runner` 不再按文件路径加载模块。`src/` 中的 9 个测试移到 `tests/policy/`：平台环境跑 8 个，需要 OpenPI 的 `test_sft_transforms` 在新的 `policy` 组（`outputs/envs/pi05-sft`）中运行。
   - 现状：`src/zero-shot`（连字符目录，不能作为包导入）和 `src/infer_after_sft`（含中文 `.sh`）的 `test_*.py` 放在 `src/` 中。
   - 做法：并入 policy 包，测试移到 `tests/`，shell 入口并入统一 CLI。
 

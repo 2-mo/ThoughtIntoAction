@@ -6,4 +6,4 @@ if [[ ! -x "$PYTHON" ]]; then
     echo '请先运行 bash src/embodied/policy/pi05_zeroshot/setup.sh' >&2
     exit 1
 fi
-exec "$PYTHON" "$ROOT/src/embodied/policy/pi05_zeroshot/infer.py" "$@"
+exec env PYTHONPATH="$ROOT/src" "$PYTHON" -m embodied.policy.pi05_zeroshot.infer "$@"

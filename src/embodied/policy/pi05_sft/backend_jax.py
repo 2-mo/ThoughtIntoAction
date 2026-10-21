@@ -4,7 +4,7 @@ os.environ.setdefault('JAX_PLATFORMS', 'cuda')
 os.environ.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE', 'false')
 import sys
 from pathlib import Path
-from checkpoint import ROOT, OPENPI, inspect_jax_checkpoint
+from embodied.policy.pi05_sft.checkpoint import ROOT, OPENPI, inspect_jax_checkpoint
 sys.path[:0] = [str(OPENPI/'src'), str(OPENPI/'packages/openpi-client/src'), str(ROOT/'integrations/openpi')]
 
 

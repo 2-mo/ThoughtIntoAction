@@ -3,7 +3,7 @@ import os
 os.environ.setdefault('JAX_PLATFORMS', 'cpu')
 import sys
 from pathlib import Path
-from checkpoint import ROOT, OPENPI, inspect_checkpoint
+from embodied.policy.pi05_sft.checkpoint import ROOT, OPENPI, inspect_checkpoint
 sys.path[:0] = [str(OPENPI/'src'), str(OPENPI/'packages/openpi-client/src'), str(ROOT/'integrations/openpi')]
 
 

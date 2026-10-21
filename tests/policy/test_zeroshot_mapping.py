@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 import numpy as np
-from x5_mapping import SCHEMA, X5Mapping, action_chunks
+from embodied.policy.pi05_zeroshot.x5_mapping import SCHEMA, X5Mapping, action_chunks
 
 
 class MappingTests(unittest.TestCase):

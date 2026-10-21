@@ -7,11 +7,10 @@ import unittest
 from unittest.mock import patch
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]/'tests'))
 from arm_service_fixture import ServiceFixture
 from legacy.robot_control.client import ArmClient
-from real import MOTION, move_pregrasp
-from rollout import bounded_target, control_loop, check_state_quantile
+from embodied.policy.pi05_zeroshot.real import MOTION, move_pregrasp
+from embodied.policy.pi05_zeroshot.rollout import bounded_target, control_loop, check_state_quantile
 
 
 class QuantileTests(unittest.TestCase):
@@ -67,7 +66,7 @@ class RolloutTests(unittest.TestCase):
                 action[-1] = 0.
                 np.savez(path/'prediction.npz', actions_x5_experimental=np.tile(action,(50,1)))
                 return {**obs, 'state_quantile_excess': .6505498836051953, 'inference_seconds': .01}
-        with tempfile.TemporaryDirectory() as tmp, patch('rollout.capture_owned', capture):
+        with tempfile.TemporaryDirectory() as tmp, patch('embodied.policy.pi05_zeroshot.rollout.capture_owned', capture):
             result = control_loop(arm, Worker(), None, Path(tmp), 'test', seconds=.65, chunk_steps=3, grip_speed=.03,
                                   state_quantile_limit=1.1)
             rows = [json.loads(x) for x in (Path(tmp)/'commands.jsonl').read_text().splitlines()]
@@ -87,7 +86,7 @@ class RolloutTests(unittest.TestCase):
             digest = 'test'
             def predict(self, *args, **kwargs):
                 raise RuntimeError('policy failure')
-        with tempfile.TemporaryDirectory() as tmp, patch('rollout.capture_owned', return_value={}):
+        with tempfile.TemporaryDirectory() as tmp, patch('embodied.policy.pi05_zeroshot.rollout.capture_owned', return_value={}):
             with self.assertRaisesRegex(RuntimeError, 'policy failure'):
                 control_loop(self.arm, Worker(), None, Path(tmp), 'test', seconds=1, chunk_steps=3, grip_speed=.03)
             self.assertEqual(json.loads((Path(tmp)/'rollout.json').read_text())['status'], 'failed')

@@ -10,7 +10,6 @@ import time
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(ROOT / 'src'))
 
 
 def rows(directory, name):
@@ -126,7 +125,7 @@ def main():
     import numpy as np
     import torch
     import sentencepiece
-    from tokenizer import DEFAULT_PATH, verify, tokenize
+    from embodied.policy.pi05_zeroshot.tokenizer import DEFAULT_PATH, verify, tokenize
 
     torch.set_num_threads(8)
     if args.device == 'cuda' and not torch.cuda.is_available():

@@ -9,9 +9,10 @@ import threading
 import time
 
 import numpy as np
-from real import ROOT, capture, checked_state, stop_and_hold
+from embodied.policy.pi05_zeroshot.real import ROOT, capture, checked_state, stop_and_hold
 from embodied.core.model import RobotModel
-from x5_mapping import X5Mapping
+from embodied.policy.pi05_zeroshot.worker_client import source_environment
+from embodied.policy.pi05_zeroshot.x5_mapping import X5Mapping
 
 MAX_STEP_RAD = .02
 MAX_TCP_STEP_M = .01
@@ -138,9 +139,9 @@ def run_trial(arm, output, stats, prompt, *, execute=True):
         raise ValueError('统计与当前 X5 URDF/单位/关节顺序不匹配')
     digest = hashlib.sha256(stats.read_bytes()).hexdigest()
     python = os.environ.get('PI05_PYTHON', str(ROOT / 'outputs/envs/pi05-zero-shot/bin/python'))
-    process = subprocess.Popen([python, str(ROOT / 'src/embodied/policy/pi05_zeroshot/policy_worker.py'), '--stats', str(stats.resolve())],
+    process = subprocess.Popen([python, '-m', 'embodied.policy.pi05_zeroshot.policy_worker', '--stats', str(stats.resolve())],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                               text=True, bufsize=1)
+                               text=True, bufsize=1, env=source_environment())
     messages = queue.Queue()
     def read():
         try:

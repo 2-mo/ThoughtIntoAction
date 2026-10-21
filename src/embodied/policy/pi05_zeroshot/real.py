@@ -8,7 +8,6 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(ROOT / 'src'))
 
 import numpy as np
 from legacy.robot_control.client import ArmClient
@@ -169,7 +168,7 @@ def main():
         if args.move_pregrasp:
             move_pregrasp(arm)
         if args.execute_step or (args.infer and args.stats):
-            from experiment import run_trial
+            from embodied.policy.pi05_zeroshot.experiment import run_trial
             run_trial(arm, output, args.stats, args.prompt, execute=args.execute_step)
             print(f'实验结果：{output.resolve()}', flush=True)
         elif args.infer:

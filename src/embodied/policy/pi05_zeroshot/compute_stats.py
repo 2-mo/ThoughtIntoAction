@@ -6,12 +6,11 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(ROOT / 'src'))
 import numpy as np
 from embodied.core.model import RobotModel
 from embodied.data.export.lerobot import load_episode
 from embodied.data.export.multirate import camera_rows
-from x5_mapping import SCHEMA, action_chunks
+from embodied.policy.pi05_zeroshot.x5_mapping import SCHEMA, action_chunks
 
 
 def main():
