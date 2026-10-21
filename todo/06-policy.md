@@ -48,7 +48,8 @@
   - 现状：采集时加速度 12 rad/s²、jerk 120 rad/s³（`启动遥操.sh:23-24`）；SFT 推理为 1 / 4（`infer_after_sft/run.py:79`）；zero-shot 为 0.5 / 2（`zero-shot/rollout.py:229`），并在测量位置附近每步限幅 ±0.08 rad（`rollout.py:78`）。
   - 做法：内核切换后，以内核执行参数为准，与数据的 action 定义对应，并写入 spec。
 
-- [ ] **P-05** 区分不同 action 定义训练的 checkpoint `P1`
+- [x] **P-05** 区分不同 action 定义训练的 checkpoint `P1`
+  - 已做（2026-10-22）：`integrations/openpi/run.py` 按导出布局选择训练配置与资产 id——内核数据 `pi05_x5_kernel` / `local/x5_kernel`，旧链路数据 `pi05_quest_x5` / `local/quest_x5`；OpenPI 把归一化统计存于 `assets/<资产 id>/`，因此 checkpoint 自带动作定义。`policy kernel --policy sft` 在资产 id 不是内核数据时警告（与 P-01 一致，只警告）。在 H800 上训练时确认新配置名。
   - 现状：schema 1 与 schema 2 的导出都使用配置名 `pi05_quest_x5`（`integrations/openpi/quest_x5.py:38-43`）和资产 ID `local/quest_x5`。schema 2 的 action 是内核 250 Hz 的 `sent_q`（`control/adapters/ticks.py:219-221`），推理却通过 240 Hz 的旧 Ruckig 服务执行（`zero-shot/rollout.py:141-142,182`）。
   - 做法：spec 带上 action 定义与控制栈；推理时与实际执行路径比对。
   - 依赖：D-02。

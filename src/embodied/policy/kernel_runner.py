@@ -16,6 +16,7 @@ import numpy as np
 from embodied.contracts.runtime.control import ControlSession
 
 POLICY_FPS = 30
+KERNEL_ASSET_ID = 'local/x5_kernel'  # integrations/openpi/run.py LAYOUTS: trained on kernel sent_q
 JOINTS = {'joint_names': ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6'], 'joint_unit': 'rad', 'length_unit': 'm'}
 
 
@@ -146,6 +147,9 @@ def main(argv=None):
             parser.error('chunk-steps must be within the model horizon')
         if spec['cameras'] not in (None, ['wrist_rgb']):
             print(f'警告：模型训练相机为 {spec["cameras"]}，推理只打开腕部相机。', flush=True)
+        if spec['asset_id'] != KERNEL_ASSET_ID:
+            print(f'警告：模型训练数据为 {spec["asset_id"]}（旧机械臂服务 240 Hz 请求位置），'
+                  '经内核执行时动作定义不同（内核 250 Hz sent_q）。', flush=True)
         output.mkdir(parents=True, exist_ok=False)
         (output / 'norm_stats.json').write_bytes(Path(spec['stats']).read_bytes())
         python = Path(os.environ.get('PI05_JAX_PYTHON' if args.backend == 'jax' else 'PI05_SFT_PYTHON',

@@ -126,7 +126,7 @@ python /home/r2/work/code/QuestArmTeleop/integrations/openpi/run.py \
   /path/to/openpi /home/r2/work/data/quest_x5/lerobot/cup_task train --exp-name=cup_x5
 ```
 
-包装入口在运行时注册 `pi05_quest_x5`，无需手改 OpenPI 配置文件。首次会在项目 `outputs/openpi-datasets/local/quest_x5` 建立导出数据集链接；切换数据集时明确调整链接，入口不会静默覆盖。训练以 `pi05_base` 权重初始化，需要下载模型和合适 GPU。本项目尚未执行完整 π0.5 训练或真机策略推理；数据能加载不代表训练效果已经验证。
+包装入口按导出布局在运行时注册训练配置，无需手改 OpenPI 配置文件：内核采集（`aligned30_raw250_v2`）为 `pi05_x5_kernel` / 资产 `local/x5_kernel`，旧机械臂服务采集（`aligned30_raw240_v1`）为 `pi05_quest_x5` / `local/quest_x5`。资产 id 随 checkpoint 保存（`assets/<id>/norm_stats.json`），`policy kernel` 据此在动作定义不一致时给出警告。首次会在项目 `outputs/openpi-datasets/<资产 id>` 建立导出数据集链接；切换数据集时明确调整链接，入口不会静默覆盖。训练以 `pi05_base` 权重初始化，需要下载模型和合适 GPU。本项目尚未执行完整 π0.5 训练或真机策略推理；数据能加载不代表训练效果已经验证。
 
 上游参考：
 - https://github.com/Physical-Intelligence/openpi/blob/main/pyproject.toml
