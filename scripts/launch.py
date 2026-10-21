@@ -73,6 +73,7 @@ MODULE_COMMANDS = {
     "monitor": "legacy.quest_teleop.runtime.monitor",
     "ports": "embodied.workstation.ports",
     "policy-kernel": "embodied.policy.kernel_runner",
+    "bench": "embodied.workstation.bench",
 }
 BOOTSTRAP_COMMANDS = {"control": "embodied.workstation.control", "components": "embodied.workstation.components.cli"}
 HARDWARE_COMMANDS = {
@@ -195,7 +196,7 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
 
 
 def catalog_text(group: str | None = None) -> str:
-    lines = [] if group else ["具身智能平台：./run.sh <功能> <命令> [参数]；./run.sh <功能> 只看该组。", ""]
+    lines = [] if group else ["具身智能平台：./run.sh 打开统一工作台；./run.sh <功能> <命令> [参数]；./run.sh <功能> 只看该组。", ""]
     for name, (title, commands) in GROUPS.items():
         if group in (None, name):
             lines.append(f"{name:8} {title}")
@@ -233,6 +234,8 @@ def resolve_group(argv: list[str]) -> list[str] | int:
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv and sys.stdin.isatty() and shutil.which("tmux"):
+        argv = ["bench", "start"]  # ./run.sh alone opens the workbench; ./run.sh help lists commands
     if not argv or argv[0] in ("help", "-h", "--help"):
         print(catalog_text())
         return 0

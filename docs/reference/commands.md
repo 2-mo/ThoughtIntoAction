@@ -16,6 +16,14 @@
 
 由 `python -m embodied.workstation.catalog` 从 `src/embodied/workstation/catalog.py` 生成，勿手改。
 
+### bench · 统一工作台（tmux）：按键启动内核，采集 / 检查 / 导出 / 网页 / 标定 / 策略都在总控里
+
+| 命令 | 说明 |
+| --- | --- |
+| `./run.sh bench start` | 打开工作台；./run.sh 不带参数同此 |
+| `./run.sh bench status` | 内核与工作台状态 |
+| `./run.sh bench stop` | 停止工作台启动的内核与网页并关闭（真机进入阻尼） |
+
 ### sim · MuJoCo 仿真工作台（Quest 遥操 + arx 内核 + 采集 + 网页）
 
 | 命令 | 说明 |
