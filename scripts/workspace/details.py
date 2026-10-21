@@ -10,8 +10,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from robot_core.terminal_keys import terminal_keys, read_key
-from robot_simulation.control import status as viewer_status
+from embodied.core.terminal_keys import terminal_keys, read_key
+from embodied.monitor.control import status as viewer_status
 
 
 def render(role, info, mode, message):
@@ -29,8 +29,8 @@ def render(role, info, mode, message):
         if role == 'arm':
             table.add_row("控制对象", 'MuJoCo 虚拟机械臂；真机不跟随')
         else:
-            table.add_row("启用手势", '先松开按键、摇杆回中，再向下拨住右摇杆 1 秒')
-            table.add_row("跟随 / 夹爪", 'Grip 按住跟随；Trigger 控制夹爪')
+            table.add_row("右手（上游）", 'A 长按 150 ms 切换模式；A+B 回 Home；Grip 跟随；Trigger 夹爪')
+            table.add_row("左手（采集）", 'X 录制 / 保存；Y 预抓取，长按作废；摇杆管理任务；左 Grip 取消预设')
     else:
         table.add_row("控制台", '已切回真机，等待显式启动')
         table.add_row("下一步", '按 A 连接机械臂，按 T 启动遥操；启动进度见总控')

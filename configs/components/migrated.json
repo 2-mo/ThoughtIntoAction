@@ -1,7 +1,7 @@
 {
   "trajectory": {
     "ruckig": {
-      "factory": "component_plugins.factories:offline_ruckig",
+      "factory": "embodied.workstation.components.factories:offline_ruckig",
       "runtime": "analysis",
       "capabilities": [
         "joint",
@@ -11,7 +11,7 @@
       ]
     },
     "clik": {
-      "factory": "component_plugins.factories:clik",
+      "factory": "embodied.workstation.components.factories:clik",
       "runtime": "rebot",
       "capabilities": [
         "jacobian",
@@ -22,7 +22,7 @@
   },
   "path": {
     "cartesian": {
-      "factory": "component_plugins.factories:cartesian_path",
+      "factory": "embodied.workstation.components.factories:cartesian_path",
       "runtime": "analysis",
       "capabilities": [
         "line",
@@ -31,7 +31,7 @@
       ]
     },
     "se3_geodesic": {
-      "factory": "component_plugins.factories:se3_path",
+      "factory": "embodied.workstation.components.factories:se3_path",
       "runtime": "rebot",
       "capabilities": [
         "linear",
@@ -43,7 +43,7 @@
   },
   "collision": {
     "tcp": {
-      "factory": "component_plugins.factories:tcp_collision",
+      "factory": "embodied.workstation.components.factories:tcp_collision",
       "runtime": "analysis",
       "capabilities": [
         "sphere",
@@ -52,7 +52,7 @@
       ]
     },
     "links": {
-      "factory": "component_plugins.factories:link_collision",
+      "factory": "embodied.workstation.components.factories:link_collision",
       "runtime": "analysis",
       "capabilities": [
         "coal",
@@ -63,7 +63,7 @@
   },
   "kinematic_analysis": {
     "jacobian": {
-      "factory": "component_plugins.factories:jacobian",
+      "factory": "embodied.workstation.components.factories:jacobian",
       "runtime": "analysis",
       "capabilities": [
         "singularity",
@@ -71,7 +71,7 @@
       ]
     },
     "rebot": {
-      "factory": "component_plugins.factories:rebot_kinematics",
+      "factory": "embodied.workstation.components.factories:rebot_kinematics",
       "runtime": "rebot",
       "capabilities": [
         "fk",
@@ -82,7 +82,7 @@
   },
   "calibration_solver": {
     "eye_in_hand": {
-      "factory": "component_plugins.factories:eye_in_hand",
+      "factory": "embodied.workstation.components.factories:eye_in_hand",
       "runtime": "analysis",
       "capabilities": [
         "T_eef_camera",
@@ -90,7 +90,7 @@
       ]
     },
     "eye_to_hand": {
-      "factory": "component_plugins.factories:eye_to_hand",
+      "factory": "embodied.workstation.components.factories:eye_to_hand",
       "runtime": "analysis",
       "capabilities": [
         "T_base_camera",
@@ -100,7 +100,7 @@
   },
   "calibration_quality": {
     "handeye": {
-      "factory": "component_plugins.factories:calibration_quality",
+      "factory": "embodied.workstation.components.factories:calibration_quality",
       "runtime": "analysis",
       "capabilities": [
         "validate",
@@ -111,7 +111,7 @@
   },
   "tool_profiles": {
     "payload": {
-      "factory": "component_plugins.factories:payload",
+      "factory": "embodied.workstation.components.factories:payload",
       "runtime": "analysis",
       "capabilities": [
         "mass",
@@ -122,7 +122,7 @@
   },
   "calibration_data": {
     "gripper": {
-      "factory": "component_plugins.factories:gripper_calibration",
+      "factory": "embodied.workstation.components.factories:gripper_calibration",
       "runtime": "analysis",
       "capabilities": [
         "width",
@@ -132,7 +132,7 @@
   },
   "task_planner": {
     "cube_stack": {
-      "factory": "component_plugins.factories:cube_stack",
+      "factory": "embodied.workstation.components.factories:cube_stack",
       "runtime": "analysis",
       "capabilities": [
         "pick",
@@ -142,7 +142,7 @@
       ]
     },
     "cube_pick_place": {
-      "factory": "component_plugins.factories:cube_pick_place",
+      "factory": "embodied.workstation.components.factories:cube_pick_place",
       "runtime": "analysis",
       "capabilities": [
         "grasp",
@@ -153,7 +153,7 @@
   },
   "dataset_export": {
     "groot_v21": {
-      "factory": "component_plugins.factories:groot_export",
+      "factory": "embodied.workstation.components.factories:groot_export",
       "runtime": "analysis",
       "capabilities": [
         "dual-rgb",
@@ -165,7 +165,7 @@
   },
   "dataset_validator": {
     "groot": {
-      "factory": "component_plugins.factories:groot_validation",
+      "factory": "embodied.workstation.components.factories:groot_validation",
       "runtime": "analysis",
       "capabilities": [
         "timestamps",
@@ -176,7 +176,7 @@
   },
   "episode_store": {
     "groot": {
-      "factory": "component_plugins.factories:groot_collection",
+      "factory": "embodied.workstation.components.factories:groot_collection",
       "runtime": "analysis",
       "capabilities": [
         "accept",
@@ -187,7 +187,7 @@
   },
   "policy": {
     "groot": {
-      "factory": "component_plugins.factories:groot_policy",
+      "factory": "embodied.workstation.components.factories:groot_policy",
       "runtime": "analysis",
       "capabilities": [
         "model-server",
@@ -197,7 +197,7 @@
   },
   "policy_actions": {
     "groot": {
-      "factory": "component_plugins.factories:groot_actions",
+      "factory": "embodied.workstation.components.factories:groot_actions",
       "runtime": "analysis",
       "capabilities": [
         "chunk",
@@ -208,7 +208,7 @@
   },
   "checkpoint": {
     "groot": {
-      "factory": "component_plugins.factories:groot_checkpoint",
+      "factory": "embodied.workstation.components.factories:groot_checkpoint",
       "runtime": "analysis",
       "capabilities": [
         "modality",
@@ -218,7 +218,7 @@
   },
   "dynamics": {
     "pinocchio": {
-      "factory": "component_plugins.factories:rebot_dynamics",
+      "factory": "embodied.workstation.components.factories:rebot_dynamics",
       "runtime": "rebot",
       "capabilities": [
         "inverse",
@@ -232,7 +232,7 @@
   },
   "input": {
     "mock": {
-      "factory": "robot_teleop.inputs.mock:MockInputSource",
+      "factory": "embodied.phone.inputs.mock:MockInputSource",
       "runtime": "workstation",
       "capabilities": [
         "push",
@@ -242,7 +242,7 @@
       "simulation_only": true
     },
     "replay": {
-      "factory": "robot_teleop.inputs.replay:ReplayInputSource",
+      "factory": "embodied.phone.inputs.replay:ReplayInputSource",
       "runtime": "workstation",
       "capabilities": [
         "playback",
@@ -253,7 +253,7 @@
   },
   "transport": {
     "mock": {
-      "factory": "robot_teleop.transports.mock:MockTransport",
+      "factory": "embodied.phone.transports.mock:MockTransport",
       "runtime": "workstation",
       "capabilities": [
         "deterministic",
@@ -264,7 +264,7 @@
   },
   "test_robot": {
     "mock": {
-      "factory": "robot_teleop.robots.mock:MockRobotBackend",
+      "factory": "embodied.phone.robots.mock:MockRobotBackend",
       "runtime": "workstation",
       "capabilities": [
         "feedback",
@@ -275,7 +275,7 @@
   },
   "servo_algorithm": {
     "ruckig_joint": {
-      "factory": "robot_teleop.controllers.ruckig_servo:RuckigJointServo",
+      "factory": "embodied.phone.controllers.ruckig_servo:RuckigJointServo",
       "runtime": "analysis",
       "capabilities": [
         "joint",
@@ -283,7 +283,7 @@
       ]
     },
     "ruckig_cartesian": {
-      "factory": "robot_teleop.controllers.cartesian_ruckig:CartesianRuckigServo",
+      "factory": "embodied.phone.controllers.cartesian_ruckig:CartesianRuckigServo",
       "runtime": "analysis",
       "capabilities": [
         "cartesian",
@@ -294,7 +294,7 @@
   },
   "kinematics": {
     "phone_pinocchio": {
-      "factory": "robot_teleop.kinematics.pinocchio:PinocchioKinematics",
+      "factory": "embodied.phone.kinematics.pinocchio:PinocchioKinematics",
       "runtime": "analysis",
       "capabilities": [
         "fk",
@@ -303,7 +303,7 @@
       ]
     },
     "motion_pinocchio": {
-      "factory": "arx5_control.motion.pinocchio_backend:PinocchioKinematics",
+      "factory": "embodied.motion.pinocchio_backend:PinocchioKinematics",
       "runtime": "analysis",
       "capabilities": [
         "fk",
@@ -313,7 +313,7 @@
   },
   "perception": {
     "rgb_cube": {
-      "factory": "arx_tools.rgb_cube_detector:RgbCubeDetector",
+      "factory": "legacy.arx_tools.rgb_cube_detector:RgbCubeDetector",
       "runtime": "analysis",
       "capabilities": [
         "rgb",
@@ -324,7 +324,7 @@
   },
   "device": {
     "rebot_dm": {
-      "factory": "component_plugins.factories:rebot_dm",
+      "factory": "embodied.workstation.components.factories:rebot_dm",
       "runtime": "rebot",
       "capabilities": [
         "joint-groups",
@@ -335,7 +335,7 @@
       "hardware": true
     },
     "rebot_rs": {
-      "factory": "component_plugins.factories:rebot_rs",
+      "factory": "embodied.workstation.components.factories:rebot_rs",
       "runtime": "rebot",
       "capabilities": [
         "joint-groups",

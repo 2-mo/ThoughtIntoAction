@@ -1,5 +1,5 @@
 import unittest
-from quest_teleop.arming import DownHoldGate
+from legacy.quest_teleop.arming import DownHoldGate
 
 
 class ArmingTests(unittest.TestCase):

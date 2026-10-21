@@ -1,0 +1,9 @@
+{
+  "repository": "arx5_test",
+  "commit": "a18d6b67906e450411d56e3d0fd08fd18a01675c",
+  "snapshot": "working tree",
+  "files": {
+    "profiles.py": "560b4df3cef2cf69ca357ed3348b7e8d4aa6d52a6d27eb41cc72fd4d93302f4f"
+  },
+  "note": "Only profiles.py is used (control/adapters/commands.py). The other imported modules were byte-identical to src/embodied/motion/ and unused; removed."
+}

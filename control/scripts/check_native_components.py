@@ -10,8 +10,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT.parent / 'src' if (ROOT.parent / 'src/component_api').is_dir() else ROOT / 'shared')]
-from component_api.rpc import request
+sys.path[:0] = [str(ROOT), str(ROOT.parent / 'src' if (ROOT.parent / 'src/embodied/contracts').is_dir() else ROOT / 'shared')]
+from embodied.contracts.rpc import request
 
 
 def case(output, component, fault_signal, active=True):

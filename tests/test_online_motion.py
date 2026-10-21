@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from robot_control.online_motion import OnlineMotion, DEFAULTS
+from legacy.robot_control.online_motion import OnlineMotion, DEFAULTS
 
 
 class OnlineMotionTests(unittest.TestCase):

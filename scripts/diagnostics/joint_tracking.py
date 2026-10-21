@@ -6,7 +6,7 @@ import time
 import numpy as np
 import tyro
 
-from robot_control.hardware import OfficialX5HardwareAdapter
+from legacy.robot_control.hardware import OfficialX5HardwareAdapter
 
 
 def main(
@@ -47,7 +47,7 @@ def main(
 
     adapter_class = OfficialX5HardwareAdapter
     if backend == "arx2025":
-        from robot_control.backends.arx2025 import ARXX52025HardwareAdapter
+        from legacy.robot_control.backends.arx2025 import ARXX52025HardwareAdapter
 
         adapter_class = ARXX52025HardwareAdapter
     adapter = adapter_class(

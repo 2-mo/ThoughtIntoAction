@@ -26,11 +26,11 @@ import pinocchio as pin
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
-from reBotArm_control_py.kinematics import (
+from embodied.robots.rebot.kinematics import (
     compute_fk,
     get_end_effector_frame_id,
 )
-from reBotArm_control_py.trajectory import (
+from embodied.robots.rebot.trajectory import (
     plan_cartesian_geodesic_trajectory,
     track_trajectory,
     compute_traj_stats,
@@ -58,7 +58,7 @@ def make_pose(x: float, y: float, z: float,
 
 
 def _solve_ik(model, end_frame_id, target, q_init, ik_params):
-    from reBotArm_control_py.kinematics.inverse_kinematics import solve_ik
+    from embodied.robots.rebot.kinematics.inverse_kinematics import solve_ik
     data = model.createData()
     result = solve_ik(model, data, end_frame_id, target, q_init, ik_params)
     return result.q, result.success

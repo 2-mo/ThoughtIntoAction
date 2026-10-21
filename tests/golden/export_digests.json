@@ -1,0 +1,40 @@
+{
+  "schema1": {
+    "episode_000000.npz:action": "11e813894a7f4fba",
+    "episode_000000.npz:action_timestamp_ns": "c7e03d5b0c88ec3a",
+    "episode_000000.npz:state": "f6d41e7533f1b5b9",
+    "episode_000000.npz:timestamp_ns": "2c25986e2c3df04d",
+    "episode_000000.parquet:action": "2559e4c76485610e",
+    "episode_000000.parquet:episode_index": "3db25c582827fdf6",
+    "episode_000000.parquet:frame_index": "0089bd5071ca1ce4",
+    "episode_000000.parquet:index": "0089bd5071ca1ce4",
+    "episode_000000.parquet:observation.state": "6ee690886c10002f",
+    "episode_000000.parquet:observation.wrist_valid": "7da0d2eda80b1c4d",
+    "episode_000000.parquet:source.action_monotonic_ns": "1fab9bd03af0d063",
+    "episode_000000.parquet:source.rgb_monotonic_ns": "46748fc33e647f91",
+    "episode_000000.parquet:source.state_monotonic_ns": "394e624222a204df",
+    "episode_000000.parquet:task_index": "3db25c582827fdf6",
+    "episode_000000.parquet:timestamp": "c0920d48e680fb83"
+  },
+  "schema2": {
+    "episode_000000.npz:action": "0dca825af4799941",
+    "episode_000000.npz:command_sequence": "dd3c981d6d84b5cb",
+    "episode_000000.npz:command_timestamp_ns": "0996f401c5fb07bc",
+    "episode_000000.npz:feedback_timestamp_ns": "02f066ff6d450349",
+    "episode_000000.npz:raw_ticks_json": "c73a266a6dc54fc3",
+    "episode_000000.npz:schema_version": "20efc4d65aee7669",
+    "episode_000000.npz:state": "6a6a160a1a982c3e",
+    "episode_000000.npz:state_sequence": "dd3c981d6d84b5cb",
+    "episode_000000.parquet:action": "dce28647b61eb708",
+    "episode_000000.parquet:episode_index": "de7e4fb437359199",
+    "episode_000000.parquet:frame_index": "b0b94e5bc1759cc3",
+    "episode_000000.parquet:index": "b0b94e5bc1759cc3",
+    "episode_000000.parquet:observation.state": "17268e500a766849",
+    "episode_000000.parquet:observation.wrist_valid": "2eb063313808ed84",
+    "episode_000000.parquet:source.action_monotonic_ns": "5a08d034c368ea2b",
+    "episode_000000.parquet:source.rgb_monotonic_ns": "ce0b4da73ea99607",
+    "episode_000000.parquet:source.state_monotonic_ns": "9641501eeb4388a2",
+    "episode_000000.parquet:task_index": "de7e4fb437359199",
+    "episode_000000.parquet:timestamp": "adf20c519b399603"
+  }
+}

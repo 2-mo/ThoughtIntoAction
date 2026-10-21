@@ -15,7 +15,7 @@ from rich.table import Table
 from rich.text import Text
 
 import tmux_workspace as workspace
-from robot_simulation.control import command as viewer_command, status as viewer_status
+from embodied.monitor.control import command as viewer_command, status as viewer_status
 
 
 def overview():
@@ -63,6 +63,13 @@ def overview():
         except (OSError, ValueError, RuntimeError) as exc:
             state, color, hint = "状态读取异常", "red", str(exc)
         rows.append((workspace.ROLES[role], Text(state, style=color), Text(hint)))
+    try:
+        from embodied.core.project import load_config
+        from embodied.workstation.ports import summary
+        text, problem = summary(load_config())
+        rows.append(("端口", Text(text, style="red" if problem else "green"), Text("./run.sh check ports 查看详情")))
+    except (OSError, ValueError, KeyError) as exc:
+        rows.append(("端口", Text("读取失败", style="red"), Text(str(exc))))
     return rows
 
 
@@ -133,7 +140,7 @@ def render(rows, message, failed=False):
     menu = Table.grid(padding=(0, 2), expand=True)
     for row in [
         ("M 切到仿真", "F 切到真机（待机）", "同一个网页地址"),
-        ("U 仿真遥操待机", "O 暂停仿真", "右摇杆下拨 1 秒启用"),
+        ("U 允许仿真遥操", "O 暂停仿真", "右手 A 长按切换模式"),
         ("A 机械臂启动 / 重连", "T 遥操启动 / 恢复", "S 停止遥操"),
         ("H 回零", "P 预抓取", "空格 停止并保持"),
         ("D 阻尼（先支撑机械臂）", "W 开网页", "E 关网页"),
@@ -143,7 +150,7 @@ def render(rows, message, failed=False):
     ]:
         menu.add_row(*(Text(item, style="cyan") for item in row))
     return Group(
-        Panel(table, title="QuestArm · 统一工作台 · " + workspace.MODES[workspace.selected_mode()], border_style="cyan"),
+        Panel(table, title="具身平台 · 工作台 · " + workspace.MODES[workspace.selected_mode()], border_style="cyan"),
         Panel(menu, title="直接按键 · 无需回车", border_style="dim"),
         Text(message, style="red" if failed else "yellow", overflow="fold"),
         Text("Ctrl+B 再按 4 返回总控。切仿真时退出真机遥操并保持位置；切回后需重新启用。", style="dim"),

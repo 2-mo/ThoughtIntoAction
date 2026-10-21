@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT.parent / 'src' if (ROOT.parent / 'src/component_api').is_dir() else ROOT / 'shared')]
+sys.path[:0] = [str(ROOT), str(ROOT.parent / 'src' if (ROOT.parent / 'src/embodied/contracts').is_dir() else ROOT / 'shared')]
 from adapters.commands import CommandEngine, MotionPlanner
 from arx5_vr.types import RobotState, ControlCommand, Mode
 from arx5_vr.settings import load_settings
@@ -55,6 +55,17 @@ class CommandsTests(unittest.TestCase):
             self.request('joint', q=self.state.q.tolist(), sent_monotonic_ns=round((self.now-.11)*1e9))
         with self.assertRaisesRegex(ValueError, 'source sequence'):
             self.request('joint', q=self.state.q.tolist(), source_sequence=2**64)
+
+    def test_free_drive_optionally_holds_the_gripper(self):
+        self.request('free-drive')
+        command = self.engine.next(self.state, self.now)
+        self.assertEqual((command.mode, command.gripper_mode), (Mode.FREE_DRIVE, Mode.FREE_DRIVE))
+        self.request('free-drive', gripper_width=.03)
+        command = self.engine.next(self.state, self.now)
+        self.assertEqual((command.mode, command.gripper_mode, command.gripper_target),
+                         (Mode.FREE_DRIVE, Mode.COMMAND_FOLLOWING, .03))
+        with self.assertRaisesRegex(ValueError, 'gripper width'):
+            self.request('free-drive', gripper_width=self.config.gripper_max_width + .01)
 
     def test_lease_expiry_cancel_and_stop_hold_without_home(self):
         self.request('joint', q=self.state.q.tolist())
@@ -125,6 +136,65 @@ class CommandsTests(unittest.TestCase):
             self.assertLessEqual(np.max(np.abs(v)), .1515)
             self.assertLessEqual(np.max(np.abs(a)), .505)
             self.assertLessEqual(np.max(np.abs(j)), 2.02)
+
+
+    def test_gateway_plans_respect_the_table_plane(self):
+        from adapters.workspace import Workspace
+        planner = MotionPlanner(self.config, 'model')
+        self.assertEqual(planner.workspace.describe(), {'minimum_tcp_z_m': 0.0})  # config/workspace.json
+        q = np.array([0., .6, 1., 0., .2, 0.])
+        snapshot = {**self.engine.status(self.state, self.now), 'q': q.tolist()}
+        start = planner.model.fk(q)
+        planner.workspace = Workspace(table_enabled=True, table_z_m=float(start[2]) - .01)
+        planner.plan({'kind': 'movej', 'q': (q + [0, -.02, 0, 0, 0, 0]).tolist()}, snapshot, self.now)
+        below = start.copy(); below[2] -= .03
+        with self.assertRaisesRegex(ValueError, 'table plane'):
+            planner.plan({'kind': 'movel', 'pose': below.tolist()}, snapshot, self.now)
+        with self.assertRaisesRegex(ValueError, 'table plane'):
+            planner.workspace.check_pose(below)
+        Workspace(table_enabled=False).check_pose(below)
+        for bad in ({'table_enabled': 1}, {'table_enabled': True, 'table_z_m': float('nan')},
+                    {'table_enabled': True, 'table_clearance_m': -.01}):
+            with self.assertRaises(ValueError):
+                Workspace(**bad)
+
+
+    def test_gateway_checks_streamed_targets_before_queueing(self):
+        import threading
+        from adapters.gateway import Gateway
+        from adapters.workspace import Workspace
+        gateway = Gateway.__new__(Gateway)  # no socket: only the request-thread check
+        gateway.planner, gateway.plan_lock = MotionPlanner(self.config, 'model'), threading.Lock()
+        q = np.array([0., .6, 1., 0., .2, 0.])
+        pose = gateway.planner.model.fk(q)
+        gateway.planner.workspace = Workspace(table_enabled=True, table_z_m=float(pose[2]) + .01)
+        with self.assertRaisesRegex(ValueError, 'table plane'):
+            gateway._check_workspace('cartesian', {'pose': pose.tolist()})
+        with self.assertRaisesRegex(ValueError, 'table plane'):
+            gateway._check_workspace('joint', {'q': q.tolist()})
+        gateway._check_workspace('cartesian', {'pose': [0, 0]})  # malformed: left to CommandEngine
+        gateway.planner.workspace = Workspace(table_enabled=True, table_z_m=float(pose[2]) - .01)
+        gateway._check_workspace('cartesian', {'pose': pose.tolist()})
+        gateway._check_workspace('joint', {'q': q.tolist()})
+
+
+    def test_describe_reports_kernel_limits_without_a_lease(self):
+        import threading
+        from adapters.gateway import Gateway, ACTIONS
+        gateway = Gateway.__new__(Gateway)
+        gateway.config, gateway.model_id, gateway.engine = self.config, 'model', self.engine
+        gateway.planner, gateway.plan_lock = MotionPlanner(self.config, 'model'), threading.Lock()
+        described = gateway.describe()
+        self.assertEqual(described['robot']['joint_min'], list(self.config.joint_min))
+        self.assertEqual(described['robot']['control_hz'], 250)
+        self.assertEqual(described['workspace'], {'minimum_tcp_z_m': 0.0})
+        self.assertEqual(set(described['actions']), set(ACTIONS))
+        # The platform's offline reader returns the same robot facts.
+        from embodied.contracts.robot import load_robot_profile
+        profile = load_robot_profile(ROOT / 'config')
+        for name, value in described['robot'].items():
+            self.assertEqual(profile['robot'][name], value, name)
+        self.assertEqual(profile['workspace'], described['workspace'])
 
 
 class NativeGateTests(unittest.TestCase):

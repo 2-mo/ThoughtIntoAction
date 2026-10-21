@@ -11,10 +11,10 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
-from robot_core.model import RobotModel
-from robot_core.transforms import from_rt
-from robot_core.plugins import Registry
-from robot_simulation.scene import Scene, WEB_ROOT
+from embodied.core.model import RobotModel
+from embodied.core.transforms import from_rt
+from embodied.core.plugins import Registry
+from embodied.monitor.scene import Scene, WEB_ROOT
 
 
 class SceneTests(unittest.TestCase):

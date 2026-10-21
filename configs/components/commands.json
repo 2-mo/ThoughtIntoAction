@@ -106,117 +106,109 @@
     }
   },
   "commands": {
-    "calibration.handeye": {
-      "environment": "analysis",
-      "module": "hand_eye_calibration"
-    },
     "calibration.payload": {
       "environment": "analysis",
-      "module": "arx_tools.calibrate_payload"
+      "module": "legacy.arx_tools.calibrate_payload"
     },
     "calibration.gripper": {
       "environment": "analysis",
-      "module": "arx_tools.calibrate_gripper_guided"
+      "module": "legacy.arx_tools.calibrate_gripper_guided"
     },
     "motion.console": {
       "environment": "analysis",
-      "module": "arx_tools.control_cli"
+      "module": "legacy.arx_tools.control_cli"
     },
     "diagnostic.arm_state": {
       "environment": "analysis",
-      "module": "arx_tools.show_state"
+      "module": "legacy.arx_tools.show_state"
     },
     "diagnostic.d405": {
       "environment": "analysis",
-      "module": "arx_tools.d405_profile_benchmark"
+      "module": "legacy.arx_tools.d405_profile_benchmark"
     },
     "gripper.position": {
       "environment": "analysis",
-      "module": "arx_tools.gripper_position_test"
+      "module": "legacy.arx_tools.gripper_position_test"
     },
     "gripper.torque": {
       "environment": "analysis",
-      "module": "arx_tools.gripper_force_test"
+      "module": "legacy.arx_tools.gripper_force_test"
     },
     "task.cube": {
       "environment": "analysis",
-      "module": "experiments.cube_pick_rotate_place"
+      "module": "legacy.cube"
     },
     "collection.groot": {
       "environment": "web",
-      "module": "isaac_groot_data_collection.cli"
+      "module": "embodied.data.groot.cli"
     },
     "policy.groot": {
       "environment": "analysis",
-      "module": "gr_zeroshot.cli"
+      "module": "embodied.policy.groot.cli"
     },
     "ui.backend": {
       "environment": "analysis",
-      "module": "arx5_backend"
+      "module": "embodied.console"
     },
     "camera.rgbd": {
       "environment": "web",
-      "module": "arx5_backend.features.camera.service"
+      "module": "embodied.console.features.camera.service"
     },
     "input.hand_service": {
       "environment": "web",
-      "module": "arx5_backend.features.vision.service"
+      "module": "embodied.console.features.vision.service"
     },
     "diagnostic.pose_monitor": {
       "environment": "analysis",
-      "module": "robot_teleop.tools.pose_monitor"
+      "module": "embodied.phone.tools.pose_monitor"
     },
     "diagnostic.pose_simulator": {
       "environment": "analysis",
-      "module": "robot_teleop.tools.pose_simulator"
+      "module": "embodied.phone.tools.pose_simulator"
     },
     "diagnostic.udp_loopback": {
       "environment": "analysis",
-      "module": "robot_teleop.tools.udp_loopback"
+      "module": "embodied.phone.tools.udp_loopback"
     },
     "diagnostic.network_test": {
       "environment": "analysis",
-      "module": "robot_teleop.tools.network_test"
+      "module": "embodied.phone.tools.network_test"
     },
     "diagnostic.latency_report": {
       "environment": "analysis",
-      "module": "robot_teleop.tools.latency_report"
+      "module": "embodied.phone.tools.latency_report"
     },
     "diagnostic.control_observations": {
       "environment": "analysis",
-      "module": "robot_teleop.tools.control_observations"
+      "module": "embodied.phone.tools.control_observations"
     },
-    "diagnostic.phase3_mock_validation": {
+    "diagnostic.phone_reset_console": {
       "environment": "analysis",
-      "module": "robot_teleop.tools.phase3_mock_validation"
+      "module": "embodied.phone.tools.phase3_mock_session"
     },
     "diagnostic.phase4_kinematics_check": {
       "environment": "analysis",
-      "module": "robot_teleop.tools.phase4_kinematics_check"
-    },
-    "diagnostic.phase4_ghost_review": {
-      "environment": "analysis",
-      "module": "robot_teleop.tools.phase4_ghost_review"
+      "module": "embodied.phone.tools.phase4_kinematics_check"
     },
     "diagnostic.arx5_sdk_inspect": {
       "environment": "analysis",
-      "module": "robot_teleop.tools.arx5_sdk_inspect"
+      "module": "embodied.phone.tools.arx5_sdk_inspect"
     },
     "diagnostic.arx5_state_readiness": {
       "environment": "analysis",
-      "module": "robot_teleop.tools.arx5_state_readiness"
+      "module": "embodied.phone.tools.arx5_state_readiness"
     },
     "diagnostic.phase5_motion_preflight": {
       "environment": "analysis",
-      "module": "robot_teleop.tools.phase5_motion_preflight"
+      "module": "embodied.phone.tools.phase5_motion_preflight"
     },
     "diagnostic.phase5_safety_contract": {
       "environment": "analysis",
-      "module": "robot_teleop.tools.phase5_safety_contract"
+      "module": "embodied.phone.tools.phase5_safety_contract"
     },
     "phone.tools": {
       "environment": "phone",
-      "module": "robot_teleop.cli"
+      "module": "embodied.phone.cli"
     },
     "rebot.dm": {
       "environment": "rebot",
@@ -296,7 +288,7 @@
       "environment": "analysis",
       "module": "pytest",
       "arguments": [
-        "tests/migrated/arx_motion",
+        "tests/motion",
         "-q",
         "--import-mode=importlib"
       ]
@@ -305,30 +297,30 @@
       "environment": "analysis",
       "module": "pytest",
       "arguments": [
-        "tests/migrated/phone",
+        "tests/phone",
         "-q",
         "--import-mode=importlib"
       ]
     },
     "ui.console": {
       "environment": "analysis",
-      "shell": "src/arx_tools/web.sh"
+      "shell": "src/legacy/arx_tools/web.sh"
     },
     "deployment.lan": {
       "environment": "analysis",
-      "shell": "src/arx_tools/web_lan.sh"
+      "shell": "src/legacy/arx_tools/web_lan.sh"
     },
     "deployment.tailnet": {
       "environment": "analysis",
-      "shell": "src/arx_tools/web_tailnet.sh"
+      "shell": "src/legacy/arx_tools/web_tailnet.sh"
     },
     "deployment.restart": {
       "environment": "analysis",
-      "shell": "src/arx_tools/web_restart.sh"
+      "shell": "src/legacy/arx_tools/web_restart.sh"
     },
     "diagnostic.can": {
       "environment": "analysis",
-      "shell": "src/arx_tools/can_up.sh"
+      "shell": "src/legacy/arx_tools/can_up.sh"
     },
     "test.rebot": {
       "environment": "rebot",

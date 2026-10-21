@@ -9,9 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 import numpy as np
 import pyarrow.parquet as pq
-from isaac_groot_data_collection.config import load_collection_config
-from isaac_groot_data_collection.exporter import export_dataset
-from isaac_groot_data_collection.validator import validate_raw_episode
+from embodied.data.groot.config import load_collection_config
+from embodied.data.groot.exporter import export_dataset
+from embodied.data.groot.validator import validate_raw_episode
 
 
 def write(path, value):

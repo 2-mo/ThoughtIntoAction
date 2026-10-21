@@ -10,14 +10,14 @@ from unittest.mock import patch
 
 import numpy as np
 
-from episode_io.mcap_io import read_camera_records
-from episode_io.recording import EpisodeWriter
-from quest_teleop.datasets import validate_episode
-from quest_teleop.export_lerobot import prepare_camera_episode
-from quest_teleop.replay import RecordedEpisode
-from quest_teleop.runtime.session import TeleopSession
-from robot_core.model import RobotModel
-from robot_core.project import load_config
+from embodied.data.episode.mcap_io import read_camera_records
+from embodied.data.episode.recording import EpisodeWriter
+from embodied.data.datasets import validate_episode
+from embodied.data.export.lerobot import prepare_camera_episode
+from embodied.data.replay import RecordedEpisode
+from legacy.quest_teleop.runtime.session import TeleopSession
+from embodied.core.model import RobotModel
+from embodied.core.project import load_config
 from test_recording import FakeCamera, snapshot
 
 
@@ -47,7 +47,7 @@ def make_dual(root, *, broken=None, count=12):
                 'device_timestamp_domain': 'hardware_clock',
                 'stream_id': 'restarted' if key == 'exterior_rgb' and broken == 'restart' and index > 4 else key,
                 'image': np.full((48, 64, 3), (10, 40, 180) if key == 'wrist_rgb' else (180, 80, 20), np.uint8)})
-    with patch('episode_io.recording.time.monotonic_ns', return_value=origin + round(count * 1e9 / 30) + 20_000_000):
+    with patch('embodied.data.episode.recording.time.monotonic_ns', return_value=origin + round(count * 1e9 / 30) + 20_000_000):
         result = writer.stop()
     assert result['lifecycle'] == 'complete', result
     return writer.path, limits
@@ -80,6 +80,11 @@ class DualRecordingTests(unittest.TestCase):
             _, rows, exported, raw = prepare_camera_episode(path)
             self.assertEqual(len(raw), len(states))
             self.assertEqual(exported['cameras']['exterior_rgb']['repeated_images'], 0)
+            # Export metadata names the control stack and records anchor gaps (todo D-01, D-02).
+            self.assertEqual(exported['backend'], 'real')
+            self.assertIn(exported['control_stack'].split(':')[0], ('legacy.robot_control.service', 'unknown'))
+            self.assertEqual(exported['gaps'], [])
+            self.assertFalse(exported['anomaly'])
             for row in rows:
                 cameras = row[3]['camera_frames']
                 self.assertLessEqual(cameras['exterior_rgb']['host_received_monotonic_ns'], row[3]['host_received_monotonic_ns'])

@@ -1,6 +1,6 @@
 """Write current-format fixtures while allowing tests to replace a single topic."""
 import json
-from quest_teleop.mcap_io import RecordWriter, read_records
+from embodied.data.episode.mcap_io import RecordWriter, read_records
 
 
 def write_records(root, *, states=None, frames=None):

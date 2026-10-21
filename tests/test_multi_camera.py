@@ -8,11 +8,11 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 import numpy as np
-from robot_core.camera_client import SharedCamera
-from robot_core.camera_service import CameraService
-from robot_core.local_server import LocalServer
-from robot_core.session_protocol import request
-from robot_core.camera import configure_rgb, RGB_OPTIONS
+from embodied.sensors.client import SharedCamera
+from embodied.sensors.service import CameraService
+from embodied.core.local_server import LocalServer
+from embodied.core.session_protocol import request
+from embodied.sensors.realsense import configure_rgb, RGB_OPTIONS
 
 
 def options(serial, model="D435i"):
@@ -64,7 +64,7 @@ class MultiCameraTests(unittest.TestCase):
             path = Path(folder) / "camera.sock"
             server = LocalServer(path, service.dispatch)
             self.addCleanup(server.close)
-            with patch("robot_core.camera_client.socket_path", return_value=path):
+            with patch("embodied.sensors.client.socket_path", return_value=path):
                 with SharedCamera("wrist", 3, 2) as wrist, SharedCamera("exterior", 3, 2, camera_id="exterior_rgb") as exterior:
                     np.testing.assert_array_equal(wrist.read()["image"], np.zeros((2, 3, 3), dtype=np.uint8))
                     np.testing.assert_array_equal(exterior.read()["image"], np.ones((2, 3, 3), dtype=np.uint8))
@@ -90,7 +90,7 @@ class MultiCameraTests(unittest.TestCase):
         for key, feed in service.feeds.items():
             feed.capture = capture(key)
         self.addCleanup(service.close)
-        with patch("robot_core.camera_control.check_legacy_session"), patch("robot_core.camera_control.recording_guard"):
+        with patch("embodied.sensors.control.check_legacy_session"), patch("embodied.sensors.control.recording_guard"):
             service.start()
             for event in started.values():
                 self.assertTrue(event.wait(1))
@@ -113,7 +113,7 @@ class MultiCameraTests(unittest.TestCase):
         def missing(*args, **kwargs):
             stop.set()
             raise RuntimeError("Device disconnected")
-        with patch("robot_core.camera_service.RealSenseCamera", side_effect=missing), patch("robot_core.camera_service.DeviceLease"):
+        with patch("embodied.sensors.service.RealSenseCamera", side_effect=missing), patch("embodied.sensors.service.DeviceLease"):
             failed.capture(failed.options, stop)
         data = service.dispatch({"command": "monitor"})
         self.assertIn("Device disconnected", data["cameras"]["exterior_rgb"]["camera"]["error"])
@@ -130,8 +130,8 @@ class MultiCameraTests(unittest.TestCase):
                 CameraService({"wrist_rgb": {**options("wrist"), **change}})
 
     def test_control_forwards_explicit_camera_id(self):
-        from robot_core.camera_control import set_enabled
-        with patch("robot_core.camera_control.ensure_service"), patch("robot_core.camera_control.request") as call:
+        from embodied.sensors.control import set_enabled
+        with patch("embodied.sensors.control.ensure_service"), patch("embodied.sensors.control.request") as call:
             set_enabled(False, "exterior_rgb")
             self.assertEqual(call.call_args.kwargs["camera_id"], "exterior_rgb")
             self.assertFalse(call.call_args.kwargs["enabled"])

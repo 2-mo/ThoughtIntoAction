@@ -57,9 +57,9 @@ def write_parameter_snapshot(directory, settings, backend_name, config_path=None
                  *sorted((ROOT / 'adapters').rglob('*.py')),
                  ROOT / 'config/components.json',
                  ROOT / 'native/bin/rollio-device-xrobot', ROOT / 'native/bin/rollio-teleop-router']
-    shared = ROOT.parent / 'src' if (ROOT.parent / 'src/component_api').is_dir() else ROOT / 'shared'
-    shared_artifacts = [path for module in ('component_api', 'operations')
-                        for path in (shared / module).rglob('*') if path.is_file() and path.suffix in ('.py', '.json')]
+    shared = ROOT.parent / 'src' if (ROOT.parent / 'src/embodied/contracts').is_dir() else ROOT / 'shared'
+    shared_artifacts = [shared / 'embodied/__init__.py', *[path for path in (shared / 'embodied/contracts').rglob('*')
+                        if path.is_file() and path.suffix in ('.py', '.json')]]
     snapshot = {
         'schema_version': 1, 'created_utc': datetime.now(timezone.utc).isoformat(),
         'backend': backend_name, 'python': sys.version, 'config_path': str(config.resolve()),

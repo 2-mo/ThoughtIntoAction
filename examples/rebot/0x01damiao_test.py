@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from motorbridge import Controller, Mode
 
-from component_plugins.ownership import leased_operation
+from embodied.workstation.components.ownership import leased_operation
 
 CHANNEL = "/dev/ttyACM0"          # 串口设备 / Serial port device
 MOTOR_ID = 0x01

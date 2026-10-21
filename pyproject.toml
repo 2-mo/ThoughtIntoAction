@@ -22,9 +22,23 @@ dependencies = [
 
 [dependency-groups]
 sdk-build = ["cmake==3.31.10", "pybind11==3.1.0"]
+# Same version as the analysis environment, which reads the configuration below.
+test = ["pytest==8.4.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# tests/motion and tests/phone run in their own environments (check-all groups motion / phone).
+norecursedirs = [".*", "__pycache__", "node_modules", "motion", "phone", "browser"]
+addopts = ["--strict-markers"]
+markers = [
+    "hardware: needs real devices (CAN, cameras, Quest); skipped unless --run-hardware",
+    "sim: needs the MuJoCo control environment",
+]
 
 [tool.uv]
 package = false
+# Plain `uv sync --locked` keeps pytest, which `./run.sh test` needs.
+default-groups = ["test"]
 python-preference = "only-managed"
 required-version = ">=0.11.0,<0.12"
 environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]

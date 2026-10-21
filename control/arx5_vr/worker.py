@@ -45,8 +45,8 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
     if managed or robot_plugin or controller_plugin:
         import sys
         control_root = Path(__file__).resolve().parents[1]
-        sys.path.insert(0, str(control_root.parent / "src" if (control_root.parent / "src/component_api").is_dir() else control_root / "shared"))
-        from component_api.registry import Registry
+        sys.path.insert(0, str(control_root.parent / "src" if (control_root.parent / "src/embodied/contracts").is_dir() else control_root / "shared"))
+        from embodied.contracts.registry import Registry
         registry = Registry(Path(__file__).resolve().parents[1] / "config/components.json")
         selected = robot_plugin or "arx." + backend_name
         plugin_spec = registry.spec("robot", selected, allow_hardware=backend_name == "real")
@@ -130,7 +130,12 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
             checks = preflight(settings.robot)
             if not checks['ready']:
                 raise RuntimeError(f'Real preflight failed: {checks}')
-            from adapters.device_lease import DeviceLease
+            import sys
+            control_root = Path(__file__).resolve().parents[1]
+            shared = control_root.parent / "src" if (control_root.parent / "src/embodied/contracts").is_dir() else control_root / "shared"
+            if str(shared) not in sys.path:
+                sys.path.insert(0, str(shared))
+            from embodied.contracts.device_lease import DeviceLease
             device_lease = DeviceLease(settings.robot.can_interface)
             # Share ownership with the existing bench; never connect two local
             # controllers to the same interface from these entry points.

@@ -6,10 +6,10 @@ import sys
 import unittest
 import uuid
 
-from component_api.registry import Registry
-from component_plugins.cli import command
-from component_plugins.ownership import leased_connect, leased_disconnect, leased_operation
-from robot_core.device_lease import DeviceLease
+from embodied.contracts.registry import Registry
+from embodied.workstation.components.cli import command
+from embodied.workstation.components.ownership import leased_connect, leased_disconnect, leased_operation
+from embodied.contracts.device_lease import DeviceLease
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -18,7 +18,7 @@ class MigrationContracts(unittest.TestCase):
     def test_discovery_does_not_import_device_sdks(self):
         script = '''
 import sys
-from component_api.registry import Registry
+from embodied.contracts.registry import Registry
 r=Registry()
 assert r.spec('device', 'rebot_dm').hardware
 assert r.spec('input', 'mock').simulation_only

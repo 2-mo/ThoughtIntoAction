@@ -7,11 +7,11 @@ import time
 import unittest
 from unittest.mock import patch
 
-from inputs.phone import PhoneController
-from robot_teleop.protocol.golden import GOLDEN_POSE
-from robot_teleop.protocol.packet import encode_packet
-from robot_teleop.core.models import Pose, Vector3, Quaternion, TrackingQuality
-from workstation.workbench import profile
+from embodied.inputs.phone import PhoneController
+from embodied.phone.protocol.golden import GOLDEN_POSE
+from embodied.phone.protocol.packet import encode_packet
+from embodied.phone.core.models import Pose, Vector3, Quaternion, TrackingQuality
+from embodied.workstation.workbench import profile
 
 
 class FakeSession:
@@ -30,7 +30,7 @@ class FakeSession:
 
 class PhoneTests(unittest.TestCase):
     def setUp(self):
-        with patch('inputs.phone.ControlSession', FakeSession):
+        with patch('embodied.inputs.phone.ControlSession', FakeSession):
             self.phone = PhoneController('unused', port=0)
         self.phone.start()
         self.addCleanup(self.phone.stop)
@@ -107,22 +107,22 @@ class CompositionTests(unittest.TestCase):
             return profile(path)
 
     def test_manual_and_phone_need_no_native_plugins(self):
-        from component_api.registry import Registry
+        from embodied.contracts.registry import Registry
         registry = Registry()
         for key in ('vr', 'routing', 'ingress'):
             registry.entries.pop(key)
-        with patch('workstation.workbench.Registry', return_value=registry):
+        with patch('embodied.workstation.workbench.Registry', return_value=registry):
             for source in ('cli','phone.arkit'):
                 config,_ = self.configured({'version':1,'robot':'arx.sim','source':source})
                 self.assertNotIn('native',config)
 
     def test_binding_uses_capabilities_and_explicit_channel_not_source_name(self):
-        from component_api.registry import Registry
+        from embodied.contracts.registry import Registry
         registry = Registry()
         registry.entries['source']['operator_b'] = registry.entries['source']['quest']
         config={'version':1,'robot':'arx.sim','source':'operator_b',
                 'native':{'device':'arx.demo','routing':'arx.native','ingress':'arx.native','channel':'xr_demo'}}
-        with patch('workstation.workbench.Registry', return_value=registry):
+        with patch('embodied.workstation.workbench.Registry', return_value=registry):
             self.assertEqual(self.configured(config)[0]['source_options']['ingress'],'xr_demo')
             with self.assertRaisesRegex(ValueError,'explicit native'):
                 self.configured({k:v for k,v in config.items() if k!='native'})

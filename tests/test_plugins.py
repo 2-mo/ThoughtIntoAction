@@ -6,17 +6,18 @@ import tempfile
 import os
 from arm_service_fixture import ServiceFixture
 import threading
+import time
 import unittest
 from unittest.mock import patch, Mock
 
 import numpy as np
 
-from robot_core.model import RobotModel
-from robot_core.plugins import Registry
-from robot_control.backends import factories
-from quest_teleop import cli
-from quest_teleop.inputs import IdleInput
-from robot_control.cli import main as simulate
+from embodied.core.model import RobotModel
+from embodied.core.plugins import Registry
+from legacy.robot_control.backends import factories
+from legacy.quest_teleop import cli
+from legacy.quest_teleop.inputs import IdleInput
+from legacy.robot_control.cli import main as simulate
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -44,7 +45,7 @@ class PluginTests(unittest.TestCase):
         content = (ROOT / "configs/plugins.toml").read_text()
         content += '\n[input.probe]\nfactory="test_plugins:ProbeInput"\nsimulation_only=true\n'
         (root / "configs/plugins.toml").write_text(content)
-        self.resources.enter_context(patch("robot_core.plugins.PROJECT_ROOT", root))
+        self.resources.enter_context(patch("embodied.core.plugins.PROJECT_ROOT", root))
         ProbeInput.instances = []
         ProbeInput.fail = False
         self.service = ServiceFixture()
@@ -53,7 +54,7 @@ class PluginTests(unittest.TestCase):
 
     def test_hardware_rejected_before_factory_import(self):
         registry = Registry()
-        with patch("robot_core.plugins.importlib.import_module") as load:
+        with patch("embodied.core.plugins.importlib.import_module") as load:
             with self.assertRaisesRegex(ValueError, "cannot load hardware"):
                 registry.load("arm", "stanford", allow_hardware=False)
             with self.assertRaisesRegex(ValueError, "Unknown viewer"):
@@ -98,6 +99,10 @@ class PluginTests(unittest.TestCase):
             self.assertTrue(controller._should_keep_running())
         with patch.object(cli.PresetSingleX5Controller, "run", run):
             simulate(["--input", "probe"])
+        # Exit requests a jerk-limited stop; the service releases the lease once settled (172982f).
+        deadline = time.monotonic() + 3
+        while self.service.service.owner is not None and time.monotonic() < deadline:
+            time.sleep(.02)
         self.assertIsNone(self.service.service.owner)
         self.assertFalse(self.service.arm.closed)
         self.assertTrue(ProbeInput.instances[0].closed)
@@ -118,13 +123,13 @@ class PluginTests(unittest.TestCase):
         self.assertFalse(self.service.arm.closed)
 
     def test_experimental_arm_actuation_is_rejected_before_creation(self):
-        from quest_teleop.experimental.arx2025 import main
+        from legacy.quest_teleop.experimental.arx2025 import main
         with self.assertRaisesRegex(RuntimeError, "disabled"):
             main(actuate=True)
         self.assertFalse(ProbeInput.instances)
 
     def test_recording_identifies_selected_pose_input(self):
-        from quest_teleop.controller import X5TeleopController
+        from legacy.quest_teleop.controller import X5TeleopController
         controller = object.__new__(X5TeleopController)
         controller._session = Mock()
         arm = Mock()

@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts/workspace'))
 import dashboard
-from robot_simulation import mode, control
+from embodied.monitor import mode, control
 w = dashboard.workspace
 
 

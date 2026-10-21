@@ -4,8 +4,8 @@ import threading
 import unittest
 from unittest.mock import Mock, patch
 
-from quest_teleop.inputs import InputFreshness
-from quest_teleop.controller import X5TeleopController
+from legacy.quest_teleop.inputs import InputFreshness
+from legacy.quest_teleop.controller import X5TeleopController
 
 
 class FreshnessTests(unittest.TestCase):
@@ -63,7 +63,7 @@ class FreshnessTests(unittest.TestCase):
         controller._update_robot_state.assert_not_called()
 
     def test_worker_exception_reaches_main_thread_instead_of_success_exit(self):
-        from quest_teleop.base_controller import X5TeleopBase, HardwareTeleopController
+        from legacy.quest_teleop.base_controller import X5TeleopBase, HardwareTeleopController
         controller = object.__new__(X5TeleopController)
         controller._service_mode = False
         controller._thread_error = ValueError("outside model limits")
@@ -84,7 +84,7 @@ class FreshnessTests(unittest.TestCase):
         controller._update_gripper_target = Mock()
         controller._pre_ik_update = Mock()
         controller._update_ik = Mock(side_effect=controller._stop_event.set)
-        with patch("quest_teleop.base_controller.time.monotonic_ns", side_effect=[1_000_000, 4_500_000]):
+        with patch("legacy.quest_teleop.base_controller.time.monotonic_ns", side_effect=[1_000_000, 4_500_000]):
             controller._ik_rate = Mock()
             controller._ik_thread(controller._stop_event)
         self.assertEqual(controller._input_timing, {"sample_monotonic_ns": 4_500_000, "duration_ms": 3.5})

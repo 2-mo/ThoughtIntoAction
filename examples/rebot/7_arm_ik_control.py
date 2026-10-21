@@ -18,8 +18,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from reBotArm_control_py.actuator import RebotArm
-from reBotArm_control_py.controllers import RebotArmEndPose
+from embodied.robots.rebot.actuator import RebotArm
+from embodied.robots.rebot.controllers import RebotArmEndPose
 
 
 def main() -> None:
@@ -50,7 +50,7 @@ def main() -> None:
 
         if line.lower() == "end_state":
             q, _, _ = rebotarm.get_state()
-            from reBotArm_control_py.kinematics import joint_to_pose
+            from embodied.robots.rebot.kinematics import joint_to_pose
             pos, rpy = joint_to_pose(q)
             px, py, pz = float(pos[0]), float(pos[1]), float(pos[2])
             rx, ry, rz = float(rpy[0]), float(rpy[1]), float(rpy[2])

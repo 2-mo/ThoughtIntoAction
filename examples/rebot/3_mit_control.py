@@ -20,7 +20,7 @@ import sys
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from reBotArm_control_py.actuator import RebotArm
+from embodied.robots.rebot.actuator import RebotArm
 
 rebotarm = RebotArm()
 rebotarm.connect()

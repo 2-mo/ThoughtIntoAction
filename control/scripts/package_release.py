@@ -48,10 +48,13 @@ def main():
         for path in paths:
             archive.add(path, arcname=str(Path('arx-televr') / path.relative_to(ROOT)), recursive=False)
         shared_hashes = {}
-        for module in ('component_api', 'operations'):
+        for module in ('embodied/contracts',):
             origin = ROOT.parent / 'src' / module
             if not origin.is_dir():
                 origin = ROOT / 'shared' / module
+            package_init = origin.parent / '__init__.py'
+            archive.add(package_init, arcname=str(Path('arx-televr/shared/embodied/__init__.py')), recursive=False)
+            shared_hashes['shared/embodied/__init__.py'] = hashlib.sha256(package_init.read_bytes()).hexdigest()
             for path in sorted(origin.rglob('*')):
                 if (not path.is_file() or '__pycache__' in path.parts
                         or path.suffix not in ('.py', '.json') and path.name != 'LICENSE'):

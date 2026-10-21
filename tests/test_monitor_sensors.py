@@ -8,11 +8,11 @@ from unittest.mock import patch
 from urllib.request import build_opener, ProxyHandler, Request
 from urllib.error import HTTPError
 
-from robot_core.model import RobotModel
-from robot_simulation.scene import Scene
-from quest_teleop.inputs import controller_snapshot, IdleInput
-from robot_core.local_server import LocalServer
-from quest_teleop.runtime.session import TeleopSession
+from embodied.core.model import RobotModel
+from embodied.monitor.scene import Scene
+from legacy.quest_teleop.inputs import controller_snapshot, IdleInput
+from embodied.core.local_server import LocalServer
+from legacy.quest_teleop.runtime.session import TeleopSession
 
 
 class MonitorSensorTests(unittest.TestCase):
@@ -28,7 +28,7 @@ class MonitorSensorTests(unittest.TestCase):
             scene = Scene(RobotModel())
             self.addCleanup(scene.close)
             http = build_opener(ProxyHandler({}))
-            with patch("robot_core.project.load_config", return_value=config), patch("robot_core.camera_client.load_config", return_value=config):
+            with patch("embodied.core.project.load_config", return_value=config), patch("embodied.sensors.client.load_config", return_value=config):
                 server = LocalServer(path, dispatch)
                 try:
                     data = json.loads(http.open(scene.url + "api/sensors").read())

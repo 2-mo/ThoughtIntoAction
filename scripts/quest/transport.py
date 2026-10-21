@@ -6,8 +6,8 @@ import ipaddress
 import subprocess
 import time
 
-from robot_core.device_lease import DeviceLease
-from robot_core.project import PROJECT_ROOT, LOG_DIR
+from embodied.contracts.device_lease import DeviceLease
+from embodied.core.project import PROJECT_ROOT, LOG_DIR
 
 from rich.console import Console
 from rich.panel import Panel

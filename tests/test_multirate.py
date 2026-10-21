@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 import numpy as np
-from quest_teleop.multirate import camera_rows, save_robot_sidecar
+from embodied.data.export.multirate import camera_rows, save_robot_sidecar
 
 class MultirateTests(unittest.TestCase):
     def test_camera_anchors_align_training_actions_and_archive_full_rate(self):

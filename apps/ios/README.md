@@ -90,7 +90,7 @@ session, run this local Ubuntu console and type `reset` only after the app is in
 `RESET PENDING` and the operator has checked the situation:
 
 ```bash
-/home/r2/.local/bin/uv run python tools/phase3_mock_session.py
+./run.sh components run diagnostic.phone_reset_console
 ```
 
 The console cannot enable a real backend, initialize CAN, or substitute for a

@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts.launch import build_command
-from robot_core.project import load_config
+from embodied.core.project import load_config
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -51,8 +51,8 @@ import tyro
 with patch.object(arx5, "Arx5JointController", side_effect=AssertionError("Opened CAN")) as hardware, \
      patch("xrobotoolkit_teleop.common.base_teleop_controller.XrClient", side_effect=AssertionError("Opened XR")) as xr:
     entries = [(name, getattr(importlib.import_module(name), function)) for name, function in (
-        ("quest_teleop.cli", "baseline_main"), ("quest_teleop.cli", "presets_main"),
-        ("quest_teleop.legacy.controller", "main"))]
+        ("legacy.quest_teleop.cli", "baseline_main"), ("legacy.quest_teleop.cli", "presets_main"),
+        ("legacy.quest_teleop.legacy.controller", "main"))]
     diagnostic = Path(os.environ["QUEST_TEST_ROOT"]) / "scripts/diagnostics/joint_tracking.py"
     entries.append(("joint-tracking", runpy.run_path(str(diagnostic))["main"]))
     for name, main in entries:

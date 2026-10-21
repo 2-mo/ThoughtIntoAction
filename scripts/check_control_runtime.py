@@ -69,7 +69,7 @@ def main():
                 viewer = until(lambda: child(runtime.pid, '_viewer'))
                 time.sleep(.7)
                 os.kill(viewer, signal.SIGTERM)
-                until(lambda: 'Optional consumer viewer exited' in (output / 'runtime.log').read_text())
+                until(lambda: 'Component viewer exited' in (output / 'runtime.log').read_text())
                 assert runtime.poll() is None, 'Viewer exit stopped control'
             base = [str(ROOT / 'run.sh'), 'collect', '--run', str(directory), '--task', 'simulation acceptance']
             successful = subprocess.run(base + ['--duration', '1', '--output', str(output / 'complete')],
@@ -89,7 +89,7 @@ def main():
                     os.kill(until(lambda: child(runtime.pid, 'adapters.observer')), signal.SIGTERM)
                 assert interrupted.wait(timeout=25) == (0 if args.keep_observer else 1), 'Wrong collector exit status'
             if not args.keep_observer:
-                until(lambda: 'Optional consumer observer exited' in (output / 'runtime.log').read_text())
+                until(lambda: 'Component observer exited' in (output / 'runtime.log').read_text())
                 assert runtime.poll() is None, 'Observer exit stopped control'
             assert runtime.wait(timeout=25) == 0, (output / 'runtime.log').read_text()
             failed = json.loads(next((output / 'interrupted').glob('*/episode.json')).read_text())

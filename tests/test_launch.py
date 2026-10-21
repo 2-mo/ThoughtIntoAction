@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 from scripts.launch import build_command, resolve_python, MODULE_COMMANDS, PYTHON_COMMANDS
-from robot_core.project import load_config
+from embodied.core.project import load_config
 
 
 class LauncherTests(unittest.TestCase):
@@ -28,7 +28,7 @@ class LauncherTests(unittest.TestCase):
         self.assertNotIn("--actuate", result["argv"])
 
     def test_monitor_shortcut_is_independent_from_control(self):
-        script = (ROOT / "scripts/viewer/启动仿真.sh").read_text()
+        script = (ROOT / "scripts/viewer/monitor.sh").read_text()
         self.assertIn('view-arm', script)
         self.assertNotIn('--input', script)
         result = self.preview('view-arm')
@@ -53,7 +53,7 @@ class LauncherTests(unittest.TestCase):
                                     cwd="/tmp", capture_output=True, text=True)
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertFalse((ROOT / "configs/profiles/quest-simulation.toml").exists())
-        self.assertFalse((ROOT / "src/quest_teleop/legacy/simulation.py").exists())
+        self.assertFalse((ROOT / "src/legacy/quest_teleop/legacy/simulation.py").exists())
 
     def test_profile_mismatch_fails_before_execution(self):
         result = subprocess.run([str(ROOT / "run.sh"), "--print-command", "--profile", "presets", "control-arm"], capture_output=True)
@@ -111,10 +111,45 @@ class LauncherTests(unittest.TestCase):
 
     def test_source_checks_can_bootstrap_before_environment_exists(self):
         with patch.dict(os.environ, {"QUEST_TELEOP_PYTHON": "/missing-quest-env/bin/python"}):
-            for command in ("check-dependencies", "fetch-dependencies"):
+            for command in ("check-dependencies", "fetch-dependencies", "check-all"):
                 result = subprocess.run([str(ROOT / "run.sh"), command, "--help"],
                                         cwd="/tmp", capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class CatalogTests(unittest.TestCase):
+    """`./run.sh <group> <command>` names existing commands, scripts and components."""
+
+    def test_every_entry_has_a_target(self):
+        from embodied.workstation.catalog import GROUPS
+        import scripts.launch as launch
+        flat = (launch.PYTHON_COMMANDS | launch.SHELL_COMMANDS | launch.MAINTENANCE_COMMANDS
+                | launch.MODULE_COMMANDS | launch.BOOTSTRAP_COMMANDS)
+        components = set(json.loads((ROOT / "configs/components/commands.json").read_text())["commands"])
+        for group, (_, commands) in GROUPS.items():
+            for name, (_, target) in commands.items():
+                with self.subTest(command=f"{group} {name}"):
+                    if target[0] == "run":
+                        self.assertIn(target[1][0], flat)
+                    elif target[0] == "component":
+                        self.assertIn(target[1], components)
+                    elif target[0] == "bash":
+                        self.assertTrue((ROOT / target[1]).is_file())
+
+    def test_groups_resolve_to_launcher_commands(self):
+        from scripts.launch import resolve_group
+        self.assertEqual(resolve_group(["arm", "check", "--virtual"]), ["check-arm", "--virtual"])
+        self.assertEqual(resolve_group(["calib", "payload", "--help"]), ["components", "run", "calibration.payload", "--help"])
+        self.assertEqual(resolve_group(["phone", "--run", "R"]), ["phone", "--run", "R"])  # single-word command
+        with patch("builtins.print"):
+            self.assertEqual(resolve_group(["check", "bogus"]), 2)
+            self.assertEqual(resolve_group(["data"]), 0)
+
+    def test_bare_run_prints_the_catalog(self):
+        result = subprocess.run([str(ROOT / "run.sh")], capture_output=True, text=True, cwd="/tmp")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("kernel", result.stdout)
+        self.assertIn("./run.sh <功能> <命令>", result.stdout)
 
 
 if __name__ == "__main__":

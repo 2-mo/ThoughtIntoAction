@@ -92,8 +92,8 @@ def run(args):
     native_device = native_routing = None
     device_plugin = args.input_plugin
     if args.managed:
-        sys.path.insert(0, str(ROOT.parent / "src" if (ROOT.parent / "src/component_api").is_dir() else ROOT / "shared"))
-        from component_api.registry import Registry
+        sys.path.insert(0, str(ROOT.parent / "src" if (ROOT.parent / "src/embodied/contracts").is_dir() else ROOT / "shared"))
+        from embodied.contracts.registry import Registry
         registry = Registry(ROOT / "config/components.json")
         # Old --input presets remain shortcuts; profiles pass explicit connections.
         device_plugin = device_plugin or {'vr': 'arx.quest', 'demo': 'arx.demo'}.get(args.input)
@@ -212,7 +212,7 @@ def run(args):
         (directory / 'runtime.ready').write_text('ready\n')
         trigger = 'gripper' if settings.robot.gripper_max_width > 0 else 'unused (no tool)'
         if args.routing_plugin == 'arx.workbench':
-            print('Workbench standby: right stick down 1 s to enable; Grip follows; Trigger controls gripper; A/B reserved for collection/presets.')
+            print(f'Workbench: right controller as upstream (A: hold 150 ms to change mode | Grip: clutch | Trigger: {trigger} | A+B: Home); left controller: collection.')
         else:
             print(f"A: hold 150 ms to change mode | Grip: clutch | Trigger: {trigger} | A+B: Home")
         if args.input == "demo":

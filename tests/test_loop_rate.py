@@ -1,5 +1,5 @@
 import unittest
-from robot_core.loop_rate import LoopRate
+from embodied.core.loop_rate import LoopRate
 
 
 class LoopRateTests(unittest.TestCase):

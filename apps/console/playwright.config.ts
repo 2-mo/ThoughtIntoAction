@@ -12,7 +12,7 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: "env PYTHONPATH=../../src python3 -B -m arx_tools.https_static_server --host 127.0.0.1 --port 8181 --directory dist --spa",
+    command: "env PYTHONPATH=../../src python3 -B -m legacy.arx_tools.https_static_server --host 127.0.0.1 --port 8181 --directory dist --spa",
     cwd: ".",
     url: "http://127.0.0.1:8181",
     reuseExistingServer: false,

@@ -30,7 +30,7 @@ arx5 = [
 ]
 
 [project.scripts]
-robot-teleop = "robot_teleop.cli:main"
+robot-teleop = "embodied.phone.cli:main"
 
 [dependency-groups]
 dev = [
@@ -42,7 +42,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/robot_teleop"]
+packages = ["src/embodied/phone"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"
@@ -59,6 +59,6 @@ select = ["B", "E", "F", "I", "PT", "RUF", "SIM", "UP"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-packages = ["robot_teleop"]
+packages = ["embodied.phone"]
 mypy_path = "src"
 warn_unreachable = true

@@ -40,4 +40,4 @@ if [[ ! -x "$PYTHON" ]]; then
 fi
 export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 export PYTHONUNBUFFERED=1
-exec "$PYTHON" -m quest_teleop.export_lerobot --source "$SOURCE" --output "$OUTPUT" "$@"
+exec "$PYTHON" -m embodied.data.export.lerobot --source "$SOURCE" --output "$OUTPUT" "$@"

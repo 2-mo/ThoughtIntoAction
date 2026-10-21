@@ -4,7 +4,7 @@ import time
 import unittest
 from unittest.mock import patch
 from arm_service_fixture import ServiceFixture
-from robot_simulation.connections import UsbEcho, arm_rtt, ConnectionProbe
+from embodied.monitor.connections import UsbEcho, arm_rtt, ConnectionProbe
 
 
 class ConnectionTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class ConnectionTests(unittest.TestCase):
         real_popen = subprocess.Popen
         def spawn(*args, **kwargs):
             return real_popen(["sh", "-c", 'while IFS= read -r line; do printf "%s\\n" "$line"; done'], **kwargs)
-        with patch("robot_simulation.connections.subprocess.Popen", side_effect=spawn):
+        with patch("embodied.monitor.connections.subprocess.Popen", side_effect=spawn):
             echo = UsbEcho("fake")
         try:
             self.assertGreaterEqual(echo.measure(), 0)

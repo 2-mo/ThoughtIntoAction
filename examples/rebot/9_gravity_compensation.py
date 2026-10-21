@@ -33,8 +33,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from reBotArm_control_py.actuator import RebotArm
-from reBotArm_control_py.dynamics import (
+from embodied.robots.rebot.actuator import RebotArm
+from embodied.robots.rebot.dynamics import (
     load_dynamics_model,
     compute_generalized_gravity,
     get_default_gravity,

@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from motorbridge import Controller, Mode
 
-from component_plugins.ownership import leased_operation
+from embodied.workstation.components.ownership import leased_operation
 
 CHANNEL = "can0"  # RobStride 使用 CAN 接口 / RobStride uses CAN interface
 MOTOR_ID = 0x01  # 电机 ID / Motor ID

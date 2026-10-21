@@ -25,13 +25,13 @@ import pinocchio as pin
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from reBotArm_control_py.kinematics import (
+from embodied.robots.rebot.kinematics import (
     get_joint_count,
     load_robot_model,
     compute_ik,
     get_joint_names,
 )
-from reBotArm_control_py.kinematics.inverse_kinematics import IKParams
+from embodied.robots.rebot.kinematics.inverse_kinematics import IKParams
 
 
 # ----------------------------------------------------------------------

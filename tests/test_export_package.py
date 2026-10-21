@@ -13,9 +13,9 @@ import zipfile
 import numpy as np
 from mcap_fixture import write_records
 
-from quest_teleop.task_package import finalize_task
-from quest_teleop.export_decode import BatchFrameReader
-from quest_teleop.video import RGBVideoWriter, SequentialFrameReader, read_frame
+from embodied.data.task_package import finalize_task
+from embodied.data.export.decode import BatchFrameReader
+from embodied.data.episode.video import RGBVideoWriter, SequentialFrameReader, read_frame
 
 
 def make_episode(root, name, count=120, png=False):
@@ -118,11 +118,44 @@ class PortableExportTests(unittest.TestCase):
             with np.load(output/'robot/episode_000000.npz') as raw:
                 self.assertEqual(len(raw['state']),len(states))
 
-    def test_runtime_schema2_portable_export_preserves_independent_clocks(self):
-        from episode_io.runtime_episode import RuntimeEpisodeWriter
+    def test_runtime_schema2_dual_camera_mp4_exports_both_views(self):
+        from embodied.data.episode.runtime_episode import RuntimeEpisodeWriter
         from test_runtime_collection import tick
         from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
-        from quest_teleop.export_lerobot import export
+        from embodied.data.export.lerobot import export
+        import time
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            descriptor = {'runtime_id':'test', 'backend':'real', 'parameters':{'model':{'manifest':{'model':'fixture'}}}}
+            cameras = {'wrist_rgb': {'stream_id':'wrist', 'fps':30, 'height':48, 'width':64},
+                       'exterior_rgb': {'stream_id':'exterior', 'fps':30, 'height':48, 'width':64}}
+            writer = RuntimeEpisodeWriter(root/'raw', descriptor, 'two views', cameras=cameras, video=True)
+            origin = time.monotonic_ns()
+            for i in range(80):
+                row = tick(i, origin+i*4_000_000)
+                row.update(version=2, source='quest', owner_epoch=1, source_sequence=i, operation_id='')
+                writer.add_tick(row)
+                if i % 8 == 0:
+                    stamp = origin+i*4_000_000+3_000_000
+                    writer.add_frame({'image':np.full((48,64,3),20,np.uint8), 'stream_id':'wrist',
+                                      'host_received_monotonic_ns':stamp, 'frame_number':i//8})
+                    writer.add_frame({'image':np.full((48,64,3),200,np.uint8), 'stream_id':'exterior',
+                                      'host_received_monotonic_ns':stamp-2_000_000, 'frame_number':i//8}, 'exterior_rgb')
+            self.assertEqual(writer.close('duration')['lifecycle'], 'complete')
+            export(root/'raw', root/'dataset', 'local/test', progress=False, decoder='opencv', decode_workers=0)
+            manifest = json.loads((root/'dataset/meta/quest_export.json').read_text())
+            self.assertEqual(manifest['cameras'], ['wrist_rgb', 'exterior_rgb'])
+            self.assertEqual(manifest['backends'], ['real'])
+            loaded = LeRobotDataset('local/test', root=root/'dataset', video_backend='pyav')
+            first = loaded[0]
+            self.assertEqual(tuple(first['observation.images.exterior'].shape), (3, 48, 64))
+            self.assertGreater(first['observation.images.exterior'].float().mean(), first['observation.images.wrist'].float().mean())
+
+    def test_runtime_schema2_portable_export_preserves_independent_clocks(self):
+        from embodied.data.episode.runtime_episode import RuntimeEpisodeWriter
+        from test_runtime_collection import tick
+        from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+        from embodied.data.export.lerobot import export
         import time
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -149,6 +182,9 @@ class PortableExportTests(unittest.TestCase):
             output = bundle/'lerobot_dataset'
             manifest = json.loads((output/'meta/quest_export.json').read_text())
             self.assertEqual(manifest['layout'],'aligned30_raw250_v2')
+            self.assertEqual(manifest['control_stacks'], ['arx-televr kernel: sent_q at 250 Hz'])
+            self.assertEqual(manifest['anomalous_episodes'], [])
+            self.assertEqual(manifest['episodes'][0]['gaps'], [])
             loaded = LeRobotDataset('local/quest_x5',root=output,video_backend='pyav')
             self.assertEqual(len(loaded),10)
             self.assertGreater(loaded[0]['source.action_monotonic_ns'].item(), loaded[0]['source.state_monotonic_ns'].item())
@@ -231,7 +267,7 @@ class PortableExportTests(unittest.TestCase):
             self.assertIn('Output already exists', rerun.stderr)
 
     def test_decoder_failure_removes_partial_output(self):
-        from quest_teleop.export_lerobot import export
+        from embodied.data.export.lerobot import export
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             path, _, _ = make_episode(root, 'video', count=4)

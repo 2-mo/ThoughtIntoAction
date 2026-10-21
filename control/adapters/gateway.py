@@ -1,6 +1,7 @@
 """Bounded command ingress. Socket handling and planning never run on the robot thread."""
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import queue
@@ -9,8 +10,16 @@ import threading
 import time
 from collections import OrderedDict
 
-from component_api.rpc import receive, send
+import numpy as np
+
+from embodied.contracts.rpc import receive, send
 from .commands import CommandEngine, MotionPlanner
+
+# Robot facts clients read instead of keeping their own copies (todo C-01, R-01).
+DESCRIBED_ROBOT_FIELDS = ('variant', 'control_hz', 'joint_min', 'joint_max', 'park_q', 'gripper_max_width',
+                          'torque_max', 'joint_step_limit', 'can_interface')
+ACTIONS = ('describe', 'status', 'acquire', 'source-metadata', 'heartbeat', 'release', 'hold', 'cancel', 'stop',
+           'preview', 'execute', 'free-drive', 'joint', 'cartesian', 'gripper')
 
 
 class Gateway:
@@ -19,6 +28,7 @@ class Gateway:
         manifest = Path(config.model_path).with_suffix('.model.json')
         self.model_id = hashlib.sha256(manifest.read_bytes()).hexdigest()
         self.ingresses = ingresses or {}
+        self.config = config
         self.engine = CommandEngine(runtime_id, config, self.model_id, self.ingresses)
         self.planner = planner_factory(config, self.model_id)
         self.pending = queue.Queue(maxsize=64)
@@ -71,6 +81,9 @@ class Gateway:
                             raise ValueError('Source metadata must be a bounded JSON object')
                         if len(self.metadata_events) >= 1024:
                             raise ValueError('Source metadata history full; start a new runtime')
+                    if action == 'describe':
+                        send(sock, {'ok': True, 'result': self.describe()})
+                        return
                     snapshot = self.snapshot
                     if snapshot is None:
                         raise ValueError('Worker feedback not ready')
@@ -82,8 +95,13 @@ class Gateway:
                             self.plans[plan['plan_id']] = plan
                             while len(self.plans) > 64:
                                 self.plans.popitem(last=False)
-                        result = {**plan, 'q': plan['q'].tolist(), 'collision_check': 'none'}
+                            tcp = self._tcp_path(plan['q'])
+                        workspace = getattr(self.planner, 'workspace', None)
+                        result = {**plan, 'q': plan['q'].tolist(), 'collision_check': 'none', 'tcp': tcp,
+                                  'workspace': workspace.describe() if workspace else None}
                     else:
+                        if action in ('cartesian', 'joint'):
+                            self._check_workspace(action, request)
                         if action == 'execute':
                             with self.plan_lock:
                                 plan = self.plans.get(request.get('plan_id'))
@@ -116,6 +134,37 @@ class Gateway:
                         pass
         finally:
             self.slots.release()
+
+    def describe(self):
+        """Read-only; needs no lease or feedback."""
+        robot = {name: getattr(self.config, name) for name in DESCRIBED_ROBOT_FIELDS}
+        workspace = getattr(self.planner, 'workspace', None)
+        return {'protocol': 1, 'runtime_id': self.engine.runtime_id, 'model_id': self.model_id,
+                'robot': {k: list(v) if isinstance(v, tuple) else v for k, v in robot.items()},
+                'workspace': workspace.describe() if workspace else None, 'actions': list(ACTIONS)}
+
+    def _tcp_path(self, qs, points=160):
+        """Base TCP poses [x, y, z, qx, qy, qz, qw] along a plan, at most `points` samples, ending at the goal."""
+        fk = getattr(getattr(self.planner, 'model', None), 'fk', None)
+        if fk is None:
+            return None
+        index = sorted({*np.linspace(0, len(qs) - 1, min(points, len(qs))).round().astype(int).tolist()})
+        return [np.asarray(fk(qs[i]), dtype=float).tolist() for i in index]
+
+    def _check_workspace(self, action, request):
+        # Streamed targets from any gateway source; the robot thread only arbitrates.
+        workspace = getattr(self.planner, 'workspace', None)
+        try:
+            target = [float(v) for v in request.get('pose' if action == 'cartesian' else 'q')]
+        except (TypeError, ValueError):
+            return  # Malformed targets are rejected by CommandEngine with its own message.
+        if workspace is None or len(target) != (7 if action == 'cartesian' else 6) or not all(map(math.isfinite, target)):
+            return
+        if action == 'cartesian':
+            workspace.check_pose(target)
+        else:
+            with self.plan_lock:
+                workspace.check_path(self.planner.model.fk, [target])
 
     def tick(self, state, now):
         # Limit per-tick ingress work; no network wait, file IO, or planning here.

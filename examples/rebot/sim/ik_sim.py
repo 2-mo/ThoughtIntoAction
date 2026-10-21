@@ -22,7 +22,7 @@ import pinocchio as pin
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
-from reBotArm_control_py.kinematics.inverse_kinematics import compute_ik
+from embodied.robots.rebot.kinematics.inverse_kinematics import compute_ik
 if __package__:
     from .visualizer import Visualizer
 else:

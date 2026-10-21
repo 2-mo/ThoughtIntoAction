@@ -5,8 +5,8 @@ import unittest
 from unittest.mock import Mock, patch
 import signal
 
-from robot_control.console import Console, fit, recovery_command
-from robot_control.startup import WAITING_FOR_ARM, NO_MOTOR_FEEDBACK, waiting_for_arm
+from legacy.robot_control.console import Console, fit, recovery_command
+from legacy.robot_control.startup import WAITING_FOR_ARM, NO_MOTOR_FEEDBACK, waiting_for_arm
 
 
 class ArmConsoleTests(unittest.TestCase):
@@ -82,7 +82,7 @@ class ArmConsoleTests(unittest.TestCase):
         terminal = RichConsole(file=output, width=120, height=26)
         live = Mock()
         self.console.service.poll.return_value = -signal.SIGABRT
-        with patch('robot_control.console.read_key', return_value='q'):
+        with patch('legacy.robot_control.console.read_key', return_value='q'):
             self.console.render_loop(terminal, live)
         terminal.print(live.update.call_args.args[0])
         rendered = output.getvalue()
@@ -95,7 +95,7 @@ class ArmConsoleTests(unittest.TestCase):
         self.console.ready.clear()
         self.console.service_argv = ['service']
         self.console.service.poll.return_value = WAITING_FOR_ARM
-        with patch('robot_control.console.time.monotonic', side_effect=[10, 14, 15]), \
+        with patch('legacy.robot_control.console.time.monotonic', side_effect=[10, 14, 15]), \
              patch.object(self.console, 'launch') as launch:
             self.assertTrue(self.console.retry_startup())
             self.assertTrue(self.console.retry_startup())

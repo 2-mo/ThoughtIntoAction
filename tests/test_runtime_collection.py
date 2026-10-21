@@ -8,10 +8,10 @@ import unittest
 
 import numpy as np
 
-from collection.capture import capture
-from dataset_tools.runtime_v2 import load_episode
-from episode_io.runtime_episode import RuntimeEpisodeWriter, split_tick
-from observations.runtime_alignment import align
+from embodied.data.capture.capture import capture
+from embodied.data.export.runtime_v2 import load_episode
+from embodied.data.episode.runtime_episode import RuntimeEpisodeWriter, split_tick
+from embodied.data.alignment.runtime_alignment import align
 
 
 def tick(sequence, stamp, *, terminal=False, mode=3):
@@ -56,6 +56,44 @@ class RuntimeCollectionTests(unittest.TestCase):
         self.assertEqual(anchors[0]['action_sequence'], 0)
         self.assertEqual(anchors[0]['action_monotonic_ns'], self.stamp + 2_000_000)
         self.assertTrue(meta['terminal_received'])
+
+    def test_two_cameras_as_mp4_align_for_export(self):
+        """Kernel capture with wrist and exterior cameras, stored as H.264, exported with both views."""
+        from embodied.data.export.exporters import Schema2
+        cameras = {'wrist_rgb': {'stream_id': 'wrist', 'width': 64, 'height': 48, 'fps': 30},
+                   'exterior_rgb': {'stream_id': 'exterior', 'width': 64, 'height': 48, 'fps': 30}}
+        writer = RuntimeEpisodeWriter(self.temp.name, {'runtime_id': 'test'}, 'dual camera', cameras=cameras, video=True)
+        writer.manifest['kind'] = 'quest_runtime_episode'
+        ticks = [tick(i, self.stamp + i * 4_000_000) for i in range(40)]
+        for row in ticks:
+            writer.add_tick(row)
+        for n in range(1, 5):
+            stamp = self.stamp + n * 33_000_000
+            image = np.full((48, 64, 3), 40 * n, np.uint8)
+            writer.add_frame({'image': image, 'host_received_monotonic_ns': stamp, 'frame_number': n, 'stream_id': 'wrist'})
+            writer.add_frame({'image': image, 'host_received_monotonic_ns': stamp - 5_000_000, 'frame_number': n,
+                              'stream_id': 'exterior'}, 'exterior_rgb')
+        writer.add_tick(tick(40, self.stamp + 160_000_000, terminal=True))
+        manifest = writer.close('runtime-terminal')
+        self.assertEqual(manifest['lifecycle'], 'complete', manifest['error'])
+        self.assertEqual(manifest['counts']['frame'], 4)
+        self.assertEqual(manifest['counts']['frame:exterior_rgb'], 4)
+        self.assertTrue((writer.path / 'wrist_rgb.mp4').is_file() and (writer.path / 'exterior_rgb.mp4').is_file())
+        meta, stored = load_episode(writer.path)
+        self.assertEqual(stored['frame:exterior_rgb'][2]['video_frame_index'], 2)
+        meta['outcome'] = 'success'
+        (writer.path / 'episode.json').write_text(json.dumps(meta))
+        meta['runtime']['parameters'] = {'model': {'manifest': 'm'}}
+        meta['runtime']['backend'] = 'sim'
+        (writer.path / 'episode.json').write_text(json.dumps(meta))
+        _, rows, report, _ = Schema2().prepare(writer.path)
+        self.assertGreaterEqual(len(rows), 2)
+        for row in rows:
+            frames = row[3]['camera_frames']
+            self.assertEqual(frames['wrist_rgb']['host_received_monotonic_ns'] - frames['exterior_rgb']['host_received_monotonic_ns'],
+                             5_000_000)
+        self.assertEqual(set(report['cameras']), {'wrist_rgb', 'exterior_rgb'})
+        self.assertEqual(report['cameras']['exterior_rgb']['repeated_images'], 0)
 
     def test_latest_nonfollowing_command_does_not_reuse_old_action(self):
         following = split_tick(tick(0, self.stamp))

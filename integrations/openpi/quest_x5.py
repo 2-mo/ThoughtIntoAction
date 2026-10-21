@@ -35,10 +35,10 @@ class X5DataConfig(config.DataConfigFactory):
             action_sequence_keys=('action',), prompt_from_task=True)
 
 
-def train_config(repo_id='local/quest_x5', fps=30, exterior_camera=False):
+def train_config(repo_id='local/quest_x5', fps=30, exterior_camera=False, name='pi05_quest_x5'):
     if fps != 30:
         raise ValueError('X5 training state/action and video must all use 30 Hz')
-    return config.TrainConfig(name='pi05_quest_x5',
+    return config.TrainConfig(name=name,
         model=pi0_config.Pi0Config(pi05=True, action_horizon=round(fps * .5)),
         data=X5DataConfig(repo_id=repo_id, exterior_camera=exterior_camera, base_config=config.DataConfig(prompt_from_task=True)),
         weight_loader=weight_loaders.CheckpointWeightLoader('gs://openpi-assets/checkpoints/pi05_base/params'),

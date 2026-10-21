@@ -162,6 +162,12 @@ class RealBackend:
             if getattr(sdk, 'quest_gripper_turns_version', None) != 1:
                 raise RuntimeError('Python 3.10 gripper startup patch required; run ./run.sh control build-sdk')
             robot.gripper_startup_turns = True
+        else:
+            # Upstream behaviour: close the gripper before powering the arm (control/README.md).
+            # The platform entry ./run.sh control start --backend real enables the local patch.
+            import sys
+            print("Gripper startup patch off (upstream behaviour); use ./run.sh control start --backend real to enable it.",
+                  file=sys.stderr, flush=True)
         control = sdk.ControllerConfigFactory.get_instance().get_config("joint_controller", 6)
         factory_defaults = {
             "robot": _config_snapshot(robot, _ROBOT_CONFIG_FIELDS),

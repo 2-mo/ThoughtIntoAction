@@ -16,10 +16,10 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from robot_core.device_lease import DeviceLease
-from robot_core.project import load_config, resolve_path
-from robot_core.session_protocol import request
-from robot_simulation.mode import MODES, selected_mode, save_mode
+from embodied.contracts.device_lease import DeviceLease
+from embodied.core.project import load_config, resolve_path
+from embodied.core.session_protocol import request
+from embodied.monitor.mode import MODES, selected_mode, save_mode
 
 SESSION = "questarm-" + hashlib.sha256(str(ROOT).encode()).hexdigest()[:8]
 ROLES = {"arm": "机械臂", "teleop": "遥操", "web": "网页", "home": "总控"}
@@ -232,6 +232,9 @@ def start():
         return
     if not (ROOT / ".venv/bin/python").exists() and not os.environ.get("QUEST_TELEOP_PYTHON"):
         raise RuntimeError("项目 Python 环境不存在，请先按 README 安装依赖。")
+    from embodied.workstation.ports import conflicts
+    if found := conflicts(load_config()):
+        print("端口冲突：" + "；".join(found) + "。详情：./run.sh check ports", file=sys.stderr)
     tmux("new-session", "-d", "-s", SESSION, "-n", ROLES["arm"], "-c", str(ROOT), pane_command("arm"))
     tmux("set-option", "-t", SESSION, "base-index", "1")
     first = tmux("display-message", "-p", "-t", SESSION + ":^", "#{window_index}").stdout.strip()
@@ -277,7 +280,7 @@ def stop_pane(role):
 
 def start_role(role):
     if role in ('arm', 'teleop') and selected_mode() == 'simulation':
-        from robot_simulation.control import command
+        from embodied.monitor.control import command
         return command('sim-resume')
     pane = panes().get(role)
     if pane is None:
@@ -327,13 +330,13 @@ def switch_mode(mode):
             raise RuntimeError('真机仍被占用或尚未停稳，保留当前模式。')
         if info is None and exists():
             stop_pane('arm')  # Cancel a pending hardware startup, not a connected service.
-    from robot_simulation.control import command
+    from embodied.monitor.control import command
     # The new selection survives viewer errors; retry W without reviving real controllers.
     save_mode(mode)
     result = command('start', mode=mode)
     if mode == 'simulation':
         restore_simulation_panes()
-    return result + ('；T 遥操待机，S 暂停保持；右摇杆下拨 1 秒启用。' if mode == 'simulation'
+    return result + ('；T 允许遥操，S 暂停保持；松开全部按键后右手 A 长按切换模式。' if mode == 'simulation'
                      else '；A 连接机械臂，T 启动遥操（仍需原启用手势）。')
 
 
@@ -354,8 +357,8 @@ def shutdown_services():
             stop_pane(role)
     if teleop_running() or arm_info() is not None:
         raise RuntimeError("还有外部控制服务运行；请先在其原控制台退出，未关闭网页或相机。")
-    from robot_simulation.control import command
-    from robot_core.camera_lifecycle import stop_service
+    from embodied.monitor.control import command
+    from embodied.sensors.lifecycle import stop_service
     command("stop")
     stop_service()
 

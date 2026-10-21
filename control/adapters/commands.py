@@ -140,7 +140,13 @@ class CommandEngine:
         if type(source_sequence) is not int or not -1 <= source_sequence < 2**63:
             raise ValueError('Invalid source sequence')
         if action == 'free-drive':
-            self.command = ControlCommand(Mode.FREE_DRIVE, gripper_mode=Mode.FREE_DRIVE)
+            # Optional gripper_width keeps the gripper position-controlled while the arm is free (teaching).
+            width = request.get('gripper_width')
+            if width is not None and (isinstance(width, bool) or not isinstance(width, (int, float))
+                                      or not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width):
+                raise ValueError('Invalid gripper width in metres')
+            self.command = (ControlCommand(Mode.FREE_DRIVE, gripper_mode=Mode.FREE_DRIVE) if width is None else
+                            ControlCommand(Mode.FREE_DRIVE, gripper_mode=Mode.COMMAND_FOLLOWING, gripper_target=float(width)))
         elif action in ('joint', 'cartesian', 'gripper'):
             q = None
             pose = None
@@ -227,7 +233,9 @@ class MotionPlanner:
     """Independent kinematics instance; never shares mutable IK data with the worker."""
     def __init__(self, config, model_id):
         from arx5_vr.model import X5Model
+        from .workspace import Workspace
         self.model, self.config, self.model_id = X5Model(config), config, model_id
+        self.workspace = Workspace.load()
 
     def plan(self, request, snapshot, now):
         start = np.asarray(snapshot['q'])
@@ -259,7 +267,7 @@ class MotionPlanner:
         if kind != 'movel':
             if np.any(goal < self.model.lower) or np.any(goal > self.model.upper):
                 raise ValueError('Target exceeds model limits')
-            from operations.vendor.arx_motion.profiles import minimum_smoothstep9_duration, smoothstep9_fraction
+            from embodied.contracts.vendor.arx_motion.profiles import minimum_smoothstep9_duration, smoothstep9_fraction
             duration = max(.4, minimum_smoothstep9_duration(goal-start, velocity_limit=speed, acceleration_limit=.5, jerk_limit=2.))
             times = np.linspace(0, duration, min(4000, int(duration*250)+2))
             u = times / duration
@@ -268,7 +276,7 @@ class MotionPlanner:
             # Smooth the IK path, then stretch time until sampled joint derivatives
             # satisfy the same velocity/acceleration/jerk bounds as MoveJ.
             from scipy.interpolate import CubicSpline
-            from operations.vendor.arx_motion.profiles import smoothstep9_fraction
+            from embodied.contracts.vendor.arx_motion.profiles import smoothstep9_fraction
             curve = CubicSpline(np.linspace(0, 1, len(qs)), qs, axis=0)
             u = np.linspace(0, 1, 2001)
             qs = curve([smoothstep9_fraction(float(a)) for a in u])
@@ -291,6 +299,7 @@ class MotionPlanner:
         width = float(request.get('gripper_width', snapshot['gripper_width']))
         if not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width:
             raise ValueError('Invalid gripper width')
+        self.workspace.check_path(self.model.fk, qs)
         identity = {'kind': kind, 'epoch': snapshot['epoch'], 'owner_present': snapshot['owner'] is not None, 'model_id': self.model_id,
                     'q': qs.tolist(), 'times': times.tolist(), 'gripper_width': width}
         digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
