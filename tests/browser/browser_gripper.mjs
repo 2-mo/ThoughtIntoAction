@@ -87,7 +87,7 @@ try {
     assert.equal(result.bodyVisible, true);
     assert.equal(result.ghost, false, 'Coincident target stays hidden');
     assert.deepEqual(result.matrix, reference.meshes[index]);
-    await page.locator('#robot-canvas').screenshot({path:new URL(`../outputs/logs/gripper-${Math.round(width*1000)}mm.png`,import.meta.url).pathname});
+    await page.locator('#robot-canvas').screenshot({path:new URL(`../../outputs/logs/gripper-${Math.round(width*1000)}mm.png`,import.meta.url).pathname});
   }
   // A gripper-only target must show moving fingers without overlaying its housing.
   live.gripper = {actual:.02, target:.07, max:.082};

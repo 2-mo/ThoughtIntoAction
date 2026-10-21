@@ -108,7 +108,7 @@ renderHand('left', null); renderHand('right', null);`});
       })).some(Boolean) || sections.some(s => s.scrollHeight > s.clientHeight+1);
     });
     if (overlap) console.log(await page.evaluate(() => [...document.querySelectorAll('.telemetry-group > section')].map(s => ({name:s.className,height:s.clientHeight,scroll:s.scrollHeight,top:s.getBoundingClientRect().top,bottom:s.getBoundingClientRect().bottom})))) ;
-    await page.screenshot({path:new URL(`../outputs/logs/telemetry-layout-${width}.png`,import.meta.url).pathname});
+    await page.screenshot({path:new URL(`../../outputs/logs/telemetry-layout-${width}.png`,import.meta.url).pathname});
     assert.equal(overlap, false, `Telemetry content overlaps at ${width}x${height}`);
     assert.equal(await page.locator('.input-panel').evaluate(e => e.scrollHeight > e.clientHeight + 1), false, 'Upper-right controls must remain visible');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false,
