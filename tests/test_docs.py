@@ -22,6 +22,11 @@ class DocumentationLinkTests(unittest.TestCase):
                     broken.append(f"{name}: {target}")
         self.assertEqual(broken, [])
 
+    def test_command_reference_matches_the_catalog(self):
+        from embodied.workstation import catalog
+        text = catalog.DOC.read_text(encoding="utf-8")
+        self.assertEqual(text, catalog.updated(text), "run: PYTHONPATH=src python3 -m embodied.workstation.catalog")
+
     def test_site_links_and_assets_resolve(self):
         page = ROOT / "site/index.html"
         targets = re.findall(r'(?:href|src)="([^"#]+)"', page.read_text(encoding="utf-8"))

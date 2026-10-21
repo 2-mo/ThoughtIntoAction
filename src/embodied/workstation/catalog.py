@@ -7,6 +7,7 @@ implementations stay where they are. Targets:
   ("component", name)          configs/components/commands.json entry
   ("workspace", [*args])       tmux workbench (scripts/workspace/tmux_workspace.py)
 """
+from pathlib import Path
 
 GROUPS = {
     "sim": ("MuJoCo 仿真工作台（Quest 遥操 + arx 内核 + 采集 + 网页）", {
@@ -132,3 +133,26 @@ GROUPS = {
         "xr-sdk": ("重建 Quest 绑定", ("run", ["rebuild-xr-sdk"])),
     }),
 }
+
+
+# docs/reference/commands.md keeps a generated copy of the table above (tests/test_docs.py checks it).
+DOC = Path(__file__).resolve().parents[3] / "docs/reference/commands.md"
+START, END = "<!-- catalog:start -->", "<!-- catalog:end -->"
+
+
+def render():
+    lines = [START, "", "由 `python -m embodied.workstation.catalog` 从 `src/embodied/workstation/catalog.py` 生成，勿手改。", ""]
+    for name, (title, commands) in GROUPS.items():
+        lines += [f"### {name} · {title}", "", "| 命令 | 说明 |", "| --- | --- |"]
+        lines += [f"| `./run.sh {name} {command}` | {description} |" for command, (description, _) in commands.items()]
+        lines.append("")
+    return "\n".join(lines + [END])
+
+
+def updated(text):
+    head, rest = text.split(START, 1)
+    return head + render() + rest.split(END, 1)[1]
+
+
+if __name__ == "__main__":
+    DOC.write_text(updated(DOC.read_text(encoding="utf-8")), encoding="utf-8")
