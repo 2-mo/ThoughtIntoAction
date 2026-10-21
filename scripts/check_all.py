@@ -37,6 +37,7 @@ GROUPS = {
         [str(ROOT / "control/.venv/bin/python"), "-B", str(ROOT / "control/scripts/check_native_components.py"),
          "--quick", "--output", str(EVIDENCE / "native-components")],
         [*PLATFORM, "scripts/check_control_runtime.py", "--output", str(EVIDENCE / "control-runtime")],
+        [*PLATFORM, "scripts/check_kernel_protocol.py", "--output", str(EVIDENCE / "kernel-protocol")],
         [*PLATFORM, "scripts/check_workbench.py", "--calibration", "--output", str(EVIDENCE / "workbench")],
         [*PLATFORM, "scripts/check_policy_kernel.py", "--output", str(EVIDENCE / "policy-kernel")],
         ["env", "PYTHONPATH=src", "OPENBLAS_NUM_THREADS=1", str(ROOT / "environments/arx_motion/.venv/bin/python"), "-B",

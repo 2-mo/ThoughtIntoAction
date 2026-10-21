@@ -7,7 +7,8 @@
 - 客户端库：`src/runtime_client/`（`ControlSession`、`ControlClient`、`RuntimeReader`）。
 
 - [ ] **C-01** 协议说明与金样本 `P1`
-  - 部分完成：gateway 增加只读 `describe`（不需租约或反馈；返回机器人限位、频率、`park_q`、夹爪、CAN、模型 ID、工作空间和动作列表），客户端 `ControlClient.describe()`。schema 与金样本仍待做。
+  - commands.sock 已完成（2026-10-22）：`embodied.contracts.protocol` 以数据描述全部 15 个动作的租约要求、字段、类型、单位与结果字段，生成 `docs/reference/kernel-protocol.md`；`tests/golden/kernel/samples.json` 为每个动作的真实请求与结果；`tests/test_kernel_protocol.py` 核对表与 gateway 的动作列表、金样本、`ControlSession` 发出的请求和文档；`scripts/check_kernel_protocol.py`（`sim` 组）在 MuJoCo 内核上逐个动作核对结果字段，`--update` 重新生成金样本。待做：observer / RobotTickV2 的类型与字节样本。
+  - 先前：gateway 增加只读 `describe`（不需租约或反馈；返回机器人限位、频率、`park_q`、夹爪、CAN、模型 ID、工作空间和动作列表），客户端 `ControlClient.describe()`。schema 与金样本仍待做。
   - 现状：
     - 手机 UDP 协议有版本号，并有 Python / Swift 共用金样本（`tests/golden`），是仓库内的最好做法。
     - `commands.sock` 只有 `version:1` 封装，没有 schema 文件，动作在代码中逐个检查。

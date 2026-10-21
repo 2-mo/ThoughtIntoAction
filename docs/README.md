@@ -30,6 +30,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | [命令](reference/commands.md) | 全部命令与参数优先级 |
+| [内核命令协议](reference/kernel-protocol.md) | `commands.sock` 全部动作、字段、单位与金样本 |
 | [可替换组件](reference/plugins.md) | 注册表与插件契约 |
 
 ## 架构
