@@ -6,13 +6,19 @@
 
 | 检查 | 命令 / 动作 | 通过条件 |
 | --- | --- | --- |
-| 旧服务已退出 | `./run.sh real shutdown` | 无输出错误；`./run.sh check ports` 中 `arm_service` 为空闲 |
+| 工作台已关闭 | `./run.sh sim shutdown`（与 `real shutdown` 相同；仿真工作台自带的 MuJoCo 内核会占用 Quest） | `./run.sh check ports` 中 `arm_service`、`monitor` 为空闲 |
 | 内核与补丁台账 | `./run.sh kernel verify` | `"status": "verified"` |
 | 夹爪修正 SDK | `./run.sh kernel build-sdk`（只需一次） | 编译成功；启动日志不出现“Gripper startup patch off” |
 | 端口 | `./run.sh check ports` | 无冲突 |
 | 现场 | 支撑机械臂、急停在手边、夹爪周围无物体 | — |
 
 ## 一、上游操控（原生 Quest）
+
+内核启动后打印运行目录 `control/run/<RUN>`；其他终端可以这样取最新一个：
+
+```bash
+RUN=$(ls -td control/run/*/ | head -1)
+```
 
 ```bash
 ./run.sh kernel real
