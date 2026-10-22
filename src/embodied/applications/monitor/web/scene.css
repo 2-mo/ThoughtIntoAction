@@ -602,7 +602,7 @@ aside > .input-panel { grid-row:2 !important; }
 .eef-pose-grid { grid-template-columns:3fr 4fr; }
 .velocity-chart { width:100%; height:24px; }
 .velocity-line { fill:none; stroke:#9dcbd1; stroke-width:1.5; vector-effect:non-scaling-stroke; }
-.velocity-line.target { opacity:.3; stroke-width:2.5; }
+.velocity-line.target { stroke:#e7b573; stroke-dasharray:4 3; opacity:.8; stroke-width:1.5; }
 .velocity-panel .velocity-line.actual { opacity:.3; stroke-width:1; }
 .velocity-panel .velocity-line.trend { stroke:#93d8e1; stroke-width:1.8; }
 .velocity-legend { display:flex; flex-wrap:wrap; gap:3px 10px; margin:2px 0 4px; color:#93d8e1; font-size:10px; }
