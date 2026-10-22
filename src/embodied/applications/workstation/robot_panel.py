@@ -97,6 +97,7 @@ class RobotControls:
     def rows(self, found):
         """Read feedback and preserve the kernel's actual completion/failure result."""
         rows = []
+        had_motion = self.motion is not None
         try:
             if self.damping_armed_until and time.monotonic() >= self.damping_armed_until:
                 self.damping_armed_until = 0.
@@ -143,9 +144,16 @@ class RobotControls:
                             reason = '未满足到位条件'
                         rows.append(('上次动作', Status(reason, 'error')))
         except (OSError, ValueError, RuntimeError, EOFError) as exc:
-            self.close()
-            self.message = Status(f'反馈异常：{exc}', 'error')
-        if found is not None and self.description:
+            try:
+                self.close()
+            except (OSError, ValueError, RuntimeError, EOFError) as cleanup:
+                exc = RuntimeError(f'{exc}；结束控制未确认：{cleanup}')
+            # A poll failure belongs to this refresh, not the persistent action
+            # result. A missing socket during restart must disappear on recovery.
+            rows.append(('反馈查询', Status(f'反馈暂不可用：{exc}', 'error')))
+            if had_motion:
+                self.message = Status('动作跟踪已中断；未确认到位，请检查机械臂状态', 'error')
+        if found is not None and self.description and self.description_run == found[0]:
             settings = self.description['defaults']
             speed = '后端每轴上限' if settings['speed'] == 0 else f'{settings["speed"]:g} rad/s'
             rows.append(('生效参数', f'速度 {speed} · 加速度 {settings["acceleration"]:g} rad/s² · jerk {settings["jerk"]:g} rad/s³'))
