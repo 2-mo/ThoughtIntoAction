@@ -1,0 +1,25 @@
+{
+  "repository": "https://github.com/XR-Robotics/XRoboToolkit-Unity-Client-Quest.git",
+  "revision": "07a28333341629008187e988b73b48bced316092",
+  "unity_version": "2021.3.45f2",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2025 XR Robotics",
+  "package": "com.thoughtintoaction.quest",
+  "audited_blobs": {
+    "Assets/Scripts/Network/TcpHandler.cs": "c8d0939f5b85c601230a0987d23ea4faad9ba40e",
+    "Assets/Scripts/UI/UIOperate.cs": "2d8aeb3d2845c3cbf9ce423f629b78fe6958ecbd",
+    "ProjectSettings/ProjectVersion.txt": "1a62a673a5fc0053da7dc3af46ca5964093b62df",
+    "Packages/manifest.json": "02ea170f59574b51433daf09a02ab084544b8bf6",
+    "LICENSE": "c0973fd2fae63464a24d96e09da74aa7fb61720b"
+  },
+  "build_notes": [
+    "The official project requires Unity 2021.3.45f2 but pins Shader Graph 14.0.9, whose package declares Unity 2022.3. This dependency combination has not been compiled here.",
+    "The official README warns of occasional null-pointer crashes when built with Unity 2022.3. The build entry preserves the official 2021.3.45f2 requirement without claiming verified compatibility."
+  ],
+  "modifications": [
+    "UIOperate.Awake attaches QuestUsbConnection to the existing scene object.",
+    "QuestUsbConnection starts a USB loopback connection, with optional launch extras, without changing tracking controls.",
+    "TcpHandler retries initial and subsequent connection failures with bounded backoff and isolates stale socket callbacks.",
+    "QuestUsbBuild validates the real scene and builds an independent Android application id."
+  ]
+}
