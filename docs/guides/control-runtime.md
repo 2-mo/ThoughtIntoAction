@@ -89,7 +89,7 @@ outputs/envs/control/bin/python scripts/setup/build_gripper_sdk.py \
 
 - `configs/robots/arx5/robot.json` 选择 `profile`，设置关节范围、Home、控制频率、CAN 和模型路径。关节单位为 rad，夹爪宽度为 m。
 - `configs/robots/arx5/tool.json` 定义 TCP 和额外负载。模型加载器检查工具与生成模型的一致性。
-- `configs/control/motion.json` 定义公共规划参数。运行时的实际速度能力由所选驱动报告；`speed=0` 使用逐轴能力，`speed_scale` 对每轴按比例缩放。
+- `configs/control/motion.json` 是统一内核运动参数的唯一配置入口，含关节速度/加速度/jerk、可选 TCP 约束和到位条件；参见 [字段与生效规则](motion-settings.md)。运行时的实际速度能力由所选驱动报告；`speed=0` 使用逐轴能力，`speed_scale` 对每轴按比例缩放。
 - `configs/inputs/quest.json` 定义 SDK 路径、基座旋转、Grip 阈值和位置比例。内置原生 Quest 路由目前要求 250 Hz 机器人配置。
 
 修改 TCP、负载或原始 URDF 后，在根目录显式重建匹配模型：

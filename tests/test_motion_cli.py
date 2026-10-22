@@ -144,6 +144,7 @@ class MotionCliTests(unittest.TestCase):
         state = {'q': [0.] * 6, 'pose': [0., 0., .2, 0., 0., 0., 1.], 'model_id': 'test-model',
                  'gripper_width': .03, 'feedback_monotonic_ns': 12345}
         client = MagicMock()
+        client.identity = {'backend': 'sim'}
         client.status.return_value = state
         client.preview.return_value = self.plan
         with tempfile.TemporaryDirectory() as folder, \

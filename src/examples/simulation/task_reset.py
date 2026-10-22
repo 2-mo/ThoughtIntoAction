@@ -15,7 +15,7 @@ def run(robot: Robot):
     outcomes = []
     for _ in range(2):
         task.reset()
-        robot.movej(goal, speed=.5)
+        robot.movej(goal)
         outcomes.append(task.check_success())
     scene.restore(initial)
     return {'task': task.name, 'success': outcomes, 'restored': True}

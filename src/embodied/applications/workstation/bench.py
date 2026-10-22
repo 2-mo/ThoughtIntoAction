@@ -32,7 +32,7 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传'
-UI_REVISION = '11'
+UI_REVISION = '12'
 ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
@@ -414,11 +414,11 @@ def actions(run, identity, episode=None, now=None):
         ('w', '打开监看与采集网页（地址与连接提示）', 'web', True, False),
         ('m', '读取状态与设备能力', f'./run.sh examples read_state --backend {backend} --run {r}', True, True),
         ('b', '测速：关节 1 往返 10°，保存报告（回车开始）',
-         f'./run.sh examples benchmark --backend {backend} --run {r} --joint 1 --degrees 10 --repeats 1 --speed 0', False, True),
+         f'./run.sh examples benchmark --backend {backend} --run {r} --joint 1 --degrees 10 --repeats 1', False, True),
         ('x', 'MoveL：基座 Z +2 cm（回车开始）',
-         f'./run.sh examples movel --backend {backend} --run {r} --offset 0 0 0.02 --speed 0 --tcp-speed 0.1', False, True),
+         f'./run.sh examples movel --backend {backend} --run {r} --offset 0 0 0.02', False, True),
         ('t', '连续路径：Z +2 cm → Y +2 cm（回车开始）',
-         f'./run.sh examples move_path --backend {backend} --run {r} --speed 0 --tcp-speed 0.1', False, True),
+         f'./run.sh examples move_path --backend {backend} --run {r}', False, True),
         ('h', '手眼标定 · 腕部相机（标定板在桌面）', f'./run.sh calib handeye capture wrist_rgb --auto --run {r}', False, True),
         ('j', '手眼标定 · 固定相机（标定板在夹爪）', f'./run.sh calib handeye capture exterior_rgb --auto --run {r}', False, True),
         ('g', 'π0.5 策略（填写任务后回车）', f'./run.sh policy kernel --run {r} --policy sft --prompt ""', False, True),

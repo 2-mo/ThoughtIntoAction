@@ -3,7 +3,7 @@ from embodied import Robot
 from ..common import run_example
 
 
-def run(robot: Robot, *, tcp_speed=.1, angular_speed=.5, preview_only=False):
+def run(robot: Robot, *, tcp_speed=None, angular_speed=None, preview_only=False):
     xyz = robot.xyz
     waypoints = [[xyz[0], xyz[1], xyz[2] + .02],
                  [xyz[0], xyz[1] + .02, xyz[2] + .02]]

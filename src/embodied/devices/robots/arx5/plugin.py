@@ -79,6 +79,17 @@ class Simulation:
 
 class Hardware:
     @staticmethod
+    def open_diagnostics(descriptor):
+        """Observe CAN broadcasts using this run's SDK mapping, without opening SDK."""
+        from .motor_feedback import MotorFeedback
+        config = descriptor['parameters']['effective_robot_config']
+        robot = descriptor['backend_parameters']['sdk_runtime']['robot']
+        # pybind serializes enum names as MotorType.EC_A4310 / DM_J4310.
+        return MotorFeedback(config['can_interface'], robot['motor_id'],
+            [name.rsplit('.', 1)[-1] for name in robot['motor_type']],
+            robot['gripper_motor_id'], robot['gripper_motor_type'].rsplit('.', 1)[-1])
+
+    @staticmethod
     def environment(env):
         """Resolve the local SDK before launching; imports do not open CAN."""
         import os

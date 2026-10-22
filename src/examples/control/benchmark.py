@@ -17,7 +17,7 @@ def main(argv=None):
     parser.add_argument('--joint', type=int, default=1, help='关节编号，从 1 开始')
     parser.add_argument('--degrees', type=float, default=10.)
     parser.add_argument('--repeats', type=int, default=1)
-    parser.add_argument('--speed', type=float, default=0., help='rad/s，0 使用后端每轴上限')
+    parser.add_argument('--speed', type=float, help='rad/s，0 使用后端每轴上限；省略沿用内核配置')
     parser.add_argument('--output', default='outputs/benchmarks')
     parser.add_argument('--baseline', type=Path, help='同一模型、动作与速度设置的历史 report.json')
     args = parser.parse_args(argv)

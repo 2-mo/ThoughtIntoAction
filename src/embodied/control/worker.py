@@ -137,11 +137,12 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
         backend_parameters = backend.runtime_parameters() if hasattr(backend, 'runtime_parameters') else None
         if backend_parameters is not None:
             write_json(backend_parameter_path, backend_parameters)
+        from embodied.control.motion_limits import MotionLimits
+        capabilities = driver.capabilities(settings.robot, backend_parameters)
+        motion_limits = MotionLimits.load(settings.robot, capabilities=capabilities, backend=backend_name)
+        native_step_limits = motion_limits.step_limits()
         if managed:
             from embodied.control.gateway import Gateway
-            from embodied.control.motion_limits import MotionLimits
-            capabilities = driver.capabilities(settings.robot, backend_parameters)
-            motion_limits = MotionLimits.load(settings.robot, capabilities=capabilities, backend=backend_name)
             native = json.loads((directory / 'runtime.json').read_text()).get('native')
             if native:
                 ingresses[native['channel']] = registry.create('ingress', native['ingress'], runtime='control',
@@ -170,6 +171,8 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
                                      "gripper": (state.gripper_mode or state.mode).value})
                 print(f"mode arm={state.mode.value} gripper={(state.gripper_mode or state.mode).value}", flush=True)
             command = bridge.poll_commands(tick) if not managed else None
+            if command is not None:
+                command.joint_step_limit = native_step_limits
             if gateway is not None:
                 command = gateway.tick(state, tick)
                 if state is not gateway.feedback:

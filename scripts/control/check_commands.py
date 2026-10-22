@@ -12,6 +12,7 @@ sys.path[:0] = [str(ROOT / 'src'), str(ROOT)]
 from embodied.control.commands import CommandEngine, MotionPlanner, SettlingWindow
 from embodied.contracts.control import RobotState, ControlCommand, Mode
 from embodied.control.settings import load_settings
+from embodied.control.motion_limits import MotionLimits
 
 
 def reported_capabilities(velocity):
@@ -98,10 +99,10 @@ class TrajectoryTests(unittest.TestCase):
     def test_default_limits_match_explicit_ruckig_profile(self):
         request = {'kind': 'movej', 'q': (self.q + [np.deg2rad(10), 0, 0, 0, 0, 0]).tolist()}
         implicit = self.planner.plan(request, self.snapshot, 10.)
-        explicit = self.planner.plan({**request, 'speed': .15, 'acceleration': 2., 'jerk': 10.}, self.snapshot, 10.)
+        explicit = self.planner.plan({**request, 'speed': 0., 'acceleration': 2., 'jerk': 10.}, self.snapshot, 10.)
         self.assertEqual(implicit['trajectory']['time_law'], 'ruckig')
         self.assertEqual({k: implicit['limits'][k] for k in ('speed', 'acceleration', 'jerk')},
-                         {'speed': .15, 'acceleration': 2., 'jerk': 10.})
+                         {'speed': 0., 'acceleration': 2., 'jerk': 10.})
         self.assertEqual(implicit['plan_id'], explicit['plan_id'])
         np.testing.assert_array_equal(implicit['q'], explicit['q'])
         np.testing.assert_array_equal(implicit['times'], explicit['times'])
@@ -250,7 +251,7 @@ class TrajectoryTests(unittest.TestCase):
 
 class SettlingTests(unittest.TestCase):
     def test_stationary_encoder_noise_requires_a_complete_window(self):
-        window = SettlingWindow()
+        window = SettlingWindow(MotionLimits.load().settling)
         for index in range(64):
             q = np.full(6, .00038147 * (index % 2))
             dq = np.full(6, (.03297 if index % 4 == 0 else -.01099))
@@ -260,19 +261,19 @@ class SettlingTests(unittest.TestCase):
     def test_persistent_speed_and_reversals_are_not_averaged_away(self):
         for alternating in (False, True):
             with self.subTest(alternating=alternating):
-                window = SettlingWindow()
+                window = SettlingWindow(MotionLimits.load().settling)
                 for index in range(100):
                     speed = .03 * (-1 if alternating and index % 2 else 1)
                     self.assertFalse(window.update(index * .004, np.zeros(6), np.full(6, speed), np.zeros(6)))
 
     def test_position_motion_is_checked_independently_of_reported_velocity(self):
-        window = SettlingWindow()
+        window = SettlingWindow(MotionLimits.load().settling)
         for index in range(100):
             q = np.full(6, .004 if index % 2 else -.004)
             self.assertFalse(window.update(index * .004, q, np.zeros(6), np.zeros(6)))
 
     def test_samples_before_window_cannot_dilute_recent_velocity(self):
-        window = SettlingWindow()
+        window = SettlingWindow(MotionLimits.load().settling)
         for stamp, speed in ((0, 0), (.08, .0225), (.16, .0225), (.24, .0225), (.32, .0225)):
             self.assertFalse(window.update(stamp, np.zeros(6), np.full(6, speed), np.zeros(6)))
 
@@ -281,7 +282,7 @@ class SettlingTests(unittest.TestCase):
                  ('gap', .5, 0, 0), ('clock', .1, 0, 0)]
         for name, stamp, position, speed in cases:
             with self.subTest(case=name):
-                window = SettlingWindow()
+                window = SettlingWindow(MotionLimits.load().settling)
                 for index in range(64):
                     window.update(index * .004, np.zeros(6), np.zeros(6), np.zeros(6))
                 self.assertFalse(window.update(stamp, np.full(6, position), np.full(6, speed), np.zeros(6)))
@@ -526,7 +527,7 @@ class CommandsTests(unittest.TestCase):
         snapshot = {**self.engine.status(self.state, self.now), 'q': q.tolist()}
         target = planner.model.fk(q + [.002,0,0,0,0,0])
         for request in ({'kind':'movej','q':(q+.02).tolist()}, {'kind':'movel','pose':target.tolist()}):
-            plan = planner.plan({**request, 'acceleration': .5, 'jerk': 2.}, snapshot, self.now)
+            plan = planner.plan({**request, 'speed': .15, 'acceleration': .5, 'jerk': 2.}, snapshot, self.now)
             v = np.gradient(plan['q'], plan['times'], axis=0)
             a = np.gradient(v, plan['times'], axis=0)
             j = np.gradient(a, plan['times'], axis=0)
@@ -583,15 +584,17 @@ class CommandsTests(unittest.TestCase):
         gateway.config, gateway.model_id, gateway.engine = self.config, 'model', self.engine
         gateway.planner, gateway.plan_lock = MotionPlanner(self.config, 'model'), threading.Lock()
         gateway.capabilities = {}
+        gateway.simulation = None
         described = gateway.describe()
         self.assertEqual(described['robot']['joint_min'], list(self.config.joint_min))
         self.assertEqual(described['robot']['control_hz'], 250)
         self.assertEqual(described['workspace'], {'minimum_tcp_z_m': 0.0})
-        self.assertEqual(described['motion_limits']['defaults'], {'speed': .15, 'acceleration': 2., 'jerk': 10.})
+        self.assertEqual(described['motion_limits']['defaults'], {'speed': 0., 'acceleration': 2., 'jerk': 10.})
         self.assertEqual(described['motion_limits']['joint_velocity_limits_rad_s'], list(self.config.joint_velocity_max))
         self.assertEqual(described['motion_limits']['source']['kind'], 'offline_configuration')
         self.assertEqual(described['motion_limits']['settling']['position_tolerance_rad'], .0035)
-        self.assertEqual(set(described['actions']), set(ACTIONS))
+        self.assertEqual(set(described['actions']), set(ACTIONS) - {
+            'simulation-reset', 'simulation-restore', 'simulation-snapshot', 'grasp'})
         # The platform's offline reader returns the same robot facts.
         from embodied.contracts.robot import load_robot_profile
         profile = load_robot_profile(ROOT / 'configs/robots/arx5')

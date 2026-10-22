@@ -1,7 +1,7 @@
 """Two-key robot console using the existing leased Robot API.
 
-Opening, refreshing or closing this panel never starts/stops the kernel.
-Only P/H submit motion; space cancels this panel's operation and releases it.
+P/H submit motion; space cancels this panel's operation. D then D explicitly
+requests real kernel shutdown into SDK damping; opening the panel is read-only.
 """
 import math
 import time
@@ -21,6 +21,10 @@ class RobotControls:
         self.started = None
         self.message = Status('按 P 到预抓取位，按 H 回零位', 'ready')
         self.plan_message = None
+        self.description = None
+        self.description_run = None
+        self.damping_armed_until = 0.
+        self.damping_run = None
 
     def close(self):
         robot, self.robot = self.robot, None
@@ -33,9 +37,25 @@ class RobotControls:
                 robot.close()
 
     def press(self, key, found):
-        if key not in ('p', 'h', ' ', 's'):
+        if key not in ('p', 'h', ' ', 's', 'd'):
+            self.damping_armed_until = 0.
             return
         try:
+            if key == 'd':
+                from embodied.applications.workstation import bench
+                if found is None or found[1].get('backend') != 'real' or bench.owned_run() != found:
+                    raise RuntimeError('D 仅用于本工作台正在运行的真机内核')
+                if time.monotonic() >= self.damping_armed_until or self.damping_run != found[0]:
+                    self.damping_run = found[0]
+                    self.damping_armed_until = time.monotonic() + 5
+                    self.message = Status('请扶住机械臂：5 秒内再按 D，退出内核进入阻尼；其他键取消', 'waiting')
+                    return
+                self.damping_armed_until = 0.
+                self.close()
+                bench.stop_kernel()
+                self.message = Status('已请求退出进入阻尼，请扶住机械臂；恢复控制需在总控重新启动 robot', 'waiting')
+                return
+            self.damping_armed_until = 0.
             if key in (' ', 's'):
                 if self.robot is None:
                     self.message = Status('本面板没有正在执行的动作', 'ready')
@@ -60,13 +80,15 @@ class RobotControls:
             self.target = (list(DEFAULT_GRASP_READY_JOINTS) if key == 'p'
                            else self.robot.describe()['robot']['park_q'])
             self.started = time.monotonic()
-            # 0 delegates velocity bounds to the backend. Acceleration/jerk and
-            # settling rules are the existing kernel configuration, not UI caps.
-            self.motion = self.robot.movej(self.target, speed=0, wait=False)
+            self.motion = self.robot.movej(self.target, wait=False)
             name = '预抓取' if key == 'p' else '回零'
             metrics = self.motion.metrics
             self.plan_message = (f'{name} · 轨迹 {metrics["duration_s"]:.2f} s · '
                                  f'规划峰值 {metrics["peak_velocity_rad_s"]:.2f} rad/s')
+            factors = metrics.get('limiting_factors', [])
+            labels = {'speed': '速度', 'acceleration': '加速度', 'jerk': 'jerk'}
+            if factors:
+                self.plan_message += ' · 受限于 ' + '、'.join(labels.get(v, v) for v in factors)
             self.message = Status(f'正在{name}；空格停止并保持', 'waiting')
         except (OSError, ValueError, RuntimeError, EOFError) as exc:
             self.close()
@@ -76,11 +98,18 @@ class RobotControls:
         """Read feedback and preserve the kernel's actual completion/failure result."""
         rows = []
         try:
+            if self.damping_armed_until and time.monotonic() >= self.damping_armed_until:
+                self.damping_armed_until = 0.
+                self.message = Status('阻尼确认已过期，未发送退出请求', 'ready')
             if self.robot is not None and (found is None or found[0] != self.run):
                 self.close()
                 raise RuntimeError('运行实例已变化，当前动作已结束')
             if found is not None and found[1].get('managed'):
-                state = ControlClient(found[0]).status()
+                client = ControlClient(found[0])
+                if self.description_run != found[0]:
+                    self.description = client.describe().get('motion_limits')
+                    self.description_run = found[0]
+                state = client.status()
                 if self.motion is not None:
                     operation = next((op for op in state['operations']
                                       if op['operation_id'] == self.motion.operation_id), None)
@@ -93,7 +122,7 @@ class RobotControls:
                         else:
                             reason = operation.get('reason') or operation['status']
                             if reason == 'Robot did not settle':
-                                reason = '未满足到位条件'
+                                reason = self.settling_reason(operation, state)
                             self.message = Status(f'动作未通过：{reason} · {elapsed:.2f} s', 'error')
                 rows.append(('速度 rad/s', '  '.join(f'{v:+.3f}' for v in state['dq'])))
                 if self.target is not None:
@@ -111,5 +140,25 @@ class RobotControls:
         except (OSError, ValueError, RuntimeError, EOFError) as exc:
             self.close()
             self.message = Status(f'反馈异常：{exc}', 'error')
-        rows.extend([('速度设置', '后端每轴上限 · 无额外应用层速度上限'), ('操作结果', self.message)])
+        if found is not None and self.description:
+            settings = self.description['defaults']
+            speed = '后端每轴上限' if settings['speed'] == 0 else f'{settings["speed"]:g} rad/s'
+            rows.append(('生效参数', f'速度 {speed} · 加速度 {settings["acceleration"]:g} rad/s² · jerk {settings["jerk"]:g} rad/s³'))
+            rows.append(('参数来源', '内核启动时加载的 configs/control/motion.json'))
+        rows.append(('操作结果', self.message))
         return rows
+
+    def settling_reason(self, operation, state):
+        detail = operation.get('settling')
+        if detail:
+            index, error, tolerance = detail['worst_joint'], detail['max_joint_error_rad'], detail['position_tolerance_rad']
+        elif self.target is not None and self.description:
+            errors = [abs(a-b) for a, b in zip(state['q'], self.target)]
+            error = max(errors)
+            index = errors.index(error) + 1
+            tolerance = self.description['settling']['position_tolerance_rad']
+        else:
+            return '未满足到位条件'
+        if error >= tolerance:
+            return f'未满足到位条件 · J{index} 偏差 {math.degrees(error):.2f}°（要求 < {math.degrees(tolerance):.2f}°）'
+        return '未满足到位条件 · 位置已进入容差，稳定时间或速度条件未通过'

@@ -14,8 +14,8 @@ def main(argv=None):
         initial = robot.simulation.snapshot()
         q = robot.q
         q[-1] += .15
-        robot.movej(q, speed=.5)
-        robot.movel(offset=[.005, 0., 0.], speed=0, tcp_speed=.03)
+        robot.movej(q)
+        robot.movel(offset=[.005, 0., 0.])
         print({'joints': len(robot.q), 'pose': robot.pose, 'gripper': 'absent'})
         robot.simulation.restore(initial)
     return 0

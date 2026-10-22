@@ -55,6 +55,35 @@ class ControlPrimitiveTests(unittest.TestCase):
         peak = np.max(np.linalg.norm(np.gradient(positions[:, :3], limited['times'], axis=0), axis=1))
         self.assertLessEqual(peak, .02)
 
+    def test_configured_tcp_defaults_apply_to_plans_and_explicit_calls_override(self):
+        self.planner.motion_limits.cartesian['tcp_speed'] = .02
+        request = dict(kind='movel', pose=[.1, 0., .3, 0., 0., 0., 1.])
+        default = self.plan(**request)
+        explicit = self.plan(**request, tcp_speed=.04)
+        self.assertEqual(default['limits']['tcp'], {'tcp_speed': .02})
+        self.assertLessEqual(default['metrics']['peak_tcp_speed_m_s'], .02)
+        self.assertEqual(explicit['limits']['tcp'], {'tcp_speed': .04})
+        self.assertLess(explicit['times'][-1], default['times'][-1])
+        joint = self.plan(kind='movej', q=[.1, 0., 0., 0., 0., 0.])
+        self.assertNotIn('tcp', joint['limits'])
+
+    def test_settling_timeout_reports_error_without_claiming_success(self):
+        plan = self.plan(kind='movej', q=[.1, 0., 0., 0., 0., 0.])
+        engine = CommandEngine('r', self.config, 'fixture')
+        state = self.state(1.)
+        lease = engine.request({'version': 1, 'runtime_id': 'r', 'action': 'acquire', 'source': 'test'}, state, 1.)
+        engine.next(state, 1.)
+        engine.request({'version': 1, 'runtime_id': 'r', 'action': 'execute',
+            **{k: lease[k] for k in ('token', 'epoch')}, 'sequence': 1, '_plan': plan}, state, 1.)
+        engine.expires = 100.
+        command = engine.next(state, 1. + plan['times'][-1] + engine.motion_limits.settling['timeout_s'] + .01)
+        result = engine.operations[plan['plan_id']]
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['settling']['worst_joint'], 1)
+        self.assertAlmostEqual(result['settling']['max_joint_error_rad'], .1)
+        self.assertTrue(command.hold)
+        self.assertIsNone(engine.completed_target)
+
     def test_pure_rotation_uses_angular_not_linear_speed(self):
         pose = [0., 0., .3, *Rotation.from_rotvec([0., 0., .2]).as_quat()]
         plan = self.plan(kind='movel', pose=pose, angular_speed=.05)

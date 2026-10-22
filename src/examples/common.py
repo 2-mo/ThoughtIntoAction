@@ -22,14 +22,14 @@ def _parser(name, description):
     parser.add_argument("--viewer", action="store_true", help="自建仿真时打开 MuJoCo 窗口，需要桌面 DISPLAY")
     parser.add_argument("--keep-open", action="store_true", help="动作完成后等待回车再退出，需要交互终端")
     if name in ("movej", "movel", "move_path", "teach_return"):
-        parser.add_argument("--speed", type=float, default=.5, help="关节速度 rad/s；0 使用后端每轴上限（默认 .5）")
-        parser.add_argument("--acceleration", type=float, default=2., help="关节加速度 rad/s²（默认 2）")
-        parser.add_argument("--jerk", type=float, default=10., help="关节加加速度 rad/s³（默认 10）")
+        parser.add_argument("--speed", type=float, help="关节速度 rad/s；0 使用后端每轴上限；省略沿用内核配置")
+        parser.add_argument("--acceleration", type=float, help="关节加速度 rad/s²；省略沿用内核配置")
+        parser.add_argument("--jerk", type=float, help="关节加加速度 rad/s³；省略沿用内核配置")
     if name in ("movej", "movel", "move_path"):
         parser.add_argument("--preview-only", action="store_true", help="只规划，不执行动作")
     if name in ("movel", "move_path"):
-        parser.add_argument("--tcp-speed", type=float, default=.1, help="末端线速度上限 m/s（默认 .1）")
-        parser.add_argument("--angular-speed", type=float, default=.5, help="末端角速度上限 rad/s（默认 .5）")
+        parser.add_argument("--tcp-speed", type=float, help="末端线速度上限 m/s；省略沿用内核配置")
+        parser.add_argument("--angular-speed", type=float, help="末端角速度上限 rad/s；省略沿用内核配置")
     if name == "grasp":
         parser.add_argument("--effort", type=float, required=True, help="闭合 effort；单位由设备能力声明，ARX 为 motor_Nm，仿真为每爪 N")
     if name == "movej":

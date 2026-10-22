@@ -8,11 +8,12 @@ from unittest.mock import Mock, patch
 
 from embodied.applications.workstation import bench, robot_panel
 from embodied.core.presets import DEFAULT_GRASP_READY_JOINTS
+from embodied.control.motion_limits import MotionLimits
 
 
 class RobotPanelTests(unittest.TestCase):
     def setUp(self):
-        self.found = (Path('/test/runtime'), {'managed': True, 'plugins': {'robot': 'arx.real'}})
+        self.found = (Path('/test/runtime'), {'backend': 'real', 'managed': True, 'plugins': {'robot': 'arx.real'}})
         self.state = {'owner': None, 'stopped': False, 'q': [0.] * 6,
                       'dq': [0.] * 6, 'operations': []}
         self.robot = Mock()
@@ -24,6 +25,7 @@ class RobotPanelTests(unittest.TestCase):
         self.connect = self.enterContext(patch.object(robot_panel.Robot, 'connect', return_value=self.robot))
         client = self.enterContext(patch.object(robot_panel, 'ControlClient'))
         client.return_value.status.return_value = self.state
+        client.return_value.describe.return_value = {'motion_limits': MotionLimits.load().describe()}
         self.controls = robot_panel.RobotControls()
         self.addCleanup(self.controls.close)
 
@@ -33,11 +35,11 @@ class RobotPanelTests(unittest.TestCase):
         self.connect.assert_not_called()
         self.robot.movej.assert_not_called()
 
-    def test_p_and_h_use_known_targets_and_backend_speed_without_extra_caps(self):
+    def test_p_and_h_use_known_targets_and_kernel_defaults_without_extra_caps(self):
         for key, target in [('p', list(DEFAULT_GRASP_READY_JOINTS)), ('h', [.1] * 6)]:
             with self.subTest(key=key):
                 self.controls.press(key, self.found)
-                self.robot.movej.assert_called_with(target, speed=0, wait=False)
+                self.robot.movej.assert_called_with(target, wait=False)
                 self.controls.close()
 
     def test_repeat_keys_never_queue_and_space_cancels_only_owned_motion(self):
@@ -58,9 +60,37 @@ class RobotPanelTests(unittest.TestCase):
         rows = dict(self.controls.rows(self.found))
         self.assertEqual(rows['操作结果'].level, 'error')
         self.assertIn('未满足到位条件', str(rows['操作结果']))
+        self.assertIn('J4', str(rows['操作结果']))
+        self.assertIn('0.20°', str(rows['操作结果']))
         self.robot.close.assert_called_once()
         self.robot.cancel.assert_not_called()
         self.assertIsNone(self.controls.motion)
+
+    def test_damping_requires_two_explicit_keys_and_owned_real_runtime(self):
+        with patch.object(bench, 'owned_run', return_value=self.found), patch.object(bench, 'stop_kernel') as stop:
+            self.controls.press('d', self.found)
+            stop.assert_not_called()
+            self.controls.press('r', self.found)  # Any other key disarms.
+            self.controls.press('d', self.found)
+            stop.assert_not_called()
+            self.controls.press('d', self.found)
+            stop.assert_called_once()
+            self.connect.assert_not_called()
+        with patch.object(bench, 'owned_run', return_value=None), patch.object(bench, 'stop_kernel') as stop:
+            self.controls.press('d', self.found)
+            self.controls.press('d', self.found)
+            stop.assert_not_called()
+
+    def test_damping_confirmation_expires_and_sim_cannot_shutdown(self):
+        with patch.object(bench, 'owned_run', return_value=self.found), patch.object(bench, 'stop_kernel') as stop:
+            self.controls.press('d', self.found)
+            self.controls.damping_armed_until = 1.
+            self.controls.rows(self.found)
+            self.controls.press('d', self.found)
+            stop.assert_not_called()
+            sim = (self.found[0], {**self.found[1], 'backend': 'sim'})
+            self.controls.press('d', sim)
+            stop.assert_not_called()
 
     def test_occupied_or_unknown_robot_never_receives_motion(self):
         self.state['owner'] = {'source': 'another-controller'}

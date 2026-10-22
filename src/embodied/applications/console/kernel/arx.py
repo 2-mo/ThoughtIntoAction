@@ -31,7 +31,7 @@ from legacy.arx5_control.teleoperation import load_teleoperation_config
 RUNS = PROJECT_ROOT / 'outputs/runtime/control'
 MOTION_PROFILE_REVISION = 6  # The page refuses other revisions.
 SPEED_TIERS = (1, 2, 3, 4, 5, 10, 25, 50, 75, 100)
-DEFAULT_SPEED = 10
+DEFAULT_SPEED = 100  # No second default throttle; 100% uses the kernel's resolved configuration.
 TTL_MS = 200
 LEGACY_ONLY = {'payload_calibration': '负载标定', 'gripper_calibration': '夹爪标定', 'cube': '方块任务'}
 
@@ -455,7 +455,7 @@ class ArxConsole:
     async def joint_motion(self, q, params, **context):
         self.require_active()
         _, scale = speed(params)
-        plan = await self.call(self.session.preview, 'movej', q=[float(v) for v in q], speed=0, speed_scale=scale)
+        plan = await self.call(self.session.preview, 'movej', q=[float(v) for v in q], speed_scale=scale)
         status = await self.execute(plan, **context)
         await self.settle(params)
         return {'kind': 'joint_motion', 'final_error_deg': degrees(np.abs(np.subtract(status['q'], q)))}
@@ -488,7 +488,7 @@ class ArxConsole:
         if self.reference is None:
             raise RuntimeError('尚未记录参考姿态。')
         percent, scale = speed(params)
-        plan = await self.call(self.session.preview, 'movej', q=list(self.reference[0]), speed=0, speed_scale=scale)
+        plan = await self.call(self.session.preview, 'movej', q=list(self.reference[0]), speed_scale=scale)
         self.preview = {'action': 'park', 'speed': percent, 'plan': plan}
         return {'kind': 'park_preview', **self.describe_plan(plan)}
 
@@ -512,7 +512,7 @@ class ArxConsole:
         orientation = (start[3:].tolist() if live or params.get('orientation_xyzw') is None
                        else unit(params['orientation_xyzw']))
         target = [*(start[:3] + delta / 1000).tolist(), *orientation]
-        plan = await self.call(self.session.preview, 'movel', pose=target, speed=0, speed_scale=scale)
+        plan = await self.call(self.session.preview, 'movel', pose=target, speed_scale=scale)
         end = np.asarray(plan['tcp'][-1])
         if not live:
             self.preview = {'action': 'xyz', 'speed': percent, 'delta': delta, 'orientation': orientation,
