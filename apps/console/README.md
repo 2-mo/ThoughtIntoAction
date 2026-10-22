@@ -2,7 +2,7 @@
 
 前端是独立的 `Vue 3 + TypeScript + Vite` 工程，只负责显示状态、可视化预览和
 向版本化 API 发送指令。机械臂、安全检查、任务状态机、相机所有权和数据写入均在
-`src/embodied/console/`，前端不会导入 Python 控制代码。
+`src/embodied/applications/console/`，前端不会导入 Python 控制代码。
 
 功能按目录拆分：
 

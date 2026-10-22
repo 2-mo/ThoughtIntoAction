@@ -2,19 +2,13 @@
 set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 ENV_DIR="$ROOT/outputs/envs/pi05-sft"
-REVISION=215abfb217dbac7d5f1273282331b9b1866c0479
-CHECKOUT="$ROOT/outputs/inference/openpi-$REVISION"
-if [[ ! -d "$CHECKOUT" ]]; then
-    mkdir -p "$ROOT/outputs/inference"
-    ARCHIVE="$(mktemp)"
-    trap 'rm -f "$ARCHIVE"' EXIT
-    curl --fail -L "https://github.com/Physical-Intelligence/openpi/archive/$REVISION.tar.gz" -o "$ARCHIVE"
-    printf '%s  %s\n' 20fc377546b741bb31d1e12aa4003e6e6a54fa0ee3c7b7d8b438157cffb3c683 "$ARCHIVE" | sha256sum --check
-    tar -xzf "$ARCHIVE" -C "$ROOT/outputs/inference"
-fi
+python3 "$ROOT/scripts/setup/dependencies.py" --fetch --name openpi
+CHECKOUT="$(PYTHONPATH="$ROOT/src" python3 -c 'from embodied.core.dependencies import dependency_root; print(dependency_root("openpi"))')"
 if [[ ! -x "$ENV_DIR/bin/python" ]]; then uv venv --python 3.12 "$ENV_DIR"; fi
 uv pip install --python "$ENV_DIR/bin/python" torch==2.7.1+cu128 torchvision==0.22.1+cu128 --index-url https://download.pytorch.org/whl/cu128
 uv pip install --python "$ENV_DIR/bin/python" -r "$ROOT/src/embodied/policy/pi05_sft/requirements.txt"
+# Runtime uses installed packages. The managed checkout remains only a build/training resource.
+uv pip install --python "$ENV_DIR/bin/python" --no-deps "$CHECKOUT" "$CHECKOUT/packages/openpi-client"
 "$ENV_DIR/bin/python" - "$CHECKOUT" <<'PY'
 from pathlib import Path
 import shutil,sys,transformers

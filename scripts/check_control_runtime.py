@@ -58,7 +58,7 @@ def main():
             runtime = subprocess.Popen(command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
 
             def find_run():
-                for path in (ROOT / 'control/run').glob('*/runtime.json'):
+                for path in (ROOT / 'outputs/runtime/control').glob('*/runtime.json'):
                     try:
                         if json.loads(path.read_text())['supervisor_pid'] == runtime.pid and (path.parent / 'backend.ready').exists():
                             return path.parent
@@ -86,7 +86,7 @@ def main():
                 until(lambda: list((output / 'interrupted').glob('*/episode.json')))
                 time.sleep(.3)
                 if not args.keep_observer:
-                    os.kill(until(lambda: child(runtime.pid, 'adapters.observer')), signal.SIGTERM)
+                    os.kill(until(lambda: child(runtime.pid, 'embodied.control.observer')), signal.SIGTERM)
                 assert interrupted.wait(timeout=25) == (0 if args.keep_observer else 1), 'Wrong collector exit status'
             if not args.keep_observer:
                 until(lambda: 'Component observer exited' in (output / 'runtime.log').read_text())

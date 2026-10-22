@@ -3,8 +3,8 @@ import json
 import struct
 from pathlib import Path
 
-from embodied.phone.protocol.golden import GOLDEN_PACKETS, golden_manifest
-from embodied.phone.protocol.packet import PosePacket, decode_packet, encode_packet
+from embodied.devices.phone.protocol.golden import GOLDEN_PACKETS, golden_manifest
+from embodied.devices.phone.protocol.packet import PosePacket, decode_packet, encode_packet
 
 GOLDEN_DIR = Path(__file__).parent
 

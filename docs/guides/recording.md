@@ -28,11 +28,11 @@
 ./run.sh doctor --output outputs/logs/doctor.json
 
 # 单独终端保持机械臂服务运行（初始化进入阻尼）：
-./启动机械臂服务.sh
+./scripts/shortcuts/启动机械臂服务.sh
 
 # 终端 1：原 presets 参数 + 会话和 D435i；这条命令会启用真机动作。
 ./run.sh --profile collection teleop-presets-x5 --actuate
-# 或在原快捷脚本后加： ./启动遥操.sh --enable-session
+# 或在原快捷脚本后加： ./scripts/shortcuts/启动遥操.sh --enable-session
 
 # 终端 2：相机启动、机械臂快照就绪后开始录制。
 ./run.sh session status
@@ -130,7 +130,7 @@ MCAP 使用 `/robot/state`（完整原始 JSON 状态）和 `/camera/wrist/rgb/i
 
 ## 手柄采集流程
 
-日常 `./启动遥操.sh` 默认开启会话，但控制和任务采集初始均未开启。待机期间只连接并监看，不发送机械臂或夹爪命令，A/B 和采集按键暂不生效。右摇杆持续下拨 1 秒启用后，重新从当前机械臂姿态建立参考；头显暂停／休眠后恢复需要再次下拨 1 秒。任务描述在脚本顶部 `COLLECTION_TASK` 设置（或传 `--collection-task`）。
+日常 `./scripts/shortcuts/启动遥操.sh` 默认开启会话，但控制和任务采集初始均未开启。待机期间只连接并监看，不发送机械臂或夹爪命令，A/B 和采集按键暂不生效。右摇杆持续下拨 1 秒启用后，重新从当前机械臂姿态建立参考；头显暂停／休眠后恢复需要再次下拨 1 秒。任务描述在脚本顶部 `COLLECTION_TASK` 设置（或传 `--collection-task`）。
 
 | 操作 | 行为 |
 | --- | --- |

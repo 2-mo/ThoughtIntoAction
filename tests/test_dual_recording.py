@@ -16,7 +16,7 @@ from embodied.data.datasets import validate_episode
 from embodied.data.export.lerobot import prepare_camera_episode
 from embodied.data.replay import RecordedEpisode
 from legacy.quest_teleop.runtime.session import TeleopSession
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.project import load_config
 from test_recording import FakeCamera, snapshot
 
@@ -25,7 +25,7 @@ def make_dual(root, *, broken=None, count=12):
     cameras = {key: {'width': 64, 'height': 48, 'fps': 30, 'stream_id': key}
                for key in ('wrist_rgb', 'exterior_rgb')}
     limits = dict(min_duration_s=.1, max_state_gap_s=.1, max_frame_gap_s=.15, max_sync_skew_s=.06)
-    writer = EpisodeWriter(root, {'robot': RobotModel().metadata(), 'camera': cameras['wrist_rgb'],
+    writer = EpisodeWriter(root, {'robot': X5PinocchioModel().metadata(), 'camera': cameras['wrist_rgb'],
         'cameras': cameras, 'hand_eye_calibrated': False, 'task_run_id': 'dual-fixture',
         'quality_limits': limits, 'control': {'actuate': True, 'gripper_width_m': .082,
         'control_rate_hz': 50, 'recording_rate_hz': 240}}, 'dual capture', rgb_video=True, queue_size=1024)
@@ -112,7 +112,7 @@ class DualRecordingTests(unittest.TestCase):
             cameras = {key: FakeCamera(key, 64, 48, 30) for key in config['recording']['camera_ids']}
             for key in cameras:
                 config['cameras'][key] = dict(serial=key, width=64, height=48, fps=30, enabled=True, hand_eye_calibrated=False)
-            session = TeleopSession(config, RobotModel().metadata(),
+            session = TeleopSession(config, X5PinocchioModel().metadata(),
                 {'actuate': True, 'gripper_width_m': .082, 'control_rate_hz': 50},
                 camera_factory=lambda serial, *args, **kwargs: cameras[serial]).start()
             stop = threading.Event()

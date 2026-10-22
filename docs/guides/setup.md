@@ -2,7 +2,7 @@
 
 主环境使用 uv、Python 3.12 和项目内 `.venv`，当前支持 Linux x86_64。`run.sh` 使用 `/usr/bin/python3`（3.11+）解析配置，然后直接启动 `.venv/bin/python`，不受终端中 Conda 激活状态影响。启动不自动安装或升级依赖。
 
-独立 `view-arm` / `scripts/viewer/monitor.sh` 通过 Python 标准库启动 Three.js 本地服务，独立机械臂服务通过锁定的 pyzmq 发布状态。前端模块和材质随仓库保存，无需安装 Node/npm，也不依赖 CDN；浏览器需支持 WebGL 2。场景资产来源与可选浏览器测试见 [共享场景说明](../../src/embodied/monitor/web/README.md)。
+独立 `view-arm` / `scripts/viewer/monitor.sh` 通过 Python 标准库启动 Three.js 本地服务，独立机械臂服务通过锁定的 pyzmq 发布状态。前端模块和材质随仓库保存，无需安装 Node/npm，也不依赖 CDN；浏览器需支持 WebGL 2。场景资产来源与可选浏览器测试见 [共享场景说明](../../src/embodied/applications/monitor/web/README.md)。
 
 ## 首次安装
 
@@ -34,11 +34,11 @@ uv sync --locked
 ./run.sh rebuild-xr-sdk
 ```
 
-重建命令把旧 CMake 构建目录移入 `outputs/build-cache/`，然后通过 uv 禁用缓存并重建 `xrobotoolkit-sdk`。只作用于本项目 `.venv`。更换机器时重新执行首次安装，不复制 `.venv`。不要把本机推理框架安装到遥操环境，环境边界见 [环境说明](../../environments/README.md)。
+重建命令把旧 CMake 构建目录移入 `outputs/build-cache/`，然后通过 uv 禁用缓存并重建 `xrobotoolkit-sdk`。只作用于本项目 `.venv`。更换机器时重新执行首次安装，不复制 `.venv`。不要把本机推理框架安装到遥操环境，环境边界见 [环境说明](../../configs/environments/README.md)。
 
 源码获取只处理缺失目录；已有 commit 不匹配会报错，不会 reset 本地改动。默认获取/检查只需 XRoboToolkit 和 PC-Service-Pybind 两个源码仓库；X5 SDK 使用已安装的 `arx5-interface`。`--all` 额外处理可选官方 X5、模型源码、openpi，以及官方 R5 和 XR 内嵌 R5 fork 参考仓库。两份 R5 均不参与项目 X5 的构建和运行。
 
-迁移前的 Conda 清单归入 `environments/snapshots/conda-teleop/`；`environments/snapshots/teleop-installed.txt` 保留全部包盘点，其中的 `arx_r5_python` 仅是历史记录。原 Conda 环境没有被修改。
+迁移前的 Conda 清单归入 `configs/environments/snapshots/conda-teleop/`；`configs/environments/snapshots/teleop-installed.txt` 保留全部包盘点，其中的 `arx_r5_python` 仅是历史记录。原 Conda 环境没有被修改。
 
 2026-09-08 在本机用全新 `.venv` 完成迁移验证：锁文件校验、48 个已安装包的依赖检查、XR 原生绑定构建及重建、62 项离线测试、独立仿真 CLI，以及 D435i 640×480 RGB 连续取帧通过。清除 Conda 环境变量后测试通过，核心模块加载的动态库不含 Conda 或桌面备份路径。没有执行真机运动，也未验证全新操作系统上的安装。测试日志在 `outputs/logs/uv-migration-tests.log`。
 
@@ -63,7 +63,7 @@ adb devices -l
 ./run.sh start-xr-service
 ```
 
-Quest 的 XRoboToolkit server IP 设为 `127.0.0.1`。`./启动遥操.sh` 默认先配置 USB reverse，随后自动执行 `quest-wake start`，唤醒头显、发送模拟佩戴信号并打开 XRoboToolkit 应用，再启动遥操。也可单独使用 `./run.sh quest-wake start`，结束使用 `./run.sh quest-wake stop`。唤醒命令返回不代表 XR 数据已连接；控制端会等待新帧。
+Quest 的 XRoboToolkit server IP 设为 `127.0.0.1`。`./scripts/shortcuts/启动遥操.sh` 默认先配置 USB reverse，随后自动执行 `quest-wake start`，唤醒头显、发送模拟佩戴信号并打开 XRoboToolkit 应用，再启动遥操。也可单独使用 `./run.sh quest-wake start`，结束使用 `./run.sh quest-wake stop`。唤醒命令返回不代表 XR 数据已连接；控制端会等待新帧。
 
 未实际佩戴时应先启用模拟佩戴，否则头显休眠会使 PC Service 报 `device missing`，手柄即使有电也会失去跟踪。可用 `./run.sh quest-battery` 查看电量，`adb shell dumpsys power` 查看 `mWakefulness` 和佩戴传感器状态。发生断连时先退出遥操，再唤醒并恢复 Quest 应用连接，最后重新启动遥操。
 
@@ -83,9 +83,9 @@ CAN 路径在 `robot.can_device` 配置。已有接口保持原状态；接口�
 
 ## 独立机械臂服务
 
-日常先在独立终端执行 `./启动机械臂服务.sh`，再按需启动 `./scripts/viewer/启动仿真.sh` 和 `./启动遥操.sh`。仅调试虚拟机械臂时，服务改用 `./run.sh arm-service --backend simulated`，控制用 `./run.sh control-arm`。服务和监看可以在没有控制程序时保持运行。
+日常先在独立终端执行 `./scripts/shortcuts/启动机械臂服务.sh`，再按需启动 `./scripts/viewer/monitor.sh` 和 `./scripts/shortcuts/启动遥操.sh`。仅调试虚拟机械臂时，服务改用 `./run.sh arm-service --backend simulated`，控制用 `./run.sh control-arm`。服务和监看可以在没有控制程序时保持运行。
 
-`启动机械臂服务.sh` 会在进入交互控制台前自动准备 CAN 接口，必要时在当前终端提示输入 sudo 密码；已有接口保持原状，准备失败则停止启动。`--help` 和虚拟后端跳过准备，可用 `--no-prepare-can` 显式关闭。
+`scripts/shortcuts/启动机械臂服务.sh` 会在进入交互控制台前自动准备 CAN 接口，必要时在当前终端提示输入 sudo 密码；已有接口保持原状，准备失败则停止启动。`--help` 和虚拟后端跳过准备，可用 `--no-prepare-can` 显式关闭。
 
 真机服务初始化 SDK 时会使能并进入阻尼；监看和 `check-arm` 只读服务，不初始化 SDK。`check-arm --virtual` 读取虚拟服务。服务配置集中在 `[arm_service]`，RPC socket 为 `outputs/runtime/arm.sock`，状态流由 `[telemetry]` 指定。控制端关闭后服务继续反馈，失联控制权会在 0.5 秒后撤销。详细运行边界见 [机械臂服务与监看](monitoring.md)。
 
@@ -102,7 +102,7 @@ CAN 路径在 `robot.can_device` 配置。已有接口保持原状态；接口�
 
 ### 遥操速度与响应参数
 
-在 `启动遥操.sh` 顶部设置当前控制会话的参数：
+在 `scripts/shortcuts/启动遥操.sh` 顶部设置当前控制会话的参数：
 
 | 参数 | 脚本默认值 | 含义 |
 | --- | --- | --- |

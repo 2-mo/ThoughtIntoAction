@@ -11,7 +11,7 @@ TELEOP = 'x5.teleop/1'     # legacy arm service recording: quest_teleop_episode,
 RUNTIME = 'x5.runtime/2'   # arx kernel recording: quest_runtime_episode / _trace, MCAP + RGB
 GROOT_RAW = 'groot.raw/1'  # GR00T dual-camera raw episode (exported with the GR00T exporter)
 KNOWN = (TELEOP, RUNTIME, GROOT_RAW)
-LEROBOT_EXPORTERS = {TELEOP: 'schema1', RUNTIME: 'schema2'}  # registry names of the LeRobot adapters
+LEROBOT_EXPORTERS = {TELEOP: 'schema1', RUNTIME: 'schema2'}  # registry names of the LeRobot embodied.devices.robots.arx5
 
 
 def identify(manifest):

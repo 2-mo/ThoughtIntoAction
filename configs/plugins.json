@@ -1,0 +1,635 @@
+{
+  "arm": {
+    "service": {
+      "factory": "legacy.robot_control.backends.factories:service",
+      "capabilities": [
+        "recording",
+        "force_hold"
+      ]
+    },
+    "stanford": {
+      "factory": "legacy.robot_control.backends.factories:stanford",
+      "hardware": true,
+      "capabilities": [
+        "recording",
+        "force_hold",
+        "service_device"
+      ]
+    },
+    "simulated": {
+      "factory": "legacy.robot_control.backends.factories:simulated",
+      "simulation_only": true,
+      "capabilities": [
+        "service_device"
+      ]
+    },
+    "arx2025": {
+      "factory": "legacy.robot_control.backends.factories:arx2025",
+      "hardware": true,
+      "capabilities": [
+        "experimental"
+      ]
+    }
+  },
+  "input": {
+    "quest": {
+      "factory": "legacy.quest_teleop.inputs:quest"
+    },
+    "idle": {
+      "factory": "legacy.quest_teleop.inputs:IdleInput",
+      "simulation_only": true
+    },
+    "arkit": {
+      "factory": "embodied.devices.inputs.phone:PhoneInput",
+      "capabilities": [
+        "pose",
+        "sequence",
+        "settings-ack",
+        "ping-pong"
+      ]
+    },
+    "mock": {
+      "factory": "embodied.devices.phone.inputs.mock:MockInputSource",
+      "runtime": "workstation",
+      "capabilities": [
+        "push",
+        "pose",
+        "deterministic"
+      ],
+      "simulation_only": true
+    },
+    "replay": {
+      "factory": "embodied.devices.phone.inputs.replay:ReplayInputSource",
+      "runtime": "workstation",
+      "capabilities": [
+        "playback",
+        "injected-clock",
+        "pose"
+      ]
+    }
+  },
+  "viewer": {
+    "web": {
+      "factory": "embodied.applications.monitor.scene:Scene"
+    },
+    "arx5": {
+      "factory": "embodied.devices.robots.arx5.viewer:Viewer",
+      "runtime": "control"
+    }
+  },
+  "telemetry": {
+    "local": {
+      "factory": "embodied.core.telemetry:LocalPublisher"
+    },
+    "none": {
+      "factory": "embodied.core.telemetry:NullPublisher"
+    }
+  },
+  "camera": {
+    "realsense": {
+      "factory": "embodied.devices.sensors.client:SharedCamera",
+      "hardware": true,
+      "capabilities": [
+        "shared-service",
+        "rgb",
+        "intrinsics"
+      ]
+    },
+    "synthetic": {
+      "factory": "embodied.devices.sensors.synthetic:SyntheticCamera",
+      "simulation_only": true,
+      "capabilities": [
+        "rgb",
+        "stream-identity"
+      ]
+    }
+  },
+  "camera_device": {
+    "realsense": {
+      "factory": "embodied.devices.sensors.factories:realsense",
+      "hardware": true,
+      "capabilities": [
+        "rgb",
+        "intrinsics"
+      ]
+    },
+    "synthetic": {
+      "factory": "embodied.devices.sensors.factories:synthetic",
+      "simulation_only": true,
+      "capabilities": [
+        "rgb",
+        "stream-identity"
+      ]
+    }
+  },
+  "robot": {
+    "arx.sim": {
+      "factory": "embodied.devices.robots.arx5.plugin:Simulation",
+      "runtime": "control",
+      "simulation_only": true,
+      "capabilities": [
+        "feedback",
+        "cartesian",
+        "joint",
+        "gripper",
+        "free-drive"
+      ]
+    },
+    "arx.real": {
+      "factory": "embodied.devices.robots.arx5.plugin:Hardware",
+      "runtime": "control",
+      "hardware": true,
+      "capabilities": [
+        "feedback",
+        "cartesian",
+        "joint",
+        "gripper",
+        "free-drive"
+      ]
+    }
+  },
+  "vr": {
+    "arx.quest": {
+      "factory": "embodied.devices.inputs.quest.composition:QuestDevice",
+      "runtime": "control",
+      "capabilities": [
+        "pose",
+        "input",
+        "tracking",
+        "xr-basis"
+      ]
+    },
+    "arx.demo": {
+      "factory": "embodied.devices.inputs.quest.composition:DemoDevice",
+      "runtime": "control",
+      "simulation_only": true,
+      "capabilities": [
+        "pose",
+        "input",
+        "tracking"
+      ]
+    },
+    "arx.workbench": {
+      "factory": "embodied.devices.inputs.quest.workbench:QuestDevice",
+      "runtime": "control",
+      "capabilities": [
+        "workbench-buttons",
+        "native-control"
+      ]
+    }
+  },
+  "source": {
+    "phone.arkit": {
+      "factory": "embodied.devices.inputs.phone:PhoneController",
+      "capabilities": [
+        "pose",
+        "clutch",
+        "recenter",
+        "gripper",
+        "lease"
+      ]
+    },
+    "cli": {
+      "factory": "embodied.devices.inputs.idle:IdleSource",
+      "capabilities": [
+        "joint",
+        "cartesian",
+        "preview",
+        "execute",
+        "cancel"
+      ]
+    },
+    "quest": {
+      "factory": "embodied.devices.inputs.idle:NativeSession",
+      "capabilities": [
+        "lease",
+        "native-ingress"
+      ]
+    }
+  },
+  "exporter": {
+    "schema1": {
+      "factory": "embodied.data.export.exporters:Schema1",
+      "capabilities": [
+        "lerobot-v2.1",
+        "raw-sidecar"
+      ]
+    },
+    "schema2": {
+      "factory": "embodied.data.export.exporters:Schema2",
+      "capabilities": [
+        "lerobot-v2.1",
+        "raw-sidecar",
+        "independent-action-clock"
+      ]
+    }
+  },
+  "mapping": {
+    "phone_tool": {
+      "factory": "embodied.devices.inputs.phone:phone_tool",
+      "capabilities": [
+        "relative-pose",
+        "tool"
+      ]
+    },
+    "phone_base": {
+      "factory": "embodied.devices.inputs.phone:phone_base",
+      "capabilities": [
+        "relative-pose",
+        "base"
+      ]
+    }
+  },
+  "planner": {
+    "motion.default": {
+      "factory": "embodied.control.commands:MotionPlanner",
+      "runtime": "control",
+      "capabilities": [
+        "movej",
+        "movel",
+        "home",
+        "jog",
+        "sampled-derivative-bounds"
+      ]
+    }
+  },
+  "routing": {
+    "arx.native": {
+      "factory": "embodied.devices.inputs.quest.composition:NativeRouting",
+      "runtime": "control",
+      "capabilities": [
+        "coordinator",
+        "relative-pose",
+        "gripper",
+        "mode-ack",
+        "permit",
+        "health"
+      ]
+    },
+    "arx.workbench": {
+      "factory": "embodied.devices.inputs.quest.workbench:Routing",
+      "runtime": "control",
+      "capabilities": [
+        "workbench-buttons",
+        "native-control"
+      ]
+    }
+  },
+  "ingress": {
+    "arx.native": {
+      "factory": "embodied.devices.inputs.quest.sources:NativeIngress",
+      "runtime": "control",
+      "capabilities": [
+        "candidate",
+        "handover",
+        "freshness",
+        "dependency-health"
+      ]
+    },
+    "arx.workbench": {
+      "factory": "embodied.devices.inputs.quest.workbench:Ingress",
+      "runtime": "control",
+      "capabilities": [
+        "workbench-buttons",
+        "native-control"
+      ]
+    }
+  },
+  "controller": {
+    "arx.joint_target": {
+      "factory": "embodied.devices.robots.arx5.kinematics:JointTargetController",
+      "runtime": "control",
+      "capabilities": [
+        "joint",
+        "cartesian",
+        "home",
+        "free-drive"
+      ]
+    }
+  },
+  "trajectory": {
+    "ruckig": {
+      "factory": "embodied.applications.workstation.components.factories:offline_ruckig",
+      "runtime": "analysis",
+      "capabilities": [
+        "joint",
+        "blend",
+        "q-dq-ddq",
+        "jerk-limits"
+      ]
+    },
+    "clik": {
+      "factory": "embodied.applications.workstation.components.factories:clik",
+      "runtime": "rebot",
+      "capabilities": [
+        "jacobian",
+        "tracking",
+        "limits"
+      ]
+    }
+  },
+  "path": {
+    "cartesian": {
+      "factory": "embodied.applications.workstation.components.factories:cartesian_path",
+      "runtime": "analysis",
+      "capabilities": [
+        "line",
+        "arc",
+        "quaternion-slerp"
+      ]
+    },
+    "se3_geodesic": {
+      "factory": "embodied.applications.workstation.components.factories:se3_path",
+      "runtime": "rebot",
+      "capabilities": [
+        "linear",
+        "min-jerk",
+        "trapezoid",
+        "se3"
+      ]
+    }
+  },
+  "collision": {
+    "tcp": {
+      "factory": "embodied.applications.workstation.components.factories:tcp_collision",
+      "runtime": "analysis",
+      "capabilities": [
+        "sphere",
+        "aabb",
+        "swept-path"
+      ]
+    },
+    "links": {
+      "factory": "embodied.applications.workstation.components.factories:link_collision",
+      "runtime": "analysis",
+      "capabilities": [
+        "coal",
+        "self-collision",
+        "environment"
+      ]
+    }
+  },
+  "kinematic_analysis": {
+    "jacobian": {
+      "factory": "embodied.applications.workstation.components.factories:jacobian",
+      "runtime": "analysis",
+      "capabilities": [
+        "singularity",
+        "scale"
+      ]
+    },
+    "rebot": {
+      "factory": "embodied.applications.workstation.components.factories:rebot_kinematics",
+      "runtime": "rebot",
+      "capabilities": [
+        "fk",
+        "ik",
+        "model"
+      ]
+    }
+  },
+  "calibration_solver": {
+    "eye_in_hand": {
+      "factory": "embodied.applications.workstation.components.factories:eye_in_hand",
+      "runtime": "analysis",
+      "capabilities": [
+        "T_eef_camera",
+        "validation"
+      ]
+    },
+    "eye_to_hand": {
+      "factory": "embodied.applications.workstation.components.factories:eye_to_hand",
+      "runtime": "analysis",
+      "capabilities": [
+        "T_base_camera",
+        "validation"
+      ]
+    }
+  },
+  "calibration_quality": {
+    "handeye": {
+      "factory": "embodied.applications.workstation.components.factories:calibration_quality",
+      "runtime": "analysis",
+      "capabilities": [
+        "validate",
+        "enable",
+        "disable"
+      ]
+    }
+  },
+  "tool_profiles": {
+    "payload": {
+      "factory": "embodied.applications.workstation.components.factories:payload",
+      "runtime": "analysis",
+      "capabilities": [
+        "mass",
+        "center-of-mass",
+        "named-profiles"
+      ]
+    }
+  },
+  "calibration_data": {
+    "gripper": {
+      "factory": "embodied.applications.workstation.components.factories:gripper_calibration",
+      "runtime": "analysis",
+      "capabilities": [
+        "width",
+        "model-identity"
+      ]
+    }
+  },
+  "task_planner": {
+    "cube_stack": {
+      "factory": "embodied.applications.workstation.components.factories:cube_stack",
+      "runtime": "analysis",
+      "capabilities": [
+        "pick",
+        "transfer",
+        "place",
+        "stack"
+      ]
+    },
+    "cube_pick_place": {
+      "factory": "embodied.applications.workstation.components.factories:cube_pick_place",
+      "runtime": "analysis",
+      "capabilities": [
+        "grasp",
+        "rotate",
+        "place"
+      ]
+    }
+  },
+  "dataset_export": {
+    "groot_v21": {
+      "factory": "embodied.applications.workstation.components.factories:groot_export",
+      "runtime": "analysis",
+      "capabilities": [
+        "dual-rgb",
+        "rot6d",
+        "measured-next-state",
+        "lerobot-v2.1"
+      ]
+    }
+  },
+  "dataset_validator": {
+    "groot": {
+      "factory": "embodied.applications.workstation.components.factories:groot_validation",
+      "runtime": "analysis",
+      "capabilities": [
+        "timestamps",
+        "alignment",
+        "quality"
+      ]
+    }
+  },
+  "episode_store": {
+    "groot": {
+      "factory": "embodied.applications.workstation.components.factories:groot_collection",
+      "runtime": "analysis",
+      "capabilities": [
+        "accept",
+        "reject",
+        "raw-episode"
+      ]
+    }
+  },
+  "policy": {
+    "groot": {
+      "factory": "embodied.applications.workstation.components.factories:groot_policy",
+      "runtime": "analysis",
+      "capabilities": [
+        "model-server",
+        "async-inference"
+      ]
+    }
+  },
+  "policy_actions": {
+    "groot": {
+      "factory": "embodied.applications.workstation.components.factories:groot_actions",
+      "runtime": "analysis",
+      "capabilities": [
+        "chunk",
+        "schedule",
+        "preview"
+      ]
+    }
+  },
+  "checkpoint": {
+    "groot": {
+      "factory": "embodied.applications.workstation.components.factories:groot_checkpoint",
+      "runtime": "analysis",
+      "capabilities": [
+        "modality",
+        "complete-shards"
+      ]
+    }
+  },
+  "dynamics": {
+    "pinocchio": {
+      "factory": "embodied.applications.workstation.components.factories:rebot_dynamics",
+      "runtime": "rebot",
+      "capabilities": [
+        "inverse",
+        "forward",
+        "gravity",
+        "inertia",
+        "energy",
+        "derivatives"
+      ]
+    }
+  },
+  "transport": {
+    "mock": {
+      "factory": "embodied.devices.phone.transports.mock:MockTransport",
+      "runtime": "workstation",
+      "capabilities": [
+        "deterministic",
+        "no-network"
+      ],
+      "simulation_only": true
+    }
+  },
+  "test_robot": {
+    "mock": {
+      "factory": "embodied.devices.phone.robots.mock:MockRobotBackend",
+      "runtime": "workstation",
+      "capabilities": [
+        "feedback",
+        "fault-injection"
+      ],
+      "simulation_only": true
+    }
+  },
+  "servo_algorithm": {
+    "ruckig_joint": {
+      "factory": "embodied.devices.phone.controllers.ruckig_servo:RuckigJointServo",
+      "runtime": "analysis",
+      "capabilities": [
+        "joint",
+        "brake"
+      ]
+    },
+    "ruckig_cartesian": {
+      "factory": "embodied.devices.phone.controllers.cartesian_ruckig:CartesianRuckigServo",
+      "runtime": "analysis",
+      "capabilities": [
+        "cartesian",
+        "ik-continuity",
+        "brake"
+      ]
+    }
+  },
+  "kinematics": {
+    "arx5": {
+      "factory": "embodied.devices.robots.arx5.kinematics:X5Model",
+      "runtime": "control"
+    }
+  },
+  "perception": {
+    "rgb_cube": {
+      "factory": "legacy.arx_tools.rgb_cube_detector:RgbCubeDetector",
+      "runtime": "analysis",
+      "capabilities": [
+        "rgb",
+        "cube",
+        "tracking"
+      ]
+    }
+  },
+  "device": {
+    "rebot_dm": {
+      "factory": "embodied.applications.workstation.components.factories:rebot_dm",
+      "runtime": "rebot",
+      "capabilities": [
+        "joint-groups",
+        "mit",
+        "position-velocity",
+        "gripper"
+      ],
+      "hardware": true
+    },
+    "rebot_rs": {
+      "factory": "embodied.applications.workstation.components.factories:rebot_rs",
+      "runtime": "rebot",
+      "capabilities": [
+        "joint-groups",
+        "mit",
+        "position-velocity",
+        "gripper"
+      ],
+      "hardware": true
+    }
+  },
+  "robot_profile": {
+    "arx5": {
+      "factory": "embodied.devices.robots.arx5.profile:load_profile",
+      "runtime": "control"
+    }
+  },
+  "input_profile": {
+    "quest": {
+      "factory": "embodied.devices.inputs.quest.settings:load_profile",
+      "runtime": "control"
+    }
+  }
+}

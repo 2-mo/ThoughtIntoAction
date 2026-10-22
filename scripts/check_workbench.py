@@ -16,10 +16,10 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 from embodied.contracts.runtime.control import ControlClient, ControlSession
-from embodied.inputs.phone import PhoneController
-from embodied.phone.protocol.golden import GOLDEN_POSE
-from embodied.phone.protocol.packet import encode_packet
-from embodied.phone.core.models import Pose, Vector3, Quaternion
+from embodied.devices.inputs.phone import PhoneController
+from embodied.devices.phone.protocol.golden import GOLDEN_POSE
+from embodied.devices.phone.protocol.packet import encode_packet
+from embodied.devices.phone.core.models import Pose, Vector3, Quaternion
 
 
 def until(predicate, timeout=20):
@@ -46,7 +46,7 @@ def main():
             def ready():
                 if runtime.poll() is not None:
                     raise RuntimeError((output/'runtime.log').read_text())
-                for path in (ROOT/'control/run').glob('*/runtime.json'):
+                for path in (ROOT/'outputs/runtime/control').glob('*/runtime.json'):
                     if json.loads(path.read_text())['supervisor_pid'] == runtime.pid and (path.parent/'backend.ready').exists():
                         return path.parent
             directory = until(ready)
@@ -101,14 +101,14 @@ def main():
             assert meta['source_metadata_events'][-1]['metadata']['mapping'] == 'phone_tool'
             result['episode'], result['alignment'] = str(episode), report
             until(lambda: client.status()['owner'] is None and max(map(abs, client.status()['dq'])) < .02)
-            from embodied.calibration.arm import CalibrationArm
+            from embodied.applications.calibration.arm import CalibrationArm
             with CalibrationArm(directory) as arm:
                 if args.calibration:
-                    from embodied.calibration.plan import kernel_model, make_plan, run_plan
-                    from embodied.calibration.session import Session, pose_matrix
-                    from embodied.calibration.solver import solve
+                    from embodied.applications.calibration.plan import kernel_model, make_plan, run_plan
+                    from embodied.applications.calibration.session import Session, pose_matrix
+                    from embodied.applications.calibration.solver import solve
                     from embodied.core.transforms import inverse
-                    from embodied.sensors.synthetic import SyntheticCamera
+                    from embodied.devices.sensors.synthetic import SyntheticCamera
                     arm.hold()
                     model = kernel_model(Path(client.parameters['model']['xml_path']).with_suffix('.urdf'))
                     plan = make_plan(model, arm.snapshot()['q'], step=.2)

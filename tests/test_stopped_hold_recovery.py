@@ -4,13 +4,13 @@ from unittest.mock import Mock
 import numpy as np
 from legacy.robot_control.service import ArmService
 from legacy.robot_control.online_motion import OnlineMotion
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.project import load_config
 
 
 class StoppedHoldRecoveryTests(unittest.TestCase):
     def make_service(self):
-        robot=RobotModel()
+        robot=X5PinocchioModel()
         backend=Mock()
         backend.robot_config.joint_vel_max=np.ones(6)*5
         s=ArmService(robot,backend,Mock(),backend='simulated',hardware=False,

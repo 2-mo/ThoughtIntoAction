@@ -24,7 +24,7 @@ from legacy.cube.planner import (
     maximum_plausible_contact_width_m,
     motion_plan_runs,
 )
-from embodied.console.features.gripper import HOME_GRIPPER_WIDTH_M
+from embodied.applications.console.features.gripper import HOME_GRIPPER_WIDTH_M
 
 
 CUBE_STACK_PREVIEW_TIMEOUT_S = 600.0

@@ -7,9 +7,9 @@ import json
 from pathlib import Path
 
 def _project_root():
-    """Repository containing configs/plugins.toml; independent of where this package lives."""
+    """Repository containing configs/plugins.json; independent of where this package lives."""
     here = Path(__file__).resolve()
-    return next((parent for parent in here.parents if (parent / "configs/plugins.toml").is_file()), here.parents[1])
+    return next((parent for parent in here.parents if (parent / "configs/plugins.json").is_file()), here.parents[1])
 
 
 PROJECT_ROOT = _project_root()
@@ -29,7 +29,7 @@ class Plugin:
 
 class Registry:
     def __init__(self, path=None):
-        self.path = Path(path) if path else PROJECT_ROOT / "configs/plugins.toml"
+        self.path = Path(path) if path else PROJECT_ROOT / "configs/plugins.json"
         if self.path.suffix == '.json':
             self.entries = json.loads(self.path.read_text())
         else:
@@ -39,18 +39,6 @@ class Registry:
                 import tomli as tomllib
             with self.path.open("rb") as stream:
                 self.entries = tomllib.load(stream)
-        if path is None:
-            extra = PROJECT_ROOT / 'control/config/components.json'
-            if extra.exists():
-                for kind, entries in json.loads(extra.read_text()).items():
-                    self.entries.setdefault(kind, {}).update(entries)
-            migrated = PROJECT_ROOT / 'configs/components/migrated.json'
-            if migrated.exists():
-                for kind, entries in json.loads(migrated.read_text()).items():
-                    group = self.entries.setdefault(kind, {})
-                    if group.keys() & entries.keys():
-                        raise ValueError(f'Duplicate migrated {kind} plugins')
-                    group.update(entries)
 
     def spec(self, kind, name, *, allow_hardware=True):
         entries = self.entries.get(kind, {})
@@ -84,7 +72,7 @@ class Registry:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--registry", help="Plugin registry TOML (default: configs/plugins.toml)")
+    parser.add_argument("--registry", help="Plugin registry JSON/TOML (default: configs/plugins.json)")
     args = parser.parse_args()
     print(json.dumps(Registry(args.registry).entries, ensure_ascii=False, indent=2))
 

@@ -5,10 +5,10 @@ import {readFile, mkdir} from 'node:fs/promises';
 import {spawn} from 'node:child_process';
 import {chromium} from '../../.cache/viewer-validation/node_modules/playwright/index.mjs';
 
-const server = spawn('.venv/bin/python', ['-u', '-B', '-c', `from embodied.core.model import RobotModel
-from embodied.monitor.scene import Scene
+const server = spawn('.venv/bin/python', ['-u', '-B', '-c', `from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
+from embodied.applications.monitor.scene import Scene
 import threading
-scene = Scene(RobotModel())
+scene = Scene(X5PinocchioModel())
 threading.Event().wait()`], {env:{...process.env, PYTHONPATH:'src'}, stdio:['ignore','pipe','pipe']});
 let browser;
 try {
@@ -34,7 +34,7 @@ try {
   const page = await browser.newPage({viewport:{width:1920,height:1080}});
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  const source = await readFile(new URL('../../src/embodied/monitor/web/scene.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../../src/embodied/applications/monitor/web/scene.js', import.meta.url), 'utf8');
   // Inspect rendered objects without adding a production debug API.
   await page.route('**/scene.js', route => route.fulfill({contentType:'text/javascript', body:source.replace(
     'scene.add(actualModel, targetModel);',

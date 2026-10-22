@@ -8,11 +8,16 @@
 | `local.example.toml` | 本机配置示例；相机序列号需替换为实际值 |
 | `local.toml` | 本机设备序列号、数据/模型路径等覆盖，不提交 |
 | `profiles/*.toml` | 某个命令的参数组合，如日常 presets、collection、virtual-arm |
-| `plugins.toml` | 受信任的插件工厂及能力声明；实现仍放在各自的 src 包 |
+| `plugins.json` | 唯一插件目录：受信任的工厂、运行环境、硬件属性与能力；实现放在各自的 src 模块 |
+| `robots/arx5/` | X5 的 profile 选择、关节/夹爪参数与 tool 配置；型号约束由 ARX 适配器校验 |
+| `inputs/quest.json` | Quest SDK 位置、坐标映射、离合和位置比例 |
+| `control/` | 公共控制的运动策略与工作区约束，不包含硬件 SDK 实现 |
+| `workbench/` | 仿真/真机与输入来源的装配组合 |
+| `environments/` | 组件环境声明与锁文件；控制环境安装结果位于 `outputs/envs/control/` |
 
 `embodied.core.project.load_config()` 先读取 `project.toml`，再叠加选定的本机配置。选定顺序为启动器 `--config`、`QUEST_TELEOP_CONFIG`、默认 `local.toml`；显式指定的文件缺失时报错。相对路径从项目根目录解析。
 
-共享默认解释器为 `.venv/bin/python`，由根目录 `uv sync --locked` 创建。本机配置通常无需指定 Python；如需诊断其他环境，显式使用 `QUEST_TELEOP_PYTHON` 或 `[environment].teleop_python`。解释器缺失会提示同步环境，不自动回退到 Conda 或系统 Python 执行控制器。
+控制内核使用 `outputs/envs/control/bin/python`（Python 3.10），由 `./run.sh kernel setup` 创建；运行目录是 `outputs/runtime/control/`，模型与原生资源归设备模块，均不写入配置目录。平台共享默认解释器为 `.venv/bin/python`，由根目录 `uv sync --locked` 创建。本机配置通常无需指定 Python；如需诊断其他环境，显式使用 `QUEST_TELEOP_PYTHON` 或 `[environment].teleop_python`。解释器缺失会提示同步环境，不自动回退到 Conda 或系统 Python 执行控制器。
 
 profile 的命令参数排在用户额外参数之前，后者可以覆盖前者。profile 不允许设置 `actuate`，真机动作需入口或命令显式启用。配置读取和 `--print-command` 不初始化设备。
 
@@ -22,7 +27,7 @@ profile 的命令参数排在用户额外参数之前，后者可以覆盖前者
 
 `[telemetry].endpoint` 定义状态发布通道，默认 `tcp://127.0.0.1:5567`；服务持续发布，可有多个监看。更换控制程序不会重启服务或中断状态流。服务控制接口默认为权限 0600 的 `outputs/runtime/arm.sock`，控制端与手眼标定读取同一配置。详见 [服务与监看说明](../docs/guides/monitoring.md)。
 
-相机服务支持多个 `[cameras.<名称>]`，每台独立绑定序列号。`recording.camera_ids` 默认只录 `wrist_rgb`；设为 `["wrist_rgb", "exterior_rgb"]` 后两路都必须在线才能开始录制，并分别保存视频、帧号、设备时钟与主机接收时钟。修改录制列表后重启遥操采集会话，见 [网页和相机控制](../docs/guides/viewer-camera-controls.md)。标定原图、会话与结果在 `outputs/calibration/`，不放入配置目录；未知外参和未完成标定状态保持原样。
+相机服务支持多个 `[cameras.<名称>]`，每台独立绑定序列号。`recording.camera_ids` 默认只录 `wrist_rgb`；设为 `["wrist_rgb", "exterior_rgb"]` 后两路都必须在线才能开始录制，并分别保存视频、帧号、设备时钟与主机接收时钟。修改录制列表后重启遥操采集会话，见 [网页和相机控制](../docs/guides/viewer-camera-controls.md)。标定原图、会话与结果在 `outputs/calibrations/`，不放入配置目录；未知外参和未完成标定状态保持原样。
 
 `[camera_service.color]` 统一设置所有相机的 RGB 白平衡、曝光、增益和色彩参数；
 `[cameras.<名称>.color]` 可覆盖单台设置。未配置时保留设备设置，未知、不支持或超范围参数会报错。

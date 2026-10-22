@@ -1,0 +1,77 @@
+{
+  "arx5_vr/app.py": {
+    "upstream_sha256": "373649b5156fba6fc1fca16088cefdea858c7ba3e0159507e6bb192c4fab0c53",
+    "sha256": "a7ed5ca7958ab9da0a1f998f2e532a0b65fb8e58a6c5fc7759c5cd310801410e",
+    "reason": "Explicit device/routing/ingress composition and dependency heartbeat; independent failed components withdraw only dependent ownership; native unmanaged baseline preserved. Workbench routing prints its actual button bindings (right controller upstream, left controller collection). Shared contracts come from src/embodied/contracts (or the portable shared/ copy). Real startup text distinguishes native Quest Home/open-gripper from managed initial feedback hold; connected inputs may command motion."
+  },
+  "arx5_vr/runtime.py": {
+    "upstream_sha256": "86c7bc2b98ac74f011bb61ef5081770de6342e976f0640e090cb288bd1efc95b",
+    "sha256": "8f161b352110edda3b49ab6410cc88d8790529184aab56d3c941e3c034fd3612",
+    "reason": "Drain telemetry after backend shutdown; keep per-run process cleanup."
+  },
+  "arx5_vr/worker.py": {
+    "upstream_sha256": "f2114216d81d8eaa24f895a8d328cec73dba2674260c46a7e0ff1409d1ed8554",
+    "sha256": "68437279534aeedd549ff86ee211e7f8875cd793991da6df1190781c92fcd54e",
+    "reason": "Managed gateway consumes registered ingresses without device names; optional controller injection, telemetry and shared CAN lease; native unmanaged baseline preserved. Pass the existing backend SDK runtime capabilities once to the shared planner/engine motion policy, without constructing another SDK owner."
+  },
+  "arx5_vr/real.py": {
+    "upstream_sha256": "1a17549508ab4cfb2368a245ace8f4aa1d5cf224ff18d7e0a63f4c3f8048af89",
+    "sha256": "0e27741ba9a17a6f268b9fe0fe4518ca30b5ae7ee0e15efcc33990d1f4adccec",
+    "reason": "Actual SDK submission timestamps and opt-in local gripper startup correction; unmodified IK and gains. Without the opt-in patch, print which gripper startup behaviour is active."
+  },
+  "arx5_vr/sim.py": {
+    "upstream_sha256": "f69cba4060b4fb5334080b2a22e63aaf489076cd1cc32763e33fada52c24f9a8",
+    "sha256": "ad41ebf28d11a5fd8c063f3f95f2f787851a7f341f61ac132289a0f9af83ed79",
+    "reason": "Simulation command application timestamps and the same controller_factory injection point as RealBackend; default controller/dynamics preserved."
+  },
+  "arx5_vr/recording.py": {
+    "upstream_sha256": "362d90330125b1b5ed36d4eb5f13aafba421f191d3d2ae36df9b33f7e75b875f",
+    "sha256": "7d744276a4398508c284df1ff47d3239562accd6c536720f168c2af7923181cc",
+    "reason": "Fingerprint integration and shared contracts/motion sources; record planning-limit configuration and Ruckig version for run reproducibility. Optional controller-specific IK diagnostics preserve backend independence."
+  },
+  "pyproject.toml": {
+    "upstream_sha256": "2f23fb2a1fa8539682c94d1f92cb3dd5d7ed0a1baa873e85eac12d21d2ca92eb",
+    "sha256": "2a5ae82327d25ab3da29ba02a994366cdd880192d884ce19a47050ce24870901",
+    "reason": "Isolated optional pybind11 SDK build dependency; pinned Ruckig dependency for the reused shared motion planner."
+  },
+  "uv.lock": {
+    "upstream_sha256": "f9bd365d24358ec6954307b56b168adf7389148d49e122f7bd28edef25090de0",
+    "sha256": "6da4ec26982532c8ff153759eacdff8de0ab3e93ce198415577e7c68ba3dc2df",
+    "reason": "Lock the optional SDK build group and shared Ruckig planner dependency."
+  },
+  "scripts/package_release.py": {
+    "upstream_sha256": "725219ecacc2dc0c79f3eb67897b3f8c8afd851c7966ba28ba271dfe5d23ef41",
+    "sha256": "9939388c63056569c7011c6fcc1e5692c1ebe95e1fa2fb398e8e12292d1b4083",
+    "reason": "Package integration adapters and existing shared contracts/motion implementations with source hashes; lazy motion imports avoid optional analysis dependencies in the control runtime."
+  },
+  "scripts/self_test.py": {
+    "upstream_sha256": "86848cb1cfb3b2502b83bcf489766c0e5866e4478d188afc4c6ef040f841ceae",
+    "sha256": "41babc44d6bce52d3f0bc8c3ca7965269a188fd7536dcdda88e53d7f84288ddd",
+    "reason": "Run offline integration boundary checks alongside upstream checks."
+  },
+  "arx5_vr/model.py": {
+    "upstream_sha256": "0b6432917cc5334bbd1a6cad5eb0b11aaf332f475e2746979ef254572810e72f",
+    "sha256": "94c2607aa22e941a04971fa192b729cf1a35e7d0deca35787dada5e85d64813a",
+    "reason": "Handle plugin joint targets and reference resets; preserve explicit joint velocity feedforward. Managed commands use resolved per-axis bounds, planned q/dq are checked and applied without a second slew, native targets retain existing interpolation and gains."
+  },
+  "arx5_vr/types.py": {
+    "upstream_sha256": "36466f32635d7007710c9de9975a7f579dfa81bba7acfb528a2e0d7e0ff33434",
+    "sha256": "c93a64e2e12e086af50f65d837b324f1b37658639c42ce1b334f7746a42155f8",
+    "reason": "Typed optional joint position/velocity targets and per-axis step bounds for managed operations. Planned trajectory marker preserves an already validated q/dq reference; native defaults and reference reset remain compatible. Nominal per-axis velocity is explicitly used only for simulation/offline capability."
+  },
+  "arx5_vr/ipc/__init__.py": {
+    "upstream_sha256": "cc751c0a37cd9aa65bdf6febdc4b8a84f0fb9229bf401dd1d39b2505de1edddd",
+    "sha256": "1448ca591886dd9fa5d7b6152852c617b97ecfddb12fbf0e02493f4231b7febb",
+    "reason": "Optional command/feedback ports separate managed ingress from the always-on feedback bus; default RobotBridge behavior unchanged, read-only viewer remains available for phone/CLI."
+  },
+  "scripts/check_real_offline.py": {
+    "upstream_sha256": "f365078e9645ff0bbcc3db9eff9967f938a04f4269a16cbd8d4247b56fd7b828",
+    "sha256": "70d7a59f67646dd7f972d4c016214d93f3bb2c1105ecffb091985320cd21b384",
+    "reason": "FakeHardware regressions for SDK q/dq submission, per-axis bounds, planned no-reslew behavior and worker SDK capability propagation; no hardware controller is constructed."
+  },
+  "scripts/check_portable.py": {
+    "upstream_sha256": "62690ac33f5cf23bd290befe22be27cf4ba25880a91d39016d173592d96c8799",
+    "sha256": "75ce37c4b287267eedda0476159de85923127bffe80ef2a3ab55a40c60e30d47",
+    "reason": "Offline relocation regression proves the release contains the existing shared Ruckig implementation and can plan without workspace or legacy imports."
+  }
+}

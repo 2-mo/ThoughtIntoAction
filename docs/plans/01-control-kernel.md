@@ -1,0 +1,129 @@
+# 控制内核：arx-televr
+
+`control/` 是平台唯一控制内核，操控行为以上游 arx-televr 为准。审查时状态：
+
+- 上游文件、执行位与哈希冻结在 `docs/provenance/arx-televr/UPSTREAM_FILES.json`；13 个局部补丁登记在 `docs/provenance/arx-televr/LOCAL_PATCHES.json`。
+- 本地新增 `src/embodied/control/`（15 个文件）、`config/components.json`、`vendor/arx5-sdk/`（夹爪补丁 SDK）和 4 个检查脚本。
+- 仿真已使用此内核：`scripts/shortcuts/启动网页仿真.sh` → workbench simulation → `./run.sh control start --backend sim`。
+- **真机日常仍走旧链路**：`scripts/shortcuts/启动机械臂服务.sh` → `robot_control.service`，`scripts/shortcuts/启动遥操.sh` → `quest_teleop`（placo IK）→ `ArmClient`。`outputs/runtime/control/` 下 64 次运行记录全部是 `backend=sim`。
+
+## 与上游保持同步
+
+- [ ] **K-01** 上游同步流程 `P1`
+  - 现状：`src/workstation/control.py` 与 `scripts/control/package_release.py` 读取 `UPSTREAM_FILES.json` / `LOCAL_PATCHES.json`，未核对 `./run.sh control verify` 是否完整比对全部上游文件。
+  - 做法：
+    - 确认 verify 会检查非 embodied.devices.robots.arx5 文件的哈希，必须等于上游值或补丁值。
+    - 在 `docs/guides/control-runtime.md` 末尾写明同步步骤：获取上游新提交 → 对比 `UPSTREAM_FILES.json` → 重放补丁 → 更新三份记录 → `control verify`。
+  - 完成：任意改动一个上游文件而不登记补丁，verify 失败。
+
+- [ ] **K-02** 复核 13 个局部补丁 `P2`
+  - 做法：逐项判断保留、移到 `embodied.devices.robots.arx5/`，或整理后提交给上游。目标是让 `embodied.control/` 的补丁只剩确实无法在外围完成的部分。
+  - 涉及：`app.py`、`runtime.py`、`worker.py`、`real.py`、`sim.py`、`recording.py`、`model.py`、`types.py`、`ipc/__init__.py`、`pyproject.toml`、`uv.lock`、`scripts/{package_release,self_test}.py`。
+
+- [x] **K-03** 内核对 `src/` 的反向依赖 `P1`
+  - 已做：内核只导入 L0 `embodied_contracts`（注册表、RPC、设备锁、运动 profile）；`DownHoldGate` 依赖随 K-04 去掉。G-04 的 `control_imports_src` 名单已清空。`app.py`、`worker.py` 仍用 `sys.path` 定位 L0（本仓库 `src/` 或打包后的 `shared/`），B-01 时改为路径依赖。
+  - 现状：
+    - `embodied.control/app.py:95` 和 `worker.py:48` 通过 `sys.path` 引入 `src/component_api`。
+    - `embodied.devices.robots.arx5/workbench.py:15` 引入旧遥操包 `quest_teleop.arming.DownHoldGate`。
+    - `embodied.devices.robots.arx5/commands.py:262,271` 引入 `operations.vendor.arx_motion.profiles`。
+    - `scripts/control/check_workbench_teleop.py` 引入 `runtime_client`。
+  - 做法：内核只依赖一个兼容 Python 3.10 的小型共享包（注册表、设备锁、运动 profile、协议常量）；`DownHoldGate` 移入 `embodied.devices.robots.arx5/` 或共享包，不再依赖 `quest_teleop`。
+  - 完成：G-04 的 `control/` → `src/` 导入白名单只剩共享包。
+
+## 工作台适配与上游操控一致
+
+- [x] **K-04** 按键映射 `P1`
+  - 已做（仿真内核工作台；真机内核使用同一适配，阶段 3 验收）：
+    - `src/embodied/devices/inputs/quest/workbench.py` 去掉"右摇杆下拨 1 秒启用"和合成的 A 脉冲，右手柄原样送给 coordinator；只保留总控的允许 / 暂停，允许后需先松开全部按键、Grip、Trigger 才接收输入。不再导入 `quest_teleop`，也不再修改 `sys.path`。
+    - 修复按键位解码：rollio 每个手柄的位是 MENU=1、摇杆按下=2、primary=4、secondary=8。旧代码把 X=1、Y=2、R3=16，导致 X 读成菜单键、R3 永远不触发。
+    - `src/robot_simulation/session.py` 采集改读左手柄；`Press` / `StickAction` 移到 `src/inputs/gestures.py`。
+    - 网页手柄卡片按后端下发的布局显示；真机旧页面保持原布局。终端、总控、README 文案同步。
+  - 观察到的上游行为：在 managed 工作台中，首次 A 进入跟随，之后在 FreeDrive / 跟随间切换（`scripts/control/check_workbench_teleop.py` 断言）。
+  - 验证：`check_workbench_teleop.py`（原生路由 + MuJoCo）通过；`tests/test_sim_buttons.py`、`tests/browser_sim_buttons.mjs` 通过。未用真实 Quest 验证。
+  - 决定（2026-10-21）：右手柄完全按上游，采集全部移到左手柄：
+
+    | 按键 | 动作 |
+    | --- | --- |
+    | 右 A 按住 ≥ 150 ms 后松开 | Disabled → FreeDrive ↔ CommandFollowing（上游） |
+    | 右 A+B | 回 Home、夹爪打开（上游） |
+    | 右 Grip / Trigger | 相对跟随 / 夹爪（上游） |
+    | 左 X | 去预抓取并开始录制；录制中再按：保存并回预抓取 |
+    | 左 Y 短按 / 长按 1 s | 预抓取 / 作废当前录制（不回零） |
+    | 左摇杆 左推 / 右推 / 上推 | 开始或继续任务 / 保存并暂停任务 / 作废上一条 |
+    | 左摇杆按下长按 1 s | 保存并结束任务 |
+    | 左 Grip | 取消预设动作和待录制 |
+  - 现状：
+    - 上游（`docs/guides/control-runtime.md` 的右手按键表）：A 按住 ≥150 ms 后松开，切换 Disabled → FreeDrive ↔ CommandFollowing；A+B 回 Home 并打开夹爪；Grip 跟随，松开再握重新对齐；Trigger 控制夹爪。
+    - 工作台适配（`embodied.devices.robots.arx5/workbench.py`，提示文字在 `embodied.control/app.py:215`）：过滤 coordinator 的按键输入，右摇杆下拨 1 s 启用；Grip / Trigger 不变；A/B 留给采集和预设。
+    - 旧链路：A 预抓取并开始采集，B 保存，长按 B 回 Home，右摇杆管理任务。
+  - 做法：定一份按键表。控制相关按键（模式、跟随、夹爪、Home）语义与上游一致；采集键另行分配，不与控制键冲突。按键表放一处，终端提示、网页和文档都引用它。
+  - 选项：
+    1. 恢复上游 A / A+B 语义，采集改用左手柄或摇杆；
+    2. 保留工作台的启用门，记为外围适配，并写明与上游的差异。
+
+- [ ] **K-05** 工作台适配改写原生配置文本 `P2`
+  - 现状：`embodied.devices.robots.arx5/workbench.py` 中 `QuestDevice.commands` 用字符串替换追加左手柄通道（把 `PICO Right Controller` 替换成 `Quest Left Controller`）；`Routing.commands` 替换 topic 后写回 coordinator 配置。
+  - 做法：在生成原生配置时（`embodied.src/embodied/devices/inputs/quest/native_config.py` 之后）用结构化数据生成，不对文本做替换。
+
+## 真机切换
+
+- [ ] **K-06** 旧链路与上游的行为差异 `P0`
+  - 决定（2026-10-21）：采用下方建议。原生 Quest 路径全部按上游；工作空间约束只在 gateway 中对非原生来源生效；启动回 Home 写入操作说明。实施见 C-04。
+  - 默认采用上游，逐行决定是否需要外围适配：
+
+    | 场景 | 旧链路（当前真机） | 上游 arx-televr |
+    | --- | --- | --- |
+    | 控制端失联 | 0.5 s 后释放并进入 SDK 阻尼，不保位（`robot_control/service.py:40,88-90`） | 租约过期后位置保持（`embodied.devices.robots.arx5/commands.py:170-171,206-210`） |
+    | 启动 | 阻尼待机，不回零（`service.py:399`） | 使能并回 `park_q`（默认全零，`app.py:153`，`model.py:162-171`） |
+    | 退出 | 阻尼 | SDK 阻尼，不回 Home（`worker.py:209-212`） |
+    | 运动整形 | Ruckig 限加速度 / jerk（`scripts/shortcuts/启动遥操.sh:23-24`：12 / 120） | 每 tick 关节步长 0.0873 rad，加 SDK 限速 |
+    | 桌面平面 | 有（`robot_core/safety.py`，`project.toml:70-74`） | 无 |
+    | 夹爪 | 上限 0.078 m，力保持 0.6 / 0.3 Nm（`project.toml:60-67`，`hardware.py:338-393`） | 上限 0.082 m，夹爪力矩 0（`real.py:427`） |
+    | IK | placo，控制 link6 | MuJoCo 阻尼最小二乘，控制 `tcp_link` |
+
+  - 建议：
+    - 原生 Quest 路径完全按上游。
+    - 桌面 / 工作空间约束作为 gateway 的外围检查，只作用于非原生来源（手机、策略、操作）；与 C-04 一起实施。
+    - 启动回 Home 是上游行为，需在操作说明中写明；`park_q` 可在 `robot.json` 配置。
+  - 完成：每行有决定并记录在此。
+
+- [x] **K-07** 统一真机入口的夹爪补丁 `P1`
+  - 复核与处理（2026-10-21）：`scripts/control/start_real.sh` 是上游原文件，不带本地夹爪补丁时行为与上游一致（上游 README 要求夹爪闭合后上电），不是安全缺陷。平台真机入口为 `./run.sh control start --backend real`（启用补丁并清理环境）；`real.py` 在补丁未启用时打印说明。统一 CLI（B-02）后日常只保留平台入口。未真机验证。
+  - 现状：`real.py:161` 只在环境变量 `QUEST_ARX_GRIPPER_TURNS=1` 时启用本机夹爪修正。该变量只由 `src/workstation/control.py:54` 设置，`scripts/control/start_real.sh:11` 不设置；`start_real.sh` 也不像 `workstation/control.py:40-49` 那样清理 `PYTHONPATH`、`LD_LIBRARY_PATH` 和 `CONDA_*`。
+  - 做法：真机只允许经 `./run.sh control start` 启动；或者 `start_real.sh` 改为调用它。缺少补丁 SDK 时拒绝启动。
+  - 完成：两种方式启动真机时补丁状态与环境相同。
+
+- [ ] **K-08** 真机验收 `P1` `阶段 3`
+  - 已准备：`./run.sh kernel real`（确认后准备 Quest USB 与 CAN，以上游原生模式启动，带遥测供采集）与 `docs/guides/real-arm-acceptance.md` 清单。
+  - 内容：
+    - 上游 README 的启动、模式切换、Grip 跟随、A+B Home、Trigger、Ctrl+C 阻尼；
+    - 工作台 managed 模式与租约；
+    - 复用 `outputs/migration/native-faults-*` 的故障场景；
+    - 记录 `outputs/runtime/control/<RUN>/report.json` 与 `tuning.jsonl`。
+  - 由操作者执行。同时补做阶段 0–2 中标注"未真机验证"的条目。
+  - 依赖：K-04、K-06、K-07、R-01。
+
+- [ ] **K-09** 日常真机入口切换到内核 `P1`
+  - 做法：
+    - 阶段 2：基于内核的真机入口与真机采集（D-09）先写好，用假 SDK 或 MuJoCo 验证，不作为默认入口。
+    - 阶段 3：K-08 通过后，`scripts/shortcuts/启动工作台.sh` 真机模式、`scripts/shortcuts/启动机械臂服务.sh`、`scripts/shortcuts/启动遥操.sh` 默认改用内核。
+  - 依赖：默认切换依赖 K-08。
+
+- [ ] **K-10** 退役旧控制内核 `P2` `阶段 3`
+  - 范围：
+    - `src/robot_control/{service,client,hardware,online_motion,motion,trajectory,console,startup,cli}.py` 和 `backends/`；
+    - `quest_teleop` 的控制部分；
+    - XRoboToolkit placo IK 依赖。
+    - `motor_feedback.py` 如仍需要，作为只读诊断保留。
+  - 依赖：K-09，以及 C-02 中依赖 `ArmClient` 的客户端全部迁移。见 `redundancy.md` X-17。
+
+## 内核运行管理
+
+- [ ] **K-11** 界面不负责内核生命周期 `P1`
+  - 现状：仿真时由 viewer 进程启动内核（`src/robot_simulation/arx_preview.py:125-128` 执行 `control start --managed`），并轮询 `runtime.json`、`workbench-request.json` 等文件。
+  - 做法：由工作台或 CLI 启动内核；viewer 只订阅状态。
+
+- [x] **K-12** `outputs/runtime/control/` 清理 `P3`
+  - 已做（2026-10-21）：`./run.sh kernel clean [--keep 20] [--yes]` 删除最新 N 个以外的运行目录，运行中的内核（supervisor 存活）不受影响；无 `--yes` 时列出并要求输入 yes。
+  - 现状：审查时 67 个运行目录、213 MB，没有清理机制。
+  - 做法：保留最近 N 次，或按天数清理。

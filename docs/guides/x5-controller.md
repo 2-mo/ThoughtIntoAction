@@ -2,7 +2,7 @@
 
 当前 `teleop-presets-x5` 使用本项目维护的 X5 控制器。A/B 采集按键与 Home和录制会话在 `src/legacy/quest_teleop/`；设备通信、待机反馈与命令提交在 `src/legacy/robot_control/service.py`；默认运行不导入上游 R5 控制器或 `arx_r5_python`。
 
-`target_limits.CartesianTargetLimiter` 在手柄坐标转换后、IK 前分别限制平移与旋转目标变化率，参数由 `启动遥操.sh` 的 `MAX_EEF_LINEAR_SPEED_M_S` 和 `MAX_EEF_ANGULAR_SPEED_RAD_S` 提供；0 表示不附加该项限制。旋转沿最短四元数路径推进，重新握持时清除旧目标差，循环卡顿不累积速度额度。预抓取和 Home 提交终点及独立速度／加速度／jerk 配置，由 arm-service 的 Ruckig 统一规划，仍遵守服务的关节速度、超前量与限位设置。参数语义和默认值见 [安装与启动](setup.md#遥操速度与响应参数)。
+`target_limits.CartesianTargetLimiter` 在手柄坐标转换后、IK 前分别限制平移与旋转目标变化率，参数由 `scripts/shortcuts/启动遥操.sh` 的 `MAX_EEF_LINEAR_SPEED_M_S` 和 `MAX_EEF_ANGULAR_SPEED_RAD_S` 提供；0 表示不附加该项限制。旋转沿最短四元数路径推进，重新握持时清除旧目标差，循环卡顿不累积速度额度。预抓取和 Home 提交终点及独立速度／加速度／jerk 配置，由 arm-service 的 Ruckig 统一规划，仍遵守服务的关节速度、超前量与限位设置。参数语义和默认值见 [安装与启动](setup.md#遥操速度与响应参数)。
 
 ```text
 run.sh teleop-presets-x5 → legacy.quest_teleop.cli.presets_main
@@ -64,7 +64,7 @@ Copyright (c) 2025 XR Robotics，原 MIT 许可保存在 [LICENSE.XRoboToolkit](
 
 状态采样保存 `position_alignment` 和 `rotation_alignment`（均为实测 K，未标定为 null）；控制元数据记录 `rotation_frame=calibrated`、`position_frame=measured_quest_to_base`，机器人元数据记录 `eef_frame=eef_link`。`quest_to_base_rotation` 仍是旧固定朝向配置，在该模式中不应用。日常使用 `base` 固定方向映射；`tool`、`aligned` 模式保留作对照。
 
-更新后在旧终端输入 q，重新运行 `./启动遥操.sh`，然后输入 c。无需重启机械臂服务。非交互调用可在另一个终端运行标定命令。
+更新后在旧终端输入 q，重新运行 `./scripts/shortcuts/启动遥操.sh`，然后输入 c。无需重启机械臂服务。非交互调用可在另一个终端运行标定命令。
 
 网页场景右下角的“姿态对齐对照”是只读窗口，可点击标题收起。
 青色示意手柄（前端箭头与上方短柱），橙色示意当前 Cartesian IK 目标，白色示意机械臂反馈的末端朝向。

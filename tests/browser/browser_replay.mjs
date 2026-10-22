@@ -2,10 +2,10 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {chromium} from '../../.cache/viewer-validation/node_modules/playwright/index.mjs';
-const server = spawn('.venv/bin/python', ['-u', '-c', `from embodied.core.model import RobotModel
-from embodied.monitor.scene import Scene
+const server = spawn('.venv/bin/python', ['-u', '-c', `from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
+from embodied.applications.monitor.scene import Scene
 import threading
-scene = Scene(RobotModel())
+scene = Scene(X5PinocchioModel())
 threading.Event().wait()`], {env:{...process.env, PYTHONPATH:'src'}, stdio:['ignore','pipe','pipe']});
 let browser;
 try {

@@ -143,7 +143,8 @@ class ModelServer:
         startup_timeout_s: float = 180.0,
     ) -> None:
         self.checkpoint = checkpoint
-        self.groot_root = groot_root.resolve()
+        from embodied.core.dependencies import reject_reference_path
+        self.groot_root = reject_reference_path(groot_root)
         self.log_path = log_path
         self.startup_timeout_s = float(startup_timeout_s)
         self.port = _unused_loopback_port()
@@ -152,11 +153,13 @@ class ModelServer:
 
     @property
     def python(self) -> Path:
-        return self.groot_root / ".venv" / "bin" / "python"
+        from embodied.core.dependencies import dependency_python, dependency_root
+        return (dependency_python("groot") if self.groot_root == dependency_root("groot")
+                else self.groot_root / ".venv/bin/python")
 
     def start(self) -> None:
         if not self.python.is_file():
-            raise PolicyError(f"GR00T Python is missing: {self.python}")
+            raise PolicyError(f"GR00T Python is missing: {self.python}; run ./run.sh components setup groot")
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._log_stream = self.log_path.open("wb")
         command = [
@@ -175,15 +178,12 @@ class ModelServer:
             str(self.port),
         ]
         environment = os.environ.copy()
-        old_python_path = environment.get("PYTHONPATH")
-        environment["PYTHONPATH"] = (
-            str(self.groot_root)
-            if not old_python_path
-            else f"{self.groot_root}{os.pathsep}{old_python_path}"
-        )
+        # gr00t is installed non-editably in this environment. Never import a checkout.
+        environment.pop("PYTHONPATH", None)
+        environment.pop("PYTHONHOME", None)
         self.process = subprocess.Popen(
             command,
-            cwd=self.groot_root,
+            cwd=self.log_path.parent,
             env=environment,
             stdout=self._log_stream,
             stderr=subprocess.STDOUT,

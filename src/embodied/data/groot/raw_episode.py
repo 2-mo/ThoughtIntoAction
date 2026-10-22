@@ -11,7 +11,7 @@ import re
 from typing import Any
 from uuid import uuid4
 
-from embodied.core.arx5_paths import DATASETS_ROOT
+from embodied.devices.robots.arx5.paths import DATASETS_ROOT
 
 from embodied.data.groot.config import CollectionConfig, load_collection_config
 

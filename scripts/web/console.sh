@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # apps/console on a running arx kernel (todo C-05): the page attaches to the kernel, never starts or stops it.
-# Usage: ./run.sh web console [--run control/run/<RUN>] [other embodied.console options]
+# Usage: ./run.sh web console [--run outputs/runtime/control/<RUN>] [other embodied.applications.console options]
 set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
-PYTHON="$ROOT/environments/arx_motion/.venv/bin/python"
+PYTHON="$ROOT/configs/environments/arx_motion/.venv/bin/python"
 source "$ROOT/src/legacy/arx_tools/frontend_runtime.sh"
 if [[ ! -x "$PYTHON" ]]; then
   echo "缺少控制台环境：./run.sh components setup analysis" >&2
@@ -14,4 +14,4 @@ PORT="$(PYTHONPATH="$ROOT/src" "$PYTHON" -B -c "from embodied.core.project impor
 cd "$ROOT"
 echo "控制台：http://127.0.0.1:$PORT   内核：先运行 ./run.sh kernel sim 或 ./run.sh kernel real，页面上点“连接”接入"
 echo "相机与手势另开：./run.sh camera rgbd、./run.sh web vision；负载 / 夹爪标定与方块任务暂用 ./run.sh web legacy"
-exec env PYTHONPATH="$ROOT/src" "$PYTHON" -B -m embodied.console --kernel --port "$PORT" --frontend-directory "$DIST" "$@"
+exec env PYTHONPATH="$ROOT/src" "$PYTHON" -B -m embodied.applications.console --kernel --port "$PORT" --frontend-directory "$DIST" "$@"

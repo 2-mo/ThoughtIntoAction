@@ -24,16 +24,16 @@ expected_process() {
   [[ "$command" == *"$ROOT_DIR"* ]] || return 1
   case "$service_name" in
     control)
-      [[ "$command" == *"embodied.console"* \
+      [[ "$command" == *"embodied.applications.console"* \
         || "$command" == *"legacy.arx_tools.web_service_supervisor --name 控制"* ]]
       ;;
     vision)
-      [[ "$command" == *"embodied.console.features.vision.service"* \
+      [[ "$command" == *"embodied.applications.console.features.vision.service"* \
         || "$command" == *"legacy.arx_tools.web_service_supervisor --name 视觉"* ]]
       ;;
     camera)
       [[ "$command" == *"arx_tools.camera_webrtc_supervisor"* \
-        || "$command" == *"embodied.console.features.camera.service"* \
+        || "$command" == *"embodied.applications.console.features.camera.service"* \
         || "$command" == *"legacy.arx_tools.web_service_supervisor --name 相机"* ]]
       ;;
     https)

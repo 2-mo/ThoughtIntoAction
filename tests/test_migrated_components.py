@@ -7,8 +7,8 @@ import unittest
 import uuid
 
 from embodied.contracts.registry import Registry
-from embodied.workstation.components.cli import command
-from embodied.workstation.components.ownership import leased_connect, leased_disconnect, leased_operation
+from embodied.applications.workstation.components.cli import command
+from embodied.contracts.device_lease import leased_connect, leased_disconnect, leased_operation
 from embodied.contracts.device_lease import DeviceLease
 
 ROOT = Path(__file__).resolve().parents[1]

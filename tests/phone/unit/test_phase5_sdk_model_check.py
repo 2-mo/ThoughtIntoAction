@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from embodied.phone.kinematics.config import load_model_config
-from embodied.phone.tools.phase5_sdk_model_check import (
+from embodied.devices.phone.kinematics.config import load_model_config
+from embodied.devices.phone.tools.phase5_sdk_model_check import (
     SdkModelMismatchError,
     compare_sdk_model_config,
 )

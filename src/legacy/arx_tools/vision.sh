@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/project_env.sh"
 ROOT_DIR="$ARX5_PROJECT_ROOT"
-WEB_PYTHON="$ROOT_DIR/environments/arx_motion/.venv-web/bin/python"
+WEB_PYTHON="$ROOT_DIR/configs/environments/arx_motion/.venv-web/bin/python"
 source "$ARX5_SCRIPTS_DIR/frontend_runtime.sh"
 
 if [[ ! -x "$WEB_PYTHON" ]]; then
@@ -18,10 +18,10 @@ if ! "$WEB_PYTHON" -B -c 'import aiortc, av, cv2, numpy, pyrealsense2, websocket
 fi
 
 cd "$ROOT_DIR"
-"$WEB_PYTHON" -B -m embodied.console.features.vision.service &
+"$WEB_PYTHON" -B -m embodied.applications.console.features.vision.service &
 BRIDGE_PID=$!
 "$ARX5_SCRIPTS_DIR/camera_webrtc_supervisor.sh" \
-  "$WEB_PYTHON" -B -m embodied.console.features.camera.service &
+  "$WEB_PYTHON" -B -m embodied.applications.console.features.camera.service &
 CAMERA_PID=$!
 
 cleanup() {

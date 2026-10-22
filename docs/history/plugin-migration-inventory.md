@@ -67,7 +67,7 @@
 
 ## B．reBotArm_control_py
 
-源码根目录：[reBotArm_control_py](../../src/embodied/robots/rebot)。下表 `package/` 代表其内部 `reBotArm_control_py/` Python 包。
+源码根目录：[reBotArm_control_py](../../src/embodied/devices/robots/rebot)。下表 `package/` 代表其内部 `reBotArm_control_py/` Python 包。
 
 | 编号 | 能力与源码依据 | 迁入决定、插件边界及验收要点 |
 | --- | --- | --- |
@@ -85,7 +85,7 @@
 
 ## C．robot-teleop
 
-源码根目录：[robot-teleop](../../src/embodied/phone)。下表路径除特别注明外相对 `src/embodied/phone/`。
+源码根目录：[robot-teleop](../../src/embodied/devices/phone)。下表路径除特别注明外相对 `src/embodied/phone/`。
 
 | 编号 | 能力与源码依据 | 迁入决定、插件边界及验收要点 |
 | --- | --- | --- |

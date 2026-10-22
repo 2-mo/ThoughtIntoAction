@@ -28,15 +28,14 @@ def main():
     global BUILD, SOURCE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build-dir', type=Path, default=BUILD)
-    parser.add_argument('--source-archive', type=Path, help='Pinned git archive supplied by the repository')
+    parser.add_argument('--source-archive', type=Path, default=ROOT / "src/embodied/devices/robots/arx5/vendor/arx5-sdk/source.tar", help='Maintained pinned SDK archive')
     parser.add_argument('--headers', type=Path, help='Extracted development include directory')
-    parser.add_argument('--patch-header', type=Path, default=ROOT / 'src/legacy/robot_control/gripper_turns.h')
+    parser.add_argument('--patch-header', type=Path, default=ROOT / 'src/embodied/devices/robots/arx5/vendor/arx5-sdk/gripper_turns.h')
     args = parser.parse_args()
     BUILD = args.build_dir.resolve()
     SOURCE = BUILD / 'source'
     SOURCE.mkdir(parents=True, exist_ok=True)
-    archive = args.source_archive.read_bytes() if args.source_archive else subprocess.check_output(
-        ["git", "-C", str(ROOT / "third_party/arx5-sdk"), "archive", "8c797d5"])
+    archive = args.source_archive.read_bytes()
     subprocess.run(["tar", "-x", "-C", str(SOURCE)], input=archive, check=True)
     shutil.copy2(args.patch_header, SOURCE / "include/app/gripper_turns.h")
     replace("include/app/config.h", "    double gripper_open_readout;",

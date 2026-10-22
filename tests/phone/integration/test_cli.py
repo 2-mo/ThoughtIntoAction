@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from embodied.phone.cli import main
+from embodied.devices.phone.cli import main
 
 ROOT = Path(__file__).parents[3]
 

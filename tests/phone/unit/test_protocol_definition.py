@@ -1,7 +1,7 @@
 import struct
 
-from embodied.phone.protocol.flags import PacketFlags
-from embodied.phone.protocol.version import (
+from embodied.devices.phone.protocol.flags import PacketFlags
+from embodied.devices.phone.protocol.version import (
     ESTOP_RESET_PACKET_SIZE,
     HEADER_FORMAT,
     HEADER_SIZE,

@@ -38,8 +38,8 @@ import sys
 from unittest.mock import patch
 
 forbidden = ("myTeleop", "project_config", "project_paths", "scripts",
-             "arx_r5_python", "xrobotoolkit_teleop.hardware.arx_r5_teleop_controller",
-             "xrobotoolkit_teleop.hardware.interface.arx_r5")
+             "arx_r5_python", "embodied.devices.inputs.quest._vendor.hardware.arx_r5_teleop_controller",
+             "embodied.devices.inputs.quest._vendor.hardware.interface.arx_r5")
 class NoR5(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
         if any(fullname == prefix or fullname.startswith(prefix + ".") for prefix in forbidden):
@@ -49,7 +49,7 @@ sys.meta_path.insert(0, NoR5())
 import arx5_interface as arx5
 import tyro
 with patch.object(arx5, "Arx5JointController", side_effect=AssertionError("Opened CAN")) as hardware, \
-     patch("xrobotoolkit_teleop.common.base_teleop_controller.XrClient", side_effect=AssertionError("Opened XR")) as xr:
+     patch("embodied.devices.inputs.quest._vendor.common.base_teleop_controller.XrClient", side_effect=AssertionError("Opened XR")) as xr:
     entries = [(name, getattr(importlib.import_module(name), function)) for name, function in (
         ("legacy.quest_teleop.cli", "baseline_main"), ("legacy.quest_teleop.cli", "presets_main"),
         ("legacy.quest_teleop.legacy.controller", "main"))]
@@ -78,7 +78,7 @@ assert "/dependencies/R5/" not in maps and "libarx_r5_src" not in maps
             root = Path(directory)
             (root / "dependencies.lock.toml").write_bytes((ROOT / "dependencies.lock.toml").read_bytes())
             import tomllib
-            entries = tomllib.loads((root / "dependencies.lock.toml").read_text())["repositories"]
+            entries = tomllib.loads((root / "dependencies.lock.toml").read_text())["managed"]
             required = [entry for entry in entries if entry["required"]]
             self.assertTrue(required)
             self.assertFalse(any(entry["name"] == "R5" for entry in required))
@@ -94,30 +94,30 @@ assert "/dependencies/R5/" not in maps and "libarx_r5_src" not in maps
                  patch.object(dependencies.subprocess, "check_output", side_effect=git), redirect_stdout(io.StringIO()):
                 self.assertEqual(dependencies.main(), 0)
 
-    def test_native_rebuild_preserves_cache_and_targets_only_project_quest_binding(self):
+    def test_native_rebuild_installs_pinned_companion_library_without_reference_paths(self):
         installer = script("rebuild_xr_sdk")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            build = root / "third_party/XRoboToolkit-Teleop-Sample-Python/dependencies/XRoboToolkit-PC-Service-Pybind/build"
-            build.mkdir(parents=True)
-            (build / "CMakeCache.txt").write_text("old absolute source path")
+            (root / "dependencies.lock.toml").write_bytes((ROOT / "dependencies.lock.toml").read_bytes())
+            from embodied.core.dependencies import dependency_root
+            native = dependency_root("xr-sdk", root=root) / "lib/libPXREARobotSDK.so"
+            native.parent.mkdir(parents=True)
+            native.write_bytes(b"pinned-native-library")
             with patch.object(installer, "ROOT", root), patch("sys.prefix", str(root / ".venv")), \
                  patch.dict(os.environ, {"UV_PROJECT_ENVIRONMENT": "/another/project/.venv"}), \
                  patch("sys.argv", ["rebuild_xr_sdk.py"]), \
+                 patch.object(installer.platform, "machine", return_value="x86_64"), \
                  patch.object(installer.shutil, "which", return_value="/usr/bin/uv"), \
                  patch.object(installer.subprocess, "run") as run:
                 installer.main()
             calls = [call.args[0] for call in run.call_args_list]
-            self.assertIn(str(root / "scripts/setup/dependencies.py"), calls[0])
+            self.assertEqual(calls[0][-3:], ["--fetch", "--name", "xr-sdk"])
             self.assertEqual(calls[1], ["/usr/bin/uv", "sync", "--locked", "--managed-python", "--no-cache",
                                         "--reinstall-package", "xrobotoolkit-sdk"])
-            self.assertEqual(run.call_args.kwargs["cwd"], root)
             self.assertNotIn("UV_PROJECT_ENVIRONMENT", run.call_args.kwargs["env"])
-            self.assertFalse(any("/R5" in token for args in calls for token in args))
-            self.assertFalse(build.exists())
-            saved = list((root / "outputs/build-cache").glob("*/CMakeCache.txt"))
-            self.assertEqual(len(saved), 1)
-            self.assertEqual(saved[0].read_text(), "old absolute source path")
+            self.assertFalse(any("third_party" in token for args in calls for token in args))
+            self.assertEqual((root / ".venv/lib/libPXREARobotSDK.so").read_bytes(), native.read_bytes())
+            self.assertIn("import xrobotoolkit_sdk", calls[-1])
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import pytest
 
-from embodied.phone.runtime.metrics import CycleTiming, RuntimeMetrics
+from embodied.devices.phone.runtime.metrics import CycleTiming, RuntimeMetrics
 
 
 def test_metrics_report_contains_latency_percentiles_and_counts() -> None:

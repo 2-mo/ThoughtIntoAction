@@ -31,7 +31,7 @@ from legacy.arx5_control.teleoperation import (
     quaternion_distance_rad,
     quaternion_multiply_xyzw,
 )
-from embodied.core.arx5_paths import CONFIG_ROOT
+from embodied.devices.robots.arx5.paths import CONFIG_ROOT
 from embodied.data.groot.geometry import pose_6d_to_eef_9d
 from embodied.data.groot.home import load_collection_home, load_training_start
 

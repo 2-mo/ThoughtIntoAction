@@ -35,7 +35,7 @@ class InputFreshness:
 
 
 def quest():
-    from xrobotoolkit_teleop.common.xr_client import XrClient
+    from embodied.devices.inputs.quest._vendor.common.xr_client import XrClient
     return XrClient()
 
 

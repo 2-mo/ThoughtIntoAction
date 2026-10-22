@@ -1,7 +1,7 @@
 from dataclasses import replace
 
-from embodied.phone.core.capabilities import InputCapabilities
-from embodied.phone.core.models import (
+from embodied.devices.phone.core.capabilities import InputCapabilities
+from embodied.devices.phone.core.models import (
     ControlMode,
     Pose,
     Quaternion,
@@ -11,9 +11,9 @@ from embodied.phone.core.models import (
     TrackingQuality,
     Vector3,
 )
-from embodied.phone.core.pipeline import TeleopPipeline
-from embodied.phone.core.safety import TargetSafetyLimits
-from embodied.phone.policies.no_compliance import NoCompliancePolicy
+from embodied.devices.phone.core.pipeline import TeleopPipeline
+from embodied.devices.phone.core.safety import TargetSafetyLimits
+from embodied.devices.phone.policies.no_compliance import NoCompliancePolicy
 
 IDENTITY = Quaternion(0.0, 0.0, 0.0, 1.0)
 ZERO_POSE = Pose(Vector3(0.0, 0.0, 0.0), IDENTITY)

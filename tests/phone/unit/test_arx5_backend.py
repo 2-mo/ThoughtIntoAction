@@ -6,9 +6,9 @@ from dataclasses import dataclass
 
 import pytest
 
-from embodied.phone.core.frames import quaternion_angular_distance
-from embodied.phone.core.models import ControlMode, Pose, RobotCommand, Vector3
-from embodied.phone.robots.arx5 import (
+from embodied.devices.phone.core.frames import quaternion_angular_distance
+from embodied.devices.phone.core.models import ControlMode, Pose, RobotCommand, Vector3
+from embodied.devices.phone.robots.arx5 import (
     Arx5Backend,
     Arx5BackendConfig,
     Arx5BackendError,
@@ -18,7 +18,7 @@ from embodied.phone.robots.arx5 import (
     pose_from_sdk_eef_state,
     robot_state_from_sdk,
 )
-from embodied.phone.robots.arx5_safety import Arx5SafetyEnvelope
+from embodied.devices.phone.robots.arx5_safety import Arx5SafetyEnvelope
 
 
 @dataclass

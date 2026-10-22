@@ -32,6 +32,10 @@ class TaskPackageTests(unittest.TestCase):
                 manifest = json.loads(package.read("pick_place/manifest.json"))
                 self.assertEqual(manifest["episodes"][0]["outcome"], "discarded")
                 self.assertIn("tools/convert.sh", "\n".join(package.namelist()))
+                for name in ("run.py", "quest_x5.py"):
+                    self.assertIn("pick_place/tools/scripts/training/openpi/" + name, package.namelist())
+                self.assertIn("pick_place/tools/src/embodied/policy/openpi/x5.py", package.namelist())
+                self.assertIn("pick_place/tools/dependencies.lock.toml", package.namelist())
                 for relative, info in manifest["files"].items():
                     actual = package.read("pick_place/" + relative)
                     self.assertEqual(hashlib.sha256(actual).hexdigest(), info["sha256"])

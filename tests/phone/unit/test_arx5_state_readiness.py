@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from embodied.phone.core.models import Pose, Quaternion, Vector3
-from embodied.phone.robots.arx5 import Arx5BackendConfig
-from embodied.phone.tools.arx5_state_readiness import run_state_readiness
+from embodied.devices.phone.core.models import Pose, Quaternion, Vector3
+from embodied.devices.phone.robots.arx5 import Arx5BackendConfig
+from embodied.devices.phone.tools.arx5_state_readiness import run_state_readiness
 
 ROOT = Path(__file__).resolve().parents[3]
 MODEL_CONFIG = ROOT / "configs/phone/robots/arx5.yaml"

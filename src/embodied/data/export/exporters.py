@@ -1,4 +1,4 @@
-"""Versioned episode adapters for the existing LeRobot conversion pipeline."""
+"""Versioned episode embodied.devices.robots.arx5 for the existing LeRobot conversion pipeline."""
 import json
 import numpy as np
 

@@ -9,7 +9,7 @@ from embodied.contracts.rpc import request
 
 
 def live_runs(root):
-    """Kernel run directories under `root` (control/run) of this boot whose supervisor is alive, oldest first."""
+    """Kernel run directories under `root` (outputs/runtime/control) of this boot whose supervisor is alive, oldest first."""
     boot = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
     runs = []
     for path in sorted(Path(root).glob('*/commands.sock')):

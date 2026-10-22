@@ -63,6 +63,16 @@ class Pose:
     def identity(cls) -> Pose:
         return cls(np.zeros(3), np.asarray([0.0, 0.0, 0.0, 1.0]))
 
+    @classmethod
+    def from_rotvec(cls, position_xyz_m, rotation_vector_rad) -> Pose:
+        """Build a pose from XYZ and an axis-angle vector (UR convention, not RPY)."""
+        vector = _vector(rotation_vector_rad, 3, "rotation vector")
+        angle = math.hypot(*vector)
+        if not math.isfinite(angle):
+            raise ValueError("rotation vector magnitude must be finite")
+        scale = math.sin(angle / 2) / angle if angle else .5
+        return cls(position_xyz_m, np.r_[vector * scale, math.cos(angle / 2)])
+
     def compose(self, child: Pose) -> Pose:
         """Return this parent pose composed with a child-frame pose."""
         if not isinstance(child, Pose):

@@ -168,7 +168,7 @@ class SharedRgbCameras:
 
     def __enter__(self) -> "SharedRgbCameras":
         from embodied.core.project import load_config
-        from embodied.sensors.client import SharedCamera
+        from embodied.devices.sensors.client import SharedCamera
         cameras = load_config()["cameras"]
         try:
             for name in self._names:

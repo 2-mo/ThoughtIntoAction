@@ -4,9 +4,9 @@
 def service(*, settings, initial_q=None):
     if initial_q is not None:
         raise ValueError("Set the initial virtual pose on arm-service, not on a control client")
-    from embodied.core.model import RobotModel
+    from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
     from legacy.robot_control.client import ArmClient
-    return ArmClient(RobotModel(settings["dynamics_urdf_path"]),
+    return ArmClient(X5PinocchioModel(settings["dynamics_urdf_path"]),
                      path=settings.get("service_socket"), hardware=settings["hardware"],
                      actuate=settings["actuate"], input_name=settings["input_name"],
                      speed=settings["max_joint_speed_rad_s"],
@@ -22,10 +22,10 @@ def stanford(*, settings, initial_q=None):
 
 
 def simulated(*, settings, initial_q=None):
-    from embodied.core.model import RobotModel
+    from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
     from legacy.robot_control.backends.simulated import SimulatedX5
     return SimulatedX5(
-        RobotModel(settings["dynamics_urdf_path"]), initial_q=initial_q,
+        X5PinocchioModel(settings["dynamics_urdf_path"]), initial_q=initial_q,
         gripper_width=settings["gripper_width"], control_rate_hz=settings["control_rate_hz"],
         max_joint_speed_rad_s=settings["max_joint_speed_rad_s"],
         joint_soft_limit_margin_rad=settings["joint_soft_limit_margin_rad"],

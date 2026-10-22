@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from embodied.contracts.device_lease import DeviceLease
 from embodied.core.project import load_config, resolve_path
 from embodied.core.session_protocol import request
-from embodied.monitor.mode import MODES, selected_mode, save_mode
+from embodied.applications.monitor.mode import MODES, selected_mode, save_mode
 
 SESSION = "questarm-" + hashlib.sha256(str(ROOT).encode()).hexdigest()[:8]
 ROLES = {"arm": "机械臂", "teleop": "遥操", "web": "网页", "home": "总控"}
@@ -150,7 +150,7 @@ def run_pane(role):
                 announced = True
             time.sleep(2)
         print("准备 CAN；如需 sudo 密码，请在本窗口输入。启动将使能机械臂并进入阻尼待机。", flush=True)
-        execute("启动机械臂服务.sh")
+        execute("scripts/shortcuts/启动机械臂服务.sh")
     elif role == "teleop":
         if teleop_running():
             print("复用已有遥操会话，请在原终端操作；未重复启动。", flush=True)
@@ -170,7 +170,7 @@ def run_pane(role):
                 if 0 <= (time.monotonic_ns() - state.get("host_monotonic_ns", 0)) / 1e9 < .5:
                     message = quest_wait_reason()
                     if message is None:
-                        execute("启动遥操.sh")
+                        execute("scripts/shortcuts/启动遥操.sh")
                         return
             arm = panes().get("arm")
             if info is None and arm and arm[1]:
@@ -182,7 +182,7 @@ def run_pane(role):
     else:
         phase("starting")
         subprocess.run([str(ROOT / "run.sh"), "viewer-control", "start"], check=True)
-        execute("网页控制.sh")
+        execute("scripts/shortcuts/网页控制.sh")
 
 
 def execute_details(role):
@@ -232,7 +232,7 @@ def start():
         return
     if not (ROOT / ".venv/bin/python").exists() and not os.environ.get("QUEST_TELEOP_PYTHON"):
         raise RuntimeError("项目 Python 环境不存在，请先按 README 安装依赖。")
-    from embodied.workstation.ports import conflicts
+    from embodied.applications.workstation.ports import conflicts
     if found := conflicts(load_config()):
         print("端口冲突：" + "；".join(found) + "。详情：./run.sh check ports", file=sys.stderr)
     tmux("new-session", "-d", "-s", SESSION, "-n", ROLES["arm"], "-c", str(ROOT), pane_command("arm"))
@@ -280,7 +280,7 @@ def stop_pane(role):
 
 def start_role(role):
     if role in ('arm', 'teleop') and selected_mode() == 'simulation':
-        from embodied.monitor.control import command
+        from embodied.applications.monitor.control import command
         return command('sim-resume')
     pane = panes().get(role)
     if pane is None:
@@ -330,7 +330,7 @@ def switch_mode(mode):
             raise RuntimeError('真机仍被占用或尚未停稳，保留当前模式。')
         if info is None and exists():
             stop_pane('arm')  # Cancel a pending hardware startup, not a connected service.
-    from embodied.monitor.control import command
+    from embodied.applications.monitor.control import command
     # The new selection survives viewer errors; retry W without reviving real controllers.
     save_mode(mode)
     result = command('start', mode=mode)
@@ -357,8 +357,8 @@ def shutdown_services():
             stop_pane(role)
     if teleop_running() or arm_info() is not None:
         raise RuntimeError("还有外部控制服务运行；请先在其原控制台退出，未关闭网页或相机。")
-    from embodied.monitor.control import command
-    from embodied.sensors.lifecycle import stop_service
+    from embodied.applications.monitor.control import command
+    from embodied.devices.sensors.lifecycle import stop_service
     command("stop")
     stop_service()
 
@@ -422,7 +422,7 @@ def main():
             return
         if args.action == "restart":
             if not exists() or args.role not in panes():
-                raise RuntimeError("工作台窗口不存在，请先运行 启动工作台.sh。")
+                raise RuntimeError("工作台窗口不存在，请先运行 scripts/shortcuts/启动工作台.sh。")
             pane, dead, _ = panes()[args.role]
             if not dead:
                 raise RuntimeError("窗口仍在运行，请先在对应控制台正常退出；不会强制重启。")

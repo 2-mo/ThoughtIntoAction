@@ -657,7 +657,7 @@ requires-dist = [
     { name = "rich", specifier = "==14.3.3" },
     { name = "ruckig", specifier = "==0.12.2" },
     { name = "tyro", specifier = "==1.0.16" },
-    { name = "xrobotoolkit-sdk", directory = "third_party/XRoboToolkit-Teleop-Sample-Python/dependencies/XRoboToolkit-PC-Service-Pybind" },
+    { name = "xrobotoolkit-sdk", git = "https://github.com/XR-Robotics/XRoboToolkit-PC-Service-Pybind.git?rev=c64ccf6acd577a333e03b66fafe8efeeceb511b1" },
 ]
 
 [package.metadata.requires-dev]
@@ -792,7 +792,7 @@ wheels = [
 [[package]]
 name = "xrobotoolkit-sdk"
 version = "1.0.2"
-source = { directory = "third_party/XRoboToolkit-Teleop-Sample-Python/dependencies/XRoboToolkit-PC-Service-Pybind" }
+source = { git = "https://github.com/XR-Robotics/XRoboToolkit-PC-Service-Pybind.git?rev=c64ccf6acd577a333e03b66fafe8efeeceb511b1#c64ccf6acd577a333e03b66fafe8efeeceb511b1" }
 
 [[package]]
 name = "zstandard"

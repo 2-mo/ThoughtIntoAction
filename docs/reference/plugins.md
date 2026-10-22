@@ -1,8 +1,8 @@
 # 可替换组件
 
-新 arx 运行使用共享 `embodied.contracts.registry.Registry`，合并 `configs/plugins.toml` 和 `control/config/components.json`；机械臂、VR、控制源、相机、规划、标定和导出接口见 [插件工作台](../guides/plugin-workbench.md)。下面保留旧服务入口的契约，不能将其 `arm` 插件直接当作新 `robot` 后端使用。
+新 arx 运行使用共享 `embodied.contracts.registry.Registry`，合并 `configs/plugins.json` 和 `configs/plugins.json`；机械臂、VR、控制源、相机、规划、标定和导出接口见 [插件工作台](../guides/plugin-workbench.md)。下面保留旧服务入口的契约，不能将其 `arm` 插件直接当作新 `robot` 后端使用。
 
-组件由 `configs/plugins.toml` 注册，按职责加载。列出注册项：`./run.sh plugins`。
+组件由 `configs/plugins.json` 注册，按职责加载。列出注册项：`./run.sh plugins`。
 
 | 类型 | 内置实现 | 加载位置 |
 | --- | --- | --- |
@@ -12,7 +12,8 @@
 | `input` | `quest`、`idle` | 虚拟控制 `--input`，真机遥操 `--input-plugin` |
 | `telemetry` | `local`、`none` | 服务固定使用 local；回放和历史诊断可选 |
 | `viewer` | `web` | 独立监看 `view-arm --viewer NAME` |
-| `camera` | `realsense` | `cameras.wrist_rgb.driver` |
+| `camera` | `realsense`、`synthetic` | 采集客户端：共享服务或直接合成帧 |
+| `camera_device` | `realsense`、`synthetic` | `CameraService` 按 `cameras.<id>.driver` 选择设备源 |
 
 日常链路为控制客户端 → 机械臂服务 → 状态流 → 监看。控制端不创建设备后端或状态发布器；显示插件只在监看进程加载。启动流程见 [独立服务与监看](../guides/monitoring.md)。
 
@@ -26,6 +27,27 @@
 - 状态输出：`factory(robot=..., source=...)`，提供 `update(actual, target=None)`、`path(name, points, color)`、`close()`。路径是 Nx3 米坐标；不得等待监看确认。主服务使用 `LocalPublisher.set_source()` 在控制权变化时更新来源。
 - 显示：`factory(robot=..., port=0)`，返回 `accept(packet)`、`set_stream_error(message)`、`close()`。消费统一状态，不操作机械臂。
 - 相机：`factory(serial=..., width=..., height=..., fps=...)`，提供上下文生命周期、`metadata` 和含图像及时间戳的 `read()`。
+
+相机服务的设备工厂使用 `factory(options=...)`，在
+[`devices/sensors/factories.py`](../../src/embodied/devices/sensors/factories.py)
+将配置传给现有 `RealSenseCamera` 或 `SyntheticCamera`。两者遵循同一个 `Camera` 协议；具体驱动与 SDK 在选中后才导入。
+`camera.realsense` 是共享服务客户端，`camera_device.realsense` 才是服务内的设备所有者，避免服务连接自身。
+默认仍为 RealSense，保留序列号独占租约、型号检查与颜色参数；合成帧不申请硬件租约。
+
+需要离线验证共享相机服务时，在本机配置 `configs/local.toml` 中选择合成源：
+
+```toml
+[cameras.wrist_rgb]
+driver = "synthetic"
+enabled = true
+serial = "synthetic-wrist"
+width = 640
+height = 480
+fps = 30
+```
+
+使用已有 `./run.sh camera service` 启动；监看、帧传输和默认 `wrist_rgb` 通道不变。
+其他相机需实现该协议并在 `camera_device` 注册设备工厂；配置名称本身不会提供尚未实现的硬件驱动。
 
 例如新增设备后端时，在 `robot_control/backends/` 实现上述服务契约，并注册：
 

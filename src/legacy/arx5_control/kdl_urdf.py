@@ -14,7 +14,7 @@ from pathlib import Path
 import tempfile
 import xml.etree.ElementTree as ET
 
-from embodied.core.arx5_paths import RUNTIME_ROOT
+from embodied.devices.robots.arx5.paths import RUNTIME_ROOT
 
 
 def kdl_compatible_urdf_path(

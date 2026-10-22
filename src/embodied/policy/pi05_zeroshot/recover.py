@@ -8,7 +8,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[4]
 import numpy as np
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.presets import DEFAULT_HOME_JOINTS
 from embodied.core.collection_motion import collection_motion
 from embodied.core.project import load_config, resolve_path
@@ -94,7 +94,7 @@ def wait_available(arm):
                 and arm.info.get('stopped_hold_recovery_protocol') != 1):
             raise RuntimeError('当前旧机械臂服务卡在 stopping，未加载停止恢复接口。'
                                '重跑停止.sh 无法恢复；请先支撑机械臂，在原机械臂服务终端 Ctrl+C 退出，'
-                               '再运行 bash 启动机械臂服务.sh。只重启模型程序不会更新服务。')
+                               '再运行 bash scripts/shortcuts/启动机械臂服务.sh。只重启模型程序不会更新服务。')
         if owner is None and np.max(np.abs(state['actual_vel'])) < .05:
             return state
         if (owner and arm.info['mode'] == 'stopping'
@@ -106,7 +106,7 @@ def wait_available(arm):
                     result = arm.recover_stopped_hold(owner)
                 except RuntimeError as exc:
                     raise RuntimeError('停止恢复未完成：' + str(exc) +
-                        '。若为旧服务不支持接口，需先支撑机械臂并退出原服务，再启动 启动机械臂服务.sh；'
+                        '。若为旧服务不支持接口，需先支撑机械臂并退出原服务，再启动 scripts/shortcuts/启动机械臂服务.sh；'
                         '当前不能确认已保持或释放控制权') from exc
                 print(f'已将停止目标恢复为实际停稳位置，原跟踪偏差 '
                       f'{result["previous_tracking_error_rad"]:.4f} rad；服务保持。',flush=True)
@@ -199,7 +199,7 @@ def main():
     args = parser.parse_args()
     if not args.status and not args.virtual:
         stop_policy_processes()
-    robot = RobotModel(resolve_path(args.urdf or load_config()['robot']['urdf']))
+    robot = X5PinocchioModel(resolve_path(args.urdf or load_config()['robot']['urdf']))
     # Do not reset/restart a faulty service in recovery; preserve its device ownership.
     arm = ArmClient(robot, path=args.socket, hardware=not args.virtual,
                     actuate=not args.status, input_name='terminal-recovery',

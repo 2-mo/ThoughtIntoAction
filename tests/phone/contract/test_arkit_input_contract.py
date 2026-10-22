@@ -3,19 +3,19 @@ import struct
 import threading
 from collections.abc import Callable, Iterator
 
-from embodied.phone.core.mapping import MappingScales
-from embodied.phone.core.models import (
+from embodied.devices.phone.core.mapping import MappingScales
+from embodied.devices.phone.core.models import (
     Pose,
     Quaternion,
     TrackingQuality,
     Vector3,
 )
-from embodied.phone.inputs.arkit import (
+from embodied.devices.phone.inputs.arkit import (
     ARKIT_CAPABILITIES,
     ArkitInputSource,
     ArkitPacketDecoder,
 )
-from embodied.phone.protocol.packet import (
+from embodied.devices.phone.protocol.packet import (
     PingPacket,
     PongPacket,
     PosePacket,
@@ -25,7 +25,7 @@ from embodied.phone.protocol.packet import (
     decode_packet,
     encode_packet,
 )
-from embodied.phone.transports.mock import MockTransport
+from embodied.devices.phone.transports.mock import MockTransport
 
 
 class BatchMockTransport:

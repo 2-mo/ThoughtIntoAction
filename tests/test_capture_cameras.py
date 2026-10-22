@@ -27,7 +27,7 @@ class CaptureCameraTests(unittest.TestCase):
                               'exterior_rgb': {'serial': '2', 'width': 64, 'height': 48, 'fps': 30}}}
         with patch('embodied.contracts.registry.Registry', Registry), \
                 patch('embodied.core.project.load_config', return_value=config), \
-                patch('embodied.sensors.control.recording_guard', return_value=SimpleNamespace(close=lambda: None)), \
+                patch('embodied.devices.sensors.control.recording_guard', return_value=SimpleNamespace(close=lambda: None)), \
                 patch.object(capture, 'RuntimeReader', side_effect=Stop):
             with self.assertRaises(Stop):
                 capture.main(['--run', '/nonexistent', '--task', 't', '--cameras', 'wrist_rgb,exterior_rgb'])

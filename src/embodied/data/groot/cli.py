@@ -6,7 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-from embodied.core.arx5_paths import DATASETS_ROOT
+from embodied.devices.robots.arx5.paths import DATASETS_ROOT
 
 from embodied.data.groot.config import load_collection_config
 from embodied.data.groot.exporter import export_dataset, find_groot_root, validate_with_groot

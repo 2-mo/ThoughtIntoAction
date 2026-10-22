@@ -1,6 +1,6 @@
 import pytest
 
-from embodied.phone.protocol.clock_sync import (
+from embodied.devices.phone.protocol.clock_sync import (
     ClockSampleError,
     ClockSyncEstimator,
     clock_sample,

@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[4]
 import numpy as np
 from embodied.policy.pi05_zeroshot.real import MOTION, move_pregrasp, checked_state, stop_and_hold
 from embodied.core.project import load_config, resolve_path
-from embodied.core.model import RobotModel
-from embodied.sensors.client import SharedCamera
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
+from embodied.devices.sensors.client import SharedCamera
 from legacy.robot_control.client import ArmClient
 from embodied.policy.pi05_zeroshot.worker_client import PolicyWorker
 from embodied.policy.pi05_zeroshot.x5_mapping import X5Mapping
@@ -184,7 +184,7 @@ def connect(robot, output):
         if resolve_path(load_config()['arm_service']['socket']).exists():
             raise
     with (output/'arm-service.log').open('ab', buffering=0) as log:
-        subprocess.Popen(['bash', str(ROOT/'启动机械臂服务.sh')], stdin=subprocess.DEVNULL,
+        subprocess.Popen(['bash', str(ROOT/'scripts/shortcuts/启动机械臂服务.sh')], stdin=subprocess.DEVNULL,
                          stdout=log, stderr=log, start_new_session=True)
     until = time.monotonic()+15
     while time.monotonic() < until:
@@ -211,7 +211,7 @@ def main():
         p.error('参数越界：seconds 0..300, chunk-steps 1..15, speed 0..0.5, gripper-speed 0..0.05')
     if not args.stats.exists():
         subprocess.run([sys.executable, '-m', 'embodied.policy.pi05_zeroshot.compute_stats', '--output', str(args.stats)], check=True)
-    robot = RobotModel(resolve_path(load_config()['robot']['urdf']))
+    robot = X5PinocchioModel(resolve_path(load_config()['robot']['urdf']))
     mapping = X5Mapping(args.stats)
     if mapping.data['robot'] != robot.metadata():
         raise ValueError('X5 统计与当前 URDF 不匹配')

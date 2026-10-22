@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from embodied.phone.config import ConfigurationError, load_profile
-from embodied.phone.registry import (
+from embodied.devices.phone.config import ConfigurationError, load_profile
+from embodied.devices.phone.registry import (
     ComponentUnavailableError,
     HardwareEnableRequiredError,
     create_application,

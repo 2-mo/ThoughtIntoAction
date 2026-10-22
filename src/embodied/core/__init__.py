@@ -1,1 +1,1 @@
-"""Shared model, transforms, camera IO, device leases and storage; no Quest dependency."""
+"""Shared project configuration, geometry, IO and storage; device models live in devices."""

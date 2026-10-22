@@ -132,8 +132,23 @@ def prepare_schema1_camera_episode(path):
     return meta, rows, report, states
 
 
+def require_export_joint_count(metadata):
+    """This pinned dataset adapter still targets six arm joints plus one gripper."""
+    runtime = metadata.get('runtime') or {}
+    count = runtime.get('joint_count')
+    if count is None:
+        profile = runtime.get('parameters', {}).get('effective_robot_config', {})
+        park_q = profile.get('park_q')
+        if park_q is not None:
+            count = len(park_q)
+    if count is not None and count != 6:
+        raise ValueError(f'LeRobot X5 export supports 6 arm joints; recording has {count}. '
+                         'The raw runtime trace remains valid; use a model-specific exporter.')
+
+
 def prepare_camera_episode(path):
     from embodied.data.export.exporters import for_episode
+    require_export_joint_count(json.loads((Path(path) / 'episode.json').read_text()))
     return for_episode(path).prepare(path)
 
 
@@ -294,8 +309,8 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
 def main():
     root = Path(__file__).resolve().parents[4]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', type=Path, default=root/'datasets')
-    parser.add_argument('--output', type=Path, default=root/'datasets'/'lerobot'/datetime.now().strftime('x5_%Y%m%d-%H%M%S'))
+    parser.add_argument('--source', type=Path, default=root/'outputs'/'datasets')
+    parser.add_argument('--output', type=Path, default=root/'outputs'/'datasets'/'lerobot'/datetime.now().strftime('x5_%Y%m%d-%H%M%S'))
     parser.add_argument('--repo-id', default='local/quest_x5')
     parser.add_argument('--task', help='Exact task text; omit to export all tasks')
     parser.add_argument('--fps', type=int, default=30)

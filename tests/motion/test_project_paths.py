@@ -4,7 +4,7 @@ import unittest
 
 from legacy.arx5_control.gripper_calibration import DEFAULT_GRIPPER_CALIBRATION_PATH
 from legacy.arx5_control.payload_profiles import DEFAULT_PAYLOAD_ROOT
-from embodied.core.arx5_paths import CALIBRATIONS_ROOT, DATASETS_ROOT, OUTPUTS_ROOT, RUNTIME_ROOT
+from embodied.devices.robots.arx5.paths import CALIBRATIONS_ROOT, DATASETS_ROOT, OUTPUTS_ROOT, RUNTIME_ROOT
 from embodied.data.groot.raw_episode import DEFAULT_RAW_ROOT
 
 

@@ -10,7 +10,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
-from embodied.sensors import lifecycle
+from embodied.devices.sensors import lifecycle
 
 
 class CameraLifecycleTests(unittest.TestCase):
@@ -30,7 +30,7 @@ server.close()
 '''
             with patch.dict(os.environ, {'QUEST_TELEOP_CONFIG': str(config),
                                         'PYTHONPATH': str(Path(__file__).resolve().parents[1] / 'src')}):
-                child = subprocess.Popen([sys.executable, '-B', '-c', code, 'embodied.sensors.service', str(path)],
+                child = subprocess.Popen([sys.executable, '-B', '-c', code, 'embodied.devices.sensors.service', str(path)],
                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 try:
                     self.assertEqual(child.stdout.readline().strip(), 'ready')
@@ -44,7 +44,7 @@ server.close()
                     child.stdout.close()
                     child.stderr.close()
 
-    def setup_mocks(self, stack, argv=b'python\0-m\0embodied.sensors.service\0'):
+    def setup_mocks(self, stack, argv=b'python\0-m\0embodied.devices.sensors.service\0'):
         stack.enter_context(patch.object(lifecycle, 'DeviceLease'))
         stack.enter_context(patch.object(lifecycle, 'recording_guard'))
         guard = stack.enter_context(patch.object(lifecycle, 'check_legacy_session'))

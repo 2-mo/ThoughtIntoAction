@@ -20,9 +20,9 @@ from legacy.robot_control.online_motion import OnlineMotion, DEFAULTS as TRAJECT
 from legacy.robot_control.startup import WAITING_FOR_ARM, waiting_for_arm
 
 from embodied.contracts.device_lease import DeviceLease
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.loop_rate import LoopRate
-from embodied.core.plugins import Registry
+from embodied.contracts.registry import Registry
 from embodied.core.project import load_config, resolve_path
 from embodied.core.telemetry import LocalPublisher, command_details
 
@@ -40,7 +40,7 @@ class ArmService:
     def __init__(self, robot, arm, publisher, *, backend, hardware, settings, lease_timeout_s=.5, safety=None):
         self.robot, self.arm, self.publisher = robot, arm, publisher
         self.backend, self.hardware, self.settings = backend, hardware, {**TRAJECTORY_DEFAULTS, **settings}
-        self._tcp_model = RobotModel(robot.urdf, eef="eef_link")
+        self._tcp_model = X5PinocchioModel(robot.urdf, eef="eef_link")
         from embodied.core.safety import TablePlane
         self.safety = dict(load_config()["arm_safety"] if safety is None else safety)
         if type(self.safety.get("table_enabled")) is not bool:
@@ -485,7 +485,7 @@ def main(argv=None):
         from legacy.robot_control.console import run_console
         return run_console(args, spec.hardware,
                            [*list(sys.argv[1:] if argv is None else argv), "--no-prepare-can"])
-    robot = RobotModel(args.urdf)
+    robot = X5PinocchioModel(args.urdf)
     q = robot.joints(args.q or [0, 1.5, 1.45, -1.52, 0, 0]) if not spec.hardware else None
     def interrupted(*_):
         raise KeyboardInterrupt

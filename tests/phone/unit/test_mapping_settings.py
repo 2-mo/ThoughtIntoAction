@@ -1,5 +1,5 @@
-from embodied.phone.core.mapping import AxisMapping, MappingScales, PoseMapping
-from embodied.phone.runtime.mapping_settings import MappingSettingsStore
+from embodied.devices.phone.core.mapping import AxisMapping, MappingScales, PoseMapping
+from embodied.devices.phone.runtime.mapping_settings import MappingSettingsStore
 
 
 def test_mapping_settings_update_scales_without_changing_axes() -> None:

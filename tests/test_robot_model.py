@@ -11,14 +11,14 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.transforms import pose_error
 from legacy.robot_control.trajectory import trajectory
 
 
 class ModelTests(unittest.TestCase):
     def test_qp_boundary_roundoff_is_normalized_but_real_violations_fail(self):
-        robot = RobotModel()
+        robot = X5PinocchioModel()
         q = robot.lower.copy()
         q[1] = np.nextafter(q[1], -np.inf)
         q[2] -= 4e-9
@@ -38,7 +38,7 @@ class ModelTests(unittest.TestCase):
             robot.joints([float("nan")] * 6)
 
     def setUp(self):
-        self.robot = RobotModel()
+        self.robot = X5PinocchioModel()
         self.q = np.array([0., 1.5, 1.45, -1.2, .1, .2])
 
     def test_limits_and_fk_ik_roundtrip(self):
@@ -52,7 +52,7 @@ class ModelTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.robot.joints([0, 0, 0, 0, 0, 2.1])
         with self.assertRaises(ValueError):
-            RobotModel(eef="not_a_frame")
+            X5PinocchioModel(eef="not_a_frame")
 
     def test_quintic_has_bounded_speed_acceleration_and_exact_endpoints(self):
         end = self.q + [.2, -.2, .1, .1, -.2, .15]

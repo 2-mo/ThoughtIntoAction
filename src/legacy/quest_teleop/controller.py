@@ -5,8 +5,8 @@ import time
 import numpy as np
 from copy import deepcopy
 
-from embodied.core.project import X5_2025_URDF
-from embodied.core.plugins import Registry
+from embodied.devices.robots.arx5.paths import X5_2025_URDF
+from embodied.contracts.registry import Registry
 
 from legacy.quest_teleop.base_controller import X5TeleopBase
 from legacy.quest_teleop.arming import DownHoldGate
@@ -416,13 +416,13 @@ class X5TeleopController(X5TeleopBase):
         try:
             if self._enable_session:
                 from embodied.core.project import load_config
-                from embodied.core.model import RobotModel
+                from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
                 from legacy.quest_teleop.runtime.session import TeleopSession
-                model = RobotModel(self._x5_dynamics_urdf_path, eef=self.manipulator_config["right_arm"]["link_name"])
+                model = X5PinocchioModel(self._x5_dynamics_urdf_path, eef=self.manipulator_config["right_arm"]["link_name"])
                 if self._service_mode:
                     arm = self.arm_controllers["right_arm"]
                     if arm.info.get("sample_protocol") != 1:
-                        raise RuntimeError("逐周期录制需要新版机械臂服务，请重启 启动机械臂服务.sh")
+                        raise RuntimeError("逐周期录制需要新版机械臂服务，请重启 scripts/shortcuts/启动机械臂服务.sh")
                     self._session_control["recording_rate_hz"] = arm.info["settings"]["control_rate_hz"]
                 self._session = TeleopSession(load_config(), model.metadata(), self._session_control)
                 self._session.input_pause = self.set_input_paused

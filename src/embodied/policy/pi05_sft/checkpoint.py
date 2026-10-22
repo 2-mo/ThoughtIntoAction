@@ -7,8 +7,10 @@ import zipfile
 
 DEFAULT_CHECKPOINT = Path('/home/r2/work/checkpoints/2500')
 ROOT = Path(__file__).resolve().parents[4]
-OPENPI_REVISION = '215abfb217dbac7d5f1273282331b9b1866c0479'
-OPENPI = ROOT/'outputs/inference'/('openpi-'+OPENPI_REVISION)
+from embodied.core.dependencies import dependency, dependency_root
+
+OPENPI_REVISION = dependency('openpi')['commit']
+OPENPI = dependency_root('openpi')
 
 
 class IgnoredTrainingFilter:
@@ -25,7 +27,7 @@ class MetadataReader(pickle.Unpickler):
 def trained_cameras(data_config):
     """Camera keys the model was trained with, or None when the checkpoint does not say.
 
-    integrations/openpi/quest_x5.py X5DataConfig.exterior_camera is serialized only by
+    scripts/training/openpi/quest_x5.py X5DataConfig.exterior_camera is serialized only by
     checkpoints trained after that field existed.
     """
     if 'exterior_camera' not in data_config:

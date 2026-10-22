@@ -1,12 +1,12 @@
-from embodied.phone.core.models import (
+from embodied.devices.phone.core.models import (
     Pose,
     Quaternion,
     TeleopInput,
     TrackingQuality,
     Vector3,
 )
-from embodied.phone.protocol.packet import EStopResetRequestPacket, SourceType
-from embodied.phone.runtime.estop_reset import EStopResetGate
+from embodied.devices.phone.protocol.packet import EStopResetRequestPacket, SourceType
+from embodied.devices.phone.runtime.estop_reset import EStopResetGate
 
 
 def safe_release(

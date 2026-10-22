@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[4]
 
 import numpy as np
 from legacy.robot_control.client import ArmClient
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.presets import DEFAULT_GRASP_READY_JOINTS
 from embodied.core.project import load_config, resolve_path
 
@@ -113,7 +113,7 @@ def move_pregrasp(arm, *, timeout=40, open_gripper=False):
 
 def capture(arm, output):
     import cv2
-    from embodied.sensors.client import SharedCamera
+    from embodied.devices.sensors.client import SharedCamera
     config = load_config()['cameras']['wrist_rgb']
     with SharedCamera(config['serial'], config['width'], config['height'], config['fps']) as camera:
         before = checked_state(arm)
@@ -158,7 +158,7 @@ def main():
         if not args.prompt.strip():
             parser.error('--prompt 不能为空')
         output.mkdir(parents=True, exist_ok=False)
-    robot = RobotModel(resolve_path(load_config()['robot']['urdf']))
+    robot = X5PinocchioModel(resolve_path(load_config()['robot']['urdf']))
     arm = ArmClient(robot, path=args.service_socket, hardware=True, actuate=args.move_pregrasp,
                     input_name='zero-shot-pregrasp', speed=.15, motion=MOTION)
     try:

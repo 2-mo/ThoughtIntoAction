@@ -36,7 +36,7 @@ class SharedCamerasTests(unittest.TestCase):
     def test_both_views_by_camera_id_and_serials_from_config(self):
         FakeShared.opened = []
         with patch('embodied.core.project.load_config', return_value=CONFIG), \
-                patch('embodied.sensors.client.SharedCamera', FakeShared):
+                patch('embodied.devices.sensors.client.SharedCamera', FakeShared):
             with SharedRgbCameras() as cameras:
                 pair = cameras.latest()
             specs = default_camera_specs()

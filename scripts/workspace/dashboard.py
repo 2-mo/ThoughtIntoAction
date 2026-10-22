@@ -15,7 +15,7 @@ from rich.table import Table
 from rich.text import Text
 
 import tmux_workspace as workspace
-from embodied.monitor.control import command as viewer_command, status as viewer_status
+from embodied.applications.monitor.control import command as viewer_command, status as viewer_status
 
 
 def overview():
@@ -65,7 +65,7 @@ def overview():
         rows.append((workspace.ROLES[role], Text(state, style=color), Text(hint)))
     try:
         from embodied.core.project import load_config
-        from embodied.workstation.ports import summary
+        from embodied.applications.workstation.ports import summary
         text, problem = summary(load_config())
         rows.append(("端口", Text(text, style="red" if problem else "green"), Text("./run.sh check ports 查看详情")))
     except (OSError, ValueError, KeyError) as exc:

@@ -19,7 +19,7 @@ import numpy as np
 
 from embodied.core.project import load_config
 from embodied.data.datasets import image_path, label_episode, load_episode, nearest_indices, validate_episode
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.data.episode.recording import EpisodeWriter
 from embodied.core.local_server import LocalServer
 from embodied.core.session_protocol import request
@@ -107,7 +107,7 @@ class SessionTests(unittest.TestCase):
         self.config["paths"].update(dataset_dir=str(self.root / "data"), log_dir=str(self.root / "logs"))
         self.config["cameras"]["wrist_rgb"].update(serial="fake", width=32, height=24, fps=30)
         self.config["recording"].update(min_free_bytes=0, min_duration_s=.15, camera_ids=['wrist_rgb'])
-        self.robot = RobotModel()
+        self.robot = X5PinocchioModel()
         self.camera = FakeCamera("fake", 32, 24, 30)
         self.session = TeleopSession(self.config, self.robot.metadata(),
                                     {"actuate": True, "gripper_width_m": .082, "control_rate_hz": 50},

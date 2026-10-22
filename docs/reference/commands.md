@@ -3,18 +3,33 @@
 所有功能从仓库根目录的 `./run.sh` 进入，可在任意目录调用：
 
 ```bash
-./run.sh                       # 列出全部功能与命令
+./run.sh                       # 打开工作台；无 tmux 或非交互终端显示常用入口
+./run.sh help                  # 精简任务导航；-h、--help 同此
+./run.sh help --all            # 完整命令目录
+./run.sh help data             # 数据功能的命令
+./run.sh data --help           # 同样只看数据这一组
+./run.sh search 相机           # 按中文说明或命令名搜索
 ./run.sh <功能>                # 只看一组
 ./run.sh <功能> <命令> [参数]  # 运行
 ```
 
-`<功能> <命令>` 是下表的分组写法，每一条都对应一个现有的启动器命令、脚本或组件，参数原样传递。原有的单词命令（如 `arm-service`、`view-arm`）仍可直接使用，见文末“旧链路命令”。
+帮助在终端使用 Rich 排版，输出到管道或未安装 Rich 时自动使用纯文本。
+
+交互终端直接运行 `./run.sh` 会打开七个 tmux 窗口：`1 内核 / 2 命令 / 3 总控 / 4 网页 / 5 VR / 6 相机 / 7 宣传`。网页服务自动启动，设备窗口在未连接时持续显示提示；真机仍需在总控选择配置并确认后才启动。按 `Ctrl+B` 再按数字切换，网页启动失败按 `R` 重试，再次打开工作台会补齐缺少的窗口。`./run.sh bench stop` 只关闭本工作台启动的服务与内核，外部终端的内核继续运行。
+
+工作台默认网页是带采集面板的 <http://127.0.0.1:18081/>，对应 `./run.sh web monitor --kernel --mode real --no-camera --no-connections`。它自动发现并只读连接统一内核，也可用 `--run <RUN>` 指定运行。`web console`（8000）是独立的动作控制台，其内核模式暂不提供网页采集。
+
+SSH 工作台会额外传入 `--host <SSH 服务器地址>`，窗口 4 显示可从客户端访问的链接；单独运行监看命令时也可显式指定 `--host`。该参数绑定明确的本机 IPv4 地址，默认 `127.0.0.1`。
+
+`<功能> <命令>` 是下表的分组写法，每一条都对应一个现有的启动器命令、脚本或组件，参数原样传递。输错命令时会显示相近命令和帮助入口。原有的单词命令（如 `arm-service`、`view-arm`）仍可直接使用，见文末“旧链路命令”。
+
+只想确认命令会执行什么时，把 `--print-command` 放在功能之前，例如 `./run.sh --print-command kernel real`。此时只打印解析结果，不启动服务或设备。
 
 ## 命令目录
 
 <!-- catalog:start -->
 
-由 `python -m embodied.workstation.catalog` 从 `src/embodied/workstation/catalog.py` 生成，勿手改。
+由 `python -m embodied.applications.workstation.catalog` 从 `src/embodied/applications/workstation/catalog.py` 生成，勿手改。
 
 ### bench · 统一工作台（tmux）：按键启动内核，采集 / 检查 / 导出 / 网页 / 标定 / 策略都在总控里
 
@@ -53,7 +68,7 @@
 | `./run.sh kernel verify` | 核对上游文件与本地补丁台账 |
 | `./run.sh kernel check` | 上游离线检查；--simulation 加跑 MuJoCo 链路 |
 | `./run.sh kernel doctor` | 检查依赖与模型，不连接设备 |
-| `./run.sh kernel clean` | 清理旧运行目录 control/run：[--keep 20] [--yes]；运行中的内核不受影响 |
+| `./run.sh kernel clean` | 清理旧运行目录 outputs/runtime/control：[--keep 20] [--yes]；运行中的内核不受影响 |
 | `./run.sh kernel setup` | 创建 Python 3.10 内核环境 |
 | `./run.sh kernel build-sdk` | 编译带夹爪修正的 SDK |
 | `./run.sh kernel profiles` | 工作台组合 profile：plugins | validate | start | status | stop |
@@ -77,7 +92,7 @@
 
 | 命令 | 说明 |
 | --- | --- |
-| `./run.sh quest teleop` | 唤醒 Quest 并启动遥操（启动遥操.sh） |
+| `./run.sh quest teleop` | 唤醒 Quest 并启动遥操（scripts/shortcuts/启动遥操.sh） |
 | `./run.sh quest check` | XR 数据检查 |
 | `./run.sh quest service` | 启动 XRoboToolkit PC Service |
 | `./run.sh quest usb` | 配置 USB 反向端口：prepare | status |
@@ -103,8 +118,14 @@
 
 | 命令 | 说明 |
 | --- | --- |
-| `./run.sh motion run` | --run <RUN> status | movej | movel | jog | gripper | teach | return | home | stop |
+| `./run.sh motion run` | `--run <RUN>`，支持 status、preview、execute、movej、movel、jog、gripper、teach、return、home、stop |
 | `./run.sh motion console` | 浏览器动作编辑台 |
+
+规划命令 `preview / movej / movel / home / jog / return` 可指定 `--speed`（rad/s）、`--acceleration`（rad/s²）和 `--jerk`（rad/s³）。默认应用参数为 `0.15 / 2 / 10`，在 `configs/control/motion.json` 中设置。`--speed 0` 使用后端每轴速度上限；正值与后端每轴上限取较小值。真机能力来自当前设备后端的 SDK 运行配置，`describe.motion_limits` 标明来源；仿真和离线使用明确标注的名义配置。SDK 配置不等于硬件额定速度读回，加速度和 jerk 则是应用规划参数。旧内核缺少对应能力字段时，客户端会在获取控制权前拒绝不支持的速度请求。
+
+`preview` 输出持续时间、采用的 `limits`、`metrics.peak_velocity_rad_s` 和 `metrics.limiting_factors`。速度参数是上限；短距离通常由加速度或 jerk 决定实际峰值。先核对预览，再用 `execute --plan <保存的预览文件>` 执行。
+
+MoveJ/home/jog/return 复用共享 Ruckig 规划，内核在控制周期直接求取同一曲线的位置和速度。MoveL 保留笛卡尔路径，按相同每轴能力缩放时间。正常完成与释放后保持最终目标；取消、失联或失败会撤销该目标并抓取当前反馈保持。原生 Quest 路径保持原行为；裸 RPC joint/cartesian 流仍使用默认应用速度限幅，本次未接入在线 Ruckig。
 
 ### collect · 数据采集
 
@@ -171,7 +192,7 @@
 | `./run.sh web preview` | 控制台前端预览 |
 | `./run.sh web lan` | 局域网 HTTPS 发布 |
 | `./run.sh web tailnet` | Tailscale 发布 |
-| `./run.sh web site` | 本地预览宣传网站（site/） |
+| `./run.sh web site` | 本地预览宣传网站（apps/site/） |
 
 ### task · 任务程序
 

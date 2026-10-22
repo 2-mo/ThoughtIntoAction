@@ -14,7 +14,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from embodied.core.plugins import Registry
+from embodied.contracts.registry import Registry
 from embodied.data.episode.recording import EpisodeWriter
 from embodied.core.storage import save_json
 from embodied.core.local_server import LocalServer
@@ -75,7 +75,7 @@ class TeleopSession:
         self.collection_status = None
         source = hashlib.sha256()
         files = list((PROJECT_ROOT / "src").rglob("*.py")) + list((PROJECT_ROOT / "scripts").rglob("*.py"))
-        files.extend(PROJECT_ROOT / name for name in ("dependencies.lock.toml", "configs/plugins.toml", "pyproject.toml", "uv.lock"))
+        files.extend(PROJECT_ROOT / name for name in ("dependencies.lock.toml", "configs/plugins.json", "pyproject.toml", "uv.lock"))
         for path in sorted(files):
             source.update(str(path.relative_to(PROJECT_ROOT)).encode() + b"\0" + path.read_bytes())
         self.source_fingerprint = source.hexdigest()
@@ -388,8 +388,8 @@ class TeleopSession:
                         self._dataset_run_id = self.task_run_id
                     meta["task_run_id"] = self.task_run_id
                     raw_root = self.dataset_root / ".raw"
-                from embodied.sensors.client import SharedCamera, socket_path
-                from embodied.sensors.control import recording_guard
+                from embodied.devices.sensors.client import SharedCamera, socket_path
+                from embodied.devices.sensors.control import recording_guard
                 from embodied.core.session_protocol import request
                 lease = recording_guard() if self.camera_factory is SharedCamera else None
                 try:
@@ -436,9 +436,9 @@ class TeleopSession:
     def _check_quality(self, episode):
         try:
             from embodied.data.datasets import validate_episode
-            from embodied.core.model import RobotModel
+            from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
             from embodied.core.project import resolve_path
-            robot = RobotModel(resolve_path(self.config['robot']['urdf']), eef=self.robot_metadata['eef_frame'])
+            robot = X5PinocchioModel(resolve_path(self.config['robot']['urdf']), eef=self.robot_metadata['eef_frame'])
             report = validate_episode(episode['path'], settings=self.config['recording'], robot=robot)
             report.update(status='passed' if report['valid'] else 'failed', episode=episode['id'])
         except Exception as exc:

@@ -10,7 +10,7 @@ import arx5_interface as arx5
 import numpy as np
 
 from embodied.contracts.device_lease import DeviceLease
-from embodied.core.project import X5_2025_URDF
+from embodied.devices.robots.arx5.paths import X5_2025_URDF
 from legacy.robot_control.trajectory import bounded_joint_target, validate_motion_limits
 
 DEFAULT_X5_URDF_PATH = str(X5_2025_URDF)

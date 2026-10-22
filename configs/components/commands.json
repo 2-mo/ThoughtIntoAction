@@ -1,12 +1,12 @@
 {
   "environments": {
     "analysis": {
-      "python": "environments/arx_motion/.venv/bin/python",
+      "python": "configs/environments/arx_motion/.venv/bin/python",
       "setup": [
         "uv",
         "sync",
         "--project",
-        "environments/arx_motion",
+        "configs/environments/arx_motion",
         "--locked",
         "--only-group",
         "handeye",
@@ -16,14 +16,14 @@
       ]
     },
     "web": {
-      "python": "environments/arx_motion/.venv-web/bin/python",
+      "python": "configs/environments/arx_motion/.venv-web/bin/python",
       "setup": [
         "env",
         "UV_PROJECT_ENVIRONMENT=.venv-web",
         "uv",
         "sync",
         "--project",
-        "environments/arx_motion",
+        "configs/environments/arx_motion",
         "--locked",
         "--only-group",
         "web",
@@ -33,12 +33,12 @@
       ]
     },
     "rebot": {
-      "python": "environments/rebot/.venv/bin/python",
+      "python": "configs/environments/rebot/.venv/bin/python",
       "setup": [
         "uv",
         "sync",
         "--project",
-        "environments/rebot",
+        "configs/environments/rebot",
         "--locked",
         "--no-install-project",
         "--python",
@@ -46,12 +46,12 @@
       ]
     },
     "phone": {
-      "python": "environments/phone/.venv/bin/python",
+      "python": "configs/environments/phone/.venv/bin/python",
       "setup": [
         "uv",
         "sync",
         "--project",
-        "environments/phone",
+        "configs/environments/phone",
         "--locked",
         "--no-install-project",
         "--python",
@@ -71,15 +71,10 @@
       ]
     },
     "groot": {
-      "python": "third_party/Isaac-GR00T/.venv/bin/python",
+      "python": "outputs/envs/groot/bin/python",
       "setup": [
-        "uv",
-        "sync",
-        "--project",
-        "third_party/Isaac-GR00T",
-        "--locked",
-        "--python",
-        "3.12"
+        "python3",
+        "scripts/setup/groot_environment.py"
       ],
       "prepare": [
         "python3",
@@ -87,17 +82,11 @@
       ]
     },
     "groot-tensorrt": {
-      "python": "third_party/Isaac-GR00T/.venv/bin/python",
+      "python": "outputs/envs/groot/bin/python",
       "setup": [
-        "uv",
-        "sync",
-        "--project",
-        "third_party/Isaac-GR00T",
-        "--locked",
-        "--extra",
-        "tensorrt",
-        "--python",
-        "3.12"
+        "python3",
+        "scripts/setup/groot_environment.py",
+        "--tensorrt"
       ],
       "prepare": [
         "python3",
@@ -148,123 +137,123 @@
     },
     "ui.backend": {
       "environment": "analysis",
-      "module": "embodied.console"
+      "module": "embodied.applications.console"
     },
     "camera.rgbd": {
       "environment": "web",
-      "module": "embodied.console.features.camera.service"
+      "module": "embodied.applications.console.features.camera.service"
     },
     "input.hand_service": {
       "environment": "web",
-      "module": "embodied.console.features.vision.service"
+      "module": "embodied.applications.console.features.vision.service"
     },
     "diagnostic.pose_monitor": {
       "environment": "analysis",
-      "module": "embodied.phone.tools.pose_monitor"
+      "module": "embodied.devices.phone.tools.pose_monitor"
     },
     "diagnostic.pose_simulator": {
       "environment": "analysis",
-      "module": "embodied.phone.tools.pose_simulator"
+      "module": "embodied.devices.phone.tools.pose_simulator"
     },
     "diagnostic.udp_loopback": {
       "environment": "analysis",
-      "module": "embodied.phone.tools.udp_loopback"
+      "module": "embodied.devices.phone.tools.udp_loopback"
     },
     "diagnostic.network_test": {
       "environment": "analysis",
-      "module": "embodied.phone.tools.network_test"
+      "module": "embodied.devices.phone.tools.network_test"
     },
     "diagnostic.latency_report": {
       "environment": "analysis",
-      "module": "embodied.phone.tools.latency_report"
+      "module": "embodied.devices.phone.tools.latency_report"
     },
     "diagnostic.control_observations": {
       "environment": "analysis",
-      "module": "embodied.phone.tools.control_observations"
+      "module": "embodied.devices.phone.tools.control_observations"
     },
     "diagnostic.phone_reset_console": {
       "environment": "analysis",
-      "module": "embodied.phone.tools.phase3_mock_session"
+      "module": "embodied.devices.phone.tools.phase3_mock_session"
     },
     "diagnostic.phase4_kinematics_check": {
       "environment": "analysis",
-      "module": "embodied.phone.tools.phase4_kinematics_check"
+      "module": "embodied.devices.phone.tools.phase4_kinematics_check"
     },
     "diagnostic.arx5_sdk_inspect": {
       "environment": "analysis",
-      "module": "embodied.phone.tools.arx5_sdk_inspect"
+      "module": "embodied.devices.phone.tools.arx5_sdk_inspect"
     },
     "diagnostic.arx5_state_readiness": {
       "environment": "analysis",
-      "module": "embodied.phone.tools.arx5_state_readiness"
+      "module": "embodied.devices.phone.tools.arx5_state_readiness"
     },
     "diagnostic.phase5_motion_preflight": {
       "environment": "analysis",
-      "module": "embodied.phone.tools.phase5_motion_preflight"
+      "module": "embodied.devices.phone.tools.phase5_motion_preflight"
     },
     "diagnostic.phase5_safety_contract": {
       "environment": "analysis",
-      "module": "embodied.phone.tools.phase5_safety_contract"
+      "module": "embodied.devices.phone.tools.phase5_safety_contract"
     },
     "phone.tools": {
       "environment": "phone",
-      "module": "embodied.phone.cli"
+      "module": "embodied.devices.phone.cli"
     },
     "rebot.dm": {
       "environment": "rebot",
-      "script": "examples/rebot/0x01damiao_test.py"
+      "script": "docs/examples/rebot/0x01damiao_test.py"
     },
     "rebot.rs": {
       "environment": "rebot",
-      "script": "examples/rebot/0x01rs06_test.py"
+      "script": "docs/examples/rebot/0x01rs06_test.py"
     },
     "rebot.zero": {
       "environment": "rebot",
-      "script": "examples/rebot/2_zero_and_read.py"
+      "script": "docs/examples/rebot/2_zero_and_read.py"
     },
     "rebot.mit": {
       "environment": "rebot",
-      "script": "examples/rebot/3_mit_control.py"
+      "script": "docs/examples/rebot/3_mit_control.py"
     },
     "rebot.position": {
       "environment": "rebot",
-      "script": "examples/rebot/4_pos_vel_control.py"
+      "script": "docs/examples/rebot/4_pos_vel_control.py"
     },
     "rebot.fk": {
       "environment": "rebot",
-      "script": "examples/rebot/5_fk_test.py"
+      "script": "docs/examples/rebot/5_fk_test.py"
     },
     "rebot.ik": {
       "environment": "rebot",
-      "script": "examples/rebot/6_ik_test.py"
+      "script": "docs/examples/rebot/6_ik_test.py"
     },
     "rebot.endpose": {
       "environment": "rebot",
-      "script": "examples/rebot/7_arm_ik_control.py"
+      "script": "docs/examples/rebot/7_arm_ik_control.py"
     },
     "rebot.trajectory": {
       "environment": "rebot",
-      "script": "examples/rebot/8_arm_traj_control.py"
+      "script": "docs/examples/rebot/8_arm_traj_control.py"
     },
     "rebot.gravity": {
       "environment": "rebot",
-      "script": "examples/rebot/9_gravity_compensation.py"
+      "script": "docs/examples/rebot/9_gravity_compensation.py"
     },
     "rebot.stationary_hold": {
       "environment": "rebot",
-      "script": "examples/rebot/10_gravity_compensation_lock.py"
+      "script": "docs/examples/rebot/10_gravity_compensation_lock.py"
     },
     "viewer.rebot_fk": {
       "environment": "rebot",
-      "script": "examples/rebot/sim/fk_sim.py"
+      "script": "docs/examples/rebot/sim/fk_sim.py"
     },
     "viewer.rebot_ik": {
       "environment": "rebot",
-      "script": "examples/rebot/sim/ik_sim.py"
+      "script": "docs/examples/rebot/sim/ik_sim.py"
     },
     "viewer.rebot_trajectory": {
       "environment": "rebot",
-      "script": "examples/rebot/sim/traj_sim.py"
+      "script": "docs/examples/rebot/sim/traj_sim.py"
     },
     "ui.build": {
       "environment": "frontend",

@@ -9,9 +9,9 @@ import threading
 
 import numpy as np
 
-from embodied.core.model import DEFAULT_URDF, RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import DEFAULT_URDF, X5PinocchioModel
 from legacy.robot_control.trajectory import trajectory
-from embodied.core.plugins import Registry
+from embodied.contracts.registry import Registry
 from legacy.robot_control.client import ArmClient
 
 
@@ -61,7 +61,7 @@ def main(argv=None):
     for name in ("joint_soft_limit_margin_rad",):
         if not np.isfinite(getattr(args, name)) or getattr(args, name) < 0:
             parser.error(f"--{name.replace('_', '-')} must be finite and nonnegative")
-    robot = RobotModel(args.urdf, args.eef)
+    robot = X5PinocchioModel(args.urdf, args.eef)
     motion = {"speed": args.max_joint_speed_rad_s, "acceleration": args.acceleration,
               "hz": args.control_rate_hz, "margin": args.joint_soft_limit_margin_rad}
     rows = replay_points(args.replay, robot) if args.replay else []

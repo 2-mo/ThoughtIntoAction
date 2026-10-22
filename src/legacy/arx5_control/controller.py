@@ -28,7 +28,7 @@ from legacy.arx5_control.cartesian import (
     quaternion_xyzw_to_rpy,
     rpy_to_quaternion_xyzw,
 )
-from legacy.arx5_control.errors import BusyError, ControlError, MotionSettleError, SafetyError
+from embodied.contracts.errors import BusyError, ControlError, MotionSettleError, SafetyError
 from legacy.arx5_control.kdl_urdf import kdl_compatible_urdf_path
 from embodied.motion import (
     RuckigJointTrajectory,

@@ -1,4 +1,4 @@
-"""Legacy D405 / D455 hand-eye calibration on the SDK controller (retired with K-10; use embodied.calibration)."""
+"""Legacy D405 / D455 hand-eye calibration on the SDK controller (retired with K-10; use embodied.applications.calibration)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from embodied.core.arx5_paths import PROJECT_ROOT
+from embodied.devices.robots.arx5.paths import PROJECT_ROOT
 
 from legacy.hand_eye.collector import ManualEyeToHandCollector, solve_and_store_session
 from legacy.hand_eye.core.storage import CalibrationSession

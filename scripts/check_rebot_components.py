@@ -7,11 +7,11 @@ sys.path.insert(0, str(ROOT / 'src'))
 import numpy as np
 import pinocchio as pin
 from embodied.contracts.registry import Registry
-from embodied.robots.rebot.kinematics.robot_model import load_robot_model, get_joint_limits
-from embodied.robots.rebot.dynamics import (
+from embodied.devices.robots.rebot.kinematics.robot_model import load_robot_model, get_joint_limits
+from embodied.devices.robots.rebot.dynamics import (
     compute_generalized_gravity, compute_inverse_dynamics, compute_mass_matrix,
 )
-from embodied.robots.rebot.trajectory.sampler import _apply_profile, TrajProfile
+from embodied.devices.robots.rebot.trajectory.sampler import _apply_profile, TrajProfile
 
 
 def main():

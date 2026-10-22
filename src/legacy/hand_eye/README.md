@@ -156,7 +156,7 @@ UV_PROJECT_ENVIRONMENT=.venv-handeye uv sync --only-group handeye
 每次会话位于：
 
 ```text
-calibrations/hand-eye/eye-to-hand/sessions/YYYYMMDD-HHMMSS/
+outputs/calibrations/hand-eye/eye-to-hand/sessions/YYYYMMDD-HHMMSS/
 ```
 
 双相机 `samples.json` 按 `eye_in_hand`、`eye_to_hand` 保存两套样本和两台相机内参；

@@ -10,7 +10,7 @@ from embodied.data.datasets import load_episode, image_path
 from embodied.data.episode.mcap_io import read_topics, TOPICS
 from copy import deepcopy
 from embodied.data.episode.video import media_path, read_frame
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.telemetry import command_details
 from embodied.core.project import load_config, resolve_path
 from embodied.data.episode.cameras import camera_metadata, camera_topic
@@ -23,7 +23,7 @@ class RecordedEpisode:
             raise ValueError('只能回放完整保存且未丢弃的数据')
         if len(self.states) < 2:
             raise ValueError('上一条缺少机械臂状态数据')
-        model = RobotModel(resolve_path(load_config()['robot']['urdf']), eef=self.meta['robot']['eef_frame'])
+        model = X5PinocchioModel(resolve_path(load_config()['robot']['urdf']), eef=self.meta['robot']['eef_frame'])
         if model.metadata() != self.meta['robot']:
             raise ValueError('回放数据与当前机械臂模型不一致')
         stamps = [row['host_monotonic_ns'] for row in self.states]

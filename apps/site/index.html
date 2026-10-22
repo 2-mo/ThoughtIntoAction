@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080a11">
+  <meta name="description" content="QuestArm 模块化具身智能平台。统一动作接口，连接仿真、真机、遥操、相机、数据与策略。探索完整架构，从一个可运行的仿真示例开始。">
+  <title>QuestArm — 把具身能力，组装成系统</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script src="site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+  <div class="reading-progress" aria-hidden="true"><span></span></div>
+  <header class="site-header">
+    <a class="brand" href="#overview" aria-label="QuestArm 首页"><svg viewBox="0 0 34 34" aria-hidden="true"><path d="M17 2 30 9.5v15L17 32 4 24.5v-15Z M4 9.5l13 8 13-8 M17 17.5V32 M17 2v8l-6.5 4v8L17 26l6.5-4v-8Z"/></svg><span>Quest<span class="brand-light">Arm</span><small>EMBODIED PLATFORM</small></span></a>
+    <nav aria-label="主导航"><a href="#architecture">系统架构</a><a href="#api">编程接口</a><a href="#workflow">数据与策略</a></nav>
+    <a class="header-cta" href="#start">开始构建 <span aria-hidden="true">↗</span></a>
+  </header>
+  <main id="main">
+    <section class="hero section" id="overview" aria-labelledby="hero-title">
+      <div class="hero-grid wrap">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="signal-mark" aria-hidden="true"></span>ONE PLATFORM. MANY POSSIBILITIES.</p>
+          <h1 id="hero-title">把具身能力，<br><span>组装成系统。</span></h1>
+          <p class="hero-lead">从一个动作，到完整的具身工作流。</p>
+          <p class="hero-description">连接输入、机械臂与相机。用统一接口编写动作，<br class="desktop-only">让示教、数据和模型策略在同一平台协作。</p>
+          <div class="actions"><a class="button primary" href="#architecture">探索系统架构 <span aria-hidden="true">↓</span></a><a class="button quiet" href="#start"><span class="terminal-symbol" aria-hidden="true">&gt;_</span>从仿真开始</a></div>
+          <div class="hero-proof"><span>当前接入</span><strong>ARX X5</strong><i></i><strong>MuJoCo</strong><i></i><strong>RealSense</strong><a href="#status">查看实现边界 ↗</a></div>
+        </div>
+        <div class="hero-lab">
+          <div class="lab-topline"><span><i class="status-dot" aria-hidden="true"></i> PLATFORM EXPLORER</span><span>交互架构示意</span></div>
+          <div class="scene-shell">
+            <div id="platform-scene" class="platform-scene" data-scene-state="loading" aria-label="平台三维模块图">
+              <div class="scene-fallback" aria-label="平台静态架构：输入和策略提交控制目标，相机与控制反馈进入数据模块">
+                <svg viewBox="0 0 640 480" role="img" aria-labelledby="fallback-title"><title id="fallback-title">输入、控制、视觉、数据与策略组成的模块化平台</title>
+                  <defs><linearGradient id="slab" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#373e6e"/><stop offset="1" stop-color="#14192d"/></linearGradient></defs>
+                  <g fill="none" stroke="#343e61"><path d="M65 332 320 184 575 332 320 480Z M65 302 320 154 575 302 M140 375 395 227 M245 435 500 287"/><path d="M143 196 320 300 494 194 M168 358 320 269 475 360" stroke-dasharray="5 7"/></g>
+                  <g fill="url(#slab)" stroke="#8996fa"><path d="m229 287 91-53 91 53-91 53Z M229 287v28l91 53 91-53v-28 M320 340v28"/><path d="m229 252 91-53 91 53-91 53Z M229 252v17l91 53 91-53v-17"/><path d="m257 208 63-37 63 37-63 37Z M257 208v23l63 37 63-37v-23"/></g>
+                  <g fill="#12192a" stroke="#7785c8"><path d="m94 174 49-28 49 28-49 28Z M94 174v24l49 28 49-28v-24"/><path d="m445 174 49-28 49 28-49 28Z M445 174v24l49 28 49-28v-24"/><path d="m113 339 49-28 49 28-49 28Z M113 339v24l49 28 49-28v-24"/><path d="m426 339 49-28 49 28-49 28Z M426 339v24l49 28 49-28v-24"/></g>
+                  <g fill="#b5bdf2" font-family="sans-serif" font-size="14" text-anchor="middle"><text x="320" y="144">控制运行时</text><text x="143" y="128">输入 INPUT</text><text x="494" y="128">视觉 SENSORS</text><text x="162" y="411">数据 DATA</text><text x="475" y="411">策略 POLICY</text></g>
+                </svg>
+              </div>
+            </div>
+            <div class="scene-controls" hidden><button type="button" id="motion-toggle" aria-pressed="false">暂停动效</button><button type="button" id="scene-reset">重置视角</button></div>
+          </div>
+          <div class="lab-footer"><span id="scene-hint">模块关系示意 · 下方可探索完整架构</span><span class="axis-key" aria-hidden="true"><b>X</b> <b>Y</b> <b>Z</b></span></div>
+          <div class="flow-switch" role="group" aria-label="选择系统数据流"><button type="button" data-flow="control" aria-pressed="true"><i></i>动作控制</button><button type="button" data-flow="data" aria-pressed="false"><i></i>示教采集</button><button type="button" data-flow="policy" aria-pressed="false"><i></i>策略执行</button></div>
+          <p id="hero-flow-description" class="flow-caption">输入表达意图，控制内核执行动作，设备反馈回到平台。</p>
+        </div>
+      </div>
+      <div class="principles wrap"><div><span>01</span><p><strong>能力共享</strong><small>控制 · 感知 · 数据 · 策略</small></p></div><div><span>02</span><p><strong>接口统一</strong><small>同一份动作，连接仿真与真机</small></p></div><div><span>03</span><p><strong>设备解耦</strong><small>独立适配，共用上层工作流</small></p></div><a href="#architecture" class="scroll-cue">继续探索 <span aria-hidden="true">↓</span></a></div>
+    </section>
+
+    <section class="section architecture-section" id="architecture" aria-labelledby="architecture-title">
+      <div class="wrap">
+        <header class="section-heading reveal"><p class="eyebrow">01 / THE SYSTEM, OPENED UP</p><h2 id="architecture-title">每个模块有边界。<br><span class="muted">组合起来，才是平台。</span></h2><p>从入口到驱动，对应真实代码。选择模块，查看它负责什么、通过什么接口协作。</p></header>
+        <div class="architecture-layout reveal">
+          <div class="architecture-map" aria-label="平台完整模块架构">
+            <div class="map-caption"><span>PLATFORM MAP</span><span>点击模块查看实现 ↗</span></div>
+            <div class="module-tier"><div class="tier-label"><span>01</span>交互与装配</div><div class="tier-content tier-two"><button class="module-node" data-module="applications" aria-pressed="false"><small>applications/</small><strong>应用与工作台</strong><span>终端 · Python · 网页 · 标定</span></button><button class="module-node" data-module="inputs" aria-pressed="false"><small>devices/inputs/</small><strong>输入与遥操</strong><span>Quest · iPhone · 动作来源</span></button></div></div>
+            <div class="map-connector" aria-hidden="true"><span></span>控制请求 / 观测订阅<span></span></div>
+            <div class="module-tier"><div class="tier-label"><span>02</span>公共契约</div><div class="tier-content"><button class="module-node module-wide" data-module="contracts" aria-pressed="false"><small>contracts/</small><strong>共享接口与生命周期</strong><span>ControlSession · RuntimeReader · Registry · 设备所有权</span></button></div></div>
+            <div class="module-tier"><div class="tier-label"><span>03</span>独立能力</div><div class="tier-content tier-four"><button class="module-node" data-module="motion" aria-pressed="false"><small>motion/</small><strong>运动算法</strong><span>轨迹 · 时间参数化</span></button><button class="module-node" data-module="data" aria-pressed="false"><small>data/</small><strong>数据</strong><span>采集 · 回放 · 导出</span></button><button class="module-node" data-module="policy" aria-pressed="false"><small>policy/</small><strong>模型策略</strong><span>观察 · 推理 · 动作</span></button><button class="module-node" data-module="core" aria-pressed="false"><small>core/</small><strong>平台基础</strong><span>配置 · 路径 · 模型</span></button></div></div>
+            <div class="map-connector" aria-hidden="true"><span></span>运行时与设备独立拥有资源<span></span></div>
+            <div class="module-tier"><div class="tier-label"><span>04</span>执行与设备</div><div class="tier-content tier-two"><button class="module-node" data-module="control" aria-pressed="true"><small>embodied/control/</small><strong>控制运行时</strong><span>gateway → worker → 设备插件</span></button><button class="module-node" data-module="sensors" aria-pressed="false"><small>devices/sensors/</small><strong>独立相机服务</strong><span>设备工厂 → 共享图像与时间戳</span></button></div></div>
+            <p class="map-note">按职责分层，不是强制串行流水线。相机、数据和策略在平台侧独立运行；控制请求才进入机械臂内核。</p>
+          </div>
+          <aside class="module-inspector" aria-live="polite" aria-atomic="true"><div class="inspector-index"><span>SELECTED MODULE</span><span id="module-index">08 / 09</span></div><p class="inspector-path" id="module-path">src/embodied/control/</p><h3 id="module-title">控制运行时</h3><p id="module-description">接收统一目标，调度动作并发布反馈。公共 runtime 通过设备插件连接机械臂；SDK 和型号运动学由对应适配器维护。</p><dl><dt>协作接口</dt><dd id="module-interface">commands.sock / observer.sock · RobotBackend</dd><dt>当前实现</dt><dd id="module-status">共用 runtime，ARX X5 真机与 MuJoCo 由设备插件提供；新型号仍需模型、限值和后端适配。</dd></dl><a id="module-source" class="source-link" href="https://github.com/2-mo/QuestArmTeleop/blob/main/src/embodied/devices/robots/arx5/plugin.py">查看实现源码 <span aria-hidden="true">↗</span></a><div class="inspector-footer"><span class="status-dot" aria-hidden="true"></span>基于仓库实际实现</div></aside>
+        </div>
+        <div class="call-path reveal">
+          <div class="path-heading"><div><p class="eyebrow">FOLLOW ONE REQUEST</p><h3>追踪一次真实调用</h3></div><div class="flow-switch" role="group" aria-label="选择调用路径"><button type="button" data-flow="control" aria-pressed="true">MoveJ</button><button type="button" data-flow="data" aria-pressed="false">采集</button><button type="button" data-flow="policy" aria-pressed="false">策略</button></div></div>
+          <ol class="path-steps" id="path-steps"><li><span>01</span><strong>Robot.movej(q)</strong><p>组织目标与控制会话。</p></li><li><span>02</span><strong>preview / execute</strong><p>通过 commands.sock 提交计划。</p></li><li><span>03</span><strong>Ruckig 轨迹规划</strong><p>共享算法生成逐时刻 q / dq。</p></li><li><span>04</span><strong>worker → 后端</strong><p>控制运行时按周期下发。</p></li><li><span>05</span><strong>反馈到位</strong><p>检查实际位置与速度，完成后保持。</p></li></ol>
+          <p class="path-note" id="path-note">MoveJ 复用独立运动算法，MoveL 另需机器人 IK。250 Hz 是当前 X5 profile 的控制频率，不是实测端到端性能。</p>
+          <noscript><p class="path-note">采集：observer 与相机共享帧 → episode → 质检 / 导出。策略：关节状态与相机图像 → 独立推理环境 → 动作映射 → 流式 joint 目标 → 设备反馈。</p></noscript>
+        </div>
+        <p class="section-footnote">Python 与动作 CLI 已共用 Robot；网页控制台的公共动作语义仍在收敛。<a href="https://github.com/2-mo/QuestArmTeleop/blob/main/docs/architecture/overview.md">完整架构与迁移边界 ↗</a></p>
+      </div>
+    </section>
+
+    <section class="section api-section" id="api" aria-labelledby="api-title">
+      <div class="wrap">
+        <header class="section-heading split-heading reveal"><div><p class="eyebrow">02 / ONE WAY TO WRITE MOTION</p><h2 id="api-title">写一次动作。<br><span class="muted">连接两种世界。</span></h2></div><p>把连接方式放在入口，动作保持相同。<br>规划、执行与到位等待封装在 Robot 中。</p></header>
+        <div class="api-workbench reveal">
+          <div class="api-choices" role="group" aria-label="选择动作示例"><button type="button" data-example="movej" aria-pressed="true"><span>01</span><strong>MoveJ</strong><small>关节目标</small></button><button type="button" data-example="movel" aria-pressed="false"><span>02</span><strong>MoveL</strong><small>空间 XYZ</small></button><button type="button" data-example="gripper" aria-pressed="false"><span>03</span><strong>Gripper</strong><small>夹爪开合</small></button><button type="button" data-example="teach" aria-pressed="false"><span>04</span><strong>Teach</strong><small>记点返回</small></button><button type="button" data-example="record" aria-pressed="false"><span>05</span><strong>Record</strong><small>轨迹采集</small></button></div>
+          <div class="code-workspace" data-copy-scope><div class="code-toolbar"><div class="backend-switch" role="group" aria-label="选择运行后端"><button type="button" data-backend="sim" aria-pressed="true">仿真 SIM</button><button type="button" data-backend="real" aria-pressed="false">真机 REAL</button></div><span class="code-language">PYTHON</span><button class="copy-button" data-copy="api-code" type="button">复制代码 <span aria-hidden="true">⧉</span></button></div><div class="code-body"><div class="line-numbers" id="code-lines" aria-hidden="true">01<br>02<br>03<br>04<br>05<br>06<br>07</div><pre tabindex="0" aria-label="可复制的 Robot 示例"><code id="api-code">from embodied import Robot
+
+with Robot.sim(viewer=True) as robot:
+    q = robot.q
+    q[0] += 0.1
+    robot.movej(q)</code></pre></div><div class="code-description"><strong id="example-title">让第一个关节转动 0.1 rad。</strong><p id="example-detail">MoveJ 输入绝对关节位置；末端路径由关节运动决定。</p><a id="example-source" href="https://github.com/2-mo/QuestArmTeleop/blob/main/src/examples/control/movej.py">打开完整示例 ↗</a></div></div>
+        </div>
+        <div class="api-notes"><p id="backend-note"><span class="note-dot"></span>仿真：自动创建 MuJoCo，退出 with 后关闭自己创建的内核；原生窗口需要桌面 DISPLAY。</p><p>位置 m · 关节 rad · 当前 speed / acceleration / jerk 约束关节轨迹。<a href="https://github.com/2-mo/QuestArmTeleop/blob/main/docs/reference/robot-primitives.md">接口与单位 ↗</a></p></div>
+        <noscript><p>真机使用 <code>with Robot.real("outputs/runtime/control/&lt;REAL_RUN&gt;") as robot:</code>，动作相同。连接已有内核，不负责启动或使能硬件。更多动作见上方完整示例与接口说明。</p></noscript>
+      </div>
+    </section>
+
+    <section class="section evidence-section" id="workbench" aria-labelledby="workbench-title">
+      <div class="wrap">
+        <header class="section-heading split-heading reveal"><div><p class="eyebrow">03 / SEE WHAT THE SYSTEM SEES</p><h2 id="workbench-title">动作之外，<br><span class="muted">看清整个过程。</span></h2></div><p>场景、目标与反馈放在同一工作流里。<br>以下画面来自项目已有界面，均为静态截图。</p></header>
+        <div class="evidence-stage reveal"><div class="evidence-menu" role="group" aria-label="查看真实工作台截图"><button type="button" data-evidence="scene" aria-pressed="true"><span>01</span>场景与仿真</button><button type="button" data-evidence="pose" aria-pressed="false"><span>02</span>目标与反馈</button><button type="button" data-evidence="telemetry" aria-pressed="false"><span>03</span>关节遥测</button><span class="evidence-label">PROJECT CAPTURES</span></div><figure><div class="evidence-viewport"><img id="evidence-image" src="assets/scene.jpg" width="2176" height="1376" loading="lazy" alt="项目 MuJoCo 工作台真实截图：X5 机械臂、桌面与三维坐标轴"><span class="capture-stamp">项目截图 / 非实时连接</span></div><figcaption><div><strong id="evidence-title">先在仿真里，看见自己的动作。</strong><p id="evidence-description">同一套控制内核与动作入口，反馈显示在独立监看视图中。</p></div><a id="evidence-source" href="https://github.com/2-mo/QuestArmTeleop/blob/main/docs/guides/monitoring.md">了解监看工作流 ↗</a></figcaption></figure></div>
+      </div>
+    </section>
+
+    <section class="section workflow-section" id="workflow" aria-labelledby="workflow-title">
+      <div class="wrap">
+        <header class="section-heading reveal"><p class="eyebrow">04 / FROM DEMONSTRATION TO POLICY</p><h2 id="workflow-title">把一次示教，<br><span class="muted">接到下一次执行。</span></h2><p>原始记录、训练格式与模型环境各有职责，数据的来路始终可以追溯。</p></header>
+        <div class="pipeline reveal"><ol><li><span class="stage-number">01</span><h3>采集</h3><p>内核观测 + 共享相机帧</p><code>MCAP · 视频 · 时间戳</code></li><li><span class="stage-number">02</span><h3>检查与回放</h3><p>对齐状态、图像与动作</p><code>episode · 质量检查</code></li><li><span class="stage-number">03</span><h3>导出与训练</h3><p>按模型要求组织数据集</p><code>LeRobot · OpenPI · GR00T</code></li><li><span class="stage-number">04</span><h3>策略执行</h3><p>模型观察 → 动作 → 反馈</p><code>独立推理 · 内核执行</code></li></ol><div class="pipeline-return"><span aria-hidden="true">↳</span>新的动作与反馈，进入下一轮数据<span aria-hidden="true">↲</span></div></div>
+        <div class="workflow-detail reveal"><div><p class="eyebrow">TWO STREAMS, ONE EPISODE</p><h3>动作和图像，<br>沿各自的时间线汇合。</h3><p>相机服务独立拥有设备。采集端读取内核 tick 与共享帧，将原始时间戳、内外参和缺口一起保留下来。</p><a class="text-link" href="https://github.com/2-mo/QuestArmTeleop/blob/main/docs/guides/recording.md">查看采集与数据契约 ↗</a></div><div class="episode-artifact"><div class="artifact-header"><span class="status-dot" aria-hidden="true"></span>EPISODE / 输出结构示意</div><div class="stream-line"><span>ROBOT</span><div class="stream-track robot-track" aria-hidden="true"></div><span>q / dq / command</span></div><div class="stream-line"><span>CAMERA</span><div class="stream-track camera-track" aria-hidden="true"></div><span>frames / timestamps</span></div><pre>episode/
+├── episode.json      <span>运行信息与任务</span>
+├── *.mcap            <span>命令、反馈与时序</span>
+└── cameras/          <span>图像与相机元数据</span></pre><p>结构示意；具体文件布局以采集输出为准。</p></div></div>
+        <div class="workflow-links"><a href="https://github.com/2-mo/QuestArmTeleop/blob/main/docs/guides/openpi-dataset.md">LeRobot / OpenPI 导出 ↗</a><a href="https://github.com/2-mo/QuestArmTeleop/tree/main/src/embodied/policy/groot">GR00T 适配 ↗</a><a href="https://github.com/2-mo/QuestArmTeleop/blob/main/src/embodied/policy/kernel_runner.py">策略运行实现 ↗</a></div>
+      </div>
+    </section>
+
+    <section class="section start-section" id="start" aria-labelledby="start-title">
+      <div class="wrap">
+        <div id="status" class="status-strip reveal"><div><span class="status-tag ready">已贯通</span><strong>MuJoCo 仿真链路</strong><p>控制、观测、采集与导出已有对应实现和验证。</p></div><div><span class="status-tag pending">继续验收</span><strong>新内核真机链路</strong><p>已做保持与小幅动作测试；新版轨迹仍待真机及完整任务验收。</p></div><div><span class="status-tag neutral">按模块扩展</span><strong>新设备与统一入口</strong><p>当前内核为 X5 六轴；其他型号需适配，旧控制台与 legacy 逐项收敛。</p></div></div>
+        <div class="start-grid reveal"><div><p class="eyebrow">05 / YOUR FIRST WORKING SYSTEM</p><h2 id="start-title">从一个能运行的<br><span>例子开始。</span></h2><p>先完成环境安装，再在仿真中写下第一个动作。<br>让平台成为下一次实验的起点。</p><div class="actions"><a class="button primary" href="https://github.com/2-mo/QuestArmTeleop/blob/main/docs/getting-started.md">安装与入门指南 ↗</a><a class="text-link" href="https://github.com/2-mo/QuestArmTeleop">GitHub 仓库 ↗</a></div></div><div class="start-terminal"><div class="terminal-header"><span class="terminal-dots" aria-hidden="true">● ● ●</span><span>终端 / 仓库根目录</span></div><div class="terminal-entry"><p>打开工作台</p><div><code id="start-workbench">./run.sh</code><button type="button" class="copy-button" data-copy="start-workbench" aria-label="复制工作台命令">复制</button></div></div><div class="terminal-entry"><p>可视化仿真 · 按步骤控制关节、XYZ 与夹爪</p><div><code id="start-simulation">./run.sh examples sim_control</code><button type="button" class="copy-button" data-copy="start-simulation" aria-label="复制仿真示例命令">复制</button></div></div><div class="terminal-entry"><p>浏览所有示例</p><div><code id="start-examples">./run.sh examples</code><button type="button" class="copy-button" data-copy="start-examples" aria-label="复制示例目录命令">复制</button></div></div><div class="terminal-bottom"><span>SSH / 无桌面：仿真示例加 --headless</span><a href="https://github.com/2-mo/QuestArmTeleop/blob/main/src/examples/README.md">示例说明 ↗</a></div></div></div>
+        <footer class="site-footer"><div><a class="footer-brand" href="#overview">QuestArm<span>EMBODIED PLATFORM</span></a><p>连接能力，让具身工作流更完整。</p></div><div><a href="https://github.com/2-mo/QuestArmTeleop/blob/main/docs/README.md">项目文档 ↗</a><a href="https://github.com/2-mo/QuestArmTeleop/blob/main/docs/architecture/overview.md">架构说明 ↗</a><a href="https://github.com/2-mo/QuestArmTeleop/blob/main/docs/guides/real-arm-acceptance.md">验收记录 ↗</a></div><p class="credits">构建于 arx-televr · XRoboToolkit · LeRobot · OpenPI · Isaac GR00T<br>Three.js 用于架构交互展示；第三方许可证随源码保存。</p></footer>
+      </div>
+    </section>
+  </main>
+  <p id="copy-status" class="sr-only" role="status" aria-live="polite"></p>
+</body>
+</html>

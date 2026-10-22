@@ -4,11 +4,10 @@ import unittest
 import numpy as np
 if importlib.util.find_spec('flax') is None:
     raise unittest.SkipTest('needs outputs/envs/pi05-sft (./run.sh check-all --only policy)')
-from embodied.policy.pi05_sft import backend  # Sets the pinned OpenPI and project adapter import roots.
 from embodied.policy.pi05_sft.checkpoint import DEFAULT_CHECKPOINT,inspect_checkpoint
 from openpi import transforms as t
 from openpi.shared.normalize import load
-from x5_policy import X5Inputs,X5Outputs
+from embodied.policy.openpi.x5 import X5Inputs,X5Outputs
 from pathlib import Path
 
 

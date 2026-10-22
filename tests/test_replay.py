@@ -9,7 +9,7 @@ from unittest.mock import patch
 import cv2
 import numpy as np
 
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.data.replay import RecordedEpisode, WebReplay, RobotReplay
 from legacy.quest_teleop.runtime.session import TeleopSession
 
@@ -20,7 +20,7 @@ class ReplayTests(unittest.TestCase):
         self.addCleanup(folder.cleanup)
         self.root = Path(folder.name)
         self.meta = {'schema_version': 1, 'kind': 'quest_teleop_episode', 'id': 'previous',
-                     'lifecycle': 'complete', 'outcome': 'unknown', 'robot': RobotModel(eef='eef_link').metadata()}
+                     'lifecycle': 'complete', 'outcome': 'unknown', 'robot': X5PinocchioModel(eef='eef_link').metadata()}
         (self.root / 'episode.json').write_text(json.dumps(self.meta))
         self.rows = [{'host_monotonic_ns': 1_000_000_000 + i * 1_000_000_000,
                       'actual_pos': [i * .1, 0, 0, 0, 0, 0], 'gripper_actual_pos': .04 - i * .01} for i in range(2)]
@@ -123,7 +123,7 @@ class ReplayTests(unittest.TestCase):
     def test_web_api_loads_video_and_pose_but_cannot_start_hardware_replay(self):
         import urllib.request
         from embodied.core.local_server import LocalServer
-        from embodied.monitor.scene import Scene
+        from embodied.applications.monitor.scene import Scene
         session = TeleopSession.__new__(TeleopSession)
         session.operations = threading.Lock()
         session.closed = False
@@ -134,7 +134,7 @@ class ReplayTests(unittest.TestCase):
         socket = self.root / 'session.sock'
         server = LocalServer(socket, session.dispatch)
         self.addCleanup(server.close)
-        scene = Scene(RobotModel(), port=0)
+        scene = Scene(X5PinocchioModel(), port=0)
         self.addCleanup(scene.close)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         def post(action, origin=None):

@@ -8,8 +8,8 @@ from unittest.mock import patch
 from urllib.request import build_opener, ProxyHandler, Request
 from urllib.error import HTTPError
 
-from embodied.core.model import RobotModel
-from embodied.monitor.scene import Scene
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
+from embodied.applications.monitor.scene import Scene
 from legacy.quest_teleop.inputs import controller_snapshot, IdleInput
 from embodied.core.local_server import LocalServer
 from legacy.quest_teleop.runtime.session import TeleopSession
@@ -25,10 +25,10 @@ class MonitorSensorTests(unittest.TestCase):
                 calls.append(payload)
                 return {"input": {"sample_monotonic_ns": time.monotonic_ns()},
                         "preview": {"jpeg_base64": None, "age_s": None}}
-            scene = Scene(RobotModel())
+            scene = Scene(X5PinocchioModel())
             self.addCleanup(scene.close)
             http = build_opener(ProxyHandler({}))
-            with patch("embodied.core.project.load_config", return_value=config), patch("embodied.sensors.client.load_config", return_value=config):
+            with patch("embodied.core.project.load_config", return_value=config), patch("embodied.devices.sensors.client.load_config", return_value=config):
                 server = LocalServer(path, dispatch)
                 try:
                     data = json.loads(http.open(scene.url + "api/sensors").read())

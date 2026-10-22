@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from embodied.console.features import feature_catalog
+from embodied.applications.console.features import feature_catalog
 
 
 class CommandCatalogTest(unittest.TestCase):

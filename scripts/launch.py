@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 from pathlib import Path
@@ -14,7 +15,9 @@ import tomllib
 # The bootstrap interpreter only needs the standard-library project module.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from embodied.core.project import PROJECT_ROOT, load_config, resolve_path
-from embodied.workstation.catalog import GROUPS
+from embodied.devices.robots.arx5.paths import official_sdk_python_root
+from embodied.applications.workstation.catalog import GROUPS
+from embodied.applications.workstation.help import print_help, print_search
 
 PYTHON_COMMANDS = {
     "quest-discovery": "quest/discovery.py",
@@ -45,37 +48,38 @@ MAINTENANCE_COMMANDS = {
     "check-camera": "diagnostics/check_camera.py",
 }
 MODULE_COMMANDS = {
+    "examples": "examples",
     "collect": "embodied.data.capture.capture",
-    "workbench": "embodied.workstation.workbench",
-    "component-source": "embodied.workstation.source",
-    "phone": "embodied.inputs.phone",
-    "motion": "embodied.operations.cli",
+    "workbench": "embodied.applications.workstation.workbench",
+    "component-source": "embodied.applications.workstation.source",
+    "phone": "embodied.devices.inputs.phone",
+    "motion": "embodied.applications.operations.cli",
     "runtime-data": "embodied.data.export.runtime_v2",
     "quest-calibrate": "legacy.quest_teleop.frame_calibration",
-    "camera-service": "embodied.sensors.service",
-    "viewer-control": "embodied.monitor.control",
+    "camera-service": "embodied.devices.sensors.service",
+    "viewer-control": "embodied.applications.monitor.control",
     "teleop-official-x5": "legacy.quest_teleop.cli",
     "teleop-presets-x5": "legacy.quest_teleop.cli",
     "teleop": "legacy.quest_teleop.legacy.controller",
     "teleop-dry-run": "legacy.quest_teleop.legacy.controller",
     "teleop-x5-2025": "legacy.quest_teleop.experimental.arx2025",
-    "plugins": "embodied.core.plugins",
+    "plugins": "embodied.contracts.registry",
     "visualize-xr": "legacy.quest_teleop.xr_visualizer.cli",
-    "view-arm": "embodied.monitor.cli",
-    "arx-preview": "embodied.monitor.arx_preview",
+    "view-arm": "embodied.applications.monitor.cli",
+    "arx-preview": "embodied.applications.monitor.arx_preview",
     "control-arm": "legacy.robot_control.cli",
     "arm-service": "legacy.robot_control.service",
-    "handeye": "embodied.calibration.cli",
+    "handeye": "embodied.applications.calibration.cli",
     "session": "legacy.quest_teleop.runtime.cli",
     "record": "legacy.quest_teleop.runtime.cli",
     "dataset": "embodied.data.datasets",
     "doctor": "legacy.quest_teleop.diagnostics",
     "monitor": "legacy.quest_teleop.runtime.monitor",
-    "ports": "embodied.workstation.ports",
+    "ports": "embodied.applications.workstation.ports",
     "policy-kernel": "embodied.policy.kernel_runner",
-    "bench": "embodied.workstation.bench",
+    "bench": "embodied.applications.workstation.bench",
 }
-BOOTSTRAP_COMMANDS = {"control": "embodied.workstation.control", "components": "embodied.workstation.components.cli"}
+BOOTSTRAP_COMMANDS = {"control": "embodied.applications.workstation.control", "components": "embodied.applications.workstation.components.cli"}
 HARDWARE_COMMANDS = {
     "test-joint", "test-joint-2025", "teleop", "teleop-dry-run",
     "teleop-x5-2025", "arm-service",
@@ -132,8 +136,19 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
         # Every group re-enters run.sh, which selects that group's interpreter and paths.
         return [sys.executable, "-B", str(PROJECT_ROOT / "scripts/check_all.py"), *arguments], env
 
+    if command == "bench":
+        # Listing workbench status must also work before the device SDKs are built.
+        try:
+            python = resolve_python(config)
+        except ValueError:
+            python = Path(sys.executable)
+        env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+        for key in ("PYTHONHOME", "LD_LIBRARY_PATH"):
+            env.pop(key, None)
+        return [str(python), "-B", "-m", MODULE_COMMANDS[command], *arguments], env
+
     python = resolve_python(config)
-    if (command in {"collect", "runtime-data", "workbench", "phone", "motion", "component-source"}
+    if (command in {"examples", "collect", "runtime-data", "workbench", "phone", "motion", "component-source"}
             or command == "handeye" and any(arg == '--runtime' or arg.startswith('--runtime=') for arg in arguments)):
         # Independent components use the gateway; they do not load legacy SDK extensions.
         env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
@@ -141,19 +156,16 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
             env.pop(key, None)
         return [str(python), "-B", "-m", MODULE_COMMANDS[command], *arguments], env
     prefix = python.parent.parent
-    # The multi-robot upstream distribution is not installed; load the pinned source.
-    paths = [PROJECT_ROOT / "src", PROJECT_ROOT / "third_party/XRoboToolkit-Teleop-Sample-Python"]
+    # Device support is an owned package; references never enter the import path.
+    paths = [PROJECT_ROOT / "src"]
     if sdk_path := config["environment"].get("arm_sdk_python"):
         sdk_path = resolve_path(sdk_path)
         if not list(sdk_path.glob("arx5_interface*.so")):
             raise RuntimeError("Patched arm SDK missing; see docs/guides/gripper-startup.md")
         paths.insert(0, sdk_path)
     env["PYTHONPATH"] = os.pathsep.join(map(str, paths))
-    xr_dependencies = PROJECT_ROOT / "third_party/XRoboToolkit-Teleop-Sample-Python/dependencies"
-    libs = [
-        str(prefix / "lib"),
-        str(xr_dependencies / "XRoboToolkit-PC-Service-Pybind/lib"),
-    ]
+    # rebuild-xr-sdk installs the native XR companion library into this environment.
+    libs = [str(prefix / "lib")]
     official_sdk = command in {"teleop-x5-2025", "test-joint-2025", "build-x5-2025-sdk"}
     official_sdk |= command == "test-joint" and any(
         token == "--backend=arx2025" or
@@ -161,7 +173,7 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
         for i, token in enumerate(arguments)
     )
     if official_sdk:
-        sdk = PROJECT_ROOT / "third_party/X5/py/arx_x5_python"
+        sdk = official_sdk_python_root()
         env["PYTHONPATH"] += os.pathsep + str(sdk)
         api = sdk / "bimanual/api"
         libs.extend([str(api / "arx_x5_src"), str(api)])
@@ -195,56 +207,108 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
     return [str(python), "-B", str(PROJECT_ROOT / "scripts" / PYTHON_COMMANDS[command]), *defaults, *arguments], env
 
 
-def catalog_text(group: str | None = None) -> str:
-    lines = [] if group else ["具身智能平台：./run.sh 打开统一工作台；./run.sh <功能> <命令> [参数]；./run.sh <功能> 只看该组。", ""]
-    for name, (title, commands) in GROUPS.items():
-        if group in (None, name):
-            lines.append(f"{name:8} {title}")
-            lines.extend(f"  {command:17} {description}" for command, (description, _) in commands.items())
-            lines.append("")
-    if not group:
-        lines.append("更多：./run.sh components list 列出全部组件命令；原有命令名（如 arm-service、view-arm）仍可直接使用。")
+def home_text() -> str:
+    """A useful first screen without importing an optional SDK or opening a device."""
+    environment = "已创建" if (PROJECT_ROOT / ".venv/bin/python").is_file() else "尚未创建 · uv sync --locked"
+    workspace = "可用 · ./run.sh bench start" if shutil.which("tmux") else "未安装 tmux · 可直接运行下方命令"
+    return "\n".join([
+        "QuestArmTeleop · 具身智能工作台",
+        "输入与设备 → 统一控制 → 采集 / 标定 / 策略",
+        "",
+        f"  Python 环境  {environment}",
+        f"  终端工作台   {workspace}",
+        "",
+        "从这里开始",
+        "  ./run.sh bench start      打开工作台，再选择真机或仿真",
+        "  ./run.sh examples         从示例学习控制、规划与采集",
+        "  ./run.sh kernel doctor    检查内核环境，不连接设备",
+        "  ./run.sh kernel profiles --help  查看运行配置命令",
+        "  ./run.sh web site         预览项目网站",
+        "",
+        "按任务查找 · ./run.sh <功能> <命令> [参数]",
+        "  bench / kernel           工作台与控制内核",
+        "  quest / phone / motion   遥操输入与动作",
+        "  collect / data / policy  采集、数据与策略",
+        "  arm / camera / calib     设备与标定",
+        "  web / check / setup      网页、诊断与安装",
+        "  sim / real / task        仿真、真机工作台与任务",
+        "",
+        "查看一组  ./run.sh help data     搜索命令  ./run.sh search 相机",
+        "命令导航  ./run.sh help          完整目录  ./run.sh help --all",
+    ])
+
+
+def unknown_text(value: str, choices, prefix: str = "") -> str:
+    suggestions = difflib.get_close_matches(value, choices, n=3, cutoff=.5)
+    lines = [f"未知命令：{prefix}{value}"]
+    if suggestions:
+        lines.append("你可能要找：" + "  /  ".join(f"./run.sh {prefix}{item}" for item in suggestions))
+    lines.append(f"查看命令：./run.sh {prefix.strip() or 'help'}；搜索：./run.sh search <关键词>")
     return "\n".join(lines)
 
 
-def resolve_group(argv: list[str]) -> list[str] | int:
+def resolve_group(argv: list[str], *, print_command: bool = False) -> list[str] | int:
     """Translate `<group> <command> args` into a launcher command, or exec a script."""
     title, commands = GROUPS[argv[0]]
     flat = argv[0] in PYTHON_COMMANDS | SHELL_COMMANDS | MAINTENANCE_COMMANDS | MODULE_COMMANDS | BOOTSTRAP_COMMANDS
     if len(argv) == 1 or argv[1] in ("-h", "--help", "help"):
-        print(catalog_text(argv[0]))
+        print_help(argv[0])
         return 0
     if argv[1] not in commands:
         if flat:
             return argv  # The single-word command keeps its own arguments, e.g. `phone --run RUN`.
-        print(f"未知命令：{argv[0]} {argv[1]}\n\n" + catalog_text(argv[0]), file=sys.stderr)
+        print(unknown_text(argv[1], commands, argv[0] + " "), file=sys.stderr)
         return 2
     target, rest = commands[argv[1]][1], argv[2:]
     if target[0] == "run":
         return [*target[1], *rest]
     if target[0] == "component":
         return ["components", "run", target[1], *rest]
-    os.chdir(PROJECT_ROOT)
     if target[0] == "bash":
-        os.execvp("bash", ["bash", str(PROJECT_ROOT / target[1]), *target[2], *rest])
-    python = os.environ.get("QUEST_BOOTSTRAP_PYTHON", "/usr/bin/python3")
-    os.execv(python, [python, "-B", str(PROJECT_ROOT / "scripts/workspace/tmux_workspace.py"), *target[1], *rest])
+        cmd = ["bash", str(PROJECT_ROOT / target[1]), *target[2], *rest]
+    else:
+        python = os.environ.get("QUEST_BOOTSTRAP_PYTHON", "/usr/bin/python3")
+        cmd = [python, "-B", str(PROJECT_ROOT / "scripts/workspace/tmux_workspace.py"), *target[1], *rest]
+    if print_command:
+        print(json.dumps({"command": " ".join(argv[:2]), "argv": cmd}, ensure_ascii=False, indent=2))
+        return 0
+    os.chdir(PROJECT_ROOT)
+    os.execvp(cmd[0], cmd)
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    if not argv and sys.stdin.isatty() and shutil.which("tmux"):
-        argv = ["bench", "start"]  # ./run.sh alone opens the workbench; ./run.sh help lists commands
-    if not argv or argv[0] in ("help", "-h", "--help"):
-        print(catalog_text())
+    if not argv and sys.stdin.isatty() and sys.stdout.isatty() and shutil.which("tmux"):
+        argv = ["bench", "start"]  # ./run.sh opens the workbench; help shows task navigation.
+    if not argv:
+        print(home_text())
+        return 0
+    if argv[0] in ("help", "-h", "--help"):
+        if len(argv) == 1:
+            print_help()
+        elif argv[1] == "examples":
+            from examples.__main__ import main as examples_main
+            return examples_main([])
+        elif argv[1] == "--all":
+            print_help(full=True)
+        elif argv[1] in GROUPS:
+            print_help(argv[1])
+        else:
+            print_search(" ".join(argv[1:]))
+        return 0
+    if argv[0] == "search":
+        if len(argv) == 1 or argv[1] in ("-h", "--help"):
+            print("搜索命令：./run.sh search <关键词>，例如 ./run.sh search 相机 或 ./run.sh search kernel")
+        else:
+            print_search(" ".join(argv[1:]))
         return 0
     # Launcher options (--config X, --profile X, --print-command) may precede a group.
     start = 0
     while start < len(argv) and argv[start] in ("--config", "--profile", "--print-command"):
         start += 1 if argv[start] == "--print-command" else 2
     if start < len(argv) and argv[start] in GROUPS:
-        resolved = resolve_group(argv[start:])
+        resolved = resolve_group(argv[start:], print_command="--print-command" in argv[:start])
         if isinstance(resolved, int):
             return resolved
         argv = argv[:start] + resolved
@@ -252,9 +316,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", help="Local TOML override (relative to the repository)")
     parser.add_argument("--profile", help="Profile name in configs/profiles, or TOML path")
     parser.add_argument("--print-command", action="store_true", help="Print resolved arguments; do not execute")
-    parser.add_argument("command", nargs="?", choices=sorted(PYTHON_COMMANDS | SHELL_COMMANDS | MAINTENANCE_COMMANDS | MODULE_COMMANDS | BOOTSTRAP_COMMANDS))
+    parser.add_argument("command", nargs="?", help="功能或兼容命令；./run.sh help 查看目录")
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
+    known = PYTHON_COMMANDS | SHELL_COMMANDS | MAINTENANCE_COMMANDS | MODULE_COMMANDS | BOOTSTRAP_COMMANDS
+    if args.command and args.command not in known:
+        print(unknown_text(args.command, {*known, *GROUPS}), file=sys.stderr)
+        return 2
     config = load_config(args.config)
     profile = {}
     if args.profile:
@@ -286,6 +354,6 @@ def main(argv: list[str] | None = None) -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, ValueError, KeyError) as exc:
-        print(f"Launch error: {exc}", file=sys.stderr)
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        print(f"启动失败：{exc}", file=sys.stderr)
         raise SystemExit(2)

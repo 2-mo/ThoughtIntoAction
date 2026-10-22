@@ -9,7 +9,7 @@ import meshcat.transformations as tf
 
 from legacy.quest_teleop.frame_calibration import fit_directions, validate_rotation, standby_snapshot, capture, main
 from legacy.quest_teleop.frames import R_CONTROLLER_TO_TOOL, operator_yaw_rotation
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from legacy.quest_teleop.presets import DEFAULT_GRASP_READY_JOINTS
 
 
@@ -99,7 +99,7 @@ class FrameCalibrationTests(unittest.TestCase):
             np.testing.assert_allclose(saved["positions_quest_m"], points)
 
     def test_tip_rotation_keeps_tcp_fixed_and_compensates_wrist_position(self):
-        tcp, wrist = RobotModel(eef="eef_link"), RobotModel(eef="link6")
+        tcp, wrist = X5PinocchioModel(eef="eef_link"), X5PinocchioModel(eef="link6")
         q = np.array(DEFAULT_GRASP_READY_JOINTS)
         initial = tcp.fk(q)
         wrist_initial = wrist.fk(q)

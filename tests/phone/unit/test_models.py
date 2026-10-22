@@ -3,7 +3,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from embodied.phone.core.models import (
+from embodied.devices.phone.core.models import (
     ControlMode,
     Pose,
     Quaternion,

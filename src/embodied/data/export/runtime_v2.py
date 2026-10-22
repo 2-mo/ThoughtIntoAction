@@ -12,6 +12,7 @@ from embodied.data.episode.cameras import camera_topic
 from embodied.data.episode.runtime_episode import ACTION, TOPICS, frame_kind, split_tick
 from embodied.data.episode.video import media_path
 from embodied.data.alignment.runtime_alignment import align
+from embodied.contracts.runtime.client import validate_tick_joints
 
 
 def load_episode(path):
@@ -50,13 +51,18 @@ def load_episode(path):
     previous, stamp = ticks[0]['sequence'] - 1, 0
     owner_context = None
     extracted = {'state': [], 'command': []}
+    joint_count = meta['runtime'].get('joint_count')
+    tick_version = meta['runtime'].get('layout', {}).get('version')
     for i, tick in enumerate(ticks):
+        if tick_version is not None and tick.get('version') != tick_version:
+            raise ValueError('Runtime tick version changed within the recording')
+        joint_count = validate_tick_joints(tick, joint_count)
         if not tick['terminal'] and tick.get('owner_epoch', 0):
             context = tick['source'], tick['owner_epoch']
             if owner_context is not None and context != owner_context:
                 raise ValueError('Control ownership changed within the episode')
             owner_context = context
-        if (tick.get('type') != 'tick' or tick.get('version') not in (1, 2)
+        if (tick.get('type') != 'tick' or tick.get('version') not in (1, 2, 3)
                 or tick['runtime_id'] != meta['runtime']['runtime_id'] or tick['sequence'] != previous + 1
                 or tick['producer_dropped'] != meta['producer_dropped_at_start']
                 or tick['observer_gaps'] != meta['observer_gaps_at_start'] or tick['error']):

@@ -4,20 +4,20 @@ from pathlib import Path
 
 import pytest
 
-from embodied.phone.core.frames import IDENTITY_QUATERNION
-from embodied.phone.core.models import Pose, Vector3
-from embodied.phone.kinematics.checks import KinematicTarget, check_pose_path
-from embodied.phone.kinematics.config import (
+from embodied.devices.phone.core.frames import IDENTITY_QUATERNION
+from embodied.devices.phone.core.models import Pose, Vector3
+from embodied.devices.phone.kinematics.checks import KinematicTarget, check_pose_path
+from embodied.devices.phone.kinematics.config import (
     ModelConfigurationError,
     load_model_config,
 )
-from embodied.phone.kinematics.models import (
+from embodied.devices.phone.kinematics.models import (
     IKResult,
     JacobianDiagnostics,
     JointLimits,
     RobotModel,
 )
-from embodied.phone.tools.phase4_kinematics_check import build_relative_targets
+from embodied.devices.phone.tools.phase4_kinematics_check import build_relative_targets
 
 
 def test_x5_model_config_is_offline_and_matches_the_copied_urdf() -> None:

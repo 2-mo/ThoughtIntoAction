@@ -1,6 +1,6 @@
 # 真机验收：arx 内核（K-08）
 
-把日常真机入口从旧机械臂服务切换到 arx 内核之前，按本清单做一次现场验收。最简单的方式是 `./run.sh` 打开统一工作台：总控按 1（Quest 直控）或 2 / 3（带命令网关）启动真机内核，下面各步的命令都有对应按键，会自动填好运行目录。仿真里的同类检查（`./run.sh check all` 的 `sim` 组）已经通过；这里只验证必须由真机回答的问题。每一步记下结论与 `control/run/<RUN>/` 目录名。
+把日常真机入口从旧机械臂服务切换到 arx 内核之前，按本清单做一次现场验收。最简单的方式是 `./run.sh` 打开统一工作台：总控按 1（Quest 直控）或 2 / 3（带命令网关）启动真机内核，下面各步的命令都有对应按键，会自动填好运行目录。仿真里的同类检查（`./run.sh check all` 的 `sim` 组）已经通过；这里只验证必须由真机回答的问题。每一步记下结论与 `outputs/runtime/control/<RUN>/` 目录名。
 
 ## 准备
 
@@ -12,12 +12,14 @@
 | 端口 | `./run.sh check ports` | 无冲突 |
 | 现场 | 支撑机械臂、急停在手边、夹爪周围无物体 | — |
 
+启动会使能电机。原生 Quest 模式会回 Home 并打开夹爪；managed 模式初始保持反馈姿态与夹爪宽度，之后由接入的输入来源决定动作。`real-manual` 默认没有输入来源，适合先验收原位保持，再由动作客户端逐步执行小幅运动；自定义 profile 的启动行为还需检查其输入配置。Ctrl+C 退出请求 SDK 阻尼，退出前先支撑机械臂。
+
 ## 一、上游操控（原生 Quest）
 
-内核启动后打印运行目录 `control/run/<RUN>`；其他终端可以这样取最新一个：
+内核启动后打印运行目录 `outputs/runtime/control/<RUN>`；其他终端可以这样取最新一个：
 
 ```bash
-RUN=$(ls -td control/run/*/ | head -1)
+RUN=$(ls -td outputs/runtime/control/*/ | head -1)
 ```
 
 ```bash
@@ -26,7 +28,7 @@ RUN=$(ls -td control/run/*/ | head -1)
 
 | 步骤 | 预期 | 记录 |
 | --- | --- | --- |
-| 启动 | 使能后回 Home（`park_q`，默认全零），终端打印运行目录 | 回 Home 用时、是否平稳 |
+| 启动 | 使能后回 Home（`park_q`，默认全零）并打开夹爪，终端打印运行目录 | 回 Home 用时、是否平稳 |
 | 右手 A 按住 ≥150 ms 后松开 | 按上游：Disabled 后进入 FreeDrive，之后在 FreeDrive / 跟随间切换（仿真工作台的 managed 模式实测首次即进入跟随） | 实际顺序 |
 | FreeDrive | 重力补偿，可用手推动 | 是否下坠或抖动 |
 | 跟随：握住 Grip 小幅移动 | 末端跟随；松开 Grip 保持当前位置 | 延迟感、是否有跳变 |
@@ -40,7 +42,7 @@ RUN=$(ls -td control/run/*/ | head -1)
 内核运行时，在另一个终端：
 
 ```bash
-./run.sh collect run --run control/run/<RUN> --task 验收 --cameras wrist_rgb,exterior_rgb --duration 20
+./run.sh collect run --run outputs/runtime/control/<RUN> --task 验收 --cameras wrist_rgb,exterior_rgb --duration 20
 ./run.sh data runtime validate <输出的 episode 目录>
 ./run.sh data export --source <episode 所在目录> --output /tmp/acceptance-dataset
 ```
@@ -49,19 +51,29 @@ RUN=$(ls -td control/run/*/ | head -1)
 
 ## 三、多来源（managed 模式）
 
+先选择一个 profile 启动。首次小幅动作验收建议用 `real-manual`：初始保持启动姿态与夹爪宽度，待现场确认稳定后，再预览并执行动作。Quest、手机或自定义来源接入后可能发出动作命令，不能仅根据 managed 模式判断会持续保持。
+
 ```bash
+./run.sh kernel real --profile real-manual              # 无输入来源，初始保持；后续由客户端发命令
 ./run.sh kernel profiles start --profile real-quest      # Quest 经工作台控制权
 ./run.sh kernel profiles start --profile real-phone      # iPhone，UDP 5005
-./run.sh motion run --run control/run/<RUN> status       # 动作客户端
-./run.sh motion run --run control/run/<RUN> movej ...    # 小幅 MoveJ，先 preview
+./run.sh motion run --run outputs/runtime/control/<RUN> status       # 动作客户端
+./run.sh motion run --run outputs/runtime/control/<RUN> movej ...    # 小幅 MoveJ，先 preview
 ```
 
 | 检查 | 通过条件 |
 | --- | --- |
+| `real-manual` 启动保持 | 没有来源或客户端发动作命令时，机械臂与夹爪保持启动状态，无下坠、持续抖动或异响 |
 | 手机接管 | 手机获得租约后跟随；断网后按租约超时保持 |
 | 桌面平面 | 手机或 MoveL 目标低于桌面时被 gateway 拒绝（错误信息含 table plane） |
 | MoveJ / MoveL | 预览后执行，到位后保持；取消立即停止 |
-| `describe` | `ControlClient(<RUN>).describe()` 返回的限位与 `control/config/robot.json` 一致 |
+| 运动平顺性 | 现场无停走、突进或抖动；记录规划位置 / 速度、实际下发位置 / 速度与反馈，区分规划、下发和电机跟随问题 |
+| 运动速度 | 记录请求速度、规划峰值速度、实际运动时间与反馈跟随误差；短距离可能受加速度 / jerk 限制，不能只用完成状态判断速度达标 |
+| `describe` | `ControlClient(<RUN>).describe()` 返回的限位与 `configs/robots/arx5/robot.json` 一致 |
+
+动作到位条件读取 `configs/control/motion.json` 的 `settling`：默认位置误差小于 `0.0035 rad`（约 `0.20°`），反馈持续稳定 `0.25 s`。正常完成及释放后保持最终目标；超时、取消、失联则撤销旧目标并保持当前反馈位置。平顺性、速度和到位精度分别验收，不能仅凭 `completed` 判断平顺。测试在明确倒计时后的固定窗口进行，用日志统计首次运动延迟、中途位置平台、实际速度、终点误差和控制周期，避免零散动作与反复询问可直接观测的数据。
+
+速度验收同时记录请求参数、`describe.motion_limits` 的每轴后端能力及预览 `metrics`。`--speed 0` 表示使用后端能力，并不保证短行程达到该速度。单关节 10°、速度 `0.5 rad/s`、加速度 `2 rad/s²`、jerk `10 rad/s³`：原九次轨迹为 `1.112 s`，共享 Ruckig 离线规划为 `0.824 s`。这只是相同参数下的离线对照；新执行链尚需真机验收。SDK 未提供加速度与 jerk 额定字段，不能把应用参数标成硬件额定值。配置在内核启动时加载；真机退出会进入阻尼，重启前先支撑机械臂。
 
 ## 四、网页控制台
 
@@ -95,4 +107,4 @@ RUN=$(ls -td control/run/*/ | head -1)
 
 ## 结论
 
-全部通过后，在 `todo/01-control-kernel.md` 勾选 K-08，并按 K-09 把 `启动工作台.sh` 真机模式、`启动机械臂服务.sh`、`启动遥操.sh` 默认切到内核；随后按 K-10 删除 `src/legacy/`。
+全部通过后，在 `docs/plans/01-control-kernel.md` 勾选 K-08，并按 K-09 把 `scripts/shortcuts/启动工作台.sh` 真机模式、`scripts/shortcuts/启动机械臂服务.sh`、`scripts/shortcuts/启动遥操.sh` 默认切到内核；随后按 K-10 删除 `src/legacy/`。

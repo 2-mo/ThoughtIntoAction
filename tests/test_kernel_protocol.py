@@ -13,7 +13,7 @@ GOLDEN = json.loads((ROOT / 'tests/golden/kernel/samples.json').read_text())
 
 
 def gateway_actions():
-    tree = ast.parse((ROOT / 'control/adapters/gateway.py').read_text())
+    tree = ast.parse((ROOT / 'src/embodied/control/gateway.py').read_text())
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and any(getattr(target, 'id', None) == 'ACTIONS' for target in node.targets):
             return ast.literal_eval(node.value)
@@ -34,7 +34,9 @@ class KernelProtocolTests(unittest.TestCase):
     def test_malformed_requests_are_reported(self):
         joint = dict(GOLDEN['joint']['request'])
         self.assertEqual(validate_request(joint), [])
-        self.assertIn('joint: q must be 6 numbers', validate_request({**joint, 'q': [0] * 5}))
+        self.assertEqual(validate_request({**joint, 'q': [0] * 7}), [])
+        self.assertIn('joint: q must be 6 finite numbers', validate_request({**joint, 'q': [0] * 5}, joint_count=6))
+        self.assertIn('joint: q must be a nonempty list of finite numbers', validate_request({**joint, 'q': []}))
         self.assertIn('joint: missing token', validate_request({k: v for k, v in joint.items() if k != 'token'}))
         self.assertIn("joint: unexpected fields ['speed']", validate_request({**joint, 'speed': 1}))
         self.assertIn('version must be 1', validate_request({**joint, 'version': 2}))

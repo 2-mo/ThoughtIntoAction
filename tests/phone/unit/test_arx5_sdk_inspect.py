@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from embodied.phone.tools.arx5_sdk_inspect import (
+from embodied.devices.phone.tools.arx5_sdk_inspect import (
     Arx5SdkInspectionError,
     _worker_payload,
     inspect_arx5_sdk,

@@ -1,16 +1,18 @@
 # 内核命令协议（commands.sock）
 
-所有客户端（工作台、手机、动作、标定、策略、网页控制台）经 `control/run/<RUN>/commands.sock` 访问内核。每个连接发送一条长度前缀 JSON 请求，返回 `{"ok": true, "result": …}` 或 `{"ok": false, "error": "<类型>: <说明>"}`。Python 客户端用 `embodied.contracts.runtime.control.ControlClient` / `ControlSession`，不需要自己拼请求。
+所有客户端（工作台、手机、动作、标定、策略、网页控制台）经 `outputs/runtime/control/<RUN>/commands.sock` 访问内核。每个连接发送一条长度前缀 JSON 请求，返回 `{"ok": true, "result": …}` 或 `{"ok": false, "error": "<类型>: <说明>"}`。Python 客户端用 `embodied.contracts.runtime.control.ControlClient` / `ControlSession`，不需要自己拼请求。
 
 - 单位：关节 rad，长度 m，位姿 `[x, y, z, qx, qy, qz, qw]`（`base_link` 中的 TCP `tcp_link`），时间为主机 CLOCK_MONOTONIC 纳秒。
 - 租约：同一时刻只有一个拥有者；租约在最后一条带租约请求后 0.5 s 过期，`status` 不续租。任何撤销（过期、release、stop、接管）都使 `epoch` 加一，之前的 token 立即失效。
 - 安全由内核统一负责：关节限位、桌面平面、单步与导数界限、0.15 m 笛卡尔领先距离、目标过期后保持，对所有来源一致。
 - 金样本：`tests/golden/kernel/samples.json`（每个动作一条真实请求与结果，长列表已截短）；`./run.sh check all` 的 `sim` 组用 `scripts/check_kernel_protocol.py` 在 MuJoCo 内核上逐个动作核对，`--update` 重新生成样本。
-- 观测流（`observer.sock`，RobotTickV2）为只读遥测，见 `control/adapters/robot_tick_v2.json` 与 `embodied.contracts.runtime.RuntimeReader`。
+- 观测流（`observer.sock`，RobotTickV3）为只读遥测，见 `src/embodied/control/robot_tick_v3.json` 与 `embodied.contracts.runtime.RuntimeReader`。V3 使用独立原生类型与 `/telemetry/robot_tick/v3` topic，显式 `joint_count` 为 1..15，JSON 数组只含实际轴数；不得用 V2 名称解析 V3 ABI。episode schema 2 是独立的存储与动作定义版本，保持不变。
 
 下面的表由 `embodied.contracts.protocol` 生成（`PYTHONPATH=src python3 -m embodied.contracts.protocol`）。
 
 <!-- protocol:start -->
+Joint vectors (`q`) contain one finite number per model joint. The kernel validates their length against `describe.robot.joint_count`; poses always contain seven finite numbers.
+
 | Field | Type | | Meaning |
 | --- | --- | --- | --- |
 | `version` | int | required | always 1 |
@@ -28,9 +30,9 @@ Leased actions also carry:
 
 ### `describe`
 
-Robot limits, control rate, park pose, gripper range, CAN interface, model id, workspace; no feedback needed.
+Robot limits, control rate, park pose, gripper range, CAN interface, model id, workspace and motion policy; no feedback needed. motion_limits reports defaults, per-joint velocity capabilities, their source, control_hz and settling thresholds. Real capabilities come from active SDK configuration; simulation capabilities come from nominal robot configuration. These are not measured hardware ratings.
 
-Result: `protocol`, `runtime_id`, `model_id`, `robot`, `workspace`, `actions`
+Result: `protocol`, `runtime_id`, `model_id`, `robot`, `workspace`, `motion_limits`, `actions`
 
 ### `status`
 
@@ -75,7 +77,7 @@ Result: `status`, `source`, `epoch`
 
 ### `release` (lease)
 
-Give up the lease; the kernel holds the measured pose.
+Give up the lease. After a completed operation, keep its final joint and gripper targets with zero joint velocity. Releasing an active operation cancels it and holds current feedback. A new owner, hold, cancel, stop, fault or lease expiry resets the reference to current feedback.
 
 Result: `status`
 
@@ -93,21 +95,24 @@ Result: `status`, `physical_stopped`
 
 ### `preview`
 
-Plan without moving: joint path and times, TCP path (<=160 poses), checked against limits, derivative bounds and the table plane. Valid for 30 s and only for the same owner and model.
+Plan without moving: joint path and times, TCP path (<=160 poses), checked against limits, derivative bounds and the table plane. MoveJ, home and jog use the shared Ruckig trajectory; MoveL preserves its Cartesian path while scaling time to satisfy the same joint bounds. trajectory describes the evaluator; limits includes requested speed/acceleration/jerk and effective joint_velocity_rad_s; metrics reports duration, peak derivatives, limiting_factors and derivative_evaluation. These fields are included in plan_id. Acceleration and jerk are planning parameters, not hardware ratings. Valid for 30 s and only for the same owner and model.
 
 | Field | Type | | Meaning |
 | --- | --- | --- | --- |
 | `kind` | str | optional | movej, movel, home or jog |
 | `q` | q | optional | movej / jog goal |
 | `pose` | pose | optional | movel goal (unit quaternion) |
-| `speed` | float | optional | joint speed bound 0.01..0.5 rad/s (default 0.15) |
+| `speed` | float | optional | finite nonnegative joint speed cap, rad/s (default 0.15); 0 uses backend per-joint velocity capabilities, positive values use min(speed, capability) on each joint before speed_scale |
+| `speed_scale` | float | optional | finite multiplier in (0, 1] on each resolved joint velocity cap; default 1 |
+| `acceleration` | float | optional | finite positive planned joint acceleration, rad/s^2 (default 2) |
+| `jerk` | float | optional | finite positive planned joint jerk, rad/s^3 (default 10) |
 | `gripper_width` | float | optional | width held during the move, 0..gripper_max_width (default: current) |
 
-Result: `kind`, `epoch`, `owner_present`, `model_id`, `q`, `times`, `gripper_width`, `plan_id`, `expires`, `collision_check`, `tcp`, `workspace`
+Result: `kind`, `epoch`, `owner_present`, `model_id`, `q`, `times`, `gripper_width`, `plan_id`, `expires`, `trajectory`, `limits`, `metrics`, `collision_check`, `tcp`, `workspace`
 
 ### `execute` (lease)
 
-Run a preview from where it started (within 0.03 rad, at rest); poll status.operations until it settles.
+Run a preview from its start at rest (joint speed <=0.05 rad/s). Built-in trajectories require the configured settling position tolerance (default 0.0035 rad); position-only planner plugins retain the 0.03 rad start tolerance. Poll status.operations until it settles. Completion holds the final joint and gripper targets with zero joint velocity; cancellation, timeout, fault or lease expiry resets the hold reference to current feedback.
 
 | Field | Type | | Meaning |
 | --- | --- | --- | --- |

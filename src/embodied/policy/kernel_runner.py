@@ -16,7 +16,7 @@ import numpy as np
 from embodied.contracts.runtime.control import ControlSession
 
 POLICY_FPS = 30
-KERNEL_ASSET_ID = 'local/x5_kernel'  # integrations/openpi/run.py LAYOUTS: trained on kernel sent_q
+KERNEL_ASSET_ID = 'local/x5_kernel'  # scripts/training/openpi/run.py LAYOUTS: trained on kernel sent_q
 JOINTS = {'joint_names': ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6'], 'joint_unit': 'rad', 'length_unit': 'm'}
 
 
@@ -95,7 +95,7 @@ def interrupt(signum, frame):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    parser.add_argument('--run', type=Path, required=True, help='Running kernel directory control/run/<RUN>')
+    parser.add_argument('--run', type=Path, required=True, help='Running kernel directory outputs/runtime/control/<RUN>')
     parser.add_argument('--policy', choices=('sft', 'zeroshot'), default='sft', help='fine-tuned OpenPI or zero-shot π0.5 base')
     parser.add_argument('--checkpoint', type=Path, help='sft: checkpoint (default: the SFT runner default)')
     parser.add_argument('--backend', choices=('pytorch', 'jax'), default='pytorch', help='sft model backend')
@@ -150,7 +150,7 @@ def main(argv=None):
                               startup_timeout=600 if args.backend == 'jax' else 180)
     signal.signal(signal.SIGTERM, interrupt)
     from embodied.core.project import load_config
-    from embodied.sensors.client import SharedCamera
+    from embodied.devices.sensors.client import SharedCamera
     camera_config = load_config()['cameras']['wrist_rgb']
     try:
         with SharedCamera(camera_config['serial'], camera_config['width'], camera_config['height'], camera_config['fps']) as camera, \

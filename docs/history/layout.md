@@ -18,7 +18,7 @@ QuestArmTeleop/
 ├── src/                      按能力组织的 Python 实现
 ├── scripts/                  安装、设备准备、诊断和 Quest 工具
 ├── configs/                  共享默认、本机覆盖和命令档位
-├── environments/snapshots/   历史环境盘点
+├── configs/environments/snapshots/   历史环境盘点
 ├── assets/                   当前模型与自有静态资产
 ├── third_party/              固定版本的外部源码和可选参考
 ├── docs/                     使用说明、迁移记录和历史验证
@@ -27,7 +27,7 @@ QuestArmTeleop/
 └── .cache/                   本机工作备份与缓存，不提交
 ```
 
-`configs/` 描述如何运行。当前 Python 环境由根目录 `pyproject.toml`、`uv.lock` 和 `.python-version` 定义，实际安装在 `.venv/`；`environments/` 保存环境边界说明和历史快照，将来的推理/训练环境也在此独立声明。原 Conda 环境保留在仓库外作临时回退，不是默认运行依赖。模型权重、数据集、安装包仍使用本机配置中的仓库外目录。
+`configs/` 描述如何运行。当前 Python 环境由根目录 `pyproject.toml`、`uv.lock` 和 `.python-version` 定义，实际安装在 `.venv/`；`configs/environments/` 保存环境边界说明和历史快照，将来的推理/训练环境也在此独立声明。原 Conda 环境保留在仓库外作临时回退，不是默认运行依赖。模型权重、数据集、安装包仍使用本机配置中的仓库外目录。
 
 `run.sh` 直接调用 `src/` 模块或 `scripts/` 文件。普通命令的 `PYTHONPATH` 只有本项目 `src/` 和固定版本 XRoboToolkit；官方 X5 实验命令按需补充其 SDK 路径。项目维护当前入口和模块路径，不设旧接口兼容层。`myTeleop/`、旧根目录工具转发脚本与 `simulate-r5` 别名均已移除。
 
@@ -37,4 +37,4 @@ QuestArmTeleop/
 
 新增功能放置原则：可复用实现归入相应 `src` 包；安装、设备准备和单次诊断入口归入 `scripts`；三维监看归入 `robot_simulation`，虚拟控制 CLI 归入 `robot_control`，选择位姿输入后延迟加载 `quest_teleop` 的控制器；网页跟随所属功能包保存。
 
-详细包职责见 [源码分层](../../src/README.md)，日常操作见 [命令说明](../reference/commands.md)，配置和环境分别见 [配置说明](../../configs/README.md) 与 [环境说明](../../environments/README.md)。
+详细包职责见 [源码分层](../../src/README.md)，日常操作见 [命令说明](../reference/commands.md)，配置和环境分别见 [配置说明](../../configs/README.md) 与 [环境说明](../../configs/environments/README.md)。

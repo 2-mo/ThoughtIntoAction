@@ -1,6 +1,6 @@
 """X5 robot profile from the arx kernel's own configuration (todo R-01).
 
-control/config/robot.json and workspace.json are the single source. Platform code that
+configs/robots/arx5/robot.json and workspace.json are the single source. Platform code that
 needs limits without a running kernel reads them here; a running kernel reports the same
 values through the `describe` action (embodied.contracts.runtime.ControlClient.describe).
 """
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from embodied.contracts.registry import PROJECT_ROOT
 
-CONFIG = PROJECT_ROOT / 'control/config'
+CONFIG = PROJECT_ROOT / 'configs/robots/arx5'
 
 
 def load_robot_profile(directory=CONFIG):
@@ -20,7 +20,7 @@ def load_robot_profile(directory=CONFIG):
     robot = json.loads(data)
     for key in ('model_path', 'tool_path'):
         robot[key] = str((directory / robot[key]).resolve())
-    workspace_path = directory / 'workspace.json'
+    workspace_path = PROJECT_ROOT / 'configs/control/workspace.json'
     workspace = json.loads(workspace_path.read_text()) if workspace_path.is_file() else {'table_enabled': False}
     minimum = workspace['table_z_m'] + workspace['table_clearance_m'] if workspace['table_enabled'] else None
     return {'robot': robot, 'workspace': {'minimum_tcp_z_m': minimum},

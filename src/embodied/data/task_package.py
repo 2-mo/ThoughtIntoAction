@@ -63,19 +63,20 @@ def finalize_task(raw_root, episode_ids, output, fps):
             package.writestr(output.name + "/manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
             package.writestr(output.name + "/README.md", package_readme(output.name))
             from embodied.core.project import PROJECT_ROOT
-            for folder in ("integrations/openpi", "scripts/datasets"):
+            for folder in ("scripts/training/openpi", "scripts/datasets"):
                 for file in sorted((PROJECT_ROOT / folder).rglob("*")):
                     if file.is_file() and "__pycache__" not in file.parts:
                         package.write(file, output.name + "/tools/" + str(file.relative_to(PROJECT_ROOT)))
             # The portable converter carries the platform export chain and what it imports.
-            for folder in ('embodied/data/export', 'embodied/data/episode', 'embodied/data/alignment', 'embodied/contracts'):
+            for folder in ('embodied/data/export', 'embodied/data/episode', 'embodied/data/alignment', 'embodied/contracts', 'embodied/policy/openpi'):
                 for file in sorted((PROJECT_ROOT / 'src' / folder).rglob('*.py')):
                     if '__pycache__' not in file.parts:
                         package.write(file, output.name + '/tools/' + str(file.relative_to(PROJECT_ROOT)))
-            for file in ('embodied/__init__.py', 'embodied/data/__init__.py', 'embodied/core/storage.py'):
+            for file in ('embodied/__init__.py', 'embodied/data/__init__.py', 'embodied/core/storage.py', 'embodied/core/dependencies.py'):
                 package.write(PROJECT_ROOT / 'src' / file, output.name + '/tools/src/' + file)
             package.writestr(output.name + '/tools/src/embodied/core/__init__.py', '')
-            for registry in ('configs/plugins.toml', 'control/config/components.json'):
+            package.writestr(output.name + '/tools/src/embodied/policy/__init__.py', '')
+            for registry in ('configs/plugins.json', 'dependencies.lock.toml'):
                 package.write(PROJECT_ROOT / registry, output.name + '/tools/' + registry)
             write_executable(package, output.name + "/tools/convert.sh",
                 "#!/usr/bin/env bash\nset -euo pipefail\n"
@@ -156,7 +157,7 @@ Only one episode's raw records are kept in memory. No 240 FPS image expansion.
 meta/data/videos: LeRobot v2.1 with one observation per actual RGB frame at nominal 30 Hz.
 robot/episode_NNNNNN.npz: all robot state/action rows and exact int64 timestamps (~240 Hz).
 The raw archive keeps full metadata/diagnostics, even if a training row is excluded.
-Use tools/integrations/openpi/run.py with this dataset. Each training row contains a real
+Use tools/scripts/training/openpi/run.py with this dataset. Each training row contains a real
 30 FPS image, the latest preceding robot state and requested action at that image timestamp.
 OpenPI's STANDARD LeRobot loader reads 15 consecutive 30 Hz actions (~0.5 s) per observation.
 The robot/*.npz sidecar is an archival copy of all 240 Hz samples, NOT the training action source.

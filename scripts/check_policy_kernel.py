@@ -9,8 +9,8 @@ import numpy as np
 
 from embodied.contracts.runtime.control import ControlSession
 from embodied.policy.kernel_runner import run
-from embodied.sensors.synthetic import SyntheticCamera
-from embodied.workstation.control import sim_kernel
+from embodied.devices.sensors.synthetic import SyntheticCamera
+from embodied.applications.workstation.control import sim_kernel
 
 
 class StandInPolicy:

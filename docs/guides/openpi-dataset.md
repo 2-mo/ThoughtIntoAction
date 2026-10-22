@@ -1,6 +1,6 @@
 # X5 原始采集与 π0.5 训练导出
 
-本地只采集、回放和打包，不再在任务结束时转换 LeRobot 或重编码视频。任务名来自 `启动遥操.sh` 的 COLLECTION_TASK。
+本地只采集、回放和打包，不再在任务结束时转换 LeRobot 或重编码视频。任务名来自 `scripts/shortcuts/启动遥操.sh` 的 COLLECTION_TASK。
 
 ## 本地压缩记录
 
@@ -115,14 +115,14 @@ OpenPI 使用标准 LeRobot 动作加载器：训练 state/action 与图像统�
 
 ## OpenPI π0.5
 
-已提供 `integrations/openpi/quest_x5.py` 和 `run.py`。启动器按数据集字段选择单／双相机：腕部进入 `left_wrist_0_rgb`，外部进入 `base_0_rgb`，缺失视角显式 mask；7 维 state/action 按模型标准补齐；6 关节动作转为相对当前状态的 delta，夹爪保留绝对宽度，输出逆变换回绝对关节目标。action horizon 根据 action_fps 设置为约 0.5 秒，30 Hz 动作下为 15；观测同为 30 Hz。训练读取任务文本作为 prompt。旧导出需要重新转换为 aligned30_raw240_v1 才能使用新适配器。
+已提供 `scripts/training/openpi/quest_x5.py` 和 `run.py`。启动器按数据集字段选择单／双相机：腕部进入 `left_wrist_0_rgb`，外部进入 `base_0_rgb`，缺失视角显式 mask；7 维 state/action 按模型标准补齐；6 关节动作转为相对当前状态的 delta，夹爪保留绝对宽度，输出逆变换回绝对关节目标。action horizon 根据 action_fps 设置为约 0.5 秒，30 Hz 动作下为 15；观测同为 30 Hz。训练读取任务文本作为 prompt。旧导出需要重新转换为 aligned30_raw240_v1 才能使用新适配器。
 
 在已经按 OpenPI 官方说明配置好的 OpenPI 环境中运行（替换 OPENPI 路径）：
 
 ```bash
-python /home/r2/work/code/QuestArmTeleop/integrations/openpi/run.py \
+python /home/r2/work/code/QuestArmTeleop/scripts/training/openpi/run.py \
   /path/to/openpi /home/r2/work/data/quest_x5/lerobot/cup_task norm
-python /home/r2/work/code/QuestArmTeleop/integrations/openpi/run.py \
+python /home/r2/work/code/QuestArmTeleop/scripts/training/openpi/run.py \
   /path/to/openpi /home/r2/work/data/quest_x5/lerobot/cup_task train --exp-name=cup_x5
 ```
 

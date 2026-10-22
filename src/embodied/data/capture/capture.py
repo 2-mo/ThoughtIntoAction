@@ -13,10 +13,10 @@ from embodied.contracts.runtime import RuntimeReader
 
 
 def hand_eye(camera_id, metadata):
-    """Extrinsics of a real camera at recording time (embodied.calibration); synthetic cameras have none."""
+    """Extrinsics of a real camera at recording time (embodied.applications.calibration); synthetic cameras have none."""
     if not metadata.get('serial'):
         return None
-    from embodied import calibration
+    from embodied.applications import calibration
     return calibration.extrinsics(camera_id, metadata['serial'])
 
 
@@ -93,8 +93,8 @@ def capture(reader, root, task, duration, camera=None, *, cameras=None, video=Fa
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--run', type=Path, required=True, help='Exact control/run/... directory')
-    parser.add_argument('--output', type=Path, default=Path('datasets/runtime'))
+    parser.add_argument('--run', type=Path, required=True, help='Exact outputs/runtime/control/... directory')
+    parser.add_argument('--output', type=Path, default=Path('outputs/datasets/runtime'))
     parser.add_argument('--task', required=True)
     parser.add_argument('--duration', type=float, default=0, help='0 records until Ctrl+C or runtime termination')
     parser.add_argument('--camera', default='none',
@@ -111,7 +111,7 @@ def main(argv=None):
             camera, cameras = None, {}
             if args.cameras:
                 from embodied.contracts.registry import Registry
-                from embodied.sensors.control import recording_guard
+                from embodied.devices.sensors.control import recording_guard
                 from embodied.core.project import load_config
                 config, registry = load_config(), Registry()
                 ids = [key.strip() for key in args.cameras.split(',') if key.strip()]
@@ -127,7 +127,7 @@ def main(argv=None):
                     cameras[key] = stack.enter_context(registry.create('camera', driver, **selected))
             elif args.camera != 'none':
                 from embodied.contracts.registry import Registry
-                from embodied.sensors.control import recording_guard
+                from embodied.devices.sensors.control import recording_guard
                 from embodied.core.project import load_config
                 options = load_config()['cameras']['wrist_rgb']
                 driver = options['driver'] if args.camera == 'wrist' else args.camera

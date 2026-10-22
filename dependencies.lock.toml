@@ -1,17 +1,18 @@
-# Exact local revisions captured before the layout migration.
-schema_version = 1
+# Reference snapshots and reproducible external dependency installations.
+# [[repositories]] are read-only reference records; runtime uses [[managed]].
+schema_version = 2
 
 [[vendored]]
 name = "arx-televr"
-path = "control"
+path = "src/embodied/control"
 url = "https://github.com/GZF123/arx-televr.git"
 commit = "cd557afbb9ec280df2d9e12e1582219b85ee1a53"
-manifest = "control/UPSTREAM.toml"
+manifest = "docs/provenance/arx-televr/UPSTREAM.toml"
 verify = "./run.sh control verify"
 
 [[vendored]]
 name = "robot-teleop-phone"
-path = "src/embodied/phone"
+path = "src/embodied/devices/phone"
 commit = "864d6501a3eeef99b7facdc8f592d80e0ff52843"
 manifest = "third_party/phone_input/PROVENANCE.json"
 snapshot = "working tree including local changes; iOS, protocol, mapping and UDP only"
@@ -37,8 +38,8 @@ name = "XRoboToolkit-Teleop-Sample-Python"
 path = "third_party/XRoboToolkit-Teleop-Sample-Python"
 url = "https://github.com/XR-Robotics/XRoboToolkit-Teleop-Sample-Python.git"
 commit = "79e5cb8a56e3455515ce1b476e993c764ec58739"
-group = "teleop"
-required = true
+group = "reference"
+required = false
 
 [[repositories]]
 name = "X5"
@@ -77,8 +78,8 @@ name = "XRoboToolkit-PC-Service-Pybind"
 path = "third_party/XRoboToolkit-Teleop-Sample-Python/dependencies/XRoboToolkit-PC-Service-Pybind"
 url = "https://github.com/XR-Robotics/XRoboToolkit-PC-Service-Pybind.git"
 commit = "c64ccf6acd577a333e03b66fafe8efeeceb511b1"
-group = "teleop-build"
-required = true
+group = "reference"
+required = false
 
 [[vendored]]
 name = "consolidated-motion"
@@ -86,23 +87,23 @@ path = "src/legacy/arx5_control"
 commit = "a18d6b67906e450411d56e3d0fd08fd18a01675c"
 manifest = "third_party/migration/manifest.json"
 patches = "third_party/migration/patches.json"
-snapshot = "Full functional source, assets and tests; original working tree retained in archives/migration/originals"
+snapshot = "Full functional source, assets and tests; original working tree retained in outputs/archives/migration/originals"
 
 [[vendored]]
 name = "consolidated-rebot"
-path = "src/embodied/robots/rebot"
+path = "src/embodied/devices/robots/rebot"
 commit = "0324b734c86866ea23d6ea4c097833739329d6d3"
 manifest = "third_party/migration/manifest.json"
 patches = "third_party/migration/patches.json"
-snapshot = "Full functional source, assets and tests; original working tree retained in archives/migration/originals"
+snapshot = "Full functional source, assets and tests; original working tree retained in outputs/archives/migration/originals"
 
 [[vendored]]
 name = "consolidated-phone"
-path = "src/embodied/phone"
+path = "src/embodied/devices/phone"
 commit = "864d6501a3eeef99b7facdc8f592d80e0ff52843"
 manifest = "third_party/migration/manifest.json"
 patches = "third_party/migration/patches.json"
-snapshot = "Full functional source, assets and tests; original working tree retained in archives/migration/originals"
+snapshot = "Full functional source, assets and tests; original working tree retained in outputs/archives/migration/originals"
 
 [[repositories]]
 name = "Isaac-GR00T"
@@ -111,3 +112,45 @@ url = "https://github.com/NVIDIA/Isaac-GR00T"
 commit = "fa1a6dfe5bf4d1b354470ebf4445903600e2bdcf"
 group = "policy"
 required = false
+
+[[managed]]
+name = "xr-sdk"
+url = "https://github.com/XR-Robotics/XRoboToolkit-PC-Service-Pybind.git"
+commit = "c64ccf6acd577a333e03b66fafe8efeeceb511b1"
+path = "outputs/dependencies/xr-sdk-c64ccf6acd577a333e03b66fafe8efeeceb511b1"
+required = true
+purpose = "Install the companion native library omitted from the upstream Python wheel; Python binding itself is a pinned uv Git package."
+
+[[managed]]
+name = "x5-official"
+url = "https://github.com/ARXroboticsX/X5.git"
+commit = "9a255e38156e3f5a263f341df209ab028d49dad9"
+path = "outputs/dependencies/x5-official-9a255e38156e3f5a263f341df209ab028d49dad9"
+required = false
+purpose = "Optional experimental SDK has no Python package metadata; native CMake installs its bimanual API into this managed dependency."
+
+[[managed]]
+name = "groot"
+url = "https://github.com/NVIDIA/Isaac-GR00T"
+commit = "fa1a6dfe5bf4d1b354470ebf4445903600e2bdcf"
+path = "outputs/dependencies/groot-fa1a6dfe5bf4d1b354470ebf4445903600e2bdcf"
+python = "outputs/envs/groot/bin/python"
+required = false
+purpose = "Locked upstream uv environment, installed non-editably; the tracked optional-TensorRT patch is applied only in the installation workspace."
+
+[[managed]]
+name = "openpi"
+url = "https://github.com/Physical-Intelligence/openpi"
+commit = "215abfb217dbac7d5f1273282331b9b1866c0479"
+path = "outputs/dependencies/openpi-215abfb217dbac7d5f1273282331b9b1866c0479"
+python = "outputs/envs/pi05-sft/bin/python"
+required = false
+purpose = "Install openpi and openpi-client packages into the policy environment; training scripts and transformers replacement resources are resolved from this pinned build workspace."
+
+[[vendored]]
+name = "quest-adapter-support"
+path = "src/embodied/devices/inputs/quest/_vendor"
+url = "https://github.com/XR-Robotics/XRoboToolkit-Teleop-Sample-Python"
+commit = "79e5cb8a56e3455515ce1b476e993c764ec58739"
+manifest = "src/embodied/devices/inputs/quest/_vendor/PROVENANCE.json"
+snapshot = "Nine maintained Quest/IK/logging/camera helper modules; namespace-only edits; MIT license retained"

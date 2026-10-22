@@ -15,39 +15,39 @@ EVIDENCE = ROOT / "outputs/checks" / time.strftime("%Y%m%d-%H%M%S")
 PLATFORM = ["env", "PYTHONPATH=src", "OPENBLAS_NUM_THREADS=1", "OMP_NUM_THREADS=1", str(ROOT / ".venv/bin/python"), "-B"]
 # name: (file that must exist, commands)
 GROUPS = {
-    "control": ("control/.venv/bin/python", [[RUN, "control", "verify"], [RUN, "control", "check"]]),
+    "control": ("outputs/envs/control/bin/python", [[RUN, "control", "verify"], [RUN, "control", "check"]]),
     "platform": (".venv/bin/python", [[RUN, "test", "-q"]]),
-    "motion": ("environments/arx_motion/.venv/bin/python", [[RUN, "components", "run", "test.motion"]]),
-    "phone": ("environments/arx_motion/.venv/bin/python", [[RUN, "components", "run", "test.phone"]]),
-    "rebot": ("environments/rebot/.venv/bin/python", [[RUN, "components", "run", "test.rebot"]]),
+    "motion": ("configs/environments/arx_motion/.venv/bin/python", [[RUN, "components", "run", "test.motion"]]),
+    "phone": ("configs/environments/arx_motion/.venv/bin/python", [[RUN, "components", "run", "test.phone"]]),
+    "rebot": ("configs/environments/rebot/.venv/bin/python", [[RUN, "components", "run", "test.rebot"]]),
     # OpenPI transforms with the project X5 adapter, in the fine-tuned inference environment.
     "policy": ("outputs/envs/pi05-sft/bin/python", [["env", "PYTHONPATH=src:tests:tests/policy", str(ROOT / "outputs/envs/pi05-sft/bin/python"),
                                                  "-B", "-m", "unittest", "test_sft_transforms"]]),
     # LeRobot export end to end, and the export regression digests (tests/golden/export_digests.json).
     "export": ("outputs/envs/lerobot-export/bin/python", [["env", "PYTHONPATH=src:tests", str(ROOT / "outputs/envs/lerobot-export/bin/python"),
                                                        "-B", "-m", "unittest", "test_export_package", "test_export_golden"]]),
-    # Pages of src/embodied/monitor/web; Playwright from: npm install --prefix .cache/viewer-validation playwright
+    # Pages of src/embodied/applications/monitor/web; Playwright from: npm install --prefix .cache/viewer-validation playwright
     "browser": (".cache/viewer-validation/node_modules/playwright/index.mjs",
                 [["node", str(path)] for path in sorted((ROOT / "tests/browser").glob("*.mjs"))]),
     # Heavy MuJoCo groups last: the legacy services in the browser group are timing-sensitive under load.
     # MuJoCo end to end: native routers + workbench buttons, component faults, capture, plugins + calibration,
     # policy executors and the console backend on the kernel.
-    "sim": ("control/.venv/bin/python", [
-        [str(ROOT / "control/.venv/bin/python"), "-B", str(ROOT / "control/scripts/check_workbench_teleop.py")],
-        [str(ROOT / "control/.venv/bin/python"), "-B", str(ROOT / "control/scripts/check_native_components.py"),
+    "sim": ("outputs/envs/control/bin/python", [
+        [str(ROOT / "outputs/envs/control/bin/python"), "-B", str(ROOT / "scripts/control/check_workbench_teleop.py")],
+        [str(ROOT / "outputs/envs/control/bin/python"), "-B", str(ROOT / "scripts/control/check_native_components.py"),
          "--quick", "--output", str(EVIDENCE / "native-components")],
         [*PLATFORM, "scripts/check_control_runtime.py", "--output", str(EVIDENCE / "control-runtime")],
         [*PLATFORM, "scripts/check_kernel_protocol.py", "--output", str(EVIDENCE / "kernel-protocol")],
         [*PLATFORM, "scripts/check_workbench.py", "--calibration", "--output", str(EVIDENCE / "workbench")],
         [*PLATFORM, "scripts/check_policy_kernel.py", "--output", str(EVIDENCE / "policy-kernel")],
-        ["env", "PYTHONPATH=src", "OPENBLAS_NUM_THREADS=1", str(ROOT / "environments/arx_motion/.venv/bin/python"), "-B",
+        ["env", "PYTHONPATH=src", "OPENBLAS_NUM_THREADS=1", str(ROOT / "configs/environments/arx_motion/.venv/bin/python"), "-B",
          "scripts/check_console_kernel.py", "--output", str(EVIDENCE / "console-kernel")],
-        ["env", "PYTHONPATH=src", "OPENBLAS_NUM_THREADS=1", str(ROOT / "environments/arx_motion/.venv/bin/python"), "-B",
+        ["env", "PYTHONPATH=src", "OPENBLAS_NUM_THREADS=1", str(ROOT / "configs/environments/arx_motion/.venv/bin/python"), "-B",
          "scripts/check_groot_kernel.py", "--output", str(EVIDENCE / "groot-kernel")],
     ]),
     # Dual-video GR00T export through the official loader, synthetic measured-state episode.
-    "groot": ("environments/arx_motion/.venv-web/bin/python", [
-        [str(ROOT / "environments/arx_motion/.venv-web/bin/python"), "-B", "scripts/check_groot_export.py",
+    "groot": ("configs/environments/arx_motion/.venv-web/bin/python", [
+        [str(ROOT / "configs/environments/arx_motion/.venv-web/bin/python"), "-B", "scripts/check_groot_export.py",
          "--output", str(EVIDENCE / "groot-export")]]),
 }
 

@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from embodied.phone.config import load_profile
-from embodied.phone.inputs.arkit import ArkitInputSource
-from embodied.phone.registry import (
+from embodied.devices.phone.config import load_profile
+from embodied.devices.phone.inputs.arkit import ArkitInputSource
+from embodied.devices.phone.registry import (
     CONTROLLERS,
     INPUTS,
     POLICIES,
@@ -15,7 +15,7 @@ from embodied.phone.registry import (
     HardwareEnableRequiredError,
     create_application,
 )
-from embodied.phone.transports.udp import UdpTransport
+from embodied.devices.phone.transports.udp import UdpTransport
 
 ROOT = Path(__file__).parents[3]
 
