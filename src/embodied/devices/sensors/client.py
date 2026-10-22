@@ -60,6 +60,11 @@ class SharedCamera:
         self.frames = None
 
     def __enter__(self):
+        # Load image/IPC extensions before recording starts. Create the socket
+        # in read(), on the thread that will use it.
+        import numpy
+        from embodied.devices.sensors.transport import FrameClient
+
         ensure_service()
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
