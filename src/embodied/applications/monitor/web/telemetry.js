@@ -27,7 +27,7 @@ function configureModel(model) {
   velocityRows = jointRows.map((_, index) => {
     const row = document.createElement('div');
     row.className = 'position-row';
-    row.innerHTML = `<span class="position-name">J${index + 1}<small class="velocity-range">—</small><small class="chart-clipped" hidden>超范围</small></span><svg class="velocity-chart" viewBox="0 0 200 24" preserveAspectRatio="none" role="img" aria-label="J${index + 1} 速度，最近五秒"><path class="torque-grid" d="M50 0V24 M100 0V24 M150 0V24"/><path class="chart-zero" d="M0 12H200"/><path class="velocity-line target"/><path class="velocity-line actual"/></svg><span class="position-values"><b>—</b><b>—</b></span>`;
+    row.innerHTML = `<span class="position-name">J${index + 1}<small class="velocity-range">—</small><small class="chart-clipped" hidden>超范围</small></span><svg class="velocity-chart" viewBox="0 0 200 24" preserveAspectRatio="none" role="img" aria-label="J${index + 1} 速度，最近五秒"><path class="torque-grid" d="M50 0V24 M100 0V24 M150 0V24"/><path class="chart-zero" d="M0 12H200"/><path class="velocity-line actual"/><path class="velocity-line trend"/><path class="velocity-line target"/></svg><span class="position-values"><b>—</b><b>—</b></span>`;
     byId('velocities').append(row); return row;
   });
   torqueRows = [...jointRows, ...(hasGripper ? [null] : [])].map((_, index) => {
@@ -86,6 +86,30 @@ function showMotors(live) {
 }
 let limits, torqueLimits, velocityLimits, state = null, received = 0, history = [], streamId, lastSample;
 const finite = Number.isFinite;
+let sampleClock = null;
+function clearHistory() { history = []; lastSample = undefined; sampleClock = null; }
+function sampleTime(stream, receipt) {
+  const stamp = stream.sample_monotonic_ns / 1e6;
+  const fallback = receipt - (finite(stream.age_s) ? Math.max(0, stream.age_s) * 1000 : 0);
+  if (!finite(stamp) || stamp <= 0) return fallback;
+  if (!sampleClock || stamp < sampleClock.last) {
+    history = [];
+    sampleClock = {server: stamp, browser: fallback};
+  }
+  sampleClock.last = stamp;
+  return sampleClock.browser + stamp - sampleClock.server;
+}
+function withVelocityTrend(sample, previous) {
+  const dt = sample.time - previous?.time;
+  const alpha = dt > 0 && dt <= 500 ? -Math.expm1(-dt / 120) : 1;
+  return {...sample, trend_velocity: (sample.velocity || []).map((value, index) => {
+    const before = previous?.trend_velocity?.[index];
+    return finite(value) ? (alpha < 1 && finite(before) ? before + alpha * (value - before) : value) : null;
+  })};
+}
+const chartTime = () => mode === 'replay' ? (replayFrame?.position_s || 0) * 1000 : performance.now();
+const feedbackLive = now => state?.stream?.status === 'live' &&
+  (mode === 'replay' || now - received + (state.stream.age_s || 0) * 1000 < 1000);
 let previousQuaternion = null, quaternionStream;
 function showPositions(live) {
   byId('joints').classList.toggle('feedback-inactive', !live);
@@ -150,9 +174,16 @@ function showPositions(live) {
   });
 }
 function render() {
-  const now = mode === 'replay' ? (replayFrame?.position_s || 0) * 1000 : performance.now();
-  if (mode === 'replay') { state = displayedState(null); history = replayFrame?.torque_history || []; }
-  const live = state?.stream?.status === 'live' && (mode === 'replay' || now - received + (state.stream.age_s || 0) * 1000 < 1000);
+  const now = chartTime();
+  if (mode === 'replay') {
+    state = displayedState(null);
+    // Rebuild only from this replay window, so seeking cannot retain a live or
+    // later recording's filter state. Recorded samples remain untouched.
+    history = [];
+    for (const sample of replayFrame?.torque_history || []) history.push(withVelocityTrend(sample, history.at(-1)));
+  }
+  const live = feedbackLive(now);
+  if (!live) clearHistory();
   showPositions(live);
   showMotors(live);
   showCommands(live);
@@ -160,32 +191,10 @@ function render() {
     const scale = velocityLimits?.[index] / Number(byId('velocity-zoom').value);
     const validScale = finite(scale) && scale > 0;
     row.querySelector('.velocity-range').textContent = validScale ? `±${(scale * 180 / Math.PI).toFixed(1)}` : '—';
-    row.title = validScale ? `显示范围 ±${(scale * 180 / Math.PI).toFixed(1)} °/s；青色实线为实际，橙色虚线为指令；超范围仅表示曲线超出当前显示范围，数值保持原值` : '速度量程未配置';
-    let clipped = false;
     [state?.actual_vel?.[index], state?.target_vel?.[index]].forEach((v, side) => {
       const valid = live && finite(v);
-      if (valid && validScale && Math.abs(v) > scale) clipped = true;
       row.querySelectorAll('b')[side].textContent = valid ? (v * 180 / Math.PI).toFixed(1) : '—';
-      const segments = [];
-      let previous;
-      const y = v => 12 - 10 * Math.max(-1, Math.min(1, v / scale));
-      const valueAt = sample => sample[side ? 'target_velocity' : 'velocity']?.[index];
-      for (const sample of history) {
-        const value = valueAt(sample);
-        if (!finite(value) || !finite(scale) || scale <= 0) {previous = null; continue;}
-        if (sample.time < now - 5000) {previous = sample; continue;}
-        if (Math.abs(value) > scale) clipped = true;
-        const connected = previous && sample.time - previous.time <= 500;
-        if (connected && previous.time < now - 5000) {
-          const fraction = (now - 5000 - previous.time) / (sample.time - previous.time);
-          segments.push(`M0 ${y(valueAt(previous) + fraction * (value - valueAt(previous))).toFixed(2)}`);
-        }
-        segments.push(`${connected ? 'L' : 'M'}${(200 * (sample.time - now + 5000) / 5000).toFixed(2)} ${y(value).toFixed(2)}`);
-        previous = sample;
-      }
-      row.querySelector(side ? '.target' : '.actual').setAttribute('d', live ? segments.join(' ') : '');
     });
-    row.querySelector('.chart-clipped').hidden = !live || !clipped;
   });
   const speeds = [state?.eef_velocity?.speed, state?.eef_velocity?.angular_speed];
   byId('eef-velocity').querySelectorAll('b').forEach((cell, i) => {
@@ -196,9 +205,6 @@ function render() {
     const value = i ? state?.command_details?.gripper_sdk_cmd_vel : state?.gripper_actual_vel;
     cell.textContent = live && finite(value) ? (value * 1000).toFixed(1) : '—';
   });
-  const windowStart = now - 5000;
-  // Keep one point before the boundary so the trace can be clipped continuously.
-  while (history.length > 1 && history[1].time <= windowStart) history.shift();
   byId('torque-scale').textContent = 'N·m · 5 s';
   const values = live ? [...(state?.actual_torque || Array(jointCount).fill(null)), ...(hasGripper ? [state?.gripper_actual_torque] : [])] : null;
   byId('torques').dataset.state = values?.some(finite) ? 'live' : 'waiting';
@@ -209,27 +215,49 @@ function render() {
     row.title = validScale ? `固定纵轴 ±${scale} N·m，零点居中；超范围仅表示曲线超出当前显示范围，数值保持原值` : '未配置最大力矩';
     row.dataset.state = finite(values?.[index]) ? 'live' : 'waiting';
     row.querySelector('b').textContent = finite(values?.[index]) ? values[index].toFixed(2) : '—';
-    let previous;
-    let clipped = validScale && finite(values?.[index]) && Math.abs(values[index]) > scale;
-    const segments = [];
-    const yFor = value => 12 - Math.max(-1, Math.min(1, value / scale)) * 9;
-    for (const sample of history) {
-      const value = sample.values[index];
-      if (!validScale || !finite(value)) { previous = undefined; continue; }
-      if (sample.time < windowStart) { previous = sample; continue; }
-      if (Math.abs(value) > scale) clipped = true;
-      const connected = previous && sample.time - previous.time <= 500;
-      if (connected && previous.time < windowStart) {
-        const fraction = (windowStart - previous.time) / (sample.time - previous.time);
-        const boundary = previous.values[index] + fraction * (value - previous.values[index]);
-        segments.push(`M0.0 ${yFor(boundary).toFixed(1)}`);
-      }
-      const x = 200 * (sample.time - windowStart) / 5000;
-      segments.push(`${connected ? 'L' : 'M'}${x.toFixed(1)} ${yFor(value).toFixed(1)}`);
-      previous = sample;
+  });
+  drawCharts();
+}
+function trace(valueAt, scale, now, amplitude = 10, digits = 2) {
+  const start = now - 5000, segments = [];
+  const y = value => (12 - amplitude * Math.max(-1, Math.min(1, value / scale))).toFixed(digits);
+  let previous;
+  for (const sample of history) {
+    const value = valueAt(sample);
+    if (!finite(scale) || scale <= 0 || !finite(value)) { previous = null; continue; }
+    if (sample.time < start) { previous = sample; continue; }
+    const connected = previous && sample.time > previous.time && sample.time - previous.time <= 500;
+    if (connected && previous.time < start) {
+      const fraction = (start - previous.time) / (sample.time - previous.time);
+      segments.push(`M${(0).toFixed(digits)} ${y(valueAt(previous) + fraction * (value - valueAt(previous)))}`);
     }
-    const d = segments.join(' ');
-    row.querySelector('.torque-line').setAttribute('d', d);
+    segments.push(`${connected ? 'L' : 'M'}${(200 * (sample.time - start) / 5000).toFixed(digits)} ${y(value)}`);
+    previous = sample;
+  }
+  return segments.join(' ');
+}
+function drawCharts() {
+  const now = chartTime(), live = feedbackLive(now), start = now - 5000;
+  // Retain one boundary sample for continuous scrolling without invented data.
+  while (history.length > 1 && history[1].time <= start) history.shift();
+  velocityRows.forEach((row, index) => {
+    const scale = velocityLimits?.[index] / Number(byId('velocity-zoom').value);
+    const samples = history.filter(sample => sample.time >= start);
+    const raw = samples.map(sample => sample.velocity?.[index]).filter(finite);
+    const peak = raw.length ? Math.max(...raw.map(Math.abs)) : null;
+    let clipped = finite(scale) && scale > 0 && [state?.actual_vel?.[index], state?.target_vel?.[index],
+      ...raw, ...samples.map(sample => sample.target_velocity?.[index])].some(value => finite(value) && Math.abs(value) > scale);
+    for (const [name, field] of [['actual', 'velocity'], ['trend', 'trend_velocity'], ['target', 'target_velocity']])
+      row.querySelector('.' + name).setAttribute('d', live ? trace(sample => sample[field]?.[index], scale, now) : '');
+    row.querySelector('.chart-clipped').hidden = !live || !clipped;
+    row.title = `原始瞬时数值不滤波；淡线为原始反馈，亮线为120 ms平滑趋势，橙色虚线为指令。最近5秒已收到样本的原始峰值：${live && finite(peak) ? (peak * 180 / Math.PI).toFixed(1) + ' °/s' : '—'}；不代表控制全采样峰值。超范围仅表示超出当前图表量程。`;
+  });
+  torqueRows.forEach((row, index) => {
+    const scale = torqueLimits?.[index] / Number(byId('torque-zoom').value);
+    const value = index < jointCount ? state?.actual_torque?.[index] : state?.gripper_actual_torque;
+    const clipped = finite(scale) && scale > 0 && (finite(value) && Math.abs(value) > scale ||
+      history.some(sample => sample.time >= start && finite(sample.values?.[index]) && Math.abs(sample.values[index]) > scale));
+    row.querySelector('.torque-line').setAttribute('d', live ? trace(sample => sample.values?.[index], scale, now, 9, 1) : '');
     row.querySelector('.chart-clipped').hidden = !live || !clipped;
   });
 }
@@ -249,27 +277,31 @@ async function poll() {
     if (!response.ok) throw new Error('Feedback unavailable');
     const liveState = await response.json();
     if (modelViewerId && liveState.viewer_id !== modelViewerId) {
-      limits = null; state = null; history = []; throw Error('模型已切换，等待新描述');
+      limits = null; state = null; clearHistory(); throw Error('模型已切换，等待新描述');
     }
     state = displayedState(liveState);
     received = performance.now();
     if (state.stream?.stream_id !== streamId) {
-      history = []; lastSample = undefined; streamId = state.stream?.stream_id;
+      clearHistory(); streamId = state.stream?.stream_id;
     }
     const values = [...(state.actual_torque || Array(jointCount).fill(null)), ...(hasGripper ? [state.gripper_actual_torque] : [])];
     if (mode !== 'replay' && state.stream?.status === 'live' && state.stream.sequence !== lastSample &&
         (values.some(finite) || state.actual_vel?.some(finite))) {
       lastSample = state.stream.sequence;
-      history.push({time: received - (state.stream.age_s || 0) * 1000, values,
-        velocity: state.actual_vel, target_velocity: state.target_vel});
+      const time = sampleTime(state.stream, received);
+      history.push(withVelocityTrend({time, values, velocity: state.actual_vel,
+        target_velocity: state.target_vel}, history.at(-1)));
     }
   } catch {
     if (state) state = {...state, stream: {...state.stream, status: 'error'}};
   }
   if (!stopped) setTimeout(poll, document.hidden ? 500 : 100);
 }
-window.addEventListener('view-mode', () => {state = null; history = []; streamId = undefined; lastSample = undefined; render();});
+window.addEventListener('view-mode', () => {state = null; clearHistory(); streamId = undefined; render();});
 render();
 const timer = setInterval(render, 100);
-window.addEventListener('pagehide', () => {stopped = true; clearInterval(timer);});
+let animation;
+function animate() { drawCharts(); if (!stopped) animation = requestAnimationFrame(animate); }
+animation = requestAnimationFrame(animate);
+window.addEventListener('pagehide', () => {stopped = true; clearInterval(timer); cancelAnimationFrame(animation);});
 poll();

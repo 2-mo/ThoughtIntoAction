@@ -29,6 +29,8 @@ globalThis.window = {addEventListener() {}};
 let render;
 globalThis.setInterval = callback => {render = callback; return 0;};
 globalThis.setTimeout = () => 0;
+globalThis.requestAnimationFrame = () => 0;
+globalThis.cancelAnimationFrame = () => {};
 const q = Array.from({length: 7}, (_, i) => .1 * (i + 1));
 const model = {viewer_id: 'seven', robot: {joint_names: q.map((_, i) => `joint${i + 1}`)},
   data_contract: {joint_names: q.map((_, i) => `joint${i + 1}`), gripper: null},
