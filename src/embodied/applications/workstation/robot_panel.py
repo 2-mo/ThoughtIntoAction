@@ -10,6 +10,7 @@ from embodied.applications.operations.robot import Robot
 from embodied.applications.workstation.status import Status
 from embodied.contracts.runtime.control import ControlClient
 from embodied.core.presets import DEFAULT_GRASP_READY_JOINTS
+from embodied.control.homing import ReleaseThenHome
 
 
 class RobotControls:
@@ -80,19 +81,26 @@ class RobotControls:
             self.target = (list(DEFAULT_GRASP_READY_JOINTS) if key == 'p'
                            else self.robot.describe()['robot']['park_q'])
             self.started = time.monotonic()
-            self.motion = self.robot.movej(self.target, wait=False)
+            self.motion = (self.robot.home(release_gripper=True, wait=False) if key == 'h'
+                           else self.robot.movej(self.target, wait=False))
             name = '预抓取' if key == 'p' else '回零'
-            metrics = self.motion.metrics
+            self.plan_message = None
+            self.describe_plan(name)
+            self.message = Status('先张开夹爪，确认松开后回零；空格停止' if key == 'h'
+                                  else f'正在{name}；空格停止并保持', 'waiting')
+        except (OSError, ValueError, RuntimeError, EOFError) as exc:
+            self.close()
+            self.message = Status(f'动作未完成：{exc}', 'error')
+
+    def describe_plan(self, name):
+        metrics = self.motion.metrics
+        if metrics:
             self.plan_message = (f'{name} · 轨迹 {metrics["duration_s"]:.2f} s · '
                                  f'规划峰值 {metrics["peak_velocity_rad_s"]:.2f} rad/s')
             factors = metrics.get('limiting_factors', [])
             labels = {'speed': '速度', 'acceleration': '加速度', 'jerk': 'jerk'}
             if factors:
                 self.plan_message += ' · 受限于 ' + '、'.join(labels.get(v, v) for v in factors)
-            self.message = Status(f'正在{name}；空格停止并保持', 'waiting')
-        except (OSError, ValueError, RuntimeError, EOFError) as exc:
-            self.close()
-            self.message = Status(f'动作未完成：{exc}', 'error')
 
     def rows(self, found):
         """Read feedback and preserve the kernel's actual completion/failure result."""
@@ -112,6 +120,11 @@ class RobotControls:
                     self.description_run = found[0]
                 state = client.status()
                 if self.motion is not None:
+                    if isinstance(self.motion, ReleaseThenHome):
+                        self.motion.step(state)
+                        self.describe_plan('回零')
+                        if self.motion.operation_id:
+                            self.message = Status('夹爪已张开，正在回零；空格停止', 'waiting')
                     operation = next((op for op in state['operations']
                                       if op['operation_id'] == self.motion.operation_id), None)
                     if operation is not None and operation['status'] != 'running':
@@ -152,7 +165,7 @@ class RobotControls:
             # result. A missing socket during restart must disappear on recovery.
             rows.append(('反馈查询', Status(f'反馈暂不可用：{exc}', 'error')))
             if had_motion:
-                self.message = Status('动作跟踪已中断；未确认到位，请检查机械臂状态', 'error')
+                self.message = Status(f'动作跟踪已中断；未确认到位：{exc}', 'error')
         if found is not None and self.description and self.description_run == found[0]:
             settings = self.description['defaults']
             speed = '后端每轴上限' if settings['speed'] == 0 else f'{settings["speed"]:g} rad/s'

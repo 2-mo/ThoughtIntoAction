@@ -206,6 +206,8 @@ class RealBackend:
         self._sdk_torque_ceiling = np.asarray(robot.joint_torque_max, dtype=float).copy()
         robot.gripper_width = config.gripper_max_width
         robot.gripper_open_readout = config.gripper_open_readout
+        robot.gripper_vel_max = _positive_limit(config.gripper_velocity_max_m_s,
+                                               robot.gripper_vel_max, 'gripper_velocity_max_m_s')
         if joint_velocity_limit_rad_s is not None:
             robot.joint_vel_max = np.full(6, joint_velocity_limit_rad_s)
         if gripper_speed_m_s is not None:
@@ -252,6 +254,8 @@ class RealBackend:
             "sdk_version": _json_value(sdk_version),
             "gripper_startup_turns": bool(getattr(robot, 'gripper_startup_turns', False)),
             "gripper_position_control": {"kind": "bounded_total_motor_effort", "effort_limit_nm": position_effort_limit,
+                "velocity_reference": "rate-limited position derivative after anti-windup",
+                "velocity_max_m_s": float(robot.gripper_vel_max),
                 "effort_unit": "motor_Nm", "motor_torque_constant": GripperPositionServo.MOTOR_TORQUE_CONSTANT},
             "control_api": "Arx5JointController.set_joint_cmd; native position, velocity, extra feedforward torque",
             "gravity_api": ("native automatic gravity; packet torque excludes gravity" if self._automatic_gravity

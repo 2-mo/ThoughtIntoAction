@@ -14,6 +14,7 @@ from embodied.devices.phone.transports.udp import UdpTransport, UdpTransportConf
 from embodied.contracts.runtime.control import ControlClient, ControlSession
 from embodied.core.project import PROJECT_ROOT, port
 from embodied.core.presets import DEFAULT_GRASP_READY_JOINTS
+from embodied.control.homing import ReleaseThenHome
 
 
 class PhoneInput(ArkitInputSource):
@@ -48,8 +49,14 @@ def phone_base():
     return replace(phone_tool(), output_frame=MappingOutputFrame.BASE)
 
 
+def phone_aligned():
+    # Upright phone: +X right, +Y top, -Z camera forward; X5 gripper points down.
+    # This is the same proper rotation as Quest's R_CONTROLLER_TO_DOWN_TOOL.
+    return replace(phone_tool(), axes=AxisMapping((1, 0, 2), (-1, -1, -1)), output_frame=MappingOutputFrame.ALIGNED)
+
+
 class PhoneController:
-    def __init__(self, directory=None, bind_host='127.0.0.1', port=5005, mapping='phone_tool', ghost=False):
+    def __init__(self, directory=None, bind_host='127.0.0.1', port=5005, mapping='phone_aligned', ghost=False):
         from embodied.contracts.registry import Registry
         registry = Registry()
         self.mapping = registry.create('mapping', mapping)
@@ -85,7 +92,8 @@ class PhoneController:
         self.zero_requested = False
         self.operation_id = None
         self.preset = None
-        self.open_deadline = 0.
+        self.homing = None
+        self.policy.clear_alignment()
         self.last_target = None
         self.last_robot = None
         self.last_input = None
@@ -104,6 +112,8 @@ class PhoneController:
         self.released = self.active = self.home = self.recenter = False
         self.operation_id = None
         self.preset = None
+        self.homing = None
+        self.policy.clear_alignment()
 
     def disable(self):
         """Release control; keep the independent phone input available to monitors."""
@@ -114,6 +124,8 @@ class PhoneController:
             self.client, self.ghost = None, True
             self.active = self.released = self.home = self.recenter = False
             self.operation_id = None
+            self.homing = None
+            self.policy.clear_alignment()
             if self.preset_busy:
                 self.preset.update(phase='cancelled', message='动作已停止，机械臂保持')
 
@@ -158,6 +170,7 @@ class PhoneController:
         if self.preset_busy:
             self.preset.update(phase='cancelled', message='输入中断，动作已停止；请重新选择')
             self.operation_id = None
+            self.homing = None
         self.active = False
 
     @property
@@ -182,34 +195,43 @@ class PhoneController:
         self._hold()
         self.released = self.home = False
         self.operation_id = None
+        self.policy.clear_alignment()
         config = self.client.parameters['effective_robot_config']
         opening = name == 'home' and config['gripper_max_width'] > 0
         self.preset = {'name': name, 'phase': 'opening' if opening else 'moving',
                        'message': '先张开夹爪，确认松开后回零' if opening else '正在回零' if name == 'home' else '正在前往预抓取位'}
-        if opening:
-            # Full stroke at the existing configured speed, plus settling time.
-            self.open_deadline = time.monotonic() + config['gripper_max_width'] / config['gripper_velocity_max_m_s'] + 2.
+        self.homing = ReleaseThenHome(self.client) if name == 'home' else None
 
-    def _advance_preset(self, snapshot, now):
+    def request_alignment(self):
+        value = self.last_input
+        if (self.ghost or self.estop or self.preset_busy or value is None or value.clutch_active
+                or time.monotonic() - self.last_received > .1 or value.tracking_quality != TrackingQuality.NORMAL):
+            raise ValueError('先开始手机遥操，松开 Clutch 并等待动作结束和正常追踪后对齐')
+        if self.mapping.output_frame is not MappingOutputFrame.ALIGNED:
+            raise ValueError('当前映射不是空间对齐模式')
+        self._hold()
+        self.policy.clear_alignment()
+        self.released = False
+        self.preset = None
+
+    def _advance_preset(self, snapshot):
         name = self.preset['name']
         label = '回零' if name == 'home' else '预抓取'
-        config = self.client.parameters['effective_robot_config']
-        if self.preset['phase'] == 'opening':
-            width = config['gripper_max_width']
-            if abs(snapshot['gripper_width'] - width) > .002:
-                if now >= self.open_deadline:
-                    raise RuntimeError('夹爪未能张开，已取消回零；请检查是否卡住')
-                self.client.command('gripper', gripper_width=width, ttl_ms=100)
+        if self.homing is not None:
+            op = self.homing.step(snapshot)
+            self.operation_id = self.homing.operation_id
+            if self.homing.phase == 'moving':
+                self.preset.update(phase='moving', message='夹爪已张开，正在回零')
+            if op is None:
                 return
-            self.preset.update(phase='moving', message='夹爪已张开，正在回零')
-        if self.operation_id is None:
-            fields = {'gripper_width': config['gripper_max_width']} if name == 'home' else {'q': list(DEFAULT_GRASP_READY_JOINTS)}
-            plan = self.client.preview('home' if name == 'home' else 'movej', **fields)
-            self.operation_id = self.client.execute(plan)['operation_id']
-            return
-        op = next((op for op in snapshot['operations'] if op['operation_id'] == self.operation_id), None)
-        if op is None:
-            raise RuntimeError(f'{label}状态丢失，未确认到位')
+        else:
+            if self.operation_id is None:
+                plan = self.client.preview('movej', q=list(DEFAULT_GRASP_READY_JOINTS))
+                self.operation_id = self.client.execute(plan)['operation_id']
+                return
+            op = next((op for op in snapshot['operations'] if op['operation_id'] == self.operation_id), None)
+            if op is None:
+                raise RuntimeError(f'{label}状态丢失，未确认到位')
         if op['status'] != 'running':
             if op['status'] != 'completed':
                 raise RuntimeError(f'{label}未完成：{op.get("reason") or op["status"]}')
@@ -238,9 +260,11 @@ class PhoneController:
         self.last_received = now
         if value.session_id != self.session_id:
             self._hold()
+            self.policy.clear_alignment()
             self.session_id, self.released = value.session_id, False
         if value.tracking_quality != TrackingQuality.NORMAL:
             self._hold()
+            self.policy.clear_alignment()
             self.released = False
             return None
         if self.client is None:
@@ -250,7 +274,7 @@ class PhoneController:
         self.last_robot = snapshot
         if self.preset_busy:
             self.home = False
-            self._advance_preset(snapshot, now)
+            self._advance_preset(snapshot)
             return None
         if self.home:
             self.home = False
@@ -304,7 +328,7 @@ def main(argv=None):
     parser.add_argument('--run', required=True)
     parser.add_argument('--bind-host', default='127.0.0.1')
     parser.add_argument('--port', type=int, default=port('phone_udp'))
-    parser.add_argument('--mapping', choices=('phone_tool', 'phone_base'), default='phone_tool')
+    parser.add_argument('--mapping', choices=('phone_aligned', 'phone_tool', 'phone_base'), default='phone_aligned')
     parser.add_argument('--ghost', action='store_true')
     parser.add_argument('--duration', type=float, default=0)
     args = parser.parse_args(argv)

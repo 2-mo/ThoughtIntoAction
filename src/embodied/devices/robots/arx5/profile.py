@@ -32,7 +32,7 @@ class RobotConfig:
     hardware_plugin: str = "arx.real"
     model_plugin: str = "arx5"
     viewer_plugin: str = "arx5"
-    gripper_velocity_max_m_s: float = 0.04
+    gripper_velocity_max_m_s: float = 0.3
     gripper_position_effort_limit_nm: float = 0.15
 
     @property

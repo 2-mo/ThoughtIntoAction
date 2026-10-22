@@ -313,8 +313,21 @@ class Robot:
         self._acquire()
         return self.execute(self.plan_movel(pose, xyz=xyz, offset=offset, frame=frame, **limits), wait=wait, timeout=timeout)
 
-    def home(self, *, wait=True, timeout=None, **limits):
+    def home(self, *, release_gripper=False, wait=True, timeout=None, **limits):
+        """Return to park_q; release_gripper confirms opening before arm motion.
+
+        With release_gripper and wait=False, advance the returned sequence with
+        step(fresh_status), or call its wait(); it does not create a worker.
+        """
+        if timeout is not None:
+            _positive(timeout, 'timeout')
         session = self._acquire()
+        if release_gripper:
+            from embodied.control.homing import ReleaseThenHome
+            self.last_motion = ReleaseThenHome(session, limits=self._limits(limits))
+            if wait:
+                self.last_motion.wait(timeout)
+            return self.last_motion
         return self.execute(session.preview("home", **self._limits(limits)), wait=wait, timeout=timeout)
 
     def jog(self, joint, delta, *, wait=True, timeout=None, **limits):

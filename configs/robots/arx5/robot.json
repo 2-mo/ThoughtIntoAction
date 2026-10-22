@@ -57,5 +57,5 @@
   ],
   "joint_step_limit": 0.08726646259971647,
   "profile": "arx5",
-  "gripper_velocity_max_m_s": 0.04
+  "gripper_velocity_max_m_s": 0.3
 }

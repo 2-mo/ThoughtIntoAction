@@ -239,6 +239,10 @@
     }
   },
   "mapping": {
+    "phone_aligned": {
+      "factory": "embodied.devices.inputs.phone:phone_aligned",
+      "capabilities": ["relative-pose", "latched-alignment"]
+    },
     "phone_tool": {
       "factory": "embodied.devices.inputs.phone:phone_tool",
       "capabilities": [

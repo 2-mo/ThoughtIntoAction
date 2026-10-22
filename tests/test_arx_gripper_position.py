@@ -1,5 +1,7 @@
 """Blocked-jaw regression and actual adapter packets, without constructing CAN."""
 from dataclasses import replace
+from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 import numpy as np
@@ -47,6 +49,29 @@ def test_waypoint_keeps_configured_speed_and_no_force_at_reached_goal():
         actual = control.reference
     control.reset()
     assert control.update(actual, actual, 0.) == 0
+
+
+@pytest.mark.parametrize('direction', [-1, 1])
+def test_moving_at_reference_speed_is_not_braked_toward_zero(direction):
+    control = GripperPositionServo(open_readout=-3.4, width=.082, kp=5., kd=.2,
+                                  effort_limit=.15, speed=.3, dt=.004)
+    control.reference = .04
+    effort = control.update(.082 if direction > 0 else 0., .04, direction * .3)
+    assert control.reference_velocity == pytest.approx(direction * .3)
+    assert effort * direction < 0  # negative motor torque opens this jaw
+    assert abs(effort) <= .15
+
+
+def test_blocked_reference_stops_advancing_and_endpoint_restores_damping():
+    control = servo()
+    for _ in range(20):
+        control.update(0, .03, 0)
+    assert control.reference_velocity == 0
+    control.reset()
+    assert control.reference_velocity == 0
+    effort = control.update(.04, .04, .03)
+    assert effort > 0  # measured opening velocity is braked at a stationary goal
+    assert abs(effort) <= .15
 
 
 class Packet:
@@ -104,3 +129,31 @@ def test_adapter_removes_native_pd_so_it_cannot_bypass_effort_cap():
     backend.step(replace(command, gripper_effort=.12), 1.1)
     assert hw.packet.gripper_torque == .12
     assert hw.gain.gripper_kp == hw.gain.gripper_kd == 0.
+
+
+@pytest.mark.parametrize('speed', [.12, .3, .31])
+def test_configured_gripper_speed_reaches_servo_and_rejects_widening_sdk_limit(monkeypatch, speed):
+    robot = SimpleNamespace(joint_vel_max=np.full(6, 3.), joint_torque_max=np.full(6, 100.),
+        gripper_vel_max=.3, gripper_torque_max=1.5, motor_id=list(range(6)), gripper_motor_id=6)
+    control = SimpleNamespace(default_gripper_kp=5., default_gripper_kd=.2)
+    def factory(value):
+        return SimpleNamespace(get_instance=lambda: SimpleNamespace(get_config=lambda *args: value))
+    def unexpected_hardware(*args):
+        pytest.fail('offline configuration check must never construct hardware')
+    sdk = SimpleNamespace(RobotConfigFactory=factory(robot), ControllerConfigFactory=factory(control),
+                          quest_gripper_turns_version=1, Arx5JointController=unexpected_hardware)
+    monkeypatch.setitem(sys.modules, 'arx5_interface', sdk)
+    monkeypatch.setitem(sys.modules, 'embodied.devices.robots.arx5.kinematics', SimpleNamespace(
+        X5Model=lambda config: SimpleNamespace(urdf_path=Path('offline.urdf'), tcp_link='tcp'),
+        JointTargetController=lambda config, model: SimpleNamespace()))
+    monkeypatch.setenv('QUEST_ARX_GRIPPER_TURNS', '1')
+    backend = RealBackend.__new__(RealBackend)
+    config = replace(RobotConfig(), gripper_velocity_max_m_s=speed)
+    if speed > .3:
+        with pytest.raises(ValueError, match='gripper_velocity_max_m_s'):
+            backend.__init__(config, cancel_requested=lambda: True)
+    else:
+        with pytest.raises(InterruptedError, match='before SDK construction'):
+            backend.__init__(config, cancel_requested=lambda: True)
+        assert backend._gripper_position.speed == speed
+        assert backend.runtime_parameters()['gripper_position_control']['velocity_max_m_s'] == speed

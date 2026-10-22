@@ -81,6 +81,9 @@ final class AppModel: ObservableObject {
     if status.phoneControl?.kernelRuntimeID == nil { return "robot 未运行，请在电脑总控启动" }
     if let preset = status.phoneControl?.preset { return preset.message }
     if status.phoneControl?.targetLimited == true { return "目标跟随误差较大，超出部分已丢弃" }
+    if status.phoneControl?.enabled == true && status.phoneControl?.aligned == false {
+      return "竖持手机、相机朝前，按住 Clutch 建立空间方向参考"
+    }
     return status.phoneControl?.enabled == true ? "遥操已开始 · 按住下方控制区跟随" : "仅监看 · 点开始遥操"
   }
 
@@ -181,6 +184,13 @@ final class AppModel: ObservableObject {
     guard canHome else { return }
     setClutchActive(false)
     coordinator?.requestControl("pregrasp")
+    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+  }
+
+  func requestAlignment() {
+    guard canHome else { return }
+    setClutchActive(false)
+    coordinator?.requestControl("align")
     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
   }
 

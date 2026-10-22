@@ -22,6 +22,7 @@ class MappingOutputFrame(Enum):
 
     TOOL = "tool"
     BASE = "base"
+    ALIGNED = "aligned"
 
 
 @dataclass(frozen=True, slots=True)

@@ -6,7 +6,7 @@
   "source_options": {
     "bind_host": "0.0.0.0",
     "port": 5005,
-    "mapping": "phone_tool"
+    "mapping": "phone_aligned"
   },
   "controller": "arx.joint_target"
 }

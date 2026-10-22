@@ -7,61 +7,56 @@ struct ControlView: View {
   var body: some View {
     GeometryReader { geometry in
       Group {
-        if useLandscapeLayout(geometry.size) {
-          landscapeLayout
+        if geometry.size.width > geometry.size.height && geometry.size.width >= 700 && !dynamicTypeSize.isAccessibilitySize {
+          landscapeLayout(geometry.size)
         } else {
           portraitLayout(geometry.size)
         }
       }
-      .padding(.horizontal, 14)
-      .padding(.vertical, 10)
+      .padding(.horizontal, 14).padding(.vertical, 10)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .background(TeleopTheme.background.ignoresSafeArea())
   }
 
+  private var dashboard: some View {
+    VStack(spacing: 10) {
+      StatusStrip(model: model)
+      ControlStatusCard(model: model)
+      TuningControls(model: model)
+    }
+  }
+
   private func portraitLayout(_ size: CGSize) -> some View {
     VStack(spacing: 10) {
-      EndpointHeader(model: model, compact: false)
-      ScrollView {
-        VStack(spacing: 10) {
-          StatusStrip(model: model)
-          TuningControls(model: model, compact: false)
-        }
+      EndpointHeader(model: model)
+      if size.height < 660 || dynamicTypeSize.isAccessibilitySize {
+        // Only short screens / accessibility text need scrolling. Controls stay outside.
+        ScrollView { dashboard }.scrollIndicators(.visible)
+      } else {
+        dashboard.fixedSize(horizontal: false, vertical: true)
       }
-      .scrollIndicators(.hidden)
-      .frame(maxHeight: dynamicTypeSize.isAccessibilitySize ? .infinity : 320)
       ControlActionRow(model: model)
       HoldControlSurface(model: model, compact: false)
-        .frame(minHeight: min(240, max(160, size.height * 0.30)), maxHeight: .infinity)
-        .layoutPriority(1)
+        .frame(minHeight: min(240, max(160, size.height - 510)), maxHeight: .infinity)
+      ControlUtilityRow(model: model)
     }
   }
 
-  private var landscapeLayout: some View {
+  private func landscapeLayout(_ size: CGSize) -> some View {
     VStack(spacing: 8) {
-      EndpointHeader(model: model, compact: true)
-      HStack(alignment: .top, spacing: 12) {
-        ScrollView {
-          VStack(spacing: 10) {
-            StatusStrip(model: model)
-            TuningControls(model: model, compact: true)
-          }
-        }
-        .scrollIndicators(.hidden)
-        .frame(maxWidth: .infinity)
-
-        VStack(spacing: 10) {
-          ControlActionRow(model: model, compact: true)
+      EndpointHeader(model: model)
+      HStack(alignment: .top, spacing: 14) {
+        VStack(spacing: 8) {
+          ScrollView { dashboard }.scrollIndicators(.visible)
+          ControlUtilityRow(model: model)
+        }.frame(maxWidth: .infinity)
+        VStack(spacing: 8) {
+          ControlActionRow(model: model)
           HoldControlSurface(model: model, compact: true)
         }
-        .frame(width: 390)
-        .frame(maxHeight: .infinity)
+        .frame(width: size.width * 0.53, height: max(0, size.height - 72))
       }
     }
-  }
-
-  private func useLandscapeLayout(_ size: CGSize) -> Bool {
-    size.width > size.height && size.width >= 760 && !dynamicTypeSize.isAccessibilitySize
   }
 }

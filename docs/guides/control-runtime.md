@@ -91,7 +91,11 @@ outputs/envs/control/bin/python scripts/setup/build_gripper_sdk.py \
 
 ARX 夹爪位置控制的总力矩上限集中在 `gripper_position_effort_limit_nm`，默认 `0.15`，沿用旧限力闭合示例。位置只表示期望开度：遇到物体时允许停在实际接触宽度，不通过增大位置误差强行到位。适配层计算并限制整个 PD 输出，电机端夹爪 Kp/Kd 为零，避免原生位置刚度绕过 SDK 的前馈力矩限制；关节控制不变。SDK 的 `gripper_torque_max` 仍保留为硬件保护阈值，不拿它充当日常夹持力。
 
+夹爪速度统一使用同文件的 `gripper_velocity_max_m_s`，当前为 `0.3 m/s`，与此 X5 SDK 的默认配置一致，真机适配器验证它不超过 SDK 上限。该值是参考速度上限，不承诺带负载时的实测速度。PD 的速度项使用“参考速度 − 实测速度”；参考速度从限幅、抗积累之后的宽度参考求导，避免在整个开闭过程中误用零目标速度持续制动。接触物体后仍限制总力矩，静止目标保留阻尼。
+
 该上限单位是 SDK 电流估算的**电机 N·m**，不是标定过的指尖牛顿力。`runtime_parameters.gripper_position_control` 记录实际策略与上限，遥操位置目标都经过该策略；显式 `grasp(effort=...)` 仍使用已有力控路径和能力检查。SDK 过流保护不会由输入恢复请求解除。修改配置/适配器后需重启 robot 才生效，退出会进入阻尼。
+
+robot 窗口 H 与手机回零共用 `ReleaseThenHome`：先张开夹爪，反馈距最大开度 ≤2 mm 后才预览、执行回零，超时或取消均不继续移动。Python 同步入口为 `robot.home(release_gripper=True)`；`wait=False` 返回此序列，事件循环需调用 `sequence.step(fresh_status)` 推进，或调用 `sequence.wait()` 等待。普通 `robot.home()` 保持原有夹爪开度。
 - `configs/robots/arx5/tool.json` 定义 TCP 和额外负载。模型加载器检查工具与生成模型的一致性。
 - `configs/control/motion.json` 是统一内核运动参数的唯一配置入口，含关节速度/加速度/jerk、可选 TCP 约束和到位条件；参见 [字段与生效规则](motion-settings.md)。运行时的实际速度能力由所选驱动报告；`speed=0` 使用逐轴能力，`speed_scale` 对每轴按比例缩放。
 - `configs/inputs/quest.json` 定义 SDK 路径、基座旋转、Grip 阈值和位置比例。内置原生 Quest 路由目前要求 250 Hz 机器人配置。

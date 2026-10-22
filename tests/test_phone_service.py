@@ -61,13 +61,34 @@ class PhoneServiceTests(unittest.TestCase):
         self.assertIsNone(self.service.snapshot()['phone_pose'])
         self.assertIsNone(self.send(tracking_quality=TrackingQuality.LIMITED)['phone_pose'])
 
+    def test_alignment_is_latched_across_clutch_and_cleared_by_explicit_align_and_preset(self):
+        client = self.enable_fake_robot()
+        self.send()
+        self.send(clutch_active=True)
+        basis = self.controller.policy.rotation_alignment
+        self.assertIsNotNone(basis)
+        self.send()
+        self.assertEqual(self.controller.policy.rotation_alignment, basis)
+        before = client.command.call_count
+        self.service.dispatch({'command': 'align', 'runtime_id': 'test'})
+        self.assertFalse(self.service.snapshot()['aligned'])
+        self.assertEqual(client.command.call_count, before)  # alignment does not command arm motion
+        self.send()
+        self.send(clutch_active=True)
+        self.assertTrue(self.service.snapshot()['aligned'])
+        self.send()
+        self.service.dispatch({'command': 'pregrasp', 'runtime_id': 'test'})
+        self.assertFalse(self.service.snapshot()['aligned'])
+        with self.assertRaisesRegex(ValueError, '等待动作结束'):
+            self.service.dispatch({'command': 'align', 'runtime_id': 'test'})
+
     def test_home_opens_gripper_before_planning_and_reports_completion(self):
         client = self.enable_fake_robot()
         state = self.service.dispatch({'command': 'home', 'runtime_id': 'test'})
         self.assertEqual(state['preset']['phase'], 'opening')
         client.preview.assert_not_called()
         self.send()
-        client.command.assert_called_with('gripper', gripper_width=.082, ttl_ms=100)
+        client.command.assert_called_with('gripper', gripper_width=.082, ttl_ms=200)
         self.send()
         client.preview.assert_not_called()  # elapsed ticks are not evidence of opening
         client.status.return_value['gripper_width'] = .081
@@ -111,7 +132,7 @@ class PhoneServiceTests(unittest.TestCase):
     def test_blocked_gripper_never_starts_home(self):
         client = self.enable_fake_robot()
         self.service.dispatch({'command': 'home', 'runtime_id': 'test'})
-        self.controller.open_deadline = time.monotonic() - 1
+        self.controller.homing.open_deadline = time.monotonic() - 1
         state = self.send()
         self.assertIn('夹爪未能张开', state['error'])
         self.assertFalse(state['enabled'])

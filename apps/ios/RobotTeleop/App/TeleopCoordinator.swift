@@ -20,11 +20,12 @@ struct PhoneControlReply: Decodable, Equatable, Sendable {
   let targetLimited: Bool
   let robotGripper: Double?
   let preset: PhonePresetReply?
+  let aligned: Bool?
   enum CodingKeys: String, CodingKey {
     case protocolName = "protocol", id, sessionID = "session_id", ok, message
     case kernelRuntimeID = "kernel_runtime_id", enabled, active, estop
     case targetLimited = "target_limited", robotGripper = "robot_gripper"
-    case preset
+    case preset, aligned
   }
 }
 
@@ -224,7 +225,7 @@ final class TeleopCoordinator: @unchecked Sendable {
 
   func requestControl(_ action: String) {
     queue.async { [weak self] in
-      guard let self, ["enable", "disable", "home", "pregrasp"].contains(action) else { return }
+      guard let self, ["enable", "disable", "home", "pregrasp", "align"].contains(action) else { return }
       // Stop can always supersede an unconfirmed action. Never queue presets.
       if action != "disable", self.status.controlPending { return }
       self.controls.releaseClutch()

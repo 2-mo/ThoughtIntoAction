@@ -4,7 +4,9 @@ from collections.abc import Callable
 import math
 
 from embodied.devices.phone.core.frames import (compose_pose, quaternion_multiply, relative_pose,
-    quaternion_conjugate, quaternion_angular_distance, quaternion_slerp, IDENTITY_QUATERNION)
+    quaternion_conjugate, quaternion_angular_distance, quaternion_slerp, IDENTITY_QUATERNION,
+    quaternion_to_matrix, quaternion_from_matrix, matrix_multiply, transpose_matrix,
+    quaternion_from_axis_angle, rotate_vector, scale_quaternion_rotation)
 from embodied.devices.phone.core.mapping import MappingOutputFrame, PoseMapping
 from embodied.devices.phone.core.models import (
     ControlMode,
@@ -41,11 +43,30 @@ class RelativePosePolicy:
         self.limited = False
         self.mapped_orientation = None
         self.position_lead_m = self.rotation_lead_rad = 0.
+        self.clear_alignment()
+
+    def clear_alignment(self):
+        self.rotation_alignment = self.position_alignment = None
+
+    def _align(self, input_pose, robot_pose):
+        # Same latched world-to-base construction as legacy Quest aligned mode.
+        # iOS rebases ARKit to its first frame: use the phone's current upright
+        # posture as the calibration frame, rather than assuming ARKit +Y survived.
+        input_basis = transpose_matrix(quaternion_to_matrix(input_pose.orientation))
+        tool_axes = matrix_multiply(quaternion_to_matrix(robot_pose.orientation), self._active_mapping.axes.matrix)
+        self.rotation_alignment = quaternion_from_matrix(matrix_multiply(tool_axes, input_basis))
+        forward_axes = ((0., 0., -1.), (-1., 0., 0.), (0., 1., 0.))
+        relative = matrix_multiply(tool_axes, transpose_matrix(forward_axes))
+        yaw = math.atan2(relative[1][0] - relative[0][1], relative[0][0] + relative[1][1])
+        upright = matrix_multiply(quaternion_to_matrix(quaternion_from_axis_angle(Vector3(0, 0, 1), yaw)), forward_axes)
+        self.position_alignment = quaternion_from_matrix(matrix_multiply(upright, input_basis))
 
     def reset(self, input_state: TeleopInput, robot_state: RobotState) -> None:
         self._active_mapping = self._mapping_provider()
         self._input_reference = input_state.pose
         self._robot_reference = robot_state.tcp_pose
+        if self._active_mapping.output_frame is MappingOutputFrame.ALIGNED and self.rotation_alignment is None:
+            self._align(input_state.pose, robot_state.tcp_pose)
         self._position_correction = Vector3(0, 0, 0)
         self._rotation_correction = IDENTITY_QUATERNION
         self.limited = False
@@ -66,9 +87,18 @@ class RelativePosePolicy:
             return hold_target(input_state.timestamp_ns, gripper=input_state.gripper)
         if self._input_reference is None or self._robot_reference is None:
             raise RuntimeError("RelativePosePolicy must be reset before update")
-        input_delta = relative_pose(self._input_reference, input_state.pose)
-        mapped_delta = self._active_mapping.map_delta(input_delta)
-        if self._active_mapping.output_frame is MappingOutputFrame.BASE:
+        if self._active_mapping.output_frame is MappingOutputFrame.ALIGNED:
+            delta = input_state.pose.position - self._input_reference.position
+            world_rotation = quaternion_multiply(input_state.pose.orientation, quaternion_conjugate(self._input_reference.orientation))
+            mapped_rotation = quaternion_multiply(quaternion_multiply(self.rotation_alignment, world_rotation),
+                                                   quaternion_conjugate(self.rotation_alignment))
+            target_pose = Pose(
+                self._robot_reference.position + rotate_vector(self.position_alignment, delta) * self._active_mapping.position_scale,
+                quaternion_multiply(scale_quaternion_rotation(mapped_rotation, self._active_mapping.rotation_scale),
+                                    self._robot_reference.orientation),
+            )
+        elif self._active_mapping.output_frame is MappingOutputFrame.BASE:
+            mapped_delta = self._active_mapping.map_delta(relative_pose(self._input_reference, input_state.pose))
             # Keep cardinal hand motions aligned with the table/base frame even
             # when the initial tool attitude is pitched or rolled.
             target_pose = Pose(
@@ -79,6 +109,7 @@ class RelativePosePolicy:
                 ),
             )
         else:
+            mapped_delta = self._active_mapping.map_delta(relative_pose(self._input_reference, input_state.pose))
             target_pose = compose_pose(self._robot_reference, mapped_delta)
         # Bound tracking error, not speed. Discard unreachable displacement from
         # the reference so reversing the hand responds immediately after saturation.
