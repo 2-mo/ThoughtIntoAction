@@ -31,6 +31,26 @@ def run(root, name, *, pid=999_999_999, ready=True, managed=False):
 
 
 class BenchStateTests(unittest.TestCase):
+    def test_real_restart_requires_one_explicit_confirmation(self):
+        found = (Path('/run/test-only'), {'backend': 'real', 'managed': True})
+        with patch.object(bench, 'owned_run', return_value=found), \
+             patch.object(sys.stdin, 'isatty', return_value=True), \
+             patch('sys.stdout', new_callable=io.StringIO), \
+             patch('builtins.input', return_value='n') as answer, \
+             patch('embodied.applications.workstation.restart.restart', return_value='已重启') as restart:
+            bench.main(['restart', '--target', 'robot'])
+            restart.assert_not_called()
+            answer.assert_called_once()
+            answer.reset_mock()
+            answer.return_value = 'y'
+            bench.main(['restart', '--target', 'robot'])
+            answer.assert_called_once()
+            restart.assert_called_once_with('robot', robot_confirmed=True)
+            restart.reset_mock()
+            with patch.object(sys.stdin, 'isatty', return_value=False):
+                bench.main(['restart', '--target', 'robot'])
+                restart.assert_not_called()
+
     def test_restart_menu_routes_digits_without_starting_a_kernel(self):
         with patch.object(sys.stdin, 'isatty', return_value=True), \
              patch.object(sys.stdin, 'fileno', return_value=0), \
