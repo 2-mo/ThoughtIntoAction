@@ -240,9 +240,9 @@ final class CoordinatorTests: XCTestCase {
     XCTAssertEqual(align["runtime_id"] as? String, "test")
     reply["id"] = align["id"]
     reply.removeValue(forKey: "preset")
-    reply["aligned"] = false
+    reply["aligned"] = true
     fixture.transport.emit(try JSONSerialization.data(withJSONObject: reply))
-    XCTAssertTrue(waitUntil { fixture.status.latest?.phoneControl?.aligned == false })
+    XCTAssertTrue(waitUntil { fixture.status.latest?.phoneControl?.aligned == true })
     let count = fixture.transport.sentControls.count
     fixture.coordinator.requestControl("disable")
     XCTAssertTrue(waitUntil { fixture.transport.sentControls.count == count + 1 })

@@ -5,8 +5,7 @@ import math
 
 from embodied.devices.phone.core.frames import (compose_pose, quaternion_multiply, relative_pose,
     quaternion_conjugate, quaternion_angular_distance, quaternion_slerp, IDENTITY_QUATERNION,
-    quaternion_to_matrix, quaternion_from_matrix, matrix_multiply, transpose_matrix,
-    quaternion_from_axis_angle, rotate_vector, scale_quaternion_rotation)
+    rotate_vector, scale_quaternion_rotation, quaternion_from_matrix)
 from embodied.devices.phone.core.mapping import MappingOutputFrame, PoseMapping
 from embodied.devices.phone.core.models import (
     ControlMode,
@@ -48,25 +47,26 @@ class RelativePosePolicy:
     def clear_alignment(self):
         self.rotation_alignment = self.position_alignment = None
 
-    def _align(self, input_pose, robot_pose):
-        # Same latched world-to-base construction as legacy Quest aligned mode.
-        # iOS rebases ARKit to its first frame: use the phone's current upright
-        # posture as the calibration frame, rather than assuming ARKit +Y survived.
-        input_basis = transpose_matrix(quaternion_to_matrix(input_pose.orientation))
-        tool_axes = matrix_multiply(quaternion_to_matrix(robot_pose.orientation), self._active_mapping.axes.matrix)
-        self.rotation_alignment = quaternion_from_matrix(matrix_multiply(tool_axes, input_basis))
-        forward_axes = ((0., 0., -1.), (-1., 0., 0.), (0., 1., 0.))
-        relative = matrix_multiply(tool_axes, transpose_matrix(forward_axes))
-        yaw = math.atan2(relative[1][0] - relative[0][1], relative[0][0] + relative[1][1])
-        upright = matrix_multiply(quaternion_to_matrix(quaternion_from_axis_angle(Vector3(0, 0, 1), yaw)), forward_axes)
-        self.position_alignment = quaternion_from_matrix(matrix_multiply(upright, input_basis))
+    def set_alignment(self, rotation):
+        # One explicitly verified input-to-base map for translation AND rotation.
+        self.rotation_alignment = self.position_alignment = rotation
+
+    def calibrate(self, input_orientation, tool_orientation):
+        # Explicit version of legacy Quest's current-pose alignment. Phone camera
+        # -Z is forward and +Y is up; TCP +X is forward and +Z is up. Both devices
+        # point the same way when the operator presses Align. No robot motion.
+        phone_to_tool = quaternion_from_matrix(((0., 0., -1.), (-1., 0., 0.), (0., 1., 0.)))
+        rotation = quaternion_multiply(quaternion_multiply(tool_orientation, phone_to_tool),
+                                       quaternion_conjugate(input_orientation))
+        self.set_alignment(rotation)
+        return rotation
 
     def reset(self, input_state: TeleopInput, robot_state: RobotState) -> None:
         self._active_mapping = self._mapping_provider()
         self._input_reference = input_state.pose
         self._robot_reference = robot_state.tcp_pose
-        if self._active_mapping.output_frame is MappingOutputFrame.ALIGNED and self.rotation_alignment is None:
-            self._align(input_state.pose, robot_state.tcp_pose)
+        if self._active_mapping.output_frame is MappingOutputFrame.CALIBRATED and self.rotation_alignment is None:
+            raise ValueError('请先完成手机手动方向校准')
         self._position_correction = Vector3(0, 0, 0)
         self._rotation_correction = IDENTITY_QUATERNION
         self.limited = False
@@ -87,7 +87,7 @@ class RelativePosePolicy:
             return hold_target(input_state.timestamp_ns, gripper=input_state.gripper)
         if self._input_reference is None or self._robot_reference is None:
             raise RuntimeError("RelativePosePolicy must be reset before update")
-        if self._active_mapping.output_frame is MappingOutputFrame.ALIGNED:
+        if self._active_mapping.output_frame is MappingOutputFrame.CALIBRATED:
             delta = input_state.pose.position - self._input_reference.position
             world_rotation = quaternion_multiply(input_state.pose.orientation, quaternion_conjugate(self._input_reference.orientation))
             mapped_rotation = quaternion_multiply(quaternion_multiply(self.rotation_alignment, world_rotation),

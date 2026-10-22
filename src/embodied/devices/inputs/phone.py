@@ -49,14 +49,12 @@ def phone_base():
     return replace(phone_tool(), output_frame=MappingOutputFrame.BASE)
 
 
-def phone_aligned():
-    # Upright phone: +X right, +Y top, -Z camera forward; X5 gripper points down.
-    # This is the same proper rotation as Quest's R_CONTROLLER_TO_DOWN_TOOL.
-    return replace(phone_tool(), axes=AxisMapping((1, 0, 2), (-1, -1, -1)), output_frame=MappingOutputFrame.ALIGNED)
+def phone_calibrated():
+    return replace(phone_tool(), output_frame=MappingOutputFrame.CALIBRATED)
 
 
 class PhoneController:
-    def __init__(self, directory=None, bind_host='127.0.0.1', port=5005, mapping='phone_aligned', ghost=False):
+    def __init__(self, directory=None, bind_host='127.0.0.1', port=5005, mapping='phone_calibrated', ghost=False):
         from embodied.contracts.registry import Registry
         registry = Registry()
         self.mapping = registry.create('mapping', mapping)
@@ -93,7 +91,7 @@ class PhoneController:
         self.operation_id = None
         self.preset = None
         self.homing = None
-        self.policy.clear_alignment()
+        self.calibrated_runtime_id = None
         self.last_target = None
         self.last_robot = None
         self.last_input = None
@@ -109,11 +107,12 @@ class PhoneController:
         self.last_robot = client.status()
         client.__enter__()
         self.client, self.ghost = client, False
+        if self.calibrated_runtime_id != client.identity['runtime_id']:
+            self.clear_calibration()
         self.released = self.active = self.home = self.recenter = False
         self.operation_id = None
         self.preset = None
         self.homing = None
-        self.policy.clear_alignment()
 
     def disable(self):
         """Release control; keep the independent phone input available to monitors."""
@@ -125,7 +124,6 @@ class PhoneController:
             self.active = self.released = self.home = self.recenter = False
             self.operation_id = None
             self.homing = None
-            self.policy.clear_alignment()
             if self.preset_busy:
                 self.preset.update(phase='cancelled', message='动作已停止，机械臂保持')
 
@@ -195,22 +193,34 @@ class PhoneController:
         self._hold()
         self.released = self.home = False
         self.operation_id = None
-        self.policy.clear_alignment()
         config = self.client.parameters['effective_robot_config']
         opening = name == 'home' and config['gripper_max_width'] > 0
         self.preset = {'name': name, 'phase': 'opening' if opening else 'moving',
                        'message': '先张开夹爪，确认松开后回零' if opening else '正在回零' if name == 'home' else '正在前往预抓取位'}
         self.homing = ReleaseThenHome(self.client) if name == 'home' else None
 
-    def request_alignment(self):
-        value = self.last_input
-        if (self.ghost or self.estop or self.preset_busy or value is None or value.clutch_active
-                or time.monotonic() - self.last_received > .1 or value.tracking_quality != TrackingQuality.NORMAL):
-            raise ValueError('先开始手机遥操，松开 Clutch 并等待动作结束和正常追踪后对齐')
-        if self.mapping.output_frame is not MappingOutputFrame.ALIGNED:
-            raise ValueError('当前映射不是空间对齐模式')
-        self._hold()
+    def clear_calibration(self):
         self.policy.clear_alignment()
+        self.calibrated_runtime_id = None
+        self.metadata.pop('input_to_base_quaternion_xyzw', None)
+
+    def request_alignment(self, robot_state, runtime_id):
+        value = self.last_input
+        if (self.estop or self.preset_busy or value is None or value.clutch_active
+                or time.monotonic() - self.last_received > .1 or value.tracking_quality != TrackingQuality.NORMAL):
+            raise ValueError('松开 Clutch 并等待动作结束和正常追踪后校准')
+        if self.mapping.output_frame is not MappingOutputFrame.CALIBRATED:
+            raise ValueError('当前映射不是手动校准模式')
+        if time.monotonic_ns() - robot_state['feedback_monotonic_ns'] > 500_000_000:
+            raise ValueError('机械臂反馈过期，请恢复连接后对齐')
+        self._hold()
+        basis = self.policy.calibrate(value.pose.orientation, Quaternion(*robot_state['pose'][3:]))
+        self.calibrated_runtime_id = runtime_id
+        self.metadata['input_to_base_quaternion_xyzw'] = list(basis.as_tuple())
+        if not self.ghost:
+            self.client.command('source-metadata', metadata={
+                'input_to_base_quaternion_xyzw': list(basis.as_tuple()),
+                'calibration_method': 'manual_current_phone_and_tcp'})
         self.released = False
         self.preset = None
 
@@ -256,15 +266,18 @@ class PhoneController:
             if now - self.last_received > .1:
                 self._hold()
                 self.released = False
+            if now - self.last_received > .5:
+                self.clear_calibration()
             return None
         self.last_received = now
         if value.session_id != self.session_id:
             self._hold()
-            self.policy.clear_alignment()
+            self.clear_calibration()
             self.session_id, self.released = value.session_id, False
         if value.tracking_quality != TrackingQuality.NORMAL:
             self._hold()
-            self.policy.clear_alignment()
+            if value.tracking_quality == TrackingQuality.UNAVAILABLE:
+                self.clear_calibration()
             self.released = False
             return None
         if self.client is None:
@@ -286,6 +299,9 @@ class PhoneController:
             self.released = True
             return None
         if not self.released:
+            return None
+        if self.mapping.output_frame is MappingOutputFrame.CALIBRATED and self.policy.rotation_alignment is None:
+            self._hold()
             return None
         p = snapshot['pose']
         robot = RobotState(timestamp_ns=snapshot['feedback_monotonic_ns'],
@@ -328,7 +344,7 @@ def main(argv=None):
     parser.add_argument('--run', required=True)
     parser.add_argument('--bind-host', default='127.0.0.1')
     parser.add_argument('--port', type=int, default=port('phone_udp'))
-    parser.add_argument('--mapping', choices=('phone_aligned', 'phone_tool', 'phone_base'), default='phone_aligned')
+    parser.add_argument('--mapping', choices=('phone_calibrated', 'phone_tool', 'phone_base'), default='phone_calibrated')
     parser.add_argument('--ghost', action='store_true')
     parser.add_argument('--duration', type=float, default=0)
     args = parser.parse_args(argv)

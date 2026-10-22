@@ -90,10 +90,10 @@ class Scene:
                         if action == 'start':
                             phone_service.ensure_service()
                             result['phone'] = phone_service.monitor()
-                        elif action in ('enable', 'disable') and owner.runtime_monitor is not None:
+                        elif action in ('enable', 'disable', 'align') and owner.runtime_monitor is not None:
                             result['phone'] = phone_service.command(action, runtime_id=data.get('runtime_id'))
                         else:
-                            raise ValueError('手机遥操只支持统一内核的显式接管 / 停止')
+                            raise ValueError('手机遥操只支持统一内核的接管 / 停止 / 方向对齐')
                     elif urlsplit(self.path).path == '/api/annotations/review':
                         if owner.review_store is None:
                             raise ValueError('标注复核只支持统一内核采集记录')

@@ -239,9 +239,9 @@
     }
   },
   "mapping": {
-    "phone_aligned": {
-      "factory": "embodied.devices.inputs.phone:phone_aligned",
-      "capabilities": ["relative-pose", "latched-alignment"]
+    "phone_calibrated": {
+      "factory": "embodied.devices.inputs.phone:phone_calibrated",
+      "capabilities": ["relative-pose", "manual-calibration"]
     },
     "phone_tool": {
       "factory": "embodied.devices.inputs.phone:phone_tool",

@@ -12,9 +12,9 @@ def rows():
                               'active' if enabled else 'ready' if connected else 'waiting'))]
     if enabled:
         details.append(('停止操作', Status('S / 空格 停止遥操；手机也可点停止', 'active')))
-    if state.get('mapping') == 'phone_aligned':
-        details.append(('空间方向', Status('已对齐 · 松开重握保留方向' if state.get('aligned')
-            else '预抓取后竖持手机，首次按住 Clutch 建立参考', 'ready' if state.get('aligned') else 'waiting')))
+    if state.get('mapping') == 'phone_calibrated':
+        details.append(('空间方向', Status('已对齐 · 平移与旋转共用方向' if state.get('aligned')
+            else '手机前端对准夹爪，按 C 一键对齐', 'ready' if state.get('aligned') else 'waiting')))
     if not state['available']:
         details.append(('接收服务', Status('未就绪 · 按 R 启动', 'waiting')))
     endpoints = [f'{host}:{state["port"]}' for host in state.get('addresses', [])]
@@ -42,12 +42,19 @@ def rows():
         details.append(('提示', Status(state['error'], 'error')))
     return details, ['手机与电脑使用可互通的网络，在 RobotTeleop 连接设置填写上方地址。',
                      'T 启用手机遥操 · S / 空格 停止遥操并保持 · R 启动 / 刷新接收服务。',
-                     '启用前先松开 Clutch；预抓取后竖持、后置相机朝操作前方，再按住跟随。',
+                     'C 对齐方向：手机前端（后置相机朝向）与夹爪同向，松手按一次；不移动机械臂。',
                      '打开本窗口默认仅接收输入；手机晚打开也可连接。',
                      '网页与本窗口共用状态；数据年龄是收包距今，不是端到端延迟。']
 
 
 def press(key):
+    if key == 'c':
+        from embodied.applications.workstation.bench import current_run
+        found = current_run()
+        if found is None:
+            raise ValueError('先启动 robot 取得夹爪姿态')
+        phone_service.command('align', runtime_id=found[1]['runtime_id'])
+        return '方向已对齐；平移与旋转使用同一校准，按住 Clutch 跟随'
     if key == 't':
         from embodied.applications.workstation.bench import current_run
         found = current_run()

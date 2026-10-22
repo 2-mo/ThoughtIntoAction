@@ -84,7 +84,7 @@ final class RobotTeleopUITests: XCTestCase {
       XCTAssertTrue(card.exists, identifier)
       XCTAssertTrue(app.frame.contains(card.frame), identifier)
     }
-    for label in ["开始遥操", "停止遥操", "回零", "预抓取", "方向对齐"] {
+    for label in ["开始遥操", "停止遥操", "回零", "预抓取", "对齐方向"] {
       XCTAssertTrue(app.buttons[label].exists, label)
       XCTAssertTrue(app.frame.contains(app.buttons[label].frame), label)
     }
