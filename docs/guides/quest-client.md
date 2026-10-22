@@ -46,14 +46,39 @@
 
 工程和 APK 已存在时，脚本拒绝覆盖。补丁更新后可指定新的 `--project-dir outputs/build/quest-client-v2/source`；构建时传入同一个目录并用 `--output` 指定新 APK 路径。
 
-## 安装后验证
+## 发布与迁移安装
 
-完成构建后，选定已授权 Quest 的序列号再安装。以下是操作示例，本次修改没有执行这些命令：
+安装入口已经提供；构建、Release 上传及头显安装留待后续完成。没有实际发布 APK 时，安装命令会直接说明“尚未发布”或“缺少完整产物”，不会下载官方旧版替代。
+
+在新电脑克隆本仓库后，连接唯一一台已授权 USB Quest，即可从本项目的 [GitHub Releases](https://github.com/2-mo/ThoughtIntoAction/releases) 安装。仓库当前为私有仓库，需要 GitHub CLI `gh` 已登录且账号有仓库权限：
 
 ```bash
-adb devices -l
-adb -s QUEST_SERIAL install -r outputs/build/quest-client/ThoughtIntoAction-Quest-USB.apk
+gh auth login --hostname github.com
+./run.sh quest client install
+./run.sh quest client install --version quest-v1
 ```
+
+默认查找最新 Release，也可指定标签。下载固定使用 `github.com/2-mo/ThoughtIntoAction`，由 `gh` 处理私有仓库认证和 GitHub 附件跳转；APK 缓存在 `outputs/downloads/quest-client`。安装前核对来源元数据、SHA256、文件大小和 APK 内部的真实包名 `com.thoughtintoaction.quest`。ADB 只对选中的已授权 USB 设备执行 `install -r`；不会卸载官方应用、修改 ADB 密钥或启动机器人。新包已安装但签名不同时，ADB 会拒绝更新，入口保留错误，不擅自卸载数据。
+
+本地构建完成后，也可以直接安装。需要保留构建生成的同名 `.build.json`，入口会核对记录与实际 APK：
+
+```bash
+./run.sh quest client install --apk outputs/build/quest-client/ThoughtIntoAction-Quest-USB.apk
+```
+
+如果构建记录放在别处，可加 `--build-record /path/to/client.build.json`。仅重命名官方 APK 或填写一个新版包名的 JSON 无法通过内部包名检查。
+
+供发布者使用的打包入口会生成三份可上传到同一 Release 的文件：`ThoughtIntoAction-Quest-USB.apk`、`quest-client-release.json`、`SHA256SUMS`。其中记录发布标签、上游完整提交、本项目完整提交、包名、APK 大小和 SHA256。`--project-commit` 必须填写**实际构建所用项目版本**的完整 40 位提交：
+
+```bash
+./run.sh quest client package \
+  --apk outputs/build/quest-client/ThoughtIntoAction-Quest-USB.apk \
+  --version quest-v1 --project-commit FULL_40_CHARACTER_BUILD_COMMIT
+```
+
+文件生成到 `outputs/releases/quest-client/quest-v1`，目录已存在时不会覆盖。此命令只生成发布文件，不上传；二进制、构建日志和本机信息不进入 Git 提交。迁移时上传这三份已校验文件即可，不需要复制整个 Unity 工程。
+
+## 安装后验证
 
 日常从项目目录执行 `./run.sh`，在工作台 VR 窗口查看客户端版本、USB 授权、转发和连接状态。电脑端应复用已有客户端，避免官方版与新包同时连接。只有显示“自动连接版”（包名 `com.thoughtintoaction.quest`）时，才能期待这份补丁的自动 Connect 行为。
 
@@ -77,5 +102,7 @@ adb -s QUEST_SERIAL shell am start \
 ## 已验证与待验证
 
 本仓库的轻量验证覆盖本地 Git 导出、源文件身份校验、补丁应用、不覆盖用户工程、篡改/过期补丁拒绝构建，以及模拟 Unity 构建成功却没有 APK 时不报成功。TCP 补丁另在固定上游原文件上检查正向与反向应用。
+
+分发入口另外使用合成 Android binary XML APK 与模拟网络/ADB，验证包名读取、发布元数据、校验失败不污染缓存、无产物不回退安装、USB 选择及安装结果处理。测试没有下载、上传或安装真实 APK。
 
 这些验证不能代替 Unity C# 编译、Android 打包与头显网络测试。上述安装后验证通过前，不应将该 APK 标为已完成真机验证。

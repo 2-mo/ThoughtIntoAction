@@ -23,6 +23,7 @@ PYTHON_COMMANDS = {
     "quest-discovery": "quest/discovery.py",
     "setup-quest-usb": "quest/transport.py",
     "quest-transport": "quest/transport.py",
+    "quest-client": "quest/client.py",
     "quest-console": "quest/console.py",
     "check-xr": "quest/check.py",
     "check-arm": "diagnostics/check_arm.py",

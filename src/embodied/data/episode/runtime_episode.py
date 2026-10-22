@@ -51,6 +51,11 @@ class RuntimeEpisodeWriter:
             cameras = {'wrist_rgb': camera} if camera else {}
         camera = cameras.get('wrist_rgb')
         self.cameras, self.video = camera_metadata({'cameras': cameras}), bool(video)
+        if self.cameras:
+            # Native extension initialization must finish before capture threads
+            # pull their first frames; doing it in add_frame can skip a frame.
+            import cv2
+
         self.contract = runtime_contract(descriptor)
         demonstration = validate_demonstration(demonstration) if demonstration is not None else None
         camera_roles = validate_roles(self.cameras, camera_roles)

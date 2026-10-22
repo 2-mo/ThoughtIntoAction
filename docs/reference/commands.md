@@ -97,6 +97,7 @@ SSH 工作台会额外传入 `--host <SSH 服务器地址>`，窗口 4 显示可
 | `./run.sh quest service` | 启动 XRoboToolkit PC Service |
 | `./run.sh quest usb` | 配置 USB 反向端口：prepare | status |
 | `./run.sh quest build-client` | 准备 / 构建 USB 自动连接版 Quest APK |
+| `./run.sh quest client` | 新版 APK 安装 / 发布打包：install | package |
 | `./run.sh quest discovery` | 头显发现广播：on | off | status |
 | `./run.sh quest battery` | 头显电量 |
 | `./run.sh quest wake` | 唤醒与模拟佩戴 |
