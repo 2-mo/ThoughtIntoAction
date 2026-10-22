@@ -181,8 +181,10 @@ class PortableExportTests(unittest.TestCase):
             self.assertEqual(done.returncode,0,done.stdout+done.stderr)
             output = bundle/'lerobot_dataset'
             manifest = json.loads((output/'meta/quest_export.json').read_text())
-            self.assertEqual(manifest['layout'],'aligned30_raw250_v2')
-            self.assertEqual(manifest['control_stacks'], ['arx-televr kernel: sent_q at 250 Hz'])
+            self.assertEqual(manifest['layout'],'aligned30_runtime_v2')
+            self.assertIsNone(manifest['raw_robot_fps'])
+            self.assertEqual(manifest['control_stacks'], ['runtime kernel: submitted joint position commands'])
+            self.assertEqual(manifest['episodes'][0]['robot_timing']['feedback_mean_hz'], 250.)
             self.assertEqual(manifest['anomalous_episodes'], [])
             self.assertEqual(manifest['episodes'][0]['gaps'], [])
             loaded = LeRobotDataset('local/quest_x5',root=output,video_backend='pyav')

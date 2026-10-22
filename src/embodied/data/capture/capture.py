@@ -121,7 +121,7 @@ def main(argv=None):
                 stack.enter_context(closing(recording_guard()))
                 for key in ids:
                     options = config['cameras'][key]
-                    driver = options.get('driver') or config['cameras'].get('wrist_rgb', {}).get('driver')
+                    driver = options.get('driver')
                     if not driver:
                         parser.error(f'Camera {key} must declare its driver')
                     selected = {k: options[k] for k in ('serial', 'width', 'height', 'fps')}

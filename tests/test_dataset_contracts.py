@@ -64,6 +64,9 @@ def test_seven_axes_external_camera_export_keeps_exact_dimensions_and_clocks(tmp
     assert rows[0][4]['requested_monotonic_ns'] < rows[0][4]['host_monotonic_ns']
     assert set(rows[0][3]['camera_frames']) == {'external_rgb'}
     assert report['anchor_camera'] == 'external_rgb' and not report['exclusion_reasons']
+    assert report['control_stack'] == 'runtime kernel: submitted joint position commands'
+    assert report['robot_timing']['configured_control_hz'] is None
+    assert report['robot_timing']['feedback_mean_hz'] == report['robot_timing']['command_mean_hz'] == 250.
     features = export_features(episode_contract(meta), meta['cameras'])
     assert features['action']['shape'] == (dimension,)
     assert features['action']['names'] == feature_names(meta['data_contract'])
