@@ -1,0 +1,742 @@
+--- a/Assets/Scripts/Network/TcpHandler.cs
++++ b/Assets/Scripts/Network/TcpHandler.cs
+@@ -1,7 +1,6 @@
+ using System;
+ using System.Collections;
+ using System.Collections.Concurrent;
+-using System.Collections.Generic;
+ using System.Net;
+ using System.Net.Sockets;
+ using System.Text;
+@@ -26,20 +25,19 @@
+         public static event ReceiveMassage ReceiveEvent;
+         public static event ReceiveFunctionMsg ReceiveFunctionEvent;
+
+-        public static bool SendTrackingData = false;
+-        private static object _sendObject = new object();
+-        private Queue<NetPacket> _receivePackages = new Queue<NetPacket>();
+-        private static Queue<SendData> _sendDatas = new Queue<SendData>();
++        public static volatile bool SendTrackingData = false;
++        private static readonly object _sendObject = new object();
++        private readonly ConcurrentQueue<NetPacket> _receivePackages = new ConcurrentQueue<NetPacket>();
++        private static readonly ConcurrentQueue<SendData> _sendDatas = new ConcurrentQueue<SendData>();
+
+         private Socket _socket;
+-        private SocketState _state = SocketState.NONE;
++        private volatile SocketState _state = SocketState.NONE;
+
+         private bool _connectInited = false;
+         private static string _address = "127.0.0.1"; // PC IP Address
+         private int _port = 8888; //PC Port
+         private int _sendTimeout = 15000; // timeout
+         private Thread _sendThread;
+-        private ByteBuffer receiveBuffer;
+         private string _appVersion = "";
+         private string _deviceSN = "";
+         private JsonData _trackingJsonData = new JsonData();
+@@ -47,13 +45,18 @@
+         private TrackingData _trackingData = new TrackingData();
+         private ConcurrentQueue<string> _sendTrackingMsg = new ConcurrentQueue<string>();
+         private float _lastHeardSend = 0;
+-        private float _lastReconnectTime = 0;
++        private double _nextReconnectTime;
++        private double _retryDelay = 1;
++        private double _connectDeadline;
++        private const double CONNECT_TIMEOUT_SECONDS = 5;
++        private static double MonotonicSeconds =>
++            (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency;
+         private bool _reconnectEnable = false;
+
+         private void Awake()
+         {
+             _appVersion = Application.version;
+-            _sendThread = new Thread(OnSendThread);
++            _sendThread = new Thread(OnSendThread) { IsBackground = true };
+         }
+
+         public SocketState State
+@@ -71,91 +74,141 @@
+
+         public void Connect(string address)
+         {
+-            LogWindow.Info($"Attempting to connect to {address}");
+-            _address = address;
+-            _reconnectEnable = false;
+-            Connect();
+-        }
+-
++            lock (_sendObject)
++            {
++                if (_state == SocketState.DESTROY)
++                {
++                    return;
++                }
++
++                if (!IPAddress.TryParse(address, out var ip) ||
++                    ip.AddressFamily != AddressFamily.InterNetwork)
++                {
++                    _reconnectEnable = false;
++                    ReleaseSocket();
++                    ConnectErrorInfo = "Enter a valid IPv4 address.";
++                    _state = SocketState.CONNECT_ERROR;
++                    return;
++                }
++
++                LogWindow.Info($"Attempting to connect to {address}");
++                _address = address;
++                _reconnectEnable = true;
++                _retryDelay = 1;
++                Connect();
++            }
++        }
++
++        // Automatic attempts preserve the retry delay and the user's connection intent.
+         private void Connect()
+         {
+-            _port = TCP_PORT;
+-            _state = SocketState.CREATE;
+-            ConnectErrorInfo = "";
+-            Debug.Log(string.Format(Tag + "connect to server: ip {0}port: {1}", _address, _port.ToString()));
+-            IPAddress ia = IPAddress.Parse(_address);
+-            try
+-            {
+-                if (_state != SocketState.CLOSE)
+-                {
+-                    Close();
+-                }
+-
+-                lock (_sendObject)
++            lock (_sendObject)
++            {
++                if (!_reconnectEnable || _state == SocketState.DESTROY)
++                {
++                    return;
++                }
++
++                ReleaseSocket();
++                _port = TCP_PORT;
++                _state = SocketState.CREATE;
++                ConnectErrorInfo = "";
++                try
+                 {
+                     _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                     _socket.Blocking = true;
+                     _socket.SendTimeout = _sendTimeout;
+                     _socket.NoDelay = true;
+                     _socket.ReceiveTimeout = RECEIVE_TIME_OUT_DEFAULT;
+-
+-
+                     _state = SocketState.CONNECTING;
+-                    _socket.BeginConnect(ia, _port, ConnectCallback, _socket);
+-                }
+-            }
+-            catch (SocketException e)
+-            {
+-                _state = SocketState.CONNECT_ERROR;
+-                ConnectErrorInfo = e.Message;
+-                LogWindow.Error($"TCP connection failed: {e.Message}");
+-                Debug.LogError(Tag + "Connection failed: " + e.Message);
++                    _connectDeadline = MonotonicSeconds + CONNECT_TIMEOUT_SECONDS;
++                    _socket.BeginConnect(IPAddress.Parse(_address), _port, ConnectCallback, _socket);
++                }
++                catch (Exception e)
++                {
++                    ConnectionFailed(_socket, e.Message);
++                }
+             }
+         }
+
+         private void ConnectCallback(IAsyncResult async)
+         {
++            var socket = (Socket)async.AsyncState;
++            Exception error = null;
+             try
+             {
+-                Socket socket = (Socket)async.AsyncState;
+-                if (socket.Connected)
+-                {
+-                    _reconnectEnable = true;
+-                    socket.EndConnect(async);
++                socket.EndConnect(async);
++            }
++            catch (Exception e)
++            {
++                error = e;
++            }
++
++            lock (_sendObject)
++            {
++                if (!ReferenceEquals(socket, _socket) || !_reconnectEnable ||
++                    _state != SocketState.CONNECTING)
++                {
++                    socket.Dispose();
++                    return;
++                }
++
++                if (error != null)
++                {
++                    ConnectionFailed(socket, error.Message);
++                    return;
++                }
++
++                try
++                {
++                    ClearPendingMessages();
+                     _state = SocketState.WORKING;
++                    _connectInited = false;
++                    _connectDeadline = 0;
++                    _nextReconnectTime = double.PositiveInfinity;
++                    _retryDelay = 1;
+                     LogWindow.Info("TCP socket connection established successfully");
+
+-                    if (_sendThread.ThreadState == ThreadState.Unstarted)
++                    if ((_sendThread.ThreadState & ThreadState.Unstarted) != 0)
+                     {
+                         _sendThread.Start();
+                     }
+
+-                    receiveBuffer = new ByteBuffer(BUFFER_LEN);
+-                    socket.BeginReceive(receiveBuffer.data, receiveBuffer.GetReadableCount(),
+-                        receiveBuffer.GetRemainCapacity(), SocketFlags.None, OnDataReceived,
+-                        socket);
+-                    _connectInited = false;
++                    // A buffer belongs to one socket; a late receive cannot touch a new connection.
++                    var buffer = new ByteBuffer(BUFFER_LEN);
++                    socket.BeginReceive(buffer.data, buffer.GetReadableCount(),
++                        buffer.GetRemainCapacity(), SocketFlags.None,
++                        ar => OnDataReceived(ar, buffer), socket);
+                     if (!string.IsNullOrEmpty(_deviceSN))
+                     {
+                         ConnectInit();
+                     }
+-
+-                    Debug.Log(Tag + "Socket Connected!  ");
+-                }
+-                else
+-                {
+-                    _state = SocketState.CONNECT_ERROR;
+-                    ConnectErrorInfo = "connect error";
+-                    LogWindow.Error("TCP connection failed - socket not connected");
+-                    Debug.LogError(Tag + "connect Error");
+-                }
+-            }
+-            catch (Exception e)
+-            {
+-                ConnectErrorInfo = e.ToString();
+-                LogWindow.Error($"TCP connection exception: {e.Message}");
+-                Debug.LogError(Tag + "Connect error,Exception " + e);
+-                _state = SocketState.CONNECT_ERROR;
++                }
++                catch (Exception e)
++                {
++                    ConnectionFailed(socket, e.Message);
++                }
++            }
++        }
++
++        private void ConnectionFailed(Socket socket, string error)
++        {
++            lock (_sendObject)
++            {
++                if (!ReferenceEquals(socket, _socket) || _state == SocketState.DESTROY)
++                {
++                    return;
++                }
++
++                ReleaseSocket();
++                ConnectErrorInfo = error;
++                _state = _reconnectEnable ? SocketState.CONNECT_ERROR : SocketState.CLOSE;
++                if (_reconnectEnable)
++                {
++                    _nextReconnectTime = MonotonicSeconds + _retryDelay;
++                    LogWindow.Warn($"TCP connection lost: {error}; retrying in {_retryDelay:0}s");
++                    _retryDelay = Math.Min(_retryDelay * 2, 8);
++                }
+             }
+         }
+
+@@ -169,65 +222,71 @@
+
+         public void SetDeviceSn(string sn)
+         {
+-            _deviceSN = sn;
+-            if (_state == SocketState.WORKING)
+-            {
+-                ConnectInit();
+-            }
+-        }
+-
+-        private void OnDataReceived(IAsyncResult ar)
+-        {
+-            if (_state != SocketState.WORKING)
+-            {
++            lock (_sendObject)
++            {
++                _deviceSN = sn;
++                if (_state == SocketState.WORKING)
++                {
++                    ConnectInit();
++                }
++            }
++        }
++
++        private void OnDataReceived(IAsyncResult ar, ByteBuffer buffer)
++        {
++            var socket = (Socket)ar.AsyncState;
++            int bytesRead;
++            try
++            {
++                bytesRead = socket.EndReceive(ar);
++            }
++            catch (Exception e)
++            {
++                ConnectionFailed(socket, e.Message);
+                 return;
+             }
+
+-            var socket = (Socket)ar.AsyncState;
+-            try
+-            {
+-                int bytesRead = socket.EndReceive(ar);
+-                if (bytesRead > 0)
+-                {
+-                    receiveBuffer.AddWriteIndex(bytesRead);
++            lock (_sendObject)
++            {
++                if (!ReferenceEquals(socket, _socket) || _state != SocketState.WORKING)
++                {
++                    return;
++                }
++
++                if (bytesRead == 0)
++                {
++                    ConnectionFailed(socket, "Peer closed the connection");
++                    return;
++                }
++
++                try
++                {
++                    buffer.AddWriteIndex(bytesRead);
+                     bool msgEnough;
+                     do
+                     {
+-                        msgEnough = PackageHandle.Unpack(receiveBuffer, out var package);
++                        msgEnough = PackageHandle.Unpack(buffer, out var package);
+                         if (msgEnough)
+                         {
+-                            if (package.Cmd == NetCMD.PACKET_CMD_FROM_CONTROLLER_COMMON_FUNCTION)
++                            if (package.Cmd == NetCMD.PACKET_CMD_FROM_CONTROLLER_COMMON_FUNCTION &&
++                                package.ToString().Contains("timeTest"))
+                             {
+-                                Debug.Log("receive function:" + package.ToString());
+-                                if (package.ToString().Contains("timeTest"))
+-                                {
+-                                    Send(NetCMD.PACKET_CCMD_TO_CONTROLLER_FUNCTION, "timeTest");
+-                                }
++                                Send(NetCMD.PACKET_CCMD_TO_CONTROLLER_FUNCTION, "timeTest");
+                             }
+
+                             _receivePackages.Enqueue(package);
+                         }
+                     } while (msgEnough);
+
+-                    receiveBuffer.RemoveReadedBytes();
+-
+-                    // Continue receiving data
+-                    socket.BeginReceive(receiveBuffer.data, receiveBuffer.GetReadableCount(),
+-                        receiveBuffer.GetRemainCapacity(), SocketFlags.None, OnDataReceived,
+-                        socket);
+-                }
+-                else
+-                {
+-                    LogWindow.Warn("TCP client disconnected - no data received");
+-                    Debug.Log("Client disconnected.");
+-                    Close();
+-                }
+-            }
+-            catch (Exception ex)
+-            {
+-                LogWindow.Error($"TCP data receive error: {ex.Message}");
+-                Debug.LogError($"Error: {ex.Message}");
+-                Close();
++                    buffer.RemoveReadedBytes();
++                    socket.BeginReceive(buffer.data, buffer.GetReadableCount(),
++                        buffer.GetRemainCapacity(), SocketFlags.None,
++                        next => OnDataReceived(next, buffer), socket);
++                }
++                catch (Exception e)
++                {
++                    ConnectionFailed(socket, e.Message);
++                }
+             }
+         }
+
+@@ -244,50 +303,59 @@
+
+         public static void Send(byte cmd, string msg)
+         {
+-            _sendDatas.Enqueue(new SendData(cmd, Encoding.UTF8.GetBytes(msg)));
++            lock (_sendObject)
++            {
++                _sendDatas.Enqueue(new SendData(cmd, Encoding.UTF8.GetBytes(msg)));
++            }
+         }
+
+         public static void SendCustomData(byte[] msg)
+         {
+-            _sendDatas.Enqueue(new SendData(NetCMD.PACKET_CMD_CUSTOM_TO_PC, msg));
++            lock (_sendObject)
++            {
++                _sendDatas.Enqueue(new SendData(NetCMD.PACKET_CMD_CUSTOM_TO_PC, msg));
++            }
+         }
+
+
+         private void Update()
+         {
+-            if (SendTrackingData)
+-            {
+-                if (_sendTrackingMsg.Count < 2)
+-                {
+-                    _trackingData.Get(ref _trackingJsonData);
+-                    _sendTrackingMsg.Enqueue(_trackingJsonData.ToJson());
+-                }
+-            }
+-
+-            if (State == SocketState.WORKING)
+-            {
+-                //heartbeat
+-                if (_deviceSN != null)
+-                {
+-                    if (Time.time - _lastHeardSend > 10)
+-                    {
+-                        _lastHeardSend = Time.time;
+-                        Send(NetCMD.PACKET_CCMD_CLIENT_HEARTBEAT, _deviceSN);
+-                    }
+-                }
+-            }
+-
+-            if (_reconnectEnable)
+-            {
+-                if (State == SocketState.CLOSE || State == SocketState.CONNECT_ERROR)
+-                {
+-                    if (!string.IsNullOrEmpty(_address))
+-                    {
+-                        if (Time.time - _lastReconnectTime > 2)
+-                        {
+-                            Reconnect();
+-                            _lastReconnectTime = Time.time;
+-                        }
++            Socket socket;
++            lock (_sendObject)
++            {
++                var now = MonotonicSeconds;
++                if (_reconnectEnable)
++                {
++                    if (_state == SocketState.CONNECTING && now >= _connectDeadline)
++                    {
++                        ConnectionFailed(_socket, "Connection timed out");
++                    }
++                    else if ((_state == SocketState.CLOSE || _state == SocketState.CONNECT_ERROR) &&
++                             now >= _nextReconnectTime)
++                    {
++                        Connect();
++                    }
++                }
++
++                socket = _state == SocketState.WORKING ? _socket : null;
++                if (socket != null && _deviceSN != null && Time.unscaledTime - _lastHeardSend > 10)
++                {
++                    _lastHeardSend = Time.unscaledTime;
++                    Send(NetCMD.PACKET_CCMD_CLIENT_HEARTBEAT, _deviceSN);
++                }
++            }
++
++            // Never accumulate poses while offline or carry poses across socket generations.
++            if (socket != null && SendTrackingData && _sendTrackingMsg.Count < 2)
++            {
++                _trackingData.Get(ref _trackingJsonData);
++                var tracking = _trackingJsonData.ToJson();
++                lock (_sendObject)
++                {
++                    if (ReferenceEquals(socket, _socket) && _state == SocketState.WORKING &&
++                        SendTrackingData)
++                    {
++                        _sendTrackingMsg.Enqueue(tracking);
+                     }
+                 }
+             }
+@@ -297,14 +365,12 @@
+
+         private void ReceivePacketHandle()
+         {
+-            lock (_receivePackages)
+-            {
+-                while (_receivePackages.Count > 0)
++            lock (_sendObject)
++            {
++                while (_receivePackages.TryDequeue(out var packet))
+                 {
+                     try
+                     {
+-                        NetPacket packet = _receivePackages.Dequeue();
+-
+                         if (packet.Cmd == NetCMD.PACKET_CMD_FROM_CONTROLLER_COMMON_FUNCTION)
+                         {
+                             string content = packet.ToString();
+@@ -354,7 +420,24 @@
+         {
+             while (_state != SocketState.DESTROY)
+             {
+-                if (_state != SocketState.WORKING)
++                Socket socket;
++                SendData sendData = default;
++                bool hasMessage = false;
++                string tracking = null;
++                lock (_sendObject)
++                {
++                    socket = _state == SocketState.WORKING ? _socket : null;
++                    if (socket != null)
++                    {
++                        hasMessage = _sendDatas.TryDequeue(out sendData);
++                        if (!hasMessage && _connectInited && SendTrackingData)
++                        {
++                            _sendTrackingMsg.TryDequeue(out tracking);
++                        }
++                    }
++                }
++
++                if (socket == null)
+                 {
+                     Thread.Sleep(100);
+                     continue;
+@@ -362,146 +445,108 @@
+
+                 try
+                 {
+-                    lock (_sendObject)
+-                    {
+-                        SocketError socketError = SocketError.Success;
+-                        if (_socket != null && _socket.Connected)
++                    // Blocking sends must not hold the lifecycle lock: Close must stay responsive.
++                    if (hasMessage)
++                    {
++                        SendPacket(socket, PackageHandle.Pack(sendData.Cmd, sendData.Content));
++                        if (sendData.Cmd == NetCMD.PACKET_CCMD_SEND_VERSION)
+                         {
+-                            //Sending general messages
+-                            while (_sendDatas.Count > 0)
++                            lock (_sendObject)
+                             {
+-                                SendData sendData = _sendDatas.Dequeue();
+-
+-                                byte[] data = PackageHandle.Pack(sendData.Cmd, sendData.Content);
+-
+-                                int totalBytes = data.Length;
+-                                int bytesSent = 0;
+-                                while (bytesSent < totalBytes)
++                                if (ReferenceEquals(socket, _socket) && _state == SocketState.WORKING)
+                                 {
+-                                    int remainingBytes = totalBytes - bytesSent;
+-                                    bytesSent += _socket.Send(data, bytesSent, remainingBytes,
+-                                        SocketFlags.None,
+-                                        out socketError);
+-                                    if (socketError == SocketError.Success)
+-                                    {
+-                                        if (sendData.Cmd == NetCMD.PACKET_CCMD_SEND_VERSION)
+-                                        {
+-                                            //This message has been successfully sent, indicating the establishment of communication with the PC side
+-                                            LogWindow.Info("PC connection established - version packet sent successfully");
+-                                            Debug.Log("pc connected !");
+-                                            _connectInited = true;
+-                                        }
+-                                    }
+-                                    else
+-                                    {
+-                                        break;
+-                                    }
+-                                }
+-
+-                                if (socketError != SocketError.Success)
+-                                {
+-                                    LogWindow.Error($"TCP send error: {socketError}");
+-                                    Debug.LogError(Tag + "send SocketError:" + socketError);
+-                                    Close();
+-                                    break;
++                                    _connectInited = true;
++                                    LogWindow.Info("PC connection established - version packet sent successfully");
+                                 }
+                             }
+-
+-                            //Tracking data transmission
+-                            if (_connectInited && SendTrackingData)
+-                            {
+-                                if (_sendTrackingMsg.Count > 0)
+-                                {
+-                                    _sendTrackingMsg.TryDequeue(out var msg);
+-                                    //Display the frequency of tracking data occurrence
+-                                    FPSDisplay.UpdateTime();
+-                                    _sendJson["functionName"] = "Tracking";
+-                                    _sendJson["value"] = msg;
+-
+-                                    byte[] data = PackageHandle.Pack(NetCMD.PACKET_CCMD_TO_CONTROLLER_FUNCTION,
+-                                        Encoding.UTF8.GetBytes(_sendJson.ToJson()));
+-
+-                                    int res = _socket.Send(data, 0, data.Length, SocketFlags.None,
+-                                        out socketError);
+-                                    if (res < data.Length)
+-                                    {
+-                                        Debug.LogWarning(Tag + "Incomplete data occurrence!");
+-                                    }
+-
+-
+-                                    if (socketError != SocketError.Success)
+-                                    {
+-                                        LogWindow.Error($"TCP tracking data send error: {socketError}");
+-                                        Debug.LogError(Tag + "SocketError:" + socketError);
+-                                        Close();
+-                                        continue;
+-                                    }
+-                                }
+-                            }
+-                            else
+-                            {
+-                                Thread.Sleep(14);
+-                            }
+                         }
+-                        else
+-                        {
+-                            Close();
+-                        }
++                    }
++                    else if (tracking != null)
++                    {
++                        FPSDisplay.UpdateTime();
++                        _sendJson["functionName"] = "Tracking";
++                        _sendJson["value"] = tracking;
++                        SendPacket(socket, PackageHandle.Pack(NetCMD.PACKET_CCMD_TO_CONTROLLER_FUNCTION,
++                            Encoding.UTF8.GetBytes(_sendJson.ToJson())));
++                    }
++                    else
++                    {
++                        Thread.Sleep(SendTrackingData ? 1 : 14);
+                     }
+                 }
+                 catch (Exception e)
+                 {
+-                    LogWindow.Error($"TCP send thread error: {e.Message}");
+-                    Debug.LogError(Tag + "Error OnSendThread:" + e);
+-                    Close();
+-                }
++                    ConnectionFailed(socket, e.Message);
++                }
++            }
++        }
++
++        private static void SendPacket(Socket socket, byte[] data)
++        {
++            int sent = 0;
++            while (sent < data.Length)
++            {
++                int count = socket.Send(data, sent, data.Length - sent, SocketFlags.None,
++                    out var error);
++                if (error != SocketError.Success || count == 0)
++                {
++                    throw new SocketException((int)(error == SocketError.Success
++                        ? SocketError.ConnectionReset : error));
++                }
++
++                sent += count;
+             }
+         }
+
+         private void OnDestroy()
+         {
+-            if (_state != SocketState.CLOSE)
+-            {
+-                Close();
+-            }
+-
+-            _state = SocketState.DESTROY;
++            lock (_sendObject)
++            {
++                _reconnectEnable = false;
++                _nextReconnectTime = double.PositiveInfinity;
++                ReleaseSocket();
++                _state = SocketState.DESTROY;
++            }
+         }
+
+         public void Close()
+         {
+-            LogWindow.Info("Closing TCP connection");
+-            Debug.Log(Tag + "Close:");
+-            if (_receivePackages != null)
+-            {
+-                lock (_receivePackages)
+-                {
+-                    _receivePackages.Clear();
+-                }
+-            }
+-
+-            _state = SocketState.CLOSE;
+-            lock (_sendObject)
+-            {
+-                if (_socket != null)
+-                {
+-                    try
+-                    {
+-                        if (_socket.Connected)
+-                        {
+-                            _socket.Shutdown(SocketShutdown.Both);
+-                            _socket.Close();
+-                        }
+-                    }
+-                    catch (Exception e)
+-                    {
+-                        LogWindow.Error($"TCP socket cleanup error: {e.Message}");
+-                        Debug.LogError(Tag + "Clear Error:" + e);
+-                    }
+-                }
+-            }
+-        }
+-
++            lock (_sendObject)
++            {
++                if (_state == SocketState.DESTROY)
++                {
++                    return;
++                }
++
++                _reconnectEnable = false;
++                _nextReconnectTime = double.PositiveInfinity;
++                ReleaseSocket();
++                _state = SocketState.CLOSE;
++                LogWindow.Info("TCP connection closed; automatic reconnect disabled");
++            }
++        }
++
++        // Called with _sendObject held. Invalidate identity before disposing the old socket.
++        private void ReleaseSocket()
++        {
++            var socket = _socket;
++            _socket = null;
++            _connectInited = false;
++            _connectDeadline = 0;
++            ClearPendingMessages();
++            if (socket != null)
++            {
++                // Dispose also closes connecting and failed sockets, unlike checking Connected.
++                socket.Dispose();
++            }
++        }
++
++        private void ClearPendingMessages()
++        {
++            while (_receivePackages.TryDequeue(out _)) { }
++            while (_sendDatas.TryDequeue(out _)) { }
++            while (_sendTrackingMsg.TryDequeue(out _)) { }
++        }
+
+         struct SendData
+         {
