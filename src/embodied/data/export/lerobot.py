@@ -11,10 +11,10 @@ import uuid
 from contextlib import ExitStack
 
 import numpy as np
-from embodied.data.episode.cameras import camera_metadata
+from embodied.data.episode.cameras import camera_metadata, anchor_camera
+from embodied.data.episode.contract import episode_contract, feature_names, vector
 
 LEROBOT_REVISION = '0cf864870cf29f4738d3ade893e6fd13fbd7cdb5'
-FEATURE_NAMES = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6', 'gripper_m']
 
 
 def load_episode(path, max_gap_s=.1):
@@ -31,6 +31,8 @@ def load_episode(path, max_gap_s=.1):
         raise ValueError('Only MCAP episodes are supported')
     from embodied.data.episode.mcap_io import read_camera_records
     states, camera_frames = read_camera_records(path / 'episode.mcap')
+    contract = episode_contract(meta)
+    dimension = len(feature_names(contract))
     images = camera_frames['wrist_rgb']
     if any(meta.get('counts', {}).get(k) != n for k, n in [('state', len(states)), ('frame', len(images))]):
         raise ValueError('Manifest counts disagree with stored records')
@@ -53,16 +55,12 @@ def load_episode(path, max_gap_s=.1):
             if report['errors']:
                 raise ValueError(camera_id + ': ' + '; '.join(report['errors']))
     for state in states:
-        if "feedback_valid" in state and (len(state["feedback_valid"]) != 7 or any(v is not True for v in state["feedback_valid"])):
+        if "feedback_valid" in state and (len(state["feedback_valid"]) != dimension or any(v is not True for v in state["feedback_valid"])):
             raise ValueError("Invalid or faulted motor feedback in recording")
         if state.get('preset_name') or state.get('source') in ('preset', 'replay'):
             raise ValueError('Episode includes positioning/replay; collect a clean demonstration')
-        values = np.asarray([[*state['actual_pos'], state['gripper_actual_pos']],
-                             [*state['requested_pos'], state['requested_gripper_pos']]], dtype=np.float64)
-        if values.shape != (2, 7) or not np.isfinite(values).all():
-            raise ValueError('Missing/nonfinite 7D state or command')
-        if np.any(values[:, -1] < 0) or np.any(values[:, -1] > .082):
-            raise ValueError('Gripper outside calibrated width range')
+        vector({'q': state['actual_pos'], 'gripper_width': state['gripper_actual_pos']}, contract)
+        vector({'q': state['requested_pos'], 'gripper_width': state['requested_gripper_pos']}, contract)
         requested = state.get('requested_monotonic_ns')
         if type(requested) is not int or requested > state['host_monotonic_ns']:
             raise ValueError('Missing/noncausal integer action timestamp')
@@ -132,24 +130,24 @@ def prepare_schema1_camera_episode(path):
     return meta, rows, report, states
 
 
-def require_export_joint_count(metadata):
-    """This pinned dataset adapter still targets six arm joints plus one gripper."""
-    runtime = metadata.get('runtime') or {}
-    count = runtime.get('joint_count')
-    if count is None:
-        profile = runtime.get('parameters', {}).get('effective_robot_config', {})
-        park_q = profile.get('park_q')
-        if park_q is not None:
-            count = len(park_q)
-    if count is not None and count != 6:
-        raise ValueError(f'LeRobot X5 export supports 6 arm joints; recording has {count}. '
-                         'The raw runtime trace remains valid; use a model-specific exporter.')
-
-
 def prepare_camera_episode(path):
     from embodied.data.export.exporters import for_episode
-    require_export_joint_count(json.loads((Path(path) / 'episode.json').read_text()))
     return for_episode(path).prepare(path)
+
+
+def export_features(contract, cameras):
+    """Build LeRobot features solely from the recorded vector and camera contracts."""
+    names = feature_names(contract)
+    features = {key: {'dtype': 'float32', 'shape': (len(names),), 'names': names}
+                for key in ('observation.state', 'action')}
+    for key, camera in cameras.items():
+        features['observation.images.' + key[:-4]] = {
+            'dtype': 'video', 'shape': (camera['height'], camera['width'], 3), 'names': ['height', 'width', 'channels']}
+        features['observation.' + key[:-4] + '_valid'] = {'dtype': 'bool', 'shape': (1,), 'names': None}
+        features['source.' + key + '_monotonic_ns'] = {'dtype': 'int64', 'shape': (1,), 'names': None}
+    for key in ('source.state_monotonic_ns', 'source.action_monotonic_ns', 'source.rgb_monotonic_ns'):
+        features[key] = {'dtype': 'int64', 'shape': (1,), 'names': None}
+    return features
 
 
 def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
@@ -175,12 +173,16 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
         raise ValueError('Output already exists; choose a new directory')
     paths = [source] if (source/'episode.json').is_file() else sorted(p.parent for p in source.glob('*/episode.json'))
     plans, rejected, robot, shapes = [], [], None, None
-    adapter = None
+    adapter, contract, reference_camera = None, None, None
     for path in tqdm(paths, desc='检查数据', unit='条', disable=not progress, dynamic_ncols=True):
         try:
             if task is not None and json.loads((path/'episode.json').read_text()).get('task') != task:
                 continue
             meta, rows, report, raw_states = prepare_camera_episode(path)
+            current_contract = episode_contract(meta)
+            current_reference = anchor_camera(meta)
+            if contract is not None and (current_contract != contract or current_reference != reference_camera):
+                raise ValueError('Mixed vector contracts or reference cameras; export separately')
             current_adapter = for_episode(path)
             if adapter is not None and current_adapter.identity != adapter.identity:
                 raise ValueError('Mixed episode schemas/action definitions; export separately')
@@ -192,6 +194,8 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
             if shapes is not None and current_shapes != shapes:
                 raise ValueError('Mixed camera sets or image resolutions; export separately')
             robot, shapes = meta['robot'], current_shapes
+            contract, reference_camera = current_contract, current_reference
+            camera_descriptions = camera_metadata(meta)
             adapter = current_adapter
             plans.append((path, report))
             del rows, raw_states
@@ -201,21 +205,13 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
         raise ValueError('No valid episodes or invalid episodes found (use --skip-invalid explicitly): ' + json.dumps(rejected, ensure_ascii=False))
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = output.with_name(output.name + '.partial-' + uuid.uuid4().hex[:8])
-    features = {key: {'dtype': 'float32', 'shape': (7,), 'names': FEATURE_NAMES}
-                for key in ('observation.state', 'action')}
-    for key, shape in shapes.items():
-        features['observation.images.' + key[:-4]] = {'dtype': 'video', 'shape': shape, 'names': ['height', 'width', 'channels']}
-        if key != 'wrist_rgb':
-            features['observation.' + key[:-4] + '_valid'] = {'dtype': 'bool', 'shape': (1,), 'names': None}
-            features['source.' + key + '_monotonic_ns'] = {'dtype': 'int64', 'shape': (1,), 'names': None}
-    features['observation.wrist_valid'] = {'dtype': 'bool', 'shape': (1,), 'names': None}
-    for key in ('source.state_monotonic_ns', 'source.action_monotonic_ns', 'source.rgb_monotonic_ns'):
-        features[key] = {'dtype': 'int64', 'shape': (1,), 'names': None}
+    features = export_features(contract, camera_descriptions)
+    dimension = len(feature_names(contract))
     dataset, writer = None, None
     total_frames = sum(report['observation_samples'] for _, report in plans)
     try:
         dataset = LeRobotDataset.create(repo_id=repo_id, root=staging, fps=fps,
-            robot_type='stanford_x5', features=features, use_videos=True, video_backend='pyav')
+            robot_type=contract.get('robot_type', 'joint_robot'), features=features, use_videos=True, video_backend='pyav')
         with ExitStack() as stack, \
              tqdm(total=total_frames, desc='转换视频', unit='帧', disable=not progress,
                   dynamic_ncols=True) as bar:
@@ -223,10 +219,10 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
             for episode_index, (path, expected_report) in enumerate(plans):
                 bar.set_description(f'读取第 {episode_index+1}/{len(plans)} 条')
                 meta, rows, report, raw_states = prepare_camera_episode(path)
-                if report != expected_report or meta['robot'] != robot:
+                if report != expected_report or meta['robot'] != robot or episode_contract(meta) != contract:
                     raise ValueError('Source changed during export')
                 bar.set_description(f'保存原始状态 {episode_index+1}/{len(plans)}')
-                adapter.save_sidecar(staging / 'robot' / f'episode_{episode_index:06d}.npz', raw_states)
+                adapter.save_sidecar(staging / 'robot' / f'episode_{episode_index:06d}.npz', raw_states, contract=contract)
                 writer = MultiVideoWriter({})
                 for key, shape in shapes.items():
                     feature = 'observation.images.' + key[:-4]
@@ -234,20 +230,18 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
                     writer.writers[feature] = StreamingVideoWriter(video_path, shape, len(rows), fps, video_preset, video_threads)
                 dataset.image_writer = writer
                 bar.set_description(f'转换第 {episode_index+1}/{len(plans)} 条')
-                streams = {key: [row[3].get('camera_frames', {'wrist_rgb': row[3]})[key] for row in rows] for key in shapes}
+                streams = {key: [row[3].get('camera_frames', {reference_camera: row[3]})[key] for row in rows] for key in shapes}
                 pixel_batches = {key: readers[key].frames(path, stream) for key, stream in streams.items()}
                 try:
                     for index, (state, action, raw_root, frame, source_state) in enumerate(rows):
                         sample = {'observation.state': state, 'action': action, 'task': meta['task'],
-                            'observation.wrist_valid': np.array([frame['wrist_valid']], dtype=bool),
                             'source.state_monotonic_ns': np.array([source_state['host_monotonic_ns']], dtype=np.int64),
                             'source.action_monotonic_ns': np.array([source_state['requested_monotonic_ns']], dtype=np.int64),
                             'source.rgb_monotonic_ns': np.array([frame['host_received_monotonic_ns']], dtype=np.int64)}
                         for key in shapes:
                             sample['observation.images.' + key[:-4]] = next(pixel_batches[key])
-                            if key != 'wrist_rgb':
-                                sample['observation.' + key[:-4] + '_valid'] = np.array([True], dtype=bool)
-                                sample['source.' + key + '_monotonic_ns'] = np.array([streams[key][index]['host_received_monotonic_ns']], np.int64)
+                            sample['observation.' + key[:-4] + '_valid'] = np.array([True], dtype=bool)
+                            sample['source.' + key + '_monotonic_ns'] = np.array([streams[key][index]['host_received_monotonic_ns']], np.int64)
                         dataset.add_frame(sample)
                         bar.update()
                 finally:
@@ -262,10 +256,11 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
                     'layout': adapter.layout, 'action_fps': 30, 'raw_robot_fps': adapter.raw_hz,
                     'episode_schema': adapter.identity[0], 'action_definition': adapter.identity[1],
                     'sidecar': 'robot/episode_{episode_index:06d}.npz',
-                    'state': 'actual joints (rad) + actual gripper width (m)',
-                    'action': adapter.identity[1] + ' (rad, m)',
-                    'alignment': 'wrist RGB anchors; latest preceding robot state and other cameras within max skew; original clocks retained',
-                    'camera': '30 FPS wrist anchors; other cameras may repeat on alignment; see per-camera report; H264 CRF20 GOP2',
+                    'state': 'actual joints (rad)' + (' + actual gripper width (m)' if contract['gripper'] else ''),
+                    'action': adapter.identity[1],
+                    'data_contract': contract, 'anchor_camera': reference_camera,
+                    'alignment': 'declared RGB anchors; latest preceding robot state and other cameras within max skew; original clocks retained',
+                    'camera': '30 FPS reference anchors; other cameras may repeat on alignment; see per-camera report; H264 CRF20 GOP2',
                     'cameras': list(shapes),
                     'control_stacks': sorted({report['control_stack'] for _, report in plans}),
                     'backends': sorted({report['backend'] for _, report in plans}),
@@ -282,7 +277,7 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
             first = loaded[0]
             bar.update()
             last = loaded[len(loaded)-1]
-            if len(loaded) != total_frames or first['action'].shape != (15, 7) or last['observation.state'].shape != (7,):
+            if len(loaded) != total_frames or first['action'].shape != (15, dimension) or last['observation.state'].shape != (dimension,):
                 raise ValueError('Exported dataset failed loader validation')
             for key, shape in shapes.items():
                 feature = 'observation.images.' + key[:-4]
