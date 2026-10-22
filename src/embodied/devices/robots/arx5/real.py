@@ -248,6 +248,7 @@ class RealBackend:
             "control_api": "Arx5JointController.set_joint_cmd; native position, velocity, extra feedforward torque",
             "gravity_api": ("native automatic gravity; packet torque excludes gravity" if self._automatic_gravity
                             else "Stanford Arx5Solver.inverse_dynamics(q,0,0); unscaled; automatic gravity disabled for staged bench"),
+            "dynamics_feedforward": "M(q_measured) * ddq_planned + C(q_measured,dq_planned) * dq_planned; same calibrated model, gravity excluded",
             "shutdown_gain_policy": "Stanford default_kd, without additional scaling",
             "sdk_configuration_source": "factory and overridden constructor configuration; not hardware readback",
             "sdk_factory_defaults": factory_defaults,
@@ -259,7 +260,8 @@ class RealBackend:
                 "command": "SDK packet and gains from the last successfully completed send_recv_once; command_time_s is caller monotonic time",
                 "applied_kp_kd": "values passed to SDK; not a readback of final clipped CAN output",
                 "user_feedforward_torque": "additional torque supplied by the caller, excluding gravity; zero by default",
-                "sdk_gravity_torque": "automatic mode: SDK output torque minus supplied feedforward (may include clipping); bench: unscaled inverse_dynamics(q,0,0)",
+                "dynamics_feedforward_torque": "model inertia and Coriolis torque for the planned q/dq/ddq reference; excludes gravity and caller feedforward",
+                "sdk_gravity_torque": "automatic mode: SDK output torque minus caller and dynamics feedforward (may include clipping); bench: unscaled inverse_dynamics(q,0,0)",
                 "pose": "FK of the same six-joint feedback sample at tcp_link (fingertip midpoint)",
                 "reported_joint_torque": "cached JointState.torque() from the latest existing read_state call, with SDK sample timestamp and caller read time; step reads before sending, not after; raw SDK-reported value, not independently calibrated torque",
                 "sdk_raw_feedback": "six arm positions/velocities/torques and gripper position/velocity/torque from public JointState; gripper position and velocity are metres and metres/second, not motor radians",
@@ -424,7 +426,13 @@ class RealBackend:
         packet.pos()[:] = state.q if target is None else target
         packet.vel()[:] = self.controller.dq_target
         gravity = None
-        packet_torque = extra_torque.copy()
+        dynamic_torque = np.zeros(6)
+        if command.planned and command.joint_acceleration_target is not None:
+            dynamic_torque = self.kinematics.dynamic_torque(
+                state.q, self.controller.dq_target, self.controller.ddq_target)
+            if not np.isfinite(dynamic_torque).all():
+                raise RuntimeError('Inverse dynamics returned invalid feedforward torque')
+        packet_torque = extra_torque + dynamic_torque
         if not self._automatic_gravity and not damping_only:
             gravity = np.asarray(self._gravity_solver.inverse_dynamics(
                 state.q, np.zeros(6), np.zeros(6)), dtype=float)
@@ -449,10 +457,12 @@ class RealBackend:
             "applied_kd": gain.kd().tolist(),
             "sent_q": packet.pos().tolist(),
             "sent_dq": packet.vel().tolist(),
+            "sent_ddq": self.controller.ddq_target.tolist(),
             "gripper_target": float(packet.gripper_pos),
             "gripper_applied_kp": float(gain.gripper_kp),
             "gripper_applied_kd": float(gain.gripper_kd),
             "user_feedforward_torque": extra_torque.tolist(),
+            "dynamics_feedforward_torque": dynamic_torque.tolist(),
             "sdk_gravity_torque": None if gravity is None else gravity.tolist(),
             "control_phase": "damping-feedback" if damping_only else "gravity-enabled",
             "automatic_sdk_gravity": self._automatic_gravity,
@@ -473,7 +483,7 @@ class RealBackend:
             actual_gain = hardware.get_gain()
             self._telemetry["sdk_readback_ns"] = time.monotonic_ns()
             if self._automatic_gravity:
-                self._telemetry['sdk_gravity_torque'] = _json_value(np.asarray(output.torque()) - extra_torque)
+                self._telemetry['sdk_gravity_torque'] = _json_value(np.asarray(output.torque()) - extra_torque - dynamic_torque)
             self._telemetry.update(_json_value({
                 "sdk_output_command": {
                     "q": output.pos(), "dq": output.vel(), "torque": output.torque(),

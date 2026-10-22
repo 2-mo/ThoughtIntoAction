@@ -211,6 +211,12 @@ class MujocoBackend:
                                   or not 0 <= effort <= self._gripper_effort_max):
             raise ValueError('Gripper closing effort exceeds the simulated actuator capability')
         target = self.controller.update(command, self.data.qpos[:6], now)
+        dynamic_torque = np.zeros(6)
+        if command.planned and command.joint_acceleration_target is not None:
+            dynamic_torque = self.kinematics.dynamic_torque(
+                self.data.qpos[:6], self.controller.dq_target, self.controller.ddq_target)
+            if not np.isfinite(dynamic_torque).all() or np.any(np.abs(dynamic_torque) > self.config.torque_max):
+                raise RuntimeError('Inverse dynamics exceeds the simulated torque capability')
         kp = np.zeros(6) if target is None else np.asarray(self.config.kp)
         kd = np.zeros(6) if target is None else np.asarray(self.config.kd)
         self.model.actuator_biasprm[:6, 1] = -kp
@@ -228,16 +234,18 @@ class MujocoBackend:
             'applied_kd': kd.tolist(),
             'sent_q': (self.data.qpos[:6] if target is None else target).tolist(),
             'sent_dq': self.controller.dq_target.tolist(),
+            'sent_ddq': self.controller.ddq_target.tolist(),
             'gripper_target': float(self.controller.gripper_target if gripper_enabled else
                                     np.clip(self.data.qpos[6:8].sum(), 0, self.config.gripper_max_width)),
             'gripper_applied_kp': 80.0 if gripper_enabled and effort is None else 0.0,
             'gripper_applied_kd': 1.0 if gripper_enabled and effort is None else 0.0,
             'user_feedforward_torque': [0.0] * 6,
+            'dynamics_feedforward_torque': dynamic_torque.tolist(),
         }
         for _ in range(self._substeps):
             # Affine bias supplies -kp*q-kd*dq; ctrl adds both desired terms.
             gravity = self.kinematics.gravity(self.data.qpos[:6])
-            self.data.ctrl[:6] = gravity if target is None else gravity + kp * target + kd * self.controller.dq_target
+            self.data.ctrl[:6] = gravity if target is None else gravity + dynamic_torque + kp * target + kd * self.controller.dq_target
             self.data.ctrl[6:] = 80 * self.controller.gripper_target / 2 if gripper_enabled else 0
             if effort is not None:
                 self.data.ctrl[6:] = -effort

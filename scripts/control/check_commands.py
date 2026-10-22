@@ -185,10 +185,25 @@ class TrajectoryTests(unittest.TestCase):
         self.assertEqual(plan['times'][-1], made[0].duration_s)
         for fraction in (.137329, .367119, .709371, .923137):
             elapsed = plan['times'][-1] * fraction
-            expected_q, expected_dq, _ = made[0].at_time(elapsed)
+            expected_q, expected_dq, expected_ddq = made[0].at_time(elapsed)
             q, dq = plan['_trajectory'].sample(elapsed)
             np.testing.assert_allclose(q, expected_q, atol=1e-12)
             np.testing.assert_allclose(dq, expected_dq, atol=1e-12)
+            np.testing.assert_allclose(plan['_trajectory'].sample_acceleration(elapsed), expected_ddq, atol=1e-12)
+
+    def test_joint_cartesian_and_scaled_curves_keep_analytic_acceleration(self):
+        from embodied.motion.cartesian_execution import TimeScaledTrajectory
+        target = self.q + [.05, -.02, .03, .01, 0., 0.]
+        for request in ({'q': target.tolist()},
+                        {'kind': 'movel', 'pose': self.planner.model.fk(target).tolist()},
+                        {'kind': 'move_path', 'waypoints': [self.planner.model.fk(target).tolist()]}):
+            plan = self.planner.plan(request, self.snapshot, 10.)
+            for curve in (plan['_trajectory'], TimeScaledTrajectory(plan['_trajectory'], 1.7)):
+                for fraction in (.213, .417, .723):
+                    t, h = curve.duration*fraction, 1e-6
+                    numerical = (curve.sample(t+h)[1]-curve.sample(t-h)[1])/(2*h)
+                    np.testing.assert_allclose(curve.sample_acceleration(t), numerical, rtol=1e-4, atol=1e-5)
+                np.testing.assert_allclose(curve.sample_acceleration(curve.duration+.1), np.zeros(6), atol=1e-9)
 
     def test_per_axis_sdk_caps_bound_plans_at_configured_control_rate(self):
         from embodied.control.motion_limits import MotionLimits
@@ -271,6 +286,16 @@ class TrajectoryTests(unittest.TestCase):
 
 
 class SettlingTests(unittest.TestCase):
+    def test_legacy_arrival_tolerance_accepts_static_offset_but_strict_mode_does_not(self):
+        settings = MotionLimits.load().settling
+        self.assertAlmostEqual(settings['position_tolerance_rad'], np.deg2rad(1.))
+        q = np.array([0., 0., .004017066955566362, -.005711059570312482, 0., 0.])
+        for tolerance, expected in ((settings['position_tolerance_rad'], True), (.0035, False)):
+            window = SettlingWindow({**settings, 'position_tolerance_rad': tolerance})
+            for index in range(80):
+                settled = window.update(index * .004, q, np.full(6, -.01099), np.zeros(6))
+            self.assertEqual(settled, expected)
+
     def test_stationary_encoder_noise_requires_a_complete_window(self):
         window = SettlingWindow(MotionLimits.load().settling)
         for index in range(64):
@@ -299,7 +324,7 @@ class SettlingTests(unittest.TestCase):
             self.assertFalse(window.update(stamp, np.zeros(6), np.full(6, speed), np.zeros(6)))
 
     def test_outside_tolerance_invalid_data_and_sampling_gaps_reset_window(self):
-        cases = [('position', .26, .015, 0), ('invalid', .26, 0, float('nan')),
+        cases = [('position', .26, .03, 0), ('invalid', .26, 0, float('nan')),
                  ('gap', .5, 0, 0), ('clock', .1, 0, 0)]
         for name, stamp, position, speed in cases:
             with self.subTest(case=name):
@@ -421,6 +446,30 @@ class CommandsTests(unittest.TestCase):
                     self.assertFalse(command.reset_reference)
                 self.assertEqual(len(self.engine.settling.samples), 0)
 
+    def test_arrival_tolerance_does_not_weaken_preview_start_validation(self):
+        plan = MotionPlanner(self.config, 'model').plan(
+            {'q': (self.state.q + [.1, 0, 0, 0, 0, 0]).tolist()},
+            self.engine.status(self.state, self.now), self.now)
+        self.state.q = self.state.q + [.01, 0, 0, 0, 0, 0]
+        self.assertLess(.01, self.engine.settling.position_limit)
+        with self.assertRaisesRegex(ValueError, 'moved since preview'):
+            self.request('execute', _plan=plan)
+
+    def test_worker_preserves_planned_acceleration_and_clears_it_on_cancel(self):
+        plan = MotionPlanner(self.config, 'model').plan(
+            {'q': (self.state.q + [.1, 0, 0, 0, 0, 0]).tolist()},
+            self.engine.status(self.state, self.now), self.now)
+        self.request('execute', _plan=plan)
+        elapsed = plan['times'][-1]*.2
+        self.now += elapsed
+        self.request('heartbeat')
+        command = self.engine.next(self.state, self.now)
+        np.testing.assert_allclose(command.joint_acceleration_target,
+                                   plan['_trajectory'].sample_acceleration(elapsed))
+        self.assertGreater(np.max(np.abs(command.joint_acceleration_target)), 1.)
+        self.request('cancel')
+        self.assertIsNone(self.engine.next(self.state, self.now).joint_acceleration_target)
+
     def complete_operation(self):
         planner = MotionPlanner(self.config, 'model')
         goal = self.state.q + [.02, 0, 0, 0, 0, 0]
@@ -435,7 +484,11 @@ class CommandsTests(unittest.TestCase):
             self.now = end + index * .01
             self.request('heartbeat')
             self.engine.next(self.state, self.now)
-        self.assertEqual(self.engine.operations[plan['plan_id']]['status'], 'completed')
+        operation = self.engine.operations[plan['plan_id']]
+        self.assertEqual(operation['status'], 'completed')
+        self.assertAlmostEqual(operation['settling']['max_joint_error_rad'], .001)
+        self.assertEqual(operation['settling']['worst_joint'], 1)
+        self.assertAlmostEqual(operation['settling']['position_tolerance_rad'], np.deg2rad(1.))
         return goal
 
     def test_completed_and_released_operation_keeps_final_position_with_zero_velocity(self):
@@ -614,7 +667,7 @@ class CommandsTests(unittest.TestCase):
                          MotionLimits.load(self.config).describe()['defaults'])
         self.assertEqual(described['motion_limits']['joint_velocity_limits_rad_s'], list(self.config.joint_velocity_max))
         self.assertEqual(described['motion_limits']['source']['kind'], 'offline_configuration')
-        self.assertEqual(described['motion_limits']['settling']['position_tolerance_rad'], .0035)
+        self.assertEqual(described['motion_limits']['settling'], MotionLimits.load(self.config).settling)
         self.assertEqual(set(described['actions']), set(ACTIONS) - {
             'simulation-reset', 'simulation-restore', 'simulation-snapshot', 'grasp'})
         # The platform's offline reader returns the same robot facts.

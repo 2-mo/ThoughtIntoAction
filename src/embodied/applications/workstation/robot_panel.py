@@ -118,7 +118,12 @@ class RobotControls:
                         self.close()
                         elapsed = time.monotonic() - self.started
                         if operation['status'] == 'completed':
-                            self.message = Status(f'已到位并保持 · {elapsed:.2f} s', 'ready')
+                            detail = operation.get('settling')
+                            accuracy = '' if not detail else (
+                                f' · J{detail["worst_joint"]} 最大偏差 '
+                                f'{math.degrees(detail["max_joint_error_rad"]):.2f}°'
+                                f' / 容差 {math.degrees(detail["position_tolerance_rad"]):.2f}°')
+                            self.message = Status(f'已到位并保持{accuracy} · {elapsed:.2f} s', 'ready')
                         else:
                             reason = operation.get('reason') or operation['status']
                             if reason == 'Robot did not settle':
@@ -144,6 +149,10 @@ class RobotControls:
             settings = self.description['defaults']
             speed = '后端每轴上限' if settings['speed'] == 0 else f'{settings["speed"]:g} rad/s'
             rows.append(('生效参数', f'速度 {speed} · 加速度 {settings["acceleration"]:g} rad/s² · jerk {settings["jerk"]:g} rad/s³'))
+            settling = self.description['settling']
+            rows.append(('到位判定', f'每轴误差 < {math.degrees(settling["position_tolerance_rad"]):.2f}°'
+                         f' · 连续稳定 {settling["duration_s"]:g} s'
+                         f' · 平均绝对速度 < {settling["velocity_tolerance_rad_s"]:g} rad/s'))
             rows.append(('参数来源', '内核启动时加载的 configs/control/motion.json'))
         rows.append(('操作结果', self.message))
         return rows
