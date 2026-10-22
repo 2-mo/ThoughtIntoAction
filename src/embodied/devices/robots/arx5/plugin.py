@@ -12,6 +12,7 @@ def model_snapshot(config):
     if len(names) != config.joint_count or len(set(names)) != len(names):
         raise ValueError('Model must declare one unique name per arm joint')
     return {'model': {'xml_path': str(model.resolve()), 'xml': xml, 'joint_names': names,
+                      'urdf_path': str(model.with_suffix('.urdf').resolve()),
                       'urdf': model.with_suffix('.urdf').read_text(),
                       'manifest': json.loads(model.with_suffix('.model.json').read_text()),
                       'tool': json.loads(Path(config.tool_path or PROJECT_ROOT / 'configs/robots/arx5/tool.json').read_text())},
