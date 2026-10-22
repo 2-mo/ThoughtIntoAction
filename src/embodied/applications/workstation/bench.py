@@ -708,5 +708,7 @@ def main(argv=None):
 if __name__ == '__main__':
     try:
         raise SystemExit(main())
+    except KeyboardInterrupt:
+        raise SystemExit(0)
     except (OSError, ValueError, RuntimeError, EOFError) as exc:
         raise SystemExit(f'工作台：{exc}')
