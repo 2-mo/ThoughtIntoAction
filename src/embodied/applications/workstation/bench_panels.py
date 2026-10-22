@@ -22,6 +22,7 @@ import time
 
 from embodied.core.project import PROJECT_ROOT as ROOT, load_config, port, resolve_path
 from embodied.contracts.robot import load_robot_profile
+from embodied.applications.workstation.status import Status, status_text
 
 TITLES = {'kernel': '机械臂 · 内核', 'vr': 'Quest · VR', 'camera': '共享相机',
           'web': '监看与采集', 'site': '项目宣传网站'}
@@ -98,8 +99,8 @@ def kernel_rows():
         raise ValueError('configs/robots/arx5/robot.json 未配置 can_interface')
     device = resolve_path(config.get('can_device', '/dev/arx_r5'))
     visible = (Path('/sys/class/net') / can_port).exists() or device.is_char_device()
-    return [('内核', '等待启动 / 真机尚未提供反馈'),
-            ('USB-CAN', '适配器可见；不代表机械臂已通电' if visible else '未发现配置中的 CAN 接口或适配器'),
+    return [('内核', Status('等待启动 / 真机尚未提供反馈', 'waiting')),
+            ('USB-CAN', Status('适配器可见；等待机械臂反馈' if visible else '未发现配置中的 CAN 接口或适配器', 'waiting')),
             ('配置', f'{can_port} · {device}')], [
                 '真机未通电或尚未连接时，本窗口保持等待。',
                 '通电、连接后，在总控按 1 / 2 / 3 选择真机配置；按内核提示确认。',
@@ -107,38 +108,46 @@ def kernel_rows():
             ]
 
 
-def vr_rows():
+def vr_rows(found):
     from embodied.applications.workstation import bench
 
-    found = bench.current_run()
     hints = ['启动头显并连接 USB，在头显内允许 USB 调试。',
              '检查连接：./run.sh quest usb status；准备连接：./run.sh quest usb prepare',
              '在总控选择带 Quest 的配置后，跟踪状态会自动更新。']
     if not found:
-        return [('VR', '等待头显连接及 Quest 内核配置'), ('内核', '尚未运行')], hints
+        return [('VR', Status('等待头显连接及 Quest 内核配置', 'waiting')), ('内核', '尚未运行')], hints
     run, identity = found
     native = identity.get('native') or {}
     quest = identity.get('input') in ('vr', 'quest') or 'quest' in str(native.get('device', '')).lower()
-    rows = [('运行目录', bench.relative(run))]
+    rows = []
     if not quest:
-        rows += [('Quest 输入', '当前内核配置未启用 Quest'), ('VR 窗口', '保持待机；不会切换或重启现有内核')]
+        rows += [('VR', Status('当前内核配置未启用 Quest', 'disabled')),
+                 ('运行目录', bench.relative(run)), ('VR 窗口', '保持待机；不会切换或重启现有内核')]
         return rows, ['需要遥操时，在总控选择带 Quest 的配置。',
                       '先按当前内核的退出提示处理设备，再切换配置。']
     if not (Path(run) / 'commands.sock').exists():
-        rows += [('Quest 输入', '已配置 · 上游直控模式'), ('跟踪状态', '无命令网关；请查看内核日志或遥测')]
+        rows += [('VR', Status('已配置 · 跟踪待确认（无命令网关）', 'waiting')),
+                 ('跟踪状态', '请查看内核日志或遥测'), ('运行目录', bench.relative(run))]
         return rows, hints
     from embodied.contracts.runtime.control import ControlClient
 
-    status = ControlClient(run).status()
+    try:
+        status = ControlClient(run).status()
+    except (OSError, ValueError, RuntimeError, EOFError, KeyError) as exc:
+        return [('VR', Status(f'状态读取失败：{exc}', 'error'))], hints
     ingress = status.get('ingresses', {}).get('native')
     if ingress is None:
-        rows.append(('跟踪状态', '等待原生 Quest 通道状态'))
+        rows.append(('VR', Status('等待原生 Quest 通道状态', 'waiting')))
     else:
-        rows += [('跟踪 / 通道', '就绪' if ingress.get('ready') else '等待有效跟踪'),
-                 ('操作激活', '已激活' if ingress.get('armed') else '待机'),
-                 ('滤波许可', '有效' if ingress.get('permit') else '等待许可')]
+        rows += [('VR', Status('跟踪 / 通道就绪' if ingress.get('ready') else '等待有效跟踪',
+                              'ready' if ingress.get('ready') else 'waiting')),
+                 ('操作激活', Status('已激活' if ingress.get('armed') else '待机',
+                                  'ready' if ingress.get('armed') else 'waiting')),
+                 ('滤波许可', Status('有效' if ingress.get('permit') else '等待许可',
+                                  'ready' if ingress.get('permit') else 'waiting'))]
         if ingress.get('reason'):
-            rows.append(('等待原因', str(ingress['reason'])))
+            rows.append(('等待原因', Status(str(ingress['reason']), 'waiting')))
+    rows.append(('运行目录', bench.relative(run)))
     return rows, hints
 
 
@@ -190,7 +199,8 @@ def snapshot(role):
         if role == 'kernel':
             rows, hints = kernel_rows()
         elif role == 'vr':
-            rows, hints = vr_rows()
+            from embodied.applications.workstation import bench
+            rows, hints = vr_rows(bench.current_run())
         elif role == 'camera':
             rows, hints = camera_rows()
         else:
@@ -199,7 +209,7 @@ def snapshot(role):
             hints = ['启动命令：' + ' '.join(service_command(role))]
         return TITLES[role], rows, hints
     except (OSError, ValueError, RuntimeError, KeyError, EOFError) as exc:
-        return TITLES[role], [('状态', f'等待就绪：{exc}')], ['窗口保持打开；修复连接或配置后按 R 刷新。']
+        return TITLES[role], [('状态', Status(f'状态读取失败：{exc}', 'error'))], ['窗口保持打开；修复连接或配置后按 R 刷新。']
 
 
 class Service:
@@ -345,8 +355,10 @@ def render(state, service=None):
     table.add_column(style='dim', no_wrap=True)
     table.add_column(ratio=1)
     for label, value in rows:
-        table.add_row(Text(label), Text(str(value)))
-    sections = [Panel(table, title=title, border_style='#b7a1e8'),
+        table.add_row(Text(label), status_text(value))
+    states = [value for _, value in rows if isinstance(value, Status)]
+    primary = next((value for value in states if value.level == 'error'), states[0] if states else None)
+    sections = [Panel(table, title=title, border_style=primary.style if primary else '#b7a1e8'),
                 Panel(Group(*(Text(line) for line in hints)), title='下一步', border_style='dim')]
     if service is not None:
         logs = service.logs()

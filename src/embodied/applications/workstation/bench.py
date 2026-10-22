@@ -22,6 +22,7 @@ import sys
 import time
 
 from embodied.core.project import PROJECT_ROOT as ROOT
+from embodied.applications.workstation.status import Status, status_text
 
 DEFAULT_SESSION = 'emb'
 LEGACY_SESSION = 'embodied-' + hashlib.sha256(str(ROOT).encode()).hexdigest()[:8]
@@ -29,7 +30,7 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': '内核', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 内核 · 4 网页 · 5 VR · 6 相机 · 7 宣传'
-UI_REVISION = '4'
+UI_REVISION = '5'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
 KERNELS = [  # key, label, command typed into the kernel window, real arm
@@ -365,15 +366,18 @@ def kernel_summary(run, identity):
         try:
             from embodied.contracts.runtime.control import ControlClient
             status = ControlClient(run).status()
-        except (OSError, ValueError, RuntimeError, EOFError) as exc:
-            lines.append(f'状态读取失败：{exc}')
+        except (OSError, ValueError, RuntimeError, EOFError, KeyError) as exc:
+            lines.append(Status(f'状态读取失败：{exc}', 'error'))
         else:
             import math
             owner = (status['owner'] or {}).get('source', '无')
             q = ' '.join(f'{math.degrees(v):6.1f}' for v in status['q'])
-            lines += [f'控制权 {owner} · 阶段 {status["phase"]}' + (' · 已 stop 锁存' if status['stopped'] else ''),
+            lines += [Status(f'{mode}反馈已收到 · 控制权 {owner} · 阶段 {status["phase"]}'
+                             + (' · 已停止（stop 锁存）' if status['stopped'] else ''),
+                             'waiting' if status['stopped'] else 'ready'),
                       f'关节 ° {q} · 夹爪 {1000 * status["gripper_width"]:.1f} mm']
     else:
+        lines.append(Status(f'{mode}内核已启动 · 反馈待确认（无命令网关）', 'waiting'))
         lines.append('关节状态见 MuJoCo 视图（V）或遥测（O）')
     return lines
 
@@ -443,7 +447,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
     menu.add_column(style='bold color(215)', width=2)
     menu.add_column(ratio=1)
     if found is None:
-        status.add_row(Text('待机 · 没有运行中的内核', style='yellow'))
+        status.add_row(status_text(Status('机械臂 · 等待启动 / 尚未收到反馈', 'waiting')))
         status.add_row(Text('真机测试按 3，仿真按 5；启动后 Ctrl+B → 1 返回总控。', style='dim'))
         status.add_row(Text('网页已随工作台启动；内核就绪后自动连接。', style='dim'))
         for real, section in ((False, '仿真'), (True, '真机')):
@@ -457,7 +461,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
     else:
         run, identity = found
         for line in kernel_summary(run, identity):
-            status.add_row(Text(line, style='green'))
+            status.add_row(status_text(line))
         rows = actions(run, identity, episode)
         for section, keys in (('观察', 'wmvo'), ('测试', 'bxt'), ('数据', 'cke'), ('进阶', 'hjg')):
             first = True
@@ -470,6 +474,10 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
                              Text(label + note, style=None if usable else 'dim'))
                 first = False
         menu.add_row('停止', 'S', Text('连按两次停止内核；真机进入阻尼，请先扶住', style='yellow'))
+    from embodied.applications.workstation.bench_panels import vr_rows
+    vr, _ = vr_rows(found)
+    label, value = vr[0]
+    status.add_row(Text.assemble(f'{label} · ', status_text(value)))
     try:
         from embodied.core.project import load_config
         from embodied.applications.workstation.ports import summary
@@ -599,7 +607,7 @@ def main(argv=None):
     elif args.action == 'status':
         found = current_run()
         print(f'工作台：{"运行中" if exists() else "未运行"}（tmux 会话 {SESSION}）')
-        print('\n'.join(kernel_summary(*found)) if found else '没有运行中的内核。')
+        print('\n'.join(map(str, kernel_summary(*found))) if found else '没有运行中的内核。')
     else:
         start(attach=not args.detach)
     return 0
