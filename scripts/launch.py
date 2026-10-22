@@ -45,6 +45,7 @@ MAINTENANCE_COMMANDS = {
     "check-dependencies": "setup/dependencies.py",
     "fetch-dependencies": "setup/dependencies.py",
     "rebuild-xr-sdk": "setup/rebuild_xr_sdk.py",
+    "build-quest-client": "setup/build_quest_client.py",
     "check-camera": "diagnostics/check_camera.py",
 }
 MODULE_COMMANDS = {

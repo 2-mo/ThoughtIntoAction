@@ -63,6 +63,7 @@ class BenchStateTests(unittest.TestCase):
              patch.object(bench, 'latest_episode', return_value=None), \
              patch.object(bench, 'dashboard_view') as view, \
              patch('rich.live.Live'), \
+             patch('embodied.applications.workstation.bench_panels.VRConnection'), \
              patch.object(bench, 'type_command', return_value='重启命令已提交') as command, \
              patch.object(bench, 'start_kernel') as start:
             bench.dashboard()

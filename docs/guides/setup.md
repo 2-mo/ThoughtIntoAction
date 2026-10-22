@@ -55,12 +55,15 @@ uv sync --locked --group sdk-build
 
 ## Quest 和 CAN
 
-Quest 安装 XRoboToolkit APK；主机安装匹配的 PC Service DEB。安装包目录由 `paths.installer_dir` 记录。连接 USB 并允许 ADB 调试：
+Quest 安装 XRoboToolkit APK；主机安装匹配的 PC Service DEB。安装包目录由 `paths.installer_dir` 记录。首次连接 USB 时，在头显内允许 ADB 调试并勾选“始终允许这台电脑”，此授权不能由电脑代替。
+
+日常执行 `./run.sh` 即可，头显可以之后再开机。VR 窗口会等待 USB 授权和 Android 开机，自动准备主机接收服务、端口转发并打开客户端；拔插后继续检查，失败按 2–30 秒退避重试，按 `R` 立即重试。窗口分别显示各段状态，后台检查不阻塞总控。官方客户端首次连接仍需输入 `127.0.0.1` 并点击 Connect；要免输入、免点击和持续自动重连，需构建安装[自动连接版客户端](quest-client.md)。工作台复用已运行的客户端；安装新版本后先退出旧客户端，避免同时连接。
+
+独立诊断与准备命令：
 
 ```bash
-adb devices -l
-./run.sh setup-quest-usb
-./run.sh start-xr-service
+./run.sh quest usb status --json        # 只读状态，包括未授权、开机中与连接情况
+./run.sh quest usb prepare --launch-client  # 复用接收服务、配置转发、打开客户端
 ```
 
 Quest 的 XRoboToolkit server IP 设为 `127.0.0.1`。`./scripts/shortcuts/启动遥操.sh` 默认先配置 USB reverse，随后自动执行 `quest-wake start`，唤醒头显、发送模拟佩戴信号并打开 XRoboToolkit 应用，再启动遥操。也可单独使用 `./run.sh quest-wake start`，结束使用 `./run.sh quest-wake stop`。唤醒命令返回不代表 XR 数据已连接；控制端会等待新帧。
@@ -90,7 +93,7 @@ CAN 路径在 `robot.can_device` 配置。已有接口保持原状态；接口�
 真机服务初始化 SDK 时会使能并进入阻尼；监看和 `check-arm` 只读服务，不初始化 SDK。`check-arm --virtual` 读取虚拟服务。服务配置集中在 `[arm_service]`，RPC socket 为 `outputs/runtime/arm.sock`，状态流由 `[telemetry]` 指定。控制端关闭后服务继续反馈，失联控制权会在 0.5 秒后撤销。详细运行边界见 [机械臂服务与监看](monitoring.md)。
 
 
-日常遥操默认使用 USB：启动脚本用 Rich 展示设备、63901 转发和实际 XR TCP 连接状态；唤醒后最多等待 15 秒确认 USB 连接，再启动机械臂控制端。若仍发现 Wi-Fi 连接或没有 USB 数据连接，会保持未启动/暂停状态，提示在 Quest 客户端设置 `127.0.0.1` 并 Connect，再按 `w` 重试。程序不能通过现有接口替 Quest 修改客户端服务器地址，该设置首次需在头显内完成。不会自动回退 Wi-Fi。
+旧遥操快捷脚本默认使用 USB：启动脚本用 Rich 展示设备、63901 转发和实际 XR TCP 连接状态；唤醒后最多等待 15 秒确认 USB 连接，再启动机械臂控制端。若仍发现 Wi-Fi 连接或没有 USB 数据连接，会保持未启动/暂停状态，提示在 Quest 客户端设置 `127.0.0.1` 并 Connect，再按 `w` 重试。官方 APK 没有远程填写地址入口；新自动连接版的构建与安装见上文。不会自动回退 Wi-Fi。
 
 `p` 会刷新连接方式提示，也可单独执行 `./run.sh quest-transport status`（只读）。`./run.sh setup-quest-usb` 仍可单独配置 USB 转发。Rich 依赖由 uv 管理；`--help` 不触发设备操作。本次实现没有重连正在运行的真机。
 

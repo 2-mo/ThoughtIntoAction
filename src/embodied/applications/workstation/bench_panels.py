@@ -3,14 +3,17 @@
     python -m embodied.applications.workstation.bench_panels kernel
     python -m embodied.applications.workstation.bench_panels web --serve
 
-Interactive --serve starts web/site children or ensures the independent camera
-service. No panel connects the arm. Noninteractive invocations stay read-only.
+Interactive --serve starts web/site children, ensures the independent camera
+service, or prepares the Quest USB transport. No panel connects the arm.
+Noninteractive invocations stay read-only.
 """
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import ipaddress
+import json
 import math
 import os
 from pathlib import Path
@@ -19,6 +22,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 
 from embodied.core.project import PROJECT_ROOT as ROOT, load_config, port, resolve_path
@@ -117,25 +121,192 @@ def kernel_rows():
             ('配置', f'{can_port} · {device}')], hints
 
 
-def vr_rows(found):
+def transport_command(arguments, *, timeout, stop=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
+    """Cancel only this CLI and its ADB children; the shared XR service is detached."""
+    with subprocess.Popen(arguments, stdout=stdout, stderr=stderr, text=True, start_new_session=True) as child:
+        deadline = time.monotonic() + timeout
+        try:
+            while True:
+                if stop is not None and stop.is_set():
+                    raise InterruptedError('窗口已关闭')
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(arguments, timeout)
+                try:
+                    output, error = child.communicate(timeout=min(.2, remaining))
+                    return subprocess.CompletedProcess(arguments, child.returncode, output, error)
+                except subprocess.TimeoutExpired:
+                    continue
+        finally:
+            if child.returncode is None:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                child.communicate()
+
+
+def vr_transport_status(stop=None):
+    """Read transport evidence through the existing CLI, without opening any SDK."""
+    try:
+        result = transport_command([str(ROOT / 'run.sh'), 'quest', 'usb', 'status', '--json'], timeout=3, stop=stop)
+        state = json.loads(result.stdout)
+        if not isinstance(state, dict):
+            raise ValueError('连接状态不是对象')
+        return state
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        return {'error': str(exc)}
+
+
+def prepare_vr(stop=None):
+    """Prepare only the shared PC receiver and USB tunnel; never attach to robot."""
+    logs = ROOT / 'outputs/logs/bench'
+    path = logs / 'quest-transport.log'
+    try:
+        logs.mkdir(parents=True, exist_ok=True)
+        with path.open('a') as output:
+            result = transport_command([str(ROOT / 'run.sh'), 'quest', 'usb', 'prepare', '--launch-client'],
+                                       stdout=output, stderr=output, timeout=25, stop=stop)
+        if result.returncode:
+            return Status(f'等待连接条件就绪；详情：{path.relative_to(ROOT)}', 'waiting')
+        return Status('USB 转发与客户端已准备；等待头显连接。', 'ready')
+    except (OSError, subprocess.SubprocessError) as exc:
+        return Status(f'连接准备失败：{exc}；详情：{path.relative_to(ROOT)}', 'error')
+
+
+class VRConnection:
+    """One background job keeps slow ADB calls out of terminal input handling."""
+
+    def __init__(self, *, auto_prepare=False):
+        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='quest-transport')
+        self.stop = threading.Event()
+        self.future = None
+        self.preparing = False
+        self.auto_prepare = auto_prepare
+        self.retry = False
+        self.attempt = None
+        self.state = {'checking': True}
+        self.message = None
+        self.checked_at = 0.
+        self.retry_at = 0.
+        self.backoff = 2.
+
+    def snapshot(self):
+        if self.future is not None:
+            if not self.future.done():
+                return self.state
+            result = self.future.result()
+            self.future = None
+            if self.preparing:
+                self.message = result
+                self.state = {'checking': True}
+                self.checked_at = 0.
+                self.preparing = False
+                self.retry_at = time.monotonic() + self.backoff
+                self.backoff = min(self.backoff * 2, 30.)
+            else:
+                self.state = result
+                self.checked_at = time.monotonic()
+        state = self.state
+        need_prepare = (not state.get('receiver_listening') or
+                        (state.get('usb_status') == 'ready' and state.get('boot_completed') and
+                         (not state.get('reverse_configured') or not state.get('client_running'))))
+        attempt = (state.get('receiver_listening'), state.get('usb_status'), state.get('usb_serial'),
+                   state.get('boot_completed'), state.get('client_running'))
+        known = not state.get('checking') and not state.get('error')
+        if known and (not need_prepare or attempt != self.attempt):
+            self.message = None
+        if known and not need_prepare:
+            self.attempt = None
+            self.backoff = 2.
+        if self.retry or (self.auto_prepare and known and need_prepare and
+                          (attempt != self.attempt or time.monotonic() >= self.retry_at)):
+            self.retry = False
+            self.attempt = attempt
+            self.preparing = True
+            self.message = Status('正在准备主机接收与 USB 转发…', 'waiting')
+            self.future = self.executor.submit(prepare_vr, self.stop)
+        elif time.monotonic() - self.checked_at >= 1:
+            self.future = self.executor.submit(vr_transport_status, self.stop)
+        return self.state
+
+    def close(self):
+        self.stop.set()
+        self.executor.shutdown(wait=False, cancel_futures=True)
+
+
+def vr_rows(found, transport=None):
+    state = vr_transport_status() if transport is None else transport
+    labels = {'ready': 'USB 已识别并授权', 'missing': 'USB 未检测到 Quest',
+              'unauthorized': '等待头显内允许 USB 调试', 'offline': 'ADB 设备离线，等待重新连接',
+              'multiple': '发现多个 USB 设备，请只连接一台 Quest'}
+    usb = state.get('usb_status', 'missing')
+    connected = state.get('usb_connected', False)
+    if state.get('checking'):
+        summary = Status('正在检查 USB 与头显连接…', 'waiting')
+    elif state.get('error'):
+        summary = Status('连接检查失败：' + state['error'], 'error')
+    elif usb != 'ready':
+        summary = Status(labels.get(usb, usb), 'waiting')
+    elif not state.get('boot_completed'):
+        summary = Status('USB 已授权，等待 Quest 开机完成', 'waiting')
+    elif not state.get('receiver_listening'):
+        summary = Status('主机 XR 接收服务未运行', 'waiting')
+    elif not state.get('reverse_configured'):
+        summary = Status('USB 已识别，等待建立转发', 'waiting')
+    elif not state.get('client_running'):
+        summary = Status('USB 转发就绪，等待客户端启动', 'waiting')
+    elif not connected:
+        summary = Status('客户端正在自动连接' if state.get('client_package') == 'com.thoughtintoaction.quest'
+                         else 'USB 转发就绪，等待头显 Connect', 'waiting')
+    else:
+        summary = Status('USB 通信已连接；跟踪状态见下方', 'waiting')
+    control, hints = vr_control_rows(found)
+    if state.get('checking'):
+        return [('VR', summary), *control], ['正在后台检查连接，终端按键仍可使用。', *hints]
+    client_label = ('待 USB 连接 / 授权后检查' if usb != 'ready' else '运行中' if state.get('client_running')
+                    else '等待 Quest 开机' if not state.get('boot_completed') else '尚未运行')
+    if state.get('client_package'):
+        client_label += ' · ' + ('自动连接版' if state['client_package'] == 'com.thoughtintoaction.quest' else '官方版')
+    rows = [('VR', summary),
+            ('主机接收', Status('在线 · TCP 63901' if state.get('receiver_listening') else '尚未监听 TCP 63901',
+                              'ready' if state.get('receiver_listening') else 'waiting')),
+            ('USB 设备', Status(labels.get(usb, usb), 'ready' if usb == 'ready' else 'waiting')),
+            ('USB 转发', Status('已配置' if state.get('reverse_configured') else '尚未配置',
+                              'ready' if state.get('reverse_configured') else 'waiting')),
+            ('客户端', Status(client_label,
+                            'ready' if state.get('client_running') else 'waiting')),
+            ('头显连接', Status('USB TCP 已连接' if connected else '网络 TCP 连接，尚未确认 USB' if state.get('peers') else '未连接',
+                              'ready' if connected else 'waiting'))]
+    if not state.get('error') and connected and control[0][1].level == 'ready':
+        rows[0] = ('VR', Status('USB 已连接 · 跟踪就绪', 'ready'))
+    rows.extend(control)
+    client_hint = ('自动连接版客户端：USB 地址 127.0.0.1，连接失败会自动重试。'
+                   if state.get('client_package') == 'com.thoughtintoaction.quest' else
+                   '官方旧版客户端需在头显填 127.0.0.1 并 Connect；免点击需要安装自动连接版 APK。')
+    return rows, [client_hint,
+                  '可先开工作台再开头显；授权并开机完成后自动准备转发、打开客户端。',
+                  '首次请在头显允许 USB 调试并勾选“始终允许”；按 R 重试。',
+                  'TCP 已连接不等于追踪有效，也不会自动取得机械臂控制权。', *hints]
+
+
+def vr_control_rows(found):
     from embodied.applications.workstation import bench
 
-    hints = ['启动头显并连接 USB，在头显内允许 USB 调试。',
-             '检查连接：./run.sh quest usb status；准备连接：./run.sh quest usb prepare',
-             '在总控选择带 Quest 的配置后，跟踪状态会自动更新。']
+    hints = ['在总控选择带 Quest 的配置后，跟踪状态会自动更新。']
     if not found:
-        return [('VR', Status('等待头显连接及 Quest 内核配置', 'waiting')), ('内核', '尚未运行')], hints
+        return [('遥操接入', Status('robot 尚未运行', 'disabled'))], hints
     run, identity = found
     native = identity.get('native') or {}
     quest = identity.get('input') in ('vr', 'quest') or 'quest' in str(native.get('device', '')).lower()
     rows = []
     if not quest:
-        rows += [('VR', Status('当前内核配置未启用 Quest', 'disabled')),
+        rows += [('遥操接入', Status('当前 robot 为手动模式，未接入 Quest', 'disabled')),
                  ('运行目录', bench.relative(run)), ('VR 窗口', '保持待机；不会切换或重启现有内核')]
         return rows, ['需要遥操时，在总控选择带 Quest 的配置。',
                       '先按当前内核的退出提示处理设备，再切换配置。']
     if not (Path(run) / 'commands.sock').exists():
-        rows += [('VR', Status('已配置 · 跟踪待确认（无命令网关）', 'waiting')),
+        rows += [('遥操接入', Status('已配置 · 跟踪待确认（无命令网关）', 'waiting')),
                  ('跟踪状态', '请查看内核日志或遥测'), ('运行目录', bench.relative(run))]
         return rows, hints
     from embodied.contracts.runtime.control import ControlClient
@@ -143,12 +314,12 @@ def vr_rows(found):
     try:
         status = ControlClient(run).status()
     except (OSError, ValueError, RuntimeError, EOFError, KeyError) as exc:
-        return [('VR', Status(f'状态读取失败：{exc}', 'error'))], hints
+        return [('遥操接入', Status(f'状态读取失败：{exc}', 'error'))], hints
     ingress = status.get('ingresses', {}).get('native')
     if ingress is None:
-        rows.append(('VR', Status('等待原生 Quest 通道状态', 'waiting')))
+        rows.append(('遥操接入', Status('等待原生 Quest 通道状态', 'waiting')))
     else:
-        rows += [('VR', Status('跟踪 / 通道就绪' if ingress.get('ready') else '等待有效跟踪',
+        rows += [('遥操接入', Status('跟踪 / 通道就绪' if ingress.get('ready') else '等待有效跟踪',
                               'ready' if ingress.get('ready') else 'waiting')),
                  ('操作激活', Status('已激活' if ingress.get('armed') else '待机',
                                   'ready' if ingress.get('armed') else 'waiting')),
@@ -399,7 +570,7 @@ def render(state, service=None):
             sections.append(Panel(Group(*(Text(line, overflow='fold') for line in logs)),
                                   title='最近日志', border_style='dim'))
     sections.append(Text('Ctrl+B → 1 返回总控 · Ctrl+B → D 离开工作台 · R ' +
-                         ('重试 / 刷新' if service is not None else '刷新') +
+                         ('连接 / 刷新' if title == TITLES['vr'] else '重试 / 刷新' if service is not None else '刷新') +
                          (' · W 打开浏览器' if service is not None and service.role == 'web' else ''), style='dim'))
     return Group(*sections)
 
@@ -420,7 +591,7 @@ def mark_waiting(role):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('role', choices=TITLES)
-    parser.add_argument('--serve', action='store_true', help='web/site/camera: start once; press R to retry after a failure')
+    parser.add_argument('--serve', action='store_true', help='Prepare web/site/camera or VR transport; press R to retry')
     args = parser.parse_args(argv)
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         title, rows, hints = snapshot(args.role)
@@ -433,6 +604,7 @@ def main(argv=None):
     mark_waiting(args.role)
     service = Service(args.role) if args.serve and args.role in (*SERVICE_COMMANDS, 'camera') else None
     stopping = False
+    vr = VRConnection(auto_prepare=args.serve) if args.role == 'vr' else None
 
     def stop_requested(*_):
         nonlocal stopping
@@ -448,7 +620,16 @@ def main(argv=None):
                 if time.monotonic() - refreshed >= 1:
                     if service is not None:
                         service.open_when_ready()
-                    live.update(render(service.snapshot() if service else snapshot(args.role), service), refresh=True)
+                    if vr is not None:
+                        transport = vr.snapshot()
+                        from embodied.applications.workstation import bench
+                        rows, hints = vr_rows(bench.current_run(), transport)
+                        if vr.message is not None:
+                            rows.append(('连接准备', vr.message))
+                        state = (TITLES['vr'], rows, hints)
+                    else:
+                        state = service.snapshot() if service else snapshot(args.role)
+                    live.update(render(state, service), refresh=True)
                     refreshed = time.monotonic()
                 key = read_key(.2)
                 if key in ('eof', '\x03', '\x04'):
@@ -456,11 +637,15 @@ def main(argv=None):
                 if key == 'r':
                     if service is not None:
                         service.start()
+                    elif vr is not None and args.serve:
+                        vr.retry = not vr.preparing
                     refreshed = 0.
                 if key == 'w' and args.role == 'web' and service is not None:
                     service.browser_message = open_browser()
                     refreshed = 0.
     finally:
+        if vr is not None:
+            vr.close()
         if service is not None:
             service.stop()
         for sig, handler in previous.items():
