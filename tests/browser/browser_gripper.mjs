@@ -3,9 +3,9 @@
 import assert from 'node:assert/strict';
 import {readFile, mkdir} from 'node:fs/promises';
 import {spawn} from 'node:child_process';
-import {chromium} from '../../.cache/viewer-validation/node_modules/playwright/index.mjs';
+import {chromium} from '../../apps/console/node_modules/playwright/index.mjs';
 
-const server = spawn('.venv/bin/python', ['-u', '-B', '-c', `from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
+const server = spawn(process.env.SCENE_TEST_PYTHON || '.venv/bin/python', ['-u', '-B', '-c', `from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.applications.monitor.scene import Scene
 import threading
 scene = Scene(X5PinocchioModel())
@@ -29,9 +29,12 @@ try {
   let live = {...structuredClone(model.reference), gripper:{actual:0, target:0, max:.082},
     stream:{status:'live', age_s:0, sequence:1, stream_id:'fixture', source:{kind:'virtual'}}};
   let replay = null;
-  browser = await chromium.launch({headless:true, env:{...process.env, DISPLAY:'', LD_LIBRARY_PATH:''},
+  browser = await chromium.launch({executablePath:process.env.SCENE_TEST_BROWSER || undefined,
+    headless:true, env:{...process.env, DISPLAY:'', LD_LIBRARY_PATH:''},
     args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-gpu-sandbox']});
   const page = await browser.newPage({viewport:{width:1920,height:1080}});
+  // Match HTTP access through a LAN IP, where crypto.subtle is unavailable.
+  await page.addInitScript(() => Object.defineProperty(window.crypto, 'subtle', {value:undefined}));
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   const source = await readFile(new URL('../../src/embodied/applications/monitor/web/scene.js', import.meta.url), 'utf8');
@@ -43,6 +46,7 @@ try {
   await page.route('**/api/sensors', route => route.fulfill({json:{}}));
   await page.route('**/api/replay*', route => route.fulfill({json:{replay, episodes:[]}}));
   await page.goto(url);
+  assert.equal(await page.evaluate(() => typeof crypto.subtle), 'undefined');
   await page.waitForSelector('body[data-ready="true"]', {timeout:15000});
   await page.waitForFunction(i => window.rigTest?.actualMeshes[i]?.userData.gripperOpening === 0, index);
   const total = await page.evaluate(i => {
@@ -123,12 +127,11 @@ try {
     const {STLLoader} = await import('three/addons/loaders/STLLoader.js');
     const bytes = await (await fetch(url)).arrayBuffer();
     const geometry = new STLLoader().parse(bytes);
-    new Uint8Array(bytes)[0] ^= 1;
-    return await splitGripperGeometry(bytes, geometry, [1,1,1]) === null;
+    return [null, '0'.repeat(64)].every(digest => splitGripperGeometry(digest, geometry, [1,1,1]) === null);
   }, model.meshes[index].url);
-  assert.equal(foreignMesh, true, 'Unrecognized meshes must not inherit the split');
+  assert.equal(foreignMesh, true, 'Missing or unrecognized mesh hashes must not inherit the split');
   assert.deepEqual(errors, []);
-  console.log('PASS: original geometry, 0/41/82 mm gaps, wrist rotation, target ghost, replay and missing feedback.');
+  console.log('PASS: HTTP without WebCrypto, original geometry, 0/41/82 mm gaps, wrist rotation, target ghost, replay, missing feedback and unknown hashes.');
 } finally {
   await browser?.close();
   server.kill('SIGTERM');

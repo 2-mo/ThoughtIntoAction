@@ -3,6 +3,7 @@
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ipaddress import IPv4Address
+import hashlib
 import json
 import mimetypes
 from pathlib import Path
@@ -122,6 +123,7 @@ class Scene:
             def respond(self, body):
                 path = urlsplit(self.path).path
                 status = 200
+                mesh_digest = None
                 if path == '/api/simulation':
                     content = json.dumps(owner.simulation.status() if owner.simulation else {}).encode()
                     mime = 'application/json'
@@ -204,6 +206,8 @@ class Scene:
                     try:
                         content = file.read_bytes()
                         mime = mimetypes.guess_type(file.name)[0] or "application/octet-stream"
+                        if path.startswith('/meshes/'):
+                            mesh_digest = hashlib.sha256(content).hexdigest()
                     except OSError as exc:
                         status = 404 if isinstance(exc, FileNotFoundError) else 503
                         content = json.dumps({'error': '模型或页面资源不可用；检查资源文件，更新后请重启网页监看服务。',
@@ -216,6 +220,8 @@ class Scene:
                     self.send_response(status)
                     self.send_header("Content-Type", mime)
                     self.send_header("Content-Length", str(len(content)))
+                    if mesh_digest is not None:
+                        self.send_header("X-Content-SHA256", mesh_digest)
                     # Reloads must never show an old viewer or a cached robot state.
                     self.send_header("Cache-Control", "no-store")
                     self.send_header("X-Content-Type-Options", "nosniff")
