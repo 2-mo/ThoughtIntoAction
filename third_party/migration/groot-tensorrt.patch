@@ -1,9 +1,6 @@
 --- a/pyproject.toml
 +++ b/pyproject.toml
-@@ -52,13 +52,15 @@
-     "onnx>=1.20.0",
-     "onnxscript",
-     # cu12 wheels only exist for x86_64; Blackwell / aarch64 requires cu13.
+@@ -55,10 +55,12 @@
 +]
 +
 +[project.optional-dependencies]

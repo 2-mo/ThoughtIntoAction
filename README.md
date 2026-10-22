@@ -90,6 +90,8 @@ outputs/          数据、运行记录、安装环境、依赖工作区与构�
 
 本机采集数据、标定结果和原始归档集中在 `outputs/{datasets,calibrations,archives}/`。原 `environments/` 移到 [configs/environments/](configs/environments/README.md)，原 `integrations/openpi/` 移到 `scripts/training/openpi/`，历史 rebot 示例在 `docs/examples/`；统一内核教学示例在 `src/examples/`。依赖版本仍由根目录 `pyproject.toml`、`uv.lock` 和 `dependencies.lock.toml` 管理。
 
+提交约定：文档、网页、代码示例、报告、日志、截图及提交说明均不包含本机显卡的具体型号、硬件架构、UUID、序列号、驱动信息或显存统计。软件依赖与运行参数按需记录；原始诊断和实验输出放在 Git 忽略的 `outputs/` 下，分享前检查并去除硬件信息。
+
 ## 手柄
 
 右手柄按 arx-televr 上游：A 按住至少 150 ms 后松开切换模式（首次进入跟随，之后在 FreeDrive 与跟随间切换），A+B 回 Home，Grip 跟随，Trigger 控制夹爪。左手柄负责采集：X 录制 / 保存，Y 预抓取（长按作废当前录制），左摇杆管理任务，左 Grip 取消预设动作。以上为仿真工作台的按键；真机日常链路的按键见 [日常操作](docs/guides/operation.md)。

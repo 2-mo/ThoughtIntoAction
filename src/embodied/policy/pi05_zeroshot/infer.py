@@ -153,7 +153,6 @@ def main():
     report = {'model': str(args.model.resolve()), 'prompt': args.prompt, 'seed': args.seed,
               'device': args.device, 'dtype': args.dtype, 'inference_steps': args.steps,
               'torch_version': torch.__version__, 'cuda_version': torch.version.cuda,
-              'gpu': torch.cuda.get_device_name() if args.device == 'cuda' else None,
               'lerobot_revision': 'b6ec0060779550c0a157ae34feb89e0cf86012a8',
               'tokenizer': str(tokenizer_path.resolve()),
               'state_mode': args.state_mode, 'gripper_width_m': width,
@@ -161,8 +160,6 @@ def main():
               'interpretation': 'Raw model-space actions, not X5 commands. No task success measured. '
                                 'Joint-limit scaling is a heuristic, not pretrained normalization.',
               'samples': []}
-    if args.device == 'cuda':
-        torch.cuda.reset_peak_memory_stats()
     for number, ((rgb, state, provenance), (normalized, clipped)) in enumerate(zip(observations, prepared)):
         # Omit absent camera keys: PI05 creates explicitly masked placeholders.
         tokens, mask = tokenize(tokenizer, args.prompt, normalized, policy.config.tokenizer_max_length)
@@ -194,8 +191,6 @@ def main():
                   'first_action_first7_unverified': action[0, :7].tolist()}
         report['samples'].append(result)
         print(json.dumps(result, ensure_ascii=False), flush=True)
-    if args.device == 'cuda':
-        report['peak_gpu_allocated_gib'] = torch.cuda.max_memory_allocated() / 2**30
     (output / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
     print(f'Results: {output.resolve()}', flush=True)
 

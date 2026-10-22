@@ -1,4 +1,4 @@
-# Install CUDA 12.8 wheels via setup.sh for RTX 5090 (sm_120).
+# Install CUDA 12.8 wheels via setup.sh.
 torch==2.7.1+cu128
 torchvision==0.22.1+cu128
 lerobot[pi] @ https://github.com/huggingface/lerobot/archive/b6ec0060779550c0a157ae34feb89e0cf86012a8.tar.gz
