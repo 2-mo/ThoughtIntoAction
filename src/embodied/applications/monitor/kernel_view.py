@@ -12,7 +12,9 @@ from embodied.core.project import PROJECT_ROOT, load_config, resolve_path
 from embodied.core.telemetry import SCHEMA
 from embodied.applications.monitor.quality import MotionQuality
 
-KERNEL_URDF = PROJECT_ROOT / 'assets/robots/x5/runtime/x5_2025.urdf'
+from embodied.applications.monitor.capture_status import capture_snapshot
+from embodied.applications.monitor.model import RuntimeModel
+from embodied.data.episode.contract import runtime_contract
 
 
 def discover_run(directory=None):
@@ -34,13 +36,15 @@ def discover_run(directory=None):
     return None
 
 
-def kernel_packet(robot, tick, identity, robot_config=None):
+def kernel_packet(robot, tick, identity, robot_config=None, data_contract=None):
     """Keep measured feedback, submitted targets and SDK output distinct."""
     feedback = tick['feedback']
     command, output = tick.get('command') or {}, tick.get('sdk_output') or {}
-    width = (robot_config or {}).get('gripper_max_width', .082)
-    if not isinstance(width, (int, float)) or not math.isfinite(width) or width <= 0:
-        width = .082
+    gripper = data_contract.get('gripper') if data_contract else None
+    width = gripper['range'][1] if gripper else (robot_config or {}).get('gripper_max_width')
+    if type(width) not in (int, float) or not math.isfinite(width) or width <= 0:
+        width = None
+    has_gripper = data_contract is None or gripper is not None
     return {
         'schema': SCHEMA, 'robot': robot.metadata(), 'stream_id': tick['runtime_id'],
         'sequence': tick['sequence'] + 1,
@@ -51,7 +55,7 @@ def kernel_packet(robot, tick, identity, robot_config=None):
         'actual_vel': feedback.get('dq'), 'target_vel': command.get('dq'),
         'sample_monotonic_ns': tick['timing']['feedback_received_ns'],
         'emitted_monotonic_ns': time.monotonic_ns(), 'paths': {},
-        'gripper': {'actual': feedback['gripper_width'], 'target': command.get('gripper_width'), 'max': width},
+        'gripper': {'actual': feedback.get('gripper_width'), 'target': command.get('gripper_width'), 'max': width} if has_gripper else None,
         'actual_torque': None, 'gripper_actual_torque': None,
         'command_details': {
             'submission': {'pos': command.get('q'), 'gripper_pos': command.get('gripper_width')},
@@ -65,12 +69,7 @@ def kernel_packet(robot, tick, identity, robot_config=None):
 
 
 def collection_snapshot(identity, roots):
-    """Report committed metadata, never infer live recording from a stale manifest.
-
-    episode.json is written at creation and close, not updated while recording.
-    A recording manifest can survive a crash, so neither activity nor counts can
-    safely be inferred until it is explicitly finalized.
-    """
+    """Use verified heartbeats for activity and finalized manifests for completion."""
     result = {'collection': {'state': '待机', 'task': '未发现当前内核的采集记录'},
               'collection_count': 0, 'recording': None,
               'collection_hint': '在总控按 C，或运行 ./run.sh collect run --run <RUN> --task <任务>。'}
@@ -94,11 +93,27 @@ def collection_snapshot(identity, roots):
     result['collection_count'] = sum(row[2].get('lifecycle') == 'complete' for row in records)
     if not records:
         return result
-    _, path, latest = max(records, key=lambda row: row[0])
+    live = []
+    for record in records:
+        heartbeat = capture_snapshot(record[1].parent, identity, record[2])
+        if heartbeat and (heartbeat.get('recording') or {}).get('live'):
+            live.append((*record, heartbeat))
+    # A later, short recording can finish while an earlier collector is still active.
+    # Prefer verified live captures; never promote an old recording manifest alone.
+    if live:
+        _, path, latest, heartbeat = max(live, key=lambda row: row[0])
+    else:
+        _, path, latest = max(records, key=lambda row: row[0])
+        heartbeat = capture_snapshot(path.parent, identity, latest)
     lifecycle = latest.get('lifecycle')
     result['collection']['task'] = str(latest.get('task') or '未命名任务')
+    # Historic writer format reserves `frame` for wrist_rgb, regardless of the anchor.
+    counts = latest.get('counts') or {}
+    cameras = latest.get('cameras') or ({'wrist_rgb': latest['camera']} if latest.get('camera') else {})
     result['episode_metadata'] = {'id': latest.get('id', path.parent.name), 'path': str(path),
-                                  'lifecycle': lifecycle, 'counts': latest.get('counts') if lifecycle != 'recording' else None}
+                                  'lifecycle': lifecycle, 'counts': latest.get('counts') if lifecycle != 'recording' else None,
+                                  'camera_counts': {key: counts.get('frame:' + key,
+                                      counts.get('frame') if key == 'wrist_rgb' else None) for key in cameras}}
     if lifecycle == 'recording':
         result['collection']['state'] = '录制状态待确认'
         result['collection_hint'] = '发现未提交的录制元数据；无法据此确认采集仍在运行。请查看采集终端，实时计数未提供。'
@@ -108,19 +123,28 @@ def collection_snapshot(identity, roots):
         result['collection_hint'] = '上一条采集失败；查看采集终端及 episode.json。'
     else:
         result['collection_hint'] = '上一条已完整写盘；这不代表任务成功。下一条仍在总控 C / collect run 启动。'
+    if heartbeat:
+        result.update(heartbeat)
+        if len(live) > 1:
+            result['collection_hint'] += f' 当前有 {len(live)} 个采集进程；显示最近启动的一条。'
+    elif lifecycle == 'complete':
+        result['collection']['state'] = 'COMPLETE'
     return result
 
 
 class KernelMonitor:
     """A latest-only observer whose lifetime is independent from the robot."""
 
-    def __init__(self, directory=None, *, reader_factory=RuntimeReader, finder=discover_run, episode_roots=None):
+    def __init__(self, directory=None, *, reader_factory=RuntimeReader, finder=discover_run, episode_roots=None, model_factory=RuntimeModel):
         self.pinned = directory
         self.reader_factory, self.finder = reader_factory, finder
         self.roots = episode_roots if episode_roots is not None else [PROJECT_ROOT / 'outputs/datasets/runtime',
             resolve_path(load_config()['paths']['dataset_dir']) / 'mujoco']
         self.reader = self.directory = self.identity = self.latest = None
         self.robot_config = {}
+        self.data_contract = None
+        self.model_factory = model_factory
+        self.model_runtime_id = None
         self.motion_quality = MotionQuality()
         self.scene = self.thread = None
         self.error = '等待运行中的统一内核；监看不会启动或控制机械臂。'
@@ -148,6 +172,9 @@ class KernelMonitor:
                     self.directory, self.identity = (found if found else (None, None))
                     self.latest = None
                     self.motion_quality.reset()
+                    self.model_runtime_id = None
+                    if self.scene:
+                        self.scene.set_model(None)
                     self.collection_at = self.display_at = 0
             if candidate is None:
                 self.error = '等待运行中的统一内核；监看不会启动或控制机械臂。'
@@ -159,12 +186,16 @@ class KernelMonitor:
             if self.reader is None:
                 self.reader = self.reader_factory(self.directory, 'latest', timeout=.5)
                 self.robot_config = self.reader.descriptor.get('parameters', {}).get('effective_robot_config', {})
+                self.data_contract = runtime_contract(self.reader.descriptor)
+                if self.scene and self.model_runtime_id != self.identity['runtime_id']:
+                    self.scene.set_model(self.model_factory(self.reader.descriptor))
+                    self.model_runtime_id = self.identity['runtime_id']
             tick = self.reader.read()
             if tick.get('terminal') or tick.get('error'):
                 raise EOFError(tick.get('error') or '内核已退出；等待下一次运行')
             if tick.get('feedback'):
                 if self.scene and time.monotonic() >= self.display_at:
-                    self.scene.accept(kernel_packet(self.scene.robot, tick, self.identity, self.robot_config))
+                    self.scene.accept(kernel_packet(self.scene.robot, tick, self.identity, self.robot_config, self.data_contract))
                     self.display_at = time.monotonic() + 1 / 30
                 with self.lock:
                     self.latest, self.error = tick, None
@@ -182,7 +213,7 @@ class KernelMonitor:
             tick, identity, directory, error = self.latest, self.identity, self.directory, self.error
             if time.monotonic() >= self.collection_at:
                 self.collection = collection_snapshot(identity, self.roots)
-                self.collection_at = time.monotonic() + 2
+                self.collection_at = time.monotonic() + .25
             payload = deepcopy(self.collection)
             payload['motion_quality'] = self.motion_quality.snapshot()
         stamp = (tick or {}).get('timing', {}).get('feedback_received_ns')
@@ -225,10 +256,9 @@ class KernelMonitor:
 
 def serve(args):
     """Foreground HTTP monitor; owns only its observer socket and scene."""
-    from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
     from embodied.applications.monitor.scene import Scene
     monitor = KernelMonitor(args.run)
-    scene = Scene(X5PinocchioModel(KERNEL_URDF, 'tcp_link'), port=args.port, host=args.host, runtime_monitor=monitor)
+    scene = Scene(None, port=args.port, host=args.host, runtime_monitor=monitor)
     import signal
     previous = signal.getsignal(signal.SIGTERM)
     def interrupted(*_):

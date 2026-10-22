@@ -28,7 +28,7 @@ class KernelMonitorTests(unittest.TestCase):
         self.assertEqual(packet['target'], [.3] * 6)
         self.assertEqual(packet['actual_vel'], [.2] * 6)
         self.assertEqual(packet['gripper']['actual'], .025)
-        self.assertEqual(packet['gripper']['max'], .082)
+        self.assertIsNone(packet['gripper']['max'])
         self.assertEqual(kernel_packet(robot, tick(), {'backend': 'real'}, {'gripper_max_width': .075})['gripper']['max'], .075)
         self.assertEqual(packet['command_details']['sdk_cmd_pos'], [.31] * 6)
         self.assertIsNone(packet['actual_torque'])  # SDK output/feedforward is not measured torque
@@ -39,13 +39,13 @@ class KernelMonitorTests(unittest.TestCase):
         finder = Mock(return_value=None)
         readers = [Mock(), Mock()]
         for reader in readers:
-            reader.descriptor = {'parameters': {'effective_robot_config': {'gripper_max_width': .082}}}
+            reader.descriptor = {'joint_count': 6, 'parameters': {'effective_robot_config': {'gripper_max_width': .082}}}
         readers[0].read.return_value = tick('one')
         readers[1].read.return_value = tick('two')
         factory = Mock(side_effect=readers)
         scene = Mock()
         scene.robot.metadata.return_value = {'eef_frame': 'tcp_link'}
-        monitor = KernelMonitor(reader_factory=factory, finder=finder, episode_roots=[])
+        monitor = KernelMonitor(reader_factory=factory, finder=finder, episode_roots=[], model_factory=Mock(return_value=scene.robot))
         monitor.scene = scene
         monitor.step()
         factory.assert_not_called()
