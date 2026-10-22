@@ -1,5 +1,6 @@
 """Versioned episode adapters for the existing LeRobot conversion pipeline."""
 import json
+import math
 import numpy as np
 from embodied.data.episode.cameras import camera_metadata, anchor_camera
 from embodied.data.episode.contract import episode_contract, vector
@@ -65,6 +66,23 @@ def annotate(report, rows, *, control_stack, backend):
     return report
 
 
+def runtime_timing(metadata, raw):
+    """Recorded receipt/submission rates, not an assumed control or hardware rate."""
+    configured = metadata['runtime'].get('parameters', {}).get('effective_robot_config', {}).get('control_hz')
+    if configured is not None and (type(configured) not in (int, float) or not math.isfinite(configured) or configured <= 0):
+        raise ValueError('Recorded control_hz must be finite and positive')
+
+    def rate(rows):
+        if len(rows) < 2:
+            return None
+        duration = rows[-1]['host_monotonic_ns'] - rows[0]['host_monotonic_ns']
+        return (len(rows) - 1) * 1e9 / duration if duration > 0 else None
+
+    return {'configured_control_hz': configured, 'feedback_mean_hz': rate(raw['state']),
+            'command_mean_hz': rate(raw['command']),
+            'measurement': '(records - 1) / (last - first) host monotonic timestamp interval; gaps lower the mean'}
+
+
 class Schema1:
     identity = (1, 'requested_joint_position + requested_gripper_width')
     layout = 'aligned30_raw240_v1'
@@ -87,8 +105,8 @@ class Schema1:
 
 class Schema2:
     identity = (2, 'sent_joint_position + sent_gripper_width')
-    layout = 'aligned30_raw250_v2'
-    raw_hz = 250
+    layout = 'aligned30_runtime_v2'
+    raw_hz = None  # Independently timestamped streams; per-episode robot_timing reports actual means.
 
     def __init__(self, action_definition='sent_joint_position + sent_gripper_width'):
         self.identity = (2, action_definition)
@@ -137,8 +155,8 @@ class Schema2:
                   'action_max_age_ms': max(r[3]['host_received_monotonic_ns']-r[4]['requested_monotonic_ns'] for r in rows)/1e6,
                   'image_max_age_ms': 0, 'repeated_images': 0, 'action_definition': self.identity[1],
                   'cameras': camera_report(rows, frames, anchor_id=anchor_id), 'anchor_camera': anchor_id,
-                  'hand_eye': meta.get('hand_eye')}
-        annotate(report, rows, control_stack='arx-televr kernel: sent_q at 250 Hz',
+                  'hand_eye': meta.get('hand_eye'), 'robot_timing': runtime_timing(meta, raw)}
+        annotate(report, rows, control_stack='runtime kernel: submitted joint position commands',
                  backend=meta['runtime']['backend'])
         return meta, rows, report, raw
 

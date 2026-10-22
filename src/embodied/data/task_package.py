@@ -49,7 +49,7 @@ def finalize_task(raw_root, episode_ids, output, fps):
                     "task_run_id": run_id, "episodes": episodes, "files": {},
                     "selection_policy": "all task episodes; no outcome/lifecycle filtering",
                     "camera_fps": 30, "schema_version": schema,
-                    "conversion_layout": "aligned30_raw240_v1" if schema == 1 else "aligned30_raw250_v2",
+                    "conversion_layout": "aligned30_raw240_v1" if schema == 1 else "aligned30_runtime_v2",
                     "timestamp_note": "int64 host monotonic ns; RGB receipt is not exposure; device clock is separate"}
         archive.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as package:
