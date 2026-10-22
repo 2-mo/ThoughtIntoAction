@@ -34,7 +34,7 @@
       </div>
       <p id="collection-episode">当前 Episode：—</p>
       <p id="collection-health">等待采集会话</p>
-      <button id="collection-last" type="button" disabled title="查看上一条录制的数据质量">上一条：—</button>
+      <div class="collection-review-actions"><button id="collection-last" type="button" disabled title="查看上一条录制的数据质量">上一条：—</button><button id="open-live-quality" type="button" title="实际运动与采集质量">实测 — °/s · 质量</button><button id="open-task-review" type="button" title="查看任务阶段与技能标注，人工复核">任务 / 技能复核</button></div>
       <p class="collection-controls"><span>A 预抓取后开始 / 保存后返位 · B 预抓取/长按回零 · 下拨1秒切换控制 · X 网页回放 · Y 真机回放</span><span>摇杆：左开始任务 · 右暂停 · 上作废上一条 · 按住 1 秒结束清零</span></p>
     </section>
     <aside>
@@ -87,6 +87,35 @@
     </aside>
 
   </main>
+  <dialog id="live-quality-dialog" class="review-dialog" aria-labelledby="live-quality-title">
+    <div class="camera-dialog-heading"><h2 id="live-quality-title">运动与采集质量 · 实时</h2><button id="close-live-quality" type="button">关闭 · Esc</button></div>
+    <p id="quality-valid" role="status">等待反馈</p>
+    <div class="quality-grid">
+      <div><span>最大实测关节速度 °/s</span><b id="quality-speed">—</b></div>
+      <div><span>命令 / 反馈位置偏差 °</span><b id="quality-error">—</b></div>
+      <div><span>反馈帧龄 ms</span><b id="quality-age">—</b></div>
+      <div><span>平均控制周期 ms</span><b id="quality-period">—</b></div>
+      <div><span>周期标准差 ms</span><b id="quality-jitter">—</b></div>
+      <div><span>最大控制周期 ms</span><b id="quality-period-max">—</b></div>
+    </div>
+    <p id="quality-joint-speeds"></p><p id="quality-clock" class="details-note"></p><p id="quality-period-note" class="details-note"></p>
+    <h3>相机采集质量</h3>
+    <table class="command-table"><thead><tr><th>相机</th><th>有效性</th><th>采集帧龄 ms</th><th>相机 − 反馈 ms</th><th>源帧号缺口</th><th>帧号</th></tr></thead><tbody id="live-quality-cameras"></tbody></table>
+    <p id="live-quality-empty">相机服务未提供采集状态</p>
+    <p class="details-note">速度来自关节反馈，零值表示实际收到零速度；— 表示没有有效数据。相机偏差比较当前各源最新主机接收时间，未经配对，不代表曝光同步。源帧号缺口由采集进程累计，每次重连重置；与网页预览跳帧及录制写入丢帧不同。</p>
+  </dialog>
+  <dialog id="task-review-dialog" class="review-dialog" aria-labelledby="task-review-title">
+    <div class="camera-dialog-heading"><h2 id="task-review-title">任务阶段与技能标注</h2><button id="close-task-review" type="button">关闭 · Esc</button></div>
+    <div class="review-toolbar"><label>当前内核任务<select id="review-task"></select></label><button id="review-refresh" type="button">刷新记录</button></div>
+    <p id="task-result">等待任务记录</p>
+    <table class="command-table"><thead><tr><th>阶段</th><th>状态</th><th>耗时</th><th>操作 ID</th><th>结果 / 错误</th></tr></thead><tbody id="task-timeline"></tbody></table>
+    <p class="details-note">阶段“执行完成”只表示该阶段返回，任务成功需看任务验证结果。这里只查看记录，不触发机械臂动作。</p>
+    <label>已完整保存的 Episode<select id="review-episode"></select></label><p id="annotation-status">尚无标注</p>
+    <table class="command-table"><thead><tr><th>技能 / 阶段</th><th>帧区间（含末帧）</th><th>对象</th><th>置信度</th><th>证据</th></tr></thead><tbody id="annotation-timeline"></tbody></table>
+    <div class="review-toolbar"><label>复核者<input id="annotation-reviewer" maxlength="100" autocomplete="name"></label><label>复核说明<input id="annotation-note" maxlength="1000"></label></div>
+    <div class="review-toolbar"><button id="annotation-approve" type="button" disabled>复核通过</button><button id="annotation-reject" type="button" disabled>退回修改</button></div>
+    <p class="details-note">复核保存为独立版本；不改原始记录，也不把任务事件自动当作正确技能标签。并发修改会拒绝旧版本复核。</p><p id="review-error" role="status"></p>
+  </dialog>
   <dialog id="quality-details" aria-labelledby="quality-title">
     <div class="camera-dialog-heading"><h2 id="quality-title">录制质量</h2><button id="quality-close" type="button" autofocus>关闭 · Esc</button></div>
     <p id="quality-episode"></p><p id="quality-summary"></p>
@@ -121,5 +150,6 @@
   <script type="module" src="/telemetry.js"></script>
   <script type="module" src="/sensors.js"></script>
   <script type="module" src="/orientation.js"></script>
+  <script type="module" src="/task-review.js"></script>
 </body>
 </html>

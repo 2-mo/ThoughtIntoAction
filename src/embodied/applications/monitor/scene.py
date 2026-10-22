@@ -9,7 +9,7 @@ from pathlib import Path
 import threading
 import time
 import uuid
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
 
@@ -31,6 +31,8 @@ class Scene:
         self.connection_probe = None
         self.simulation = simulation
         self.runtime_monitor = runtime_monitor
+        from embodied.applications.monitor.review import ReviewStore
+        self.review_store = ReviewStore(runtime_monitor) if runtime_monitor is not None else None
         self._lock = threading.RLock()
         self._state = None
         self._stream = None
@@ -46,19 +48,24 @@ class Scene:
                 self.respond(body=True)
 
             def do_POST(self):
-                if urlsplit(self.path).path not in ("/api/replay", "/api/camera", "/api/simulation"):
+                if urlsplit(self.path).path not in ("/api/replay", "/api/camera", "/api/simulation", "/api/annotations/review"):
                     self.send_error(404); return
                 if self.headers.get("Origin") not in (None, owner.url.rstrip("/"),
                         owner.url.rstrip("/").replace("127.0.0.1", "localhost")):
                     self.send_error(403); return
                 try:
-                    if owner.runtime_monitor is not None and urlsplit(self.path).path != '/api/camera':
+                    if owner.runtime_monitor is not None and urlsplit(self.path).path not in ('/api/camera', '/api/annotations/review'):
                         raise ValueError('统一内核监看为只读；录制请使用总控 C / collect run，旧回放控制未接入。')
                     length = int(self.headers.get("Content-Length", "0"))
                     if not 0 < length <= 4096: raise ValueError("Invalid request size")
                     data = json.loads(self.rfile.read(length))
                     if not isinstance(data, dict): raise ValueError("Expected object")
-                    if urlsplit(self.path).path == '/api/simulation':
+                    result = {"ok": True}
+                    if urlsplit(self.path).path == '/api/annotations/review':
+                        if owner.review_store is None:
+                            raise ValueError('标注复核只支持统一内核采集记录')
+                        result['annotations'] = owner.review_store.review(data)
+                    elif urlsplit(self.path).path == '/api/simulation':
                         if owner.simulation is None:
                             raise ValueError('当前页面不是仿真')
                         owner.simulation.command(data.get('action'))
@@ -76,8 +83,8 @@ class Scene:
                         command = "collection.replay_previous" if action == "load_last" else "collection.replay_episode" if action == "load" else "replay.control"
                         request(resolve_path(load_config()["runtime"]["socket"]), command,
                                 action=action, position_s=data.get("position_s"), speed=data.get("speed"), episode_id=data.get("episode_id"), timeout=5)
-                    content = json.dumps({"ok": True}).encode()
-                except (OSError, ValueError, RuntimeError, TypeError) as exc:
+                    content = json.dumps(result, allow_nan=False).encode()
+                except (OSError, ValueError, RuntimeError, TypeError, ImportError) as exc:
                     content = json.dumps({"error": str(exc)}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -116,6 +123,18 @@ class Scene:
                         payload = {"error": str(exc)}
                     content = json.dumps(payload, allow_nan=False).encode()
                     mime = "application/json"
+                elif path == "/api/review":
+                    try:
+                        if owner.review_store is None:
+                            raise ValueError('任务时间轴与技能复核需要统一内核监看页')
+                        query = parse_qs(urlsplit(self.path).query)
+                        episode_id = query.get('episode_id', [None])[0]
+                        payload = {'tasks': owner.review_store.tasks(), 'episodes': owner.review_store.episodes(),
+                                   'annotations': owner.review_store.annotations(episode_id) if episode_id else None}
+                    except (OSError, ValueError, TypeError, ImportError) as exc:
+                        payload = {'error': str(exc)}
+                    content = json.dumps(payload, allow_nan=False).encode()
+                    mime = 'application/json'
                 elif path == "/api/sensors":
                     from embodied.core.project import load_config, resolve_path
                     from embodied.core.session_protocol import request
@@ -146,6 +165,8 @@ class Scene:
                         payload.pop("error", None)
                     except (OSError, ValueError, RuntimeError) as exc:
                         payload["camera_error"] = f"相机服务未连接：{exc}"
+                    from embodied.applications.monitor.quality import camera_quality
+                    payload['camera_quality'] = camera_quality(payload)
                     payload["connections"] = owner.connection_probe.snapshot() if owner.connection_probe else {}
                     content = json.dumps(payload, allow_nan=False).encode()
                     mime = "application/json"

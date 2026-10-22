@@ -1,6 +1,7 @@
 // Read-only session feed, independently polled so camera IPC never delays arm rendering.
 import {renderCameras} from './cameras.js';
 import {renderQuality} from './quality.js';
+import {renderLiveQuality} from './live-quality.js';
 // Keep the complete dashboard visible even in a narrow embedded browser pane.
 function fitDashboard() {
   document.documentElement.style.setProperty('--dashboard-scale', String(Math.min(1, innerWidth / 1024)));
@@ -135,6 +136,7 @@ async function refresh() {
         Number.isFinite(value) && value >= 0 ? value.toFixed(1) + ' ms' : '未测';
     }
     renderCameras(data);
+    renderLiveQuality(data);
     renderCollection(data);
     const safety = data.table_safety;
     byId('table-safety').hidden = !safety;
@@ -190,6 +192,7 @@ async function refresh() {
   } catch {
     window.dispatchEvent(new CustomEvent('teleop-preview', { detail: null }));
     renderCollection();
+    renderLiveQuality();
     renderCameras({camera_error: '监看接口未连接'});
     byId('table-safety').textContent = '桌面限制状态未连接';
     byId('loop-rates').textContent = 'IK — Hz · 服务 — Hz';

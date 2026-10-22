@@ -99,6 +99,9 @@ class CameraFeed:
                            "serial": self.options.get("serial", ""), "model": self.options.get("model", ""),
                            "preview_fps": 5, "metadata": self.metadata, "error": self.error,
                            "enabled": self.enabled, "switch_protocol": 1,
+                           "host_received_monotonic_ns": None if frame is None else frame.get("host_received_monotonic_ns"),
+                           "frame_number": None if frame is None else frame.get("frame_number"),
+                           "source_missing_frames": None if frame is None else frame.get("source_missing_frames"),
                            "age_s": None if frame is None else (now - frame["host_received_monotonic_ns"]) / 1e9},
                 "depth_preview": {"jpeg_base64": None if depth is None else depth[1],
                                   "age_s": None if depth is None else (now - depth[0]) / 1e9,
@@ -119,12 +122,22 @@ class CameraFeed:
                     stream_id = uuid.uuid4().hex
                     metadata = {**camera.metadata, "stream_id": stream_id, "zmq_frame_protocol": 1}
                     last_preview = 0
+                    last_number = None
+                    source_missing = 0
                     preview = depth_preview = None
                     while not stop.is_set():
                         frame = camera.read()
                         image = frame["image"]
+                        number = frame.get("frame_number")
+                        # Count in the capture process, never from downsampled browser previews.
+                        if type(number) is int and type(last_number) is int and number > last_number:
+                            if source_missing is not None:
+                                source_missing += max(0, number - last_number - 1)
+                        elif type(number) is int and type(last_number) is int and number <= last_number:
+                            source_missing = None  # Loss count is no longer trustworthy for this stream.
+                        last_number = number
                         encoded_frame = {**{k: v for k, v in frame.items() if k not in ("depth_image", "depth_scale_m")},
-                                         "stream_id": stream_id}
+                                         "stream_id": stream_id, "source_missing_frames": source_missing if type(number) is int else None}
                         if time.monotonic() - last_preview >= .2:
                             size = (min(640, image.shape[1]), max(1, round(image.shape[0] * min(640, image.shape[1]) / image.shape[1])))
                             ok, jpeg = cv2.imencode(".jpg", cv2.resize(image, size), [cv2.IMWRITE_JPEG_QUALITY, 75])
