@@ -78,8 +78,12 @@ class ControlSession(ControlClient):
             if self.lease is None:
                 raise RuntimeError('Acquire control first')
             self.sequence += 1
-            return super().request(action, token=self.lease['token'], epoch=self.lease['epoch'],
-                                   sequence=self.sequence, **fields)
+            result = super().request(action, token=self.lease['token'], epoch=self.lease['epoch'],
+                                     sequence=self.sequence, **fields)
+            if action in ('simulation-restore', 'simulation-reset'):
+                # Keep heartbeats on the epoch returned by this discontinuity.
+                self.lease['epoch'] = result['epoch']
+            return result
 
     def _heartbeat(self):
         while not self.stop_event.wait(.1):

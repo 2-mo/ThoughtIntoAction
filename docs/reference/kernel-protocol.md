@@ -170,5 +170,27 @@ Hold the arm and stream a gripper target.
 
 Result: `status`
 
+### `simulation-snapshot`
+
+Optional simulator capability, advertised in describe.actions. Copy physics state on the worker without acquiring control. The backend owns this snapshot format. The MuJoCo adapter includes complete integration state and robot/named-body observations (metres, XYZW). Does not capture a running motion or Python task. No rendering or disk access occurs in the control loop.
+
+Result: `schema`, `schema_version`, `backend`, `engine_version`, `model_id`, `configuration_id`, `state_spec`, `state`, `observation`
+
+### `simulation-restore` (lease)
+
+Simulator only. Refuse while an operation or stream is active; restore physics and enter hold. Advance the ownership epoch; the caller must use the returned epoch for later commands (ControlSession does this automatically). Invalidates previews and creates an episode boundary; finish the current recording first. Does not resume an old motion.
+
+| Field | Type | | Meaning |
+| --- | --- | --- | --- |
+| `snapshot` | object | required | snapshot from the same model, configuration and engine version |
+
+Result: `status`, `epoch`
+
+### `simulation-reset` (lease)
+
+Same boundary and lease semantics as simulation-restore; restore the simulator initial state.
+
+Result: `status`, `epoch`
+
 `status.owner`: `source`, `epoch`, `ingress`, `purpose`. `status.operations[]`: `operation_id`, `status`, `started`, `kind` (+ `reason`), status one of `running`, `completed`, `failed`, `cancelled`.
 <!-- protocol:end -->

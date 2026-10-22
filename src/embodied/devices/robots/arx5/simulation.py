@@ -1,6 +1,8 @@
 """MuJoCo torque-control backend with one 4 ms physical step per control tick."""
 from copy import deepcopy
 from dataclasses import asdict
+import hashlib
+import json
 import time
 
 import mujoco
@@ -8,7 +10,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 from embodied.devices.robots.arx5.kinematics import X5Model, JointTargetController
 from embodied.devices.robots.arx5.profile import RobotConfig
-from embodied.contracts.control import RobotState, Mode
+from embodied.contracts.control import ControlCommand, RobotState, Mode
 
 
 class MujocoBackend:
@@ -20,9 +22,15 @@ class MujocoBackend:
         self.model = self.kinematics.model
         self.data = mujoco.MjData(self.model)
         self.controller = controller_factory(config, self.kinematics)
+        self._controller_factory = controller_factory
         self.data.qpos[:6] = config.park_q
         self.data.qpos[6:] = config.gripper_max_width / 2
         mujoco.mj_forward(self.model, self.data)
+        self._state_spec = mujoco.mjtState.mjSTATE_INTEGRATION
+        self._model_id = config.model_id
+        self._configuration_id = hashlib.sha256(json.dumps(
+            {**asdict(config), 'model_path': '', 'tool_path': '', 'model_id': self._model_id},
+            sort_keys=True).encode()).hexdigest()
         ratio = .004 / self.model.opt.timestep
         self._substeps = round(ratio)
         if self._substeps < 1 or not np.isclose(ratio, self._substeps):
@@ -76,6 +84,81 @@ class MujocoBackend:
             'sim_actuator_torque', 'simulation_time_s',
         ))
         self._telemetry['reported_joint_torque_source'] = 'unavailable_simulation'
+        self._initial_snapshot = self.simulation_snapshot()
+
+    def simulation_snapshot(self):
+        """Copy complete MuJoCo integration state, not an in-flight control task.
+
+        Called on the simulation worker. Rendering and disk I/O stay outside it.
+        The engine/version/configuration identity prevents an incompatible restore.
+        """
+        state = np.empty(mujoco.mj_stateSize(self.model, self._state_spec))
+        mujoco.mj_getState(self.model, self.data, state, self._state_spec)
+        if not np.isfinite(state).all():
+            raise ValueError('Cannot snapshot non-finite simulation state')
+        feedback = self.read_state(time.monotonic())
+        bodies = {}
+        for index in range(1, self.model.nbody):
+            name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, index)
+            if name:
+                bodies[name] = [*self.data.xpos[index].tolist(),
+                                *self.data.xquat[index][[1, 2, 3, 0]].tolist()]
+        return {'schema': 'embodied.simulation.state', 'schema_version': 1,
+                'backend': 'mujoco', 'engine_version': mujoco.__version__,
+                'model_id': self._model_id, 'configuration_id': self._configuration_id,
+                'state_spec': int(self._state_spec), 'state': state.tolist(),
+                'observation': {'q': feedback.q.tolist(), 'dq': feedback.dq.tolist(),
+                    'pose': feedback.pose.tolist(), 'gripper_width': feedback.gripper_width,
+                    'simulation_time_s': float(self.data.time), 'bodies': bodies}}
+
+    def _snapshot_state(self, snapshot):
+        expected = {'schema': 'embodied.simulation.state', 'schema_version': 1,
+                    'backend': 'mujoco', 'engine_version': mujoco.__version__,
+                    'model_id': self._model_id, 'configuration_id': self._configuration_id,
+                    'state_spec': int(self._state_spec)}
+        if not isinstance(snapshot, dict) or any(snapshot.get(k) != v for k, v in expected.items()):
+            raise ValueError('Simulation snapshot model, configuration or engine version mismatch')
+        value = snapshot.get('state')
+        size = mujoco.mj_stateSize(self.model, self._state_spec)
+        if (not isinstance(value, list) or len(value) != size
+                or any(type(v) not in (int, float) for v in value)):
+            raise ValueError('Invalid simulation integration state')
+        state = np.asarray(value, dtype=float)
+        if not np.isfinite(state).all():
+            raise ValueError('Simulation state must be finite')
+        return state
+
+    def simulation_restore(self, snapshot):
+        """Restore physics into a new hold reference; never resume old motion."""
+        state = self._snapshot_state(snapshot)  # Validate fully before mutation.
+        mujoco.mj_setState(self.model, self.data, state, self._state_spec)
+        mujoco.mj_forward(self.model, self.data)
+        self.controller = self._controller_factory(self.config, self.kinematics)
+        self.controller.update(ControlCommand(Mode.COMMAND_FOLLOWING, hold=True,
+            gripper_target=float(self.data.qpos[6:].sum()), reset_reference=True),
+            self.data.qpos[:6], time.monotonic())
+        for key in self._telemetry:
+            if key != 'reported_joint_torque_source':
+                self._telemetry[key] = None
+
+    def simulation_reset(self):
+        self.simulation_restore(self._initial_snapshot)
+
+    def render_snapshot(self, snapshot, *, camera=-1, width=640, height=480):
+        """Offline RGB rendering from recorded physics; not exposed on the tick RPC.
+
+        Use a separate backend instance in the control Python environment. The
+        current physics state is untouched; named cameras come from the model.
+        """
+        state = self._snapshot_state(snapshot)
+        if any(type(v) is not int or not 1 <= v <= 4096 for v in (width, height)):
+            raise ValueError('Render dimensions must be integers in 1..4096')
+        data = mujoco.MjData(self.model)
+        mujoco.mj_setState(self.model, data, state, self._state_spec)
+        mujoco.mj_forward(self.model, data)
+        with mujoco.Renderer(self.model, height=height, width=width) as renderer:
+            renderer.update_scene(data, camera=camera)
+            return renderer.render().copy()
 
     def runtime_parameters(self) -> dict:
         """Return the captured model settings without changing simulation state."""

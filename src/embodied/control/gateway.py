@@ -20,17 +20,21 @@ from embodied.control.commands import CommandEngine, MotionPlanner
 DESCRIBED_ROBOT_FIELDS = ('variant', 'control_hz', 'joint_min', 'joint_max', 'park_q', 'gripper_max_width',
                           'torque_max', 'joint_step_limit', 'can_interface')
 ACTIONS = ('describe', 'status', 'acquire', 'source-metadata', 'heartbeat', 'release', 'hold', 'cancel', 'stop',
-           'preview', 'execute', 'free-drive', 'joint', 'cartesian', 'gripper')
+           'preview', 'execute', 'free-drive', 'joint', 'cartesian', 'gripper',
+           'simulation-snapshot', 'simulation-restore', 'simulation-reset')
+SIMULATION_ACTIONS = ('simulation-snapshot', 'simulation-restore', 'simulation-reset')
 
 
 class Gateway:
-    def __init__(self, directory, runtime_id, config, planner_factory=MotionPlanner, ingresses=None, *, motion_limits=None, capabilities=None):
+    def __init__(self, directory, runtime_id, config, planner_factory=MotionPlanner, ingresses=None, *, motion_limits=None, capabilities=None, simulation=None):
         from embodied.control.motion_limits import MotionLimits
         self.directory = Path(directory)
         self.model_id = config.model_id
         self.ingresses = ingresses or {}
         self.config = config
         self.capabilities = capabilities or {}
+        self.simulation = simulation
+        self.feedback = None
         self.motion_limits = motion_limits or MotionLimits.load(config)
         self.engine = CommandEngine(runtime_id, config, self.model_id, self.ingresses, motion_limits=self.motion_limits)
         parameters = inspect.signature(planner_factory).parameters
@@ -153,7 +157,41 @@ class Gateway:
         return {'protocol': 1, 'runtime_id': self.engine.runtime_id, 'model_id': self.model_id,
                 'robot': {k: list(v) if isinstance(v, tuple) else v for k, v in robot.items()},
                 'workspace': workspace.describe() if workspace else None,
-                'motion_limits': motion_limits.describe() if motion_limits else None, 'actions': list(ACTIONS)}
+                'motion_limits': motion_limits.describe() if motion_limits else None,
+                'actions': [action for action in ACTIONS if action not in SIMULATION_ACTIONS or self.simulation is not None]}
+
+    def _simulation_request(self, request, state, now):
+        """Optional driver capability. Called only by the simulation worker."""
+        if self.simulation is None:
+            raise ValueError('This backend does not support simulation state operations')
+        if request.get('version') != 1 or request.get('runtime_id') != self.engine.runtime_id:
+            raise ValueError('Command protocol/runtime mismatch')
+        if self.engine.stopped:
+            raise ValueError('Runtime stop is latched')
+        action = request['action']
+        if action == 'simulation-snapshot':
+            return self.simulation.simulation_snapshot(), state
+        self.engine.authorize(request, now)
+        if self.engine.owner['ingress'] != 'rpc':
+            raise ValueError('Simulation state changes require an RPC control lease')
+        if self.engine.operation or (self.engine.command is not None and now < self.engine.command_expires):
+            raise ValueError('Finish or cancel the active operation before restoring the scene')
+        if action == 'simulation-restore':
+            self.simulation.simulation_restore(request.get('snapshot'))
+        else:
+            self.simulation.simulation_reset()
+        # A restore is an episode boundary. Invalidate previews and prevent a
+        # collector from silently mixing two scene histories under one epoch.
+        self.engine.epoch += 1
+        self.engine.owner['epoch'] = self.engine.epoch
+        self.engine.command = self.engine.completed_target = None
+        self.engine.settling.clear()
+        self.engine.reset_reference = True
+        self.engine.ingress_paused = True
+        self.engine.source_sequence = -1
+        self.engine.phase = action
+        state = self.simulation.read_state(time.monotonic())
+        return {'status': 'applied', 'epoch': self.engine.epoch}, state
 
     def _tcp_path(self, qs, points=160):
         """Base TCP poses [x, y, z, qx, qy, qz, qw] along a plan, at most `points` samples, ending at the goal."""
@@ -180,6 +218,7 @@ class Gateway:
 
     def tick(self, state, now):
         # Limit per-tick ingress work; no network wait, file IO, or planning here.
+        restored = []
         for _ in range(8):
             try:
                 future = self.pending.get_nowait()
@@ -188,11 +227,18 @@ class Gateway:
             try:
                 if time.monotonic_ns() >= future['deadline']:
                     raise ValueError('Command expired in ingress queue')
-                future['result'] = self.engine.request(future['request'], state, time.monotonic())
+                if future['request'].get('action') in SIMULATION_ACTIONS:
+                    future['result'], state = self._simulation_request(future['request'], state, time.monotonic())
+                else:
+                    future['result'] = self.engine.request(future['request'], state, time.monotonic())
             except Exception as exc:
                 future['error'] = str(exc)
             finally:
-                future['done'].set()
+                if ('error' not in future and future['request'].get('action') in
+                        ('simulation-restore', 'simulation-reset')):
+                    restored.append(future)
+                else:
+                    future['done'].set()
         # Resolve ownership after this tick's queued requests, so a candidate from
         # the previous owner can never cross an acquire/release boundary.
         owner = self.engine.owner
@@ -201,6 +247,10 @@ class Gateway:
         command = self.engine.next(state, now, candidates)
         self.snapshot = {**self.engine.status(state, now),
                          'ingresses': {name: dict(ingress.status) for name, ingress in self.ingresses.items()}}
+        self.feedback = state
+        # A client planning immediately after restore must see the new scene.
+        for future in restored:
+            future['done'].set()
         return command
 
     def close(self):

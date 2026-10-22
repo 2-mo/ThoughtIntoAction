@@ -98,7 +98,21 @@
         "describe",
         "status",
         "acquire",
-        "…"
+        "stop",
+        "heartbeat",
+        "source-metadata",
+        "release",
+        "hold",
+        "cancel",
+        "preview",
+        "execute",
+        "free-drive",
+        "joint",
+        "cartesian",
+        "gripper",
+        "simulation-snapshot",
+        "simulation-restore",
+        "simulation-reset"
       ]
     }
   },
@@ -268,13 +282,13 @@
           -2.8235355418361536e-12,
           -1.4927521873857939e-12
         ],
-        "…"
+        "\u2026"
       ],
       "times": [
         0.0,
         0.003992395437262356,
         0.007984790874524712,
-        "…"
+        "\u2026"
       ],
       "gripper_width": 0.08199999929980324,
       "trajectory": {
@@ -374,7 +388,7 @@
           8.808645349793017e-13,
           0.9999999999719901
         ],
-        "…"
+        "\u2026"
       ],
       "workspace": {
         "minimum_tcp_z_m": 0.0
@@ -532,6 +546,128 @@
     "result": {
       "status": "applied",
       "stopped": true
+    }
+  },
+  "simulation-snapshot": {
+    "request": {
+      "version": 1,
+      "runtime_id": "<runtime_id>",
+      "action": "simulation-snapshot",
+      "sent_monotonic_ns": 1591082468800244
+    },
+    "result": {
+      "schema": "embodied.simulation.state",
+      "schema_version": 1,
+      "backend": "mujoco",
+      "engine_version": "3.6.0",
+      "model_id": "<model_id>",
+      "configuration_id": "<configuration_id>",
+      "state_spec": 16383,
+      "state": [
+        0.0
+      ],
+      "observation": {
+        "q": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "dq": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "pose": [
+          0.0,
+          0.0,
+          0.3,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "gripper_width": 0.04,
+        "simulation_time_s": 0.0,
+        "bodies": {}
+      }
+    }
+  },
+  "simulation-restore": {
+    "request": {
+      "version": 1,
+      "runtime_id": "<runtime_id>",
+      "action": "simulation-restore",
+      "sent_monotonic_ns": 1591082468800244,
+      "token": "<token>",
+      "epoch": 1,
+      "sequence": 1,
+      "snapshot": {
+        "schema": "embodied.simulation.state",
+        "schema_version": 1,
+        "backend": "mujoco",
+        "engine_version": "3.6.0",
+        "model_id": "<model_id>",
+        "configuration_id": "<configuration_id>",
+        "state_spec": 16383,
+        "state": [
+          0.0
+        ],
+        "observation": {
+          "q": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "dq": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "pose": [
+            0.0,
+            0.0,
+            0.3,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "gripper_width": 0.04,
+          "simulation_time_s": 0.0,
+          "bodies": {}
+        }
+      }
+    },
+    "result": {
+      "status": "applied",
+      "epoch": 2
+    }
+  },
+  "simulation-reset": {
+    "request": {
+      "version": 1,
+      "runtime_id": "<runtime_id>",
+      "action": "simulation-reset",
+      "sent_monotonic_ns": 1591082468800244,
+      "token": "<token>",
+      "epoch": 1,
+      "sequence": 1
+    },
+    "result": {
+      "status": "applied",
+      "epoch": 2
     }
   }
 }

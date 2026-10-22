@@ -76,11 +76,45 @@ with Robot.sim(viewer=True) as robot:
 | 保持 | `robot.hold()` | 请求内核保持 |
 | 取消 | `robot.cancel()` | 取消当前执行的动作 |
 | 采集 | `robot.record(duration=3, output=path, task="观察")` | 按给定时长采集，并附任务说明 |
+| 仿真状态 | `robot.simulation.snapshot()` / `.restore(snapshot)` | 保存、恢复完整物理状态，恢复后保持 |
+| 仿真重置 | `robot.simulation.reset()` | 恢复该仿真启动时的场景 |
 
 关节编号从 0 开始；`q` 的长度与连接后的关节反馈一致，单位 rad。当前内核为六轴 X5；公共接口去掉固定轴数并不表示其他型号已完成适配。
 位置、偏移和夹爪宽度用 m；`robot.pose` 的反馈始终为 `xyz + xyzw` 七值，避免反馈格式随调用改变。
 `teach()` 是记录点位，不是打开拖动示教模式；此接口暂不提供 `free_drive()`。
 夹爪动作完成表示开合指令完成，不表示已经抓住物体。
+
+## 可重复的仿真任务
+
+```python
+with Robot.sim() as robot:
+    target = robot.q
+    target[0] += .1
+    task = robot.simulation.task(
+        "reach", instruction="第一个关节增加 0.1 rad",
+        goal="所有关节与目标偏差小于 0.01 rad",
+        success=lambda obs: all(abs(q - t) < .01 for q, t in zip(obs["q"], target)),
+    )
+    for _ in range(2):
+        task.reset()
+        robot.movej(target)
+        print(task.check_success())
+```
+
+运行 `./run.sh examples sim_task` 可查看完整例子。任务保存当前场景作为初始状态；
+`success` 是显式观测判据，动作结束不自动代表任务成功。`objects` 可指定模型中的 body 名称，
+注册时检查对象是否存在。`task.describe()` 保存任务文字、对象、目标说明和初始快照；
+成功判据仍由应用代码提供，不序列化 Python 函数。
+
+`robot.simulation.observe()` 返回同一物理状态的 `q`、`dq`、`pose`、`gripper_width`、
+`simulation_time_s` 和命名 `bodies` 位姿（m、XYZW）。MuJoCo 快照保存完整积分状态，
+并检查模型、配置和引擎版本。恢复进入当前测量位置的保持，不恢复旧任务、轨迹或控制计时器。
+先结束运动与录制，再恢复场景；恢复会使旧预览失效，并产生新的采集 epoch。
+真机不提供这些仿真能力，普通运动接口保持一致。
+
+离线重渲染由设备适配器的 `MujocoBackend.render_snapshot(snapshot, camera=..., width=..., height=...)`
+提供，在控制 Python 环境中的独立后端实例上调用；不在周期控制线程中渲染。
+它使用新的 MuJoCo data，不修改当前物理状态。当前适配仍使用 X5 场景，未引入完整 LIBERO 环境或任务集。
 
 ## 默认直接执行，也能先看计划
 

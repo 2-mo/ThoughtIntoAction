@@ -148,7 +148,9 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
                     prefix=prefix, dependencies=native['dependencies'], gripper=settings.robot.gripper_max_width > 0)
             gateway = Gateway(directory, prefix, settings.robot,
                               registry.load("planner", planner_plugin, runtime="control"), ingresses,
-                              motion_limits=motion_limits, capabilities=capabilities)
+                              motion_limits=motion_limits, capabilities=capabilities,
+                              simulation=backend if backend_name == 'sim' and all(callable(getattr(backend, name, None))
+                                  for name in ('simulation_snapshot', 'simulation_restore', 'simulation_reset')) else None)
         bridge = RobotBridge(prefix, commands=not managed)
         now = time.monotonic()
         state = backend.read_state(now)
@@ -162,8 +164,6 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
             state = backend.read_state(tick)
             feedback_read_ns = time.monotonic_ns()
             check_and_record_feedback(state, tick, 'control')
-            if bridge is not None:
-                bridge.publish_state(state, tick)
             if previous_mode != (state.mode, state.gripper_mode):
                 previous_mode = state.mode, state.gripper_mode
                 mode_changes.append({"time_s": tick - started, "arm": state.mode.value,
@@ -172,9 +172,14 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
             command = bridge.poll_commands(tick) if not managed else None
             if gateway is not None:
                 command = gateway.tick(state, tick)
+                if state is not gateway.feedback:
+                    state = gateway.feedback
+                    check_and_record_feedback(state, time.monotonic(), 'simulation-state-change')
                 if gateway.engine.stopped:
                     stopped = True
                     break
+            if bridge is not None:
+                bridge.publish_state(state, time.monotonic())
             if backend_name == 'real' and stopped:
                 break
             pose_commands += int(command.pose_target is not None)

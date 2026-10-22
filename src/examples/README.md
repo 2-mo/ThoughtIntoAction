@@ -58,6 +58,7 @@ examples/
 | 文件 | 运行参数 | 学会什么 |
 | --- | --- | --- |
 | [control.py](simulation/control.py) | `sim_control` / `sim_control --headless` | 在仿真中逐步执行关节、XYZ 和夹爪动作 |
+| [task_reset.py](simulation/task_reset.py) | `sim_task` | 保存/恢复物理状态，重复执行任务并检查成功条件 |
 | [read_state.py](control/read_state.py) | `read_state` | 读取 `state`、关节、末端和能力说明 |
 | [movej.py](control/movej.py) | `movej --joint 1 --degrees 10` | 从当前关节位置构造目标，再调用 `movej` |
 | [movel.py](control/movel.py) | `movel` / `movel --xyz X Y Z` / `movel --offset 0 0 0.02` | 绝对 XYZ、相对平移与完整位姿控制 |
@@ -95,6 +96,7 @@ examples/
 控制和采集示例默认 `--backend sim`，省略 `--run` 时自动新建仿真。
 `--viewer` 仅用于新建仿真；`--keep-open` 在交互终端中执行后等待 Enter，便于查看结果。
 两个离线规划示例不启动内核。
+`sim_task` 仅支持仿真，演示场景快照、重置和观测成功判据；它不把动作结束直接当作任务成功。
 示例数据保存在 `outputs/examples/`，支持输出路径的例子可用 `--output` 指定位置；仿真日志保存在 `outputs/robot/runs/`。
 
 要使用已经运行的内核，显式选择后端和运行目录：

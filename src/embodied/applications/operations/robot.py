@@ -184,6 +184,12 @@ class Robot:
         return self._connected().identity["backend"]
 
     @property
+    def simulation(self):
+        """Optional scene snapshot/restore and repeatable tasks for a simulation."""
+        from .simulation import Simulation
+        return Simulation(self)
+
+    @property
     def q(self):
         """Measured joint positions in radians, returned as a fresh list."""
         return list(self.state["q"])
