@@ -2,11 +2,11 @@
 import math
 import hashlib
 import numpy as np
-from scipy.interpolate import BPoly
+from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation
 
 from embodied.motion.geometry import CartesianWaypoint, build_cartesian_path
-from embodied.motion.offline import plan_blended_joint_trajectory
+from embodied.motion.profiles import smoothstep9_fraction, smoothstep9_derivatives
 from embodied.motion.cartesian_time import plan_scalar_progress
 from embodied.motion.validation import finite_vector
 
@@ -28,23 +28,21 @@ def tcp_limits(request):
     return result
 
 
-class QuinticTrajectory:
-    """Exact piecewise quintic reconstruction: the shared planner retains anchors."""
-    def __init__(self, curve, start):
-        self.times = np.r_[0., curve.sample_times_s]
-        self.q = np.vstack([start, curve.positions])
-        self.dq = np.vstack([np.zeros_like(start), curve.velocities])
-        self.ddq = np.vstack([np.zeros_like(start), curve.accelerations])
-        self.curve = BPoly.from_derivatives(self.times, [[q, v, a] for q, v, a in zip(self.q, self.dq, self.ddq)])
-        self.duration = float(self.times[-1])
+class CartesianSplineTrajectory:
+    """One q(s) path with the same endpoint time law used by MoveL."""
+    def __init__(self, curve, duration, limiting_factors):
+        self.curve, self.duration = curve, float(duration)
+        self.limiting_factors = limiting_factors
 
     def sample(self, elapsed):
-        t = min(max(float(elapsed), 0.), self.duration)
-        return self.curve(t), self.curve(t, 1)
+        alpha = min(max(float(elapsed) / self.duration, 0.), 1.)
+        fraction = smoothstep9_fraction(alpha)
+        speed, _, _ = smoothstep9_derivatives(alpha)
+        return self.curve(fraction), self.curve(fraction, 1) * speed / self.duration
 
     def describe(self):
-        return {'time_law': 'quintic_blended', 'duration_s': self.duration,
-                'sample_count': len(self.times),
+        return {'time_law': 'smoothstep9_cartesian_spline', 'duration_s': self.duration,
+                'path_parameter': 'normalized_cartesian_arc_length',
                 'coefficients_sha256': hashlib.sha256(self.curve.x.tobytes() + self.curve.c.tobytes()).hexdigest()}
 
 
@@ -83,22 +81,36 @@ def plan_path(model, start, request, joint_limits, control_hz):
         for i, pose in enumerate(poses)])
     if len(geometry.positions_xyz_m) > 2000:
         raise ValueError('Path geometry exceeds 2000 samples; split the path')
-    joints, seed = [np.asarray(start).copy()], np.asarray(start).copy()
-    for xyz, quaternion in zip(geometry.positions_xyz_m[1:], geometry.orientations_xyzw[1:]):
+    joints, distances, seed = [np.asarray(start).copy()], [0.], np.asarray(start).copy()
+    for xyz, quaternion, distance in zip(geometry.positions_xyz_m[1:], geometry.orientations_xyzw[1:], geometry.distance_m[1:]):
         seed, converged, error = model.solve_ik(np.r_[xyz, quaternion], seed)
         if not converged or error > .001 or np.max(np.abs(seed - joints[-1])) > .1:
             raise ValueError('Path has an unreachable/discontinuous IK segment')
         if np.max(np.abs(seed - joints[-1])) > 1e-9:
             joints.append(seed.copy())
+            distances.append(distance)
     if len(joints) < 2:
         raise ValueError('Path has no motion')
-    curve = plan_blended_joint_trajectory(np.asarray(joints),
-        max_velocity=joint_limits['joint_velocity_rad_s'], max_acceleration=joint_limits['acceleration'],
-        max_jerk=joint_limits['jerk'], sample_rate_hz=control_hz, minimum_duration_s=1. / control_hz,
-        maximum_duration_s=60.)
-    trajectory = QuinticTrajectory(curve, start)
-    jerk = trajectory.curve(trajectory.times, 3)
-    return trajectory, trajectory.times, trajectory.q, trajectory.dq, trajectory.ddq, jerk
+    # Geometry samples constrain q(s), not independent acceleration boundaries.
+    # Resetting acceleration at every IK sample makes duration grow with density.
+    progress = np.asarray(distances) / distances[-1]
+    curve = CubicSpline(progress, np.asarray(joints), axis=0)
+    alpha = np.linspace(0., 1., 2001)
+    fractions = np.asarray([smoothstep9_fraction(float(u)) for u in alpha])
+    ds, dds, ddds = (value[:, None] for value in smoothstep9_derivatives(alpha))
+    q = curve(fractions)
+    path_v, path_a, path_j = (curve(fractions, order) for order in (1, 2, 3))
+    velocity = path_v * ds
+    acceleration = path_a * ds**2 + path_v * dds
+    jerk = path_j * ds**3 + 3. * path_a * ds * dds + path_v * ddds
+    timing = {'minimum_duration': 1. / control_hz,
+        'speed': float(np.max(np.abs(velocity) / np.asarray(joint_limits['joint_velocity_rad_s']))),
+        'acceleration': (float(np.max(np.abs(acceleration))) / joint_limits['acceleration'])**.5,
+        'jerk': (float(np.max(np.abs(jerk))) / joint_limits['jerk'])**(1/3)}
+    duration = 1.05 * max(timing.values())
+    limiting = [name for name, value in timing.items() if math.isclose(value, max(timing.values()), rel_tol=1e-9)]
+    return (CartesianSplineTrajectory(curve, duration, limiting), alpha * duration, q,
+            velocity / duration, acceleration / duration**2, jerk / duration**3)
 
 
 def tcp_metrics(model, qs, times):

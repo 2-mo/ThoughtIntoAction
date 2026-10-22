@@ -127,6 +127,38 @@ class ControlPrimitiveTests(unittest.TestCase):
         self.assertIsNone(engine.next(self.state(.8), .8).gripper_effort)
 
 class PhysicsGraspTests(unittest.TestCase):
+    def test_x5_blended_path_timing_is_stable_across_geometry_sample_density(self):
+        from embodied.control.settings import load_settings
+        from embodied.motion import cartesian_execution
+        config = load_settings().robot
+        planner = MotionPlanner(config, config.model_id)
+        start = np.asarray(config.park_q)
+        first = planner.model.fk(start)
+        first[2] += .02
+        second = first.copy()
+        second[1] += .02
+        request = dict(kind='move_path', waypoints=[first.tolist(), second.tolist()], blend_radius=.005,
+                       speed=.5, acceleration=2., jerk=10., tcp_speed=.1, angular_speed=.5)
+        snapshot = dict(q=start.tolist(), gripper_width=.082, epoch=0, owner=None)
+        geometry_builder = cartesian_execution.build_cartesian_path
+        durations = []
+        for step in (.0015, .003, .005):
+            with patch.object(cartesian_execution, 'build_cartesian_path',
+                              side_effect=lambda points: geometry_builder(points, max_step_m=step)):
+                plan = planner.plan(request, snapshot, 0.)
+            durations.append(plan['times'][-1])
+            self.assertEqual(plan['limits']['joint_velocity_rad_s'], [.5] * 6)
+            self.assertEqual(plan['limits']['tcp'], {'tcp_speed': .1, 'angular_speed': .5})
+            for name, cap in [('peak_velocity_rad_s', .5), ('peak_acceleration_rad_s2', 2.),
+                              ('peak_jerk_rad_s3', 10.), ('peak_tcp_speed_m_s', .1),
+                              ('peak_angular_speed_rad_s', .5)]:
+                self.assertLessEqual(plan['metrics'][name], cap)
+            self.assertIn('jerk', plan['metrics']['limiting_factors'])
+        # Line/arc curvature and numerical IK still vary with approximation
+        # density. They must not introduce a new acceleration cycle at every sample.
+        self.assertLess(max(durations) / min(durations), 1.2)
+        self.assertLess(max(durations), 6.)
+
     def test_actual_mujoco_contacts_confirm_only_an_obstructed_close(self):
         import xml.etree.ElementTree as ET
         from pathlib import Path
