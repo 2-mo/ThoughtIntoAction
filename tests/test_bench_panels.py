@@ -1,5 +1,6 @@
 """Waiting panes and web-service ownership, without devices or real child processes."""
 import builtins
+from contextlib import nullcontext
 import io
 import os
 from pathlib import Path
@@ -13,6 +14,88 @@ from embodied.applications.workstation import bench, bench_panels as panels
 
 
 class BenchPanelTests(unittest.TestCase):
+    def test_shared_camera_service_retries_without_owning_or_stopping_it(self):
+        with patch('embodied.devices.sensors.client.ensure_service', side_effect=[RuntimeError('startup failed'), None]) as ensure, \
+             patch.object(panels, 'load_config', return_value={'paths': {'log_dir': '/tmp/camera-logs'}}), \
+             patch.object(panels.subprocess, 'Popen') as spawn, \
+             patch.object(panels.os, 'killpg') as signal_group:
+            service = panels.Service('camera')
+            service.start()
+            self.assertEqual(service.message.level, 'error')
+            self.assertIn('startup failed', str(service.message))
+            self.assertIn('R 重试', str(service.message))
+            service.start()
+            self.assertEqual(ensure.call_count, 2)
+            self.assertIn('共享服务已连接', service.message)
+            self.assertEqual(service.log_path, Path('/tmp/camera-logs/camera-service.log'))
+            self.assertIsNone(service.process)
+            service.stop()
+            spawn.assert_not_called()
+            signal_group.assert_not_called()
+
+    def test_interactive_camera_starts_and_r_retries_without_stopping_shared_service(self):
+        with patch.object(panels.sys.stdin, 'isatty', return_value=True), \
+             patch.object(panels.sys.stdout, 'isatty', return_value=True), \
+             patch('embodied.devices.sensors.client.ensure_service', side_effect=[RuntimeError('offline'), None]) as ensure, \
+             patch('embodied.core.terminal_keys.terminal_keys', return_value=nullcontext()), \
+             patch('embodied.core.terminal_keys.read_key', side_effect=['r', 'eof']), \
+             patch('rich.live.Live'), \
+             patch.object(panels, 'snapshot', return_value=('共享相机', [], [])), \
+             patch.object(panels.Service, 'logs', return_value=[]), \
+             patch.object(panels.os, 'killpg') as signal_group:
+            self.assertEqual(panels.main(['camera', '--serve']), 0)
+            self.assertEqual(ensure.call_count, 2)
+            signal_group.assert_not_called()
+
+    def test_camera_ready_requires_enabled_fresh_frames_instead_of_metadata(self):
+        config = {'camera_service': {'socket': '/camera.sock'},
+                  'cameras': {'wrist_rgb': {'enabled': True, 'serial': 'expected'}}}
+        camera = {'enabled': True, 'metadata': {'model': 'D435i'}, 'error': None}
+        with patch.object(panels, 'load_config', return_value=config), \
+             patch.object(panels, 'resolve_path', side_effect=Path), \
+             patch.object(Path, 'exists', return_value=True), \
+             patch.object(Path, 'glob', return_value=[]), \
+             patch('embodied.core.session_protocol.request', return_value={'cameras': {'wrist_rgb': {'camera': camera}}}):
+            for age, level in [(None, 'waiting'), (.1, 'ready'), (.5, 'error'), (4., 'error'), (float('nan'), 'waiting')]:
+                with self.subTest(age=age):
+                    camera['age_s'] = age
+                    rows = dict(panels.camera_rows()[0])
+                    self.assertEqual(rows['wrist_rgb'].level, level)
+            camera.update(enabled=False, age_s=.1)
+            self.assertEqual(dict(panels.camera_rows()[0])['wrist_rgb'].level, 'disabled')
+            camera.update(enabled=True, error='device disconnected')
+            self.assertEqual(dict(panels.camera_rows()[0])['wrist_rgb'].level, 'error')
+
+    def test_camera_usb_detection_distinguishes_wrong_serial_from_waiting_for_frames(self):
+        with tempfile.TemporaryDirectory() as directory:
+            usb = Path(directory)
+            (usb / 'serial').write_text('connected')
+            (usb / 'product').write_text('Intel RealSense D435i')
+            options = {'enabled': True, 'serial': 'configured'}
+            config = {'camera_service': {'socket': str(usb / 'missing.sock')}, 'cameras': {'wrist_rgb': options}}
+            with patch.object(panels, 'load_config', return_value=config), \
+                 patch.object(panels, 'resolve_path', side_effect=Path), \
+                 patch.object(Path, 'glob', return_value=[usb / 'serial']):
+                rows = dict(panels.camera_rows()[0])
+                self.assertEqual(rows['共享服务'].level, 'waiting')
+                self.assertEqual(rows['wrist_rgb'].level, 'error')
+                self.assertIn('未匹配', str(rows['wrist_rgb']))
+                self.assertIn('connected', rows['USB 识别'])
+                options['serial'] = 'connected'
+                row = dict(panels.camera_rows()[0])['wrist_rgb']
+                self.assertEqual(row.level, 'waiting')
+                self.assertIn('USB 设备可见', str(row))
+
+    def test_noninteractive_camera_serve_never_ensures_service(self):
+        with patch.object(panels.sys.stdin, 'isatty', return_value=False), \
+             patch.object(panels, 'snapshot', return_value=('共享相机', [], ['等待启动'])), \
+             patch('embodied.devices.sensors.client.ensure_service') as ensure, \
+             patch.object(panels.Service, 'start') as start, \
+             patch('sys.stdout', new_callable=io.StringIO):
+            self.assertEqual(panels.main(['camera', '--serve']), 0)
+            ensure.assert_not_called()
+            start.assert_not_called()
+
     def test_vr_color_requires_valid_tracking_and_distinguishes_errors(self):
         with tempfile.TemporaryDirectory() as directory, \
              patch('embodied.contracts.runtime.control.ControlClient') as client:
