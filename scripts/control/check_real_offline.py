@@ -148,6 +148,16 @@ class NativeInterfaceChecks(unittest.TestCase):
         np.testing.assert_allclose(hardware.command.vel(), -hardware.state.pos() / 1.8)
         self.assertEqual(hardware.command.timestamp, 0.)
 
+    def test_profile_preserves_sdk_joint_controller_gains(self):
+        backend = self.backend()
+        factory = sdk.ControllerConfigFactory.get_instance().get_config('joint_controller', 6)
+        for config in (backend.config, RobotConfig()):
+            np.testing.assert_array_equal(config.kp, factory.default_kp)
+            np.testing.assert_array_equal(config.kd, factory.default_kd)
+        backend.step(ControlCommand(Mode.COMMAND_FOLLOWING), 10.)
+        np.testing.assert_array_equal(backend._hardware.gain.kp(), factory.default_kp)
+        np.testing.assert_array_equal(backend._hardware.gain.kd(), factory.default_kd)
+
     def test_extra_feedforward_is_not_gravity(self):
         backend = self.backend()
         torque = np.array([.1, -.2, .3, -.1, .2, -.05])
@@ -350,14 +360,17 @@ class NativeInterfaceChecks(unittest.TestCase):
                     return ControlCommand(Mode.COMMAND_FOLLOWING)
                 bridge = SimpleNamespace(poll_commands=poll, publish_state=lambda *args: None, close=lambda: None)
                 directory = Path(folder) / 'run'
+                # FakeHardware must not acquire the live arm's CAN lease.
                 with patch.object(real, 'RealBackend', side_effect=construct), \
                      patch.object(real, 'preflight', return_value={'ready': True}), \
+                     patch('embodied.contracts.device_lease.DeviceLease') as lease, \
                      patch.object(worker, 'RobotBridge', return_value=bridge):
                     if failure:
                         with self.assertRaises(RuntimeError):
                             worker.run('real', 'arx5-offline', None, directory)
                     else:
                         worker.run('real', 'arx5-offline', None, directory)
+                lease.return_value.close.assert_called_once_with()
                 backend, hardware = made[0]
                 self.assertTrue(backend._closed)
                 self.assertEqual(hardware.damping_calls, 1)

@@ -13,6 +13,7 @@ from embodied.control.commands import CommandEngine, MotionPlanner, SettlingWind
 from embodied.contracts.control import RobotState, ControlCommand, Mode
 from embodied.control.settings import load_settings
 from embodied.control.motion_limits import MotionLimits
+from embodied.core.presets import DEFAULT_GRASP_READY_JOINTS
 
 
 def reported_capabilities(velocity):
@@ -99,13 +100,33 @@ class TrajectoryTests(unittest.TestCase):
     def test_default_limits_match_explicit_ruckig_profile(self):
         request = {'kind': 'movej', 'q': (self.q + [np.deg2rad(10), 0, 0, 0, 0, 0]).tolist()}
         implicit = self.planner.plan(request, self.snapshot, 10.)
-        explicit = self.planner.plan({**request, 'speed': 0., 'acceleration': 2., 'jerk': 10.}, self.snapshot, 10.)
+        defaults = MotionLimits.load(self.config).describe()['defaults']
+        explicit = self.planner.plan({**request, **defaults}, self.snapshot, 10.)
         self.assertEqual(implicit['trajectory']['time_law'], 'ruckig')
         self.assertEqual({k: implicit['limits'][k] for k in ('speed', 'acceleration', 'jerk')},
-                         {'speed': 0., 'acceleration': 2., 'jerk': 10.})
+                         defaults)
         self.assertEqual(implicit['plan_id'], explicit['plan_id'])
         np.testing.assert_array_equal(implicit['q'], explicit['q'])
         np.testing.assert_array_equal(implicit['times'], explicit['times'])
+
+    def test_default_presets_reach_sdk_velocity_without_position_overshoot(self):
+        """Catch the slow a=2/j=10 profile returning to the P/H controls."""
+        home = np.array(self.config.park_q)
+        ready = np.array(DEFAULT_GRASP_READY_JOINTS)
+        limits = np.array(self.config.joint_velocity_max)
+        for start, target in ((home, ready), (ready, home)):
+            snapshot = {**self.snapshot, 'q': start.tolist()}
+            plan = self.planner.plan({'kind': 'movej', 'q': target.tolist()}, snapshot, 10.)
+            duration = plan['times'][-1]
+            self.assertLess(duration, .7)
+            samples = [plan['_trajectory'].sample(t) for t in np.linspace(0, duration, 1001)]
+            q, dq = np.array([s[0] for s in samples]), np.array([s[1] for s in samples])
+            self.assertTrue(np.all(q >= np.minimum(start, target) - 1e-9))
+            self.assertTrue(np.all(q <= np.maximum(start, target) + 1e-9))
+            self.assertTrue(np.all(np.abs(dq) <= limits + 1e-8))
+            self.assertGreater(np.max(np.abs(dq) / limits), .99)
+            np.testing.assert_allclose(q[-1], target, atol=1e-9)
+            np.testing.assert_allclose(dq[[0, -1]], 0., atol=1e-9)
 
     def test_short_move_acceleration_and_jerk_tuning_does_not_promise_requested_speed(self):
         request = {'kind': 'movej', 'q': (self.q + [np.deg2rad(10), 0, 0, 0, 0, 0]).tolist(), 'speed': .5}
@@ -589,7 +610,8 @@ class CommandsTests(unittest.TestCase):
         self.assertEqual(described['robot']['joint_min'], list(self.config.joint_min))
         self.assertEqual(described['robot']['control_hz'], 250)
         self.assertEqual(described['workspace'], {'minimum_tcp_z_m': 0.0})
-        self.assertEqual(described['motion_limits']['defaults'], {'speed': 0., 'acceleration': 2., 'jerk': 10.})
+        self.assertEqual(described['motion_limits']['defaults'],
+                         MotionLimits.load(self.config).describe()['defaults'])
         self.assertEqual(described['motion_limits']['joint_velocity_limits_rad_s'], list(self.config.joint_velocity_max))
         self.assertEqual(described['motion_limits']['source']['kind'], 'offline_configuration')
         self.assertEqual(described['motion_limits']['settling']['position_tolerance_rad'], .0035)
