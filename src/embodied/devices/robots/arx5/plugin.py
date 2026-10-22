@@ -3,9 +3,15 @@
 def model_snapshot(config):
     from pathlib import Path
     import json
+    from xml.etree import ElementTree
     from embodied.contracts.paths import PROJECT_ROOT
     model = Path(config.model_path) if config.model_path else PROJECT_ROOT / 'assets/robots/x5/runtime/x5_2025.xml'
-    return {'model': {'xml_path': str(model.resolve()), 'xml': model.read_text(),
+    xml = model.read_text()
+    joints = ElementTree.fromstring(xml).findall('.//worldbody//joint')[:config.joint_count]
+    names = [joint.attrib['name'] for joint in joints]
+    if len(names) != config.joint_count or len(set(names)) != len(names):
+        raise ValueError('Model must declare one unique name per arm joint')
+    return {'model': {'xml_path': str(model.resolve()), 'xml': xml, 'joint_names': names,
                       'urdf': model.with_suffix('.urdf').read_text(),
                       'manifest': json.loads(model.with_suffix('.model.json').read_text()),
                       'tool': json.loads(Path(config.tool_path or PROJECT_ROOT / 'configs/robots/arx5/tool.json').read_text())},
