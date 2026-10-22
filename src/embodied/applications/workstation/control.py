@@ -21,11 +21,13 @@ SDK_VENDOR = ROOT / "src/embodied/devices/robots/arx5/vendor/arx5-sdk"
 
 
 @contextmanager
-def sim_kernel(log_path, timeout=20, *, viewer=False):
+def sim_kernel(log_path, timeout=20, *, viewer=False, config=None):
     """Own an idle MuJoCo kernel, optionally with its read-only desktop viewer."""
     if viewer and sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
         raise ValueError("MuJoCo viewer requires DISPLAY; use viewer=False or --headless over SSH")
     command = [str(ROOT / "run.sh"), "control", "start", "--backend", "sim", "--input", "idle", "--managed"]
+    if config is not None:
+        command.extend(['--config', str(Path(config).expanduser().resolve())])
     if not viewer:
         command.append("--headless")
     with Path(log_path).open("w") as log:

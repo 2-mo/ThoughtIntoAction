@@ -75,6 +75,10 @@
     "arx5": {
       "factory": "embodied.devices.robots.arx5.viewer:Viewer",
       "runtime": "control"
+    },
+    "reference7": {
+      "factory": "embodied.devices.robots.reference7.viewer:Viewer",
+      "runtime": "control"
     }
   },
   "telemetry": {
@@ -145,6 +149,16 @@
         "joint",
         "gripper",
         "free-drive"
+      ]
+    },
+    "reference7.sim": {
+      "factory": "embodied.devices.robots.reference7.plugin:Simulation",
+      "runtime": "control",
+      "simulation_only": true,
+      "capabilities": [
+        "feedback",
+        "joint",
+        "cartesian"
       ]
     }
   },
@@ -583,6 +597,10 @@
     "arx5": {
       "factory": "embodied.devices.robots.arx5.kinematics:X5Model",
       "runtime": "control"
+    },
+    "reference7": {
+      "factory": "embodied.devices.robots.reference7.model:Model",
+      "runtime": "control"
     }
   },
   "perception": {
@@ -623,6 +641,10 @@
   "robot_profile": {
     "arx5": {
       "factory": "embodied.devices.robots.arx5.profile:load_profile",
+      "runtime": "control"
+    },
+    "reference7": {
+      "factory": "embodied.devices.robots.reference7.profile:load_profile",
       "runtime": "control"
     }
   },

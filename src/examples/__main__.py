@@ -6,8 +6,10 @@ from importlib import import_module
 EXAMPLES = {
     "sim_control": ("simulation.control", "可视化仿真控制：关节、XYZ、夹爪与返回；无需真机或 VR"),
     "sim_task": ("simulation.task_reset", "保存/恢复仿真场景，重复执行任务并检查成功条件"),
+    "reference7": ("simulation.reference7", "同一接口控制七轴无夹爪 MuJoCo 教学模型"),
     "read_state": ("control.read_state", "读取关节、TCP、夹爪和内核能力（不申请控制权）"),
     "movej": ("control.movej", "robot.movej：给定关节目标，等待到位"),
+    "benchmark": ("control.benchmark", "统一内核往返测试：保存速度、周期、跟踪和基线对比报告"),
     "movel": ("control.movel", "TCP 直线运动：绝对 XYZ、相对偏移或完整位姿"),
     "gripper": ("control.gripper", "robot.gripper.move：设置夹爪宽度"),
     "teach_return": ("control.teach_return", "teach → jog → return_to：记点、移动、返回"),
