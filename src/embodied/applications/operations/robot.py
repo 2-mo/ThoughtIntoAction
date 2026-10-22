@@ -184,6 +184,12 @@ class Robot:
         return self._connected().identity["backend"]
 
     @property
+    def simulation(self):
+        """Optional scene snapshot/restore and repeatable tasks for a simulation."""
+        from .simulation import Simulation
+        return Simulation(self)
+
+    @property
     def q(self):
         """Measured joint positions in radians, returned as a fresh list."""
         return list(self.state["q"])
@@ -200,6 +206,11 @@ class Robot:
 
     def describe(self):
         return self._connected().describe()
+
+    def task(self, name, *, on_event=None):
+        """Compose observed task stages; events are saved under this run's tasks/."""
+        from .tasks import Task
+        return Task(self, name, on_event=on_event)
 
     def _limits(self, options):
         return {**self.defaults, **{k: v for k, v in options.items() if v is not None}}
@@ -331,11 +342,14 @@ class Gripper:
     def width(self):
         return self.robot.state["gripper_width"]
 
-    def move(self, width, *, timeout=2., tolerance=.003):
-        timeout, tolerance = _positive(timeout, "timeout"), _positive(tolerance, "tolerance")
+    def _validate_width(self, width):
         maximum = self.robot.describe()["robot"]["gripper_max_width"]
         if isinstance(width, bool) or not math.isfinite(width) or not 0 <= width <= maximum:
             raise ValueError(f"Gripper width must be in 0..{maximum} metres")
+
+    def move(self, width, *, timeout=2., tolerance=.003):
+        timeout, tolerance = _positive(timeout, "timeout"), _positive(tolerance, "tolerance")
+        self._validate_width(width)
         session = self.robot._acquire()
         deadline, settled_since = time.monotonic() + timeout, None
         try:

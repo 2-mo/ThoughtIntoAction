@@ -45,7 +45,8 @@ with Robot.sim(viewer=True, speed=.5) as robot:
 examples/
 ├── simulation/              # 可视化、分步仿真控制
 ├── control/                 # 状态、MoveJ、MoveL、夹爪、记点返回
-├── data/                    # 数据采集
+├── tasks/                   # 接近、退离、二次观测与带验证的抓放模板
+├── data/                    # 数据采集、任务事件标注
 ├── planning/                # 离线轨迹与圆角路径
 ├── common.py                # 示例命令行参数与输出
 ├── __main__.py              # python -m examples 统一入口
@@ -58,12 +59,16 @@ examples/
 | 文件 | 运行参数 | 学会什么 |
 | --- | --- | --- |
 | [control.py](simulation/control.py) | `sim_control` / `sim_control --headless` | 在仿真中逐步执行关节、XYZ 和夹爪动作 |
+| [task_reset.py](simulation/task_reset.py) | `sim_task` | 保存/恢复物理状态，重复执行任务并检查成功条件 |
 | [read_state.py](control/read_state.py) | `read_state` | 读取 `state`、关节、末端和能力说明 |
 | [movej.py](control/movej.py) | `movej --joint 1 --degrees 10` | 从当前关节位置构造目标，再调用 `movej` |
 | [movel.py](control/movel.py) | `movel` / `movel --xyz X Y Z` / `movel --offset 0 0 0.02` | 绝对 XYZ、相对平移与完整位姿控制 |
 | [gripper.py](control/gripper.py) | `gripper --width 0.04` | 用夹爪对象控制 40 mm 开口 |
 | [teach_return.py](control/teach_return.py) | `teach_return` | 记住当前点位，移动，再返回 |
+| [approach_retreat.py](tasks/approach_retreat.py) | `approach_retreat` | 使用同一 Robot 接口组合接近/退离，记录阶段结果 |
+| [pick_place.py](tasks/pick_place.py) | `pick_place` | 注入目标观测和抓取验证；默认仿真空抓失败后停止 |
 | [record.py](data/record.py) | `record --duration 2` | 采集一段数据，查看记录结果 |
+| [annotate.py](data/annotate.py) | `annotate <EPISODE> <EVENTS> --annotator operator --confidence 0.8` | 将同一运行的任务事件映射到已录制相机帧，保存待复核技能区间 |
 | [offline_trajectory.py](planning/offline_trajectory.py) | `offline_trajectory` | 离线生成 Ruckig 轨迹，读取 q / dq / ddq |
 | [cartesian_blend.py](planning/cartesian_blend.py) | `cartesian_blend --radius 0.025` | 离线生成直线与圆角几何路径 |
 
@@ -95,6 +100,9 @@ examples/
 控制和采集示例默认 `--backend sim`，省略 `--run` 时自动新建仿真。
 `--viewer` 仅用于新建仿真；`--keep-open` 在交互终端中执行后等待 Enter，便于查看结果。
 两个离线规划示例不启动内核。
+`sim_task` 仅支持仿真，演示场景快照、重置和观测成功判据；它不把动作结束直接当作任务成功。
+`pick_place` 默认演示没有物体时的失败分支，结果为 `failed`，不会继续抬升或放置。
+将真实检测器和 `verify_grasp` 传给示例的 `run()` 后可复用同一流程；夹爪目前是宽度定位，不是力控抓取。
 示例数据保存在 `outputs/examples/`，支持输出路径的例子可用 `--output` 指定位置；仿真日志保存在 `outputs/robot/runs/`。
 
 要使用已经运行的内核，显式选择后端和运行目录：
@@ -130,7 +138,9 @@ with Robot.sim(speed=.5) as robot:
 需要非阻塞调用时，使用 `motion = robot.movej(q, wait=False)`，然后 `motion.wait()`。
 
 `record.py` 只采集，不触发运动；默认记录无相机诊断数据。
-它不等同于双相机训练数据，完整工作流见[采集说明](../../docs/guides/recording.md)。
+视觉训练数据需要另行配置相机；支持只有外部相机的录制，不要求双相机。
+`annotate` 只处理已结束、带相机的录制，需要同一次内核运行的 `tasks/<TASK_ID>/events.jsonl`；
+不会从无相机的 `record` 诊断数据生成帧标签。完整工作流见[采集说明](../../docs/guides/recording.md)。
 
 ## 名称、单位与当前边界
 

@@ -76,11 +76,45 @@ with Robot.sim(viewer=True) as robot:
 | 保持 | `robot.hold()` | 请求内核保持 |
 | 取消 | `robot.cancel()` | 取消当前执行的动作 |
 | 采集 | `robot.record(duration=3, output=path, task="观察")` | 按给定时长采集，并附任务说明 |
+| 仿真状态 | `robot.simulation.snapshot()` / `.restore(snapshot)` | 保存、恢复完整物理状态，恢复后保持 |
+| 仿真重置 | `robot.simulation.reset()` | 恢复该仿真启动时的场景 |
 
 关节编号从 0 开始；`q` 的长度与连接后的关节反馈一致，单位 rad。当前内核为六轴 X5；公共接口去掉固定轴数并不表示其他型号已完成适配。
 位置、偏移和夹爪宽度用 m；`robot.pose` 的反馈始终为 `xyz + xyzw` 七值，避免反馈格式随调用改变。
 `teach()` 是记录点位，不是打开拖动示教模式；此接口暂不提供 `free_drive()`。
 夹爪动作完成表示开合指令完成，不表示已经抓住物体。
+
+## 可重复的仿真任务
+
+```python
+with Robot.sim() as robot:
+    target = robot.q
+    target[0] += .1
+    task = robot.simulation.task(
+        "reach", instruction="第一个关节增加 0.1 rad",
+        goal="所有关节与目标偏差小于 0.01 rad",
+        success=lambda obs: all(abs(q - t) < .01 for q, t in zip(obs["q"], target)),
+    )
+    for _ in range(2):
+        task.reset()
+        robot.movej(target)
+        print(task.check_success())
+```
+
+运行 `./run.sh examples sim_task` 可查看完整例子。任务保存当前场景作为初始状态；
+`success` 是显式观测判据，动作结束不自动代表任务成功。`objects` 可指定模型中的 body 名称，
+注册时检查对象是否存在。`task.describe()` 保存任务文字、对象、目标说明和初始快照；
+成功判据仍由应用代码提供，不序列化 Python 函数。
+
+`robot.simulation.observe()` 返回同一物理状态的 `q`、`dq`、`pose`、`gripper_width`、
+`simulation_time_s` 和命名 `bodies` 位姿（m、XYZW）。MuJoCo 快照保存完整积分状态，
+并检查模型、配置和引擎版本。恢复进入当前测量位置的保持，不恢复旧任务、轨迹或控制计时器。
+先结束运动与录制，再恢复场景；恢复会使旧预览失效，并产生新的采集 epoch。
+真机不提供这些仿真能力，普通运动接口保持一致。
+
+离线重渲染由设备适配器的 `MujocoBackend.render_snapshot(snapshot, camera=..., width=..., height=...)`
+提供，在控制 Python 环境中的独立后端实例上调用；不在周期控制线程中渲染。
+它使用新的 MuJoCo data，不修改当前物理状态。当前适配仍使用 X5 场景，未引入完整 LIBERO 环境或任务集。
 
 ## 默认直接执行，也能先看计划
 
@@ -159,8 +193,7 @@ robot.movel(offset=[0, 0, 0.02], frame="tool")  # 沿当前工具 Z 轴移动 2 
 
 这里的 `offset` 只表示三维平移，保持原有朝向。
 绝对位姿 `robot.movel(pose)` 和 `robot.movel(xyz=...)` 使用基座坐标系，不支持 `frame="tool"`。
-`approach`、`retreat`、`lift` 可以先用明确坐标系的相对移动表达，
-不必为同一个动作增加许多含义相近的接口。
+单次几何移动使用 `movel(offset=..., frame=...)`；需要阶段记录和失败传播时使用下面的任务接口。
 
 ## 运动原语与任务技能的区别
 
@@ -170,14 +203,33 @@ MoveJ、MoveL、夹爪开合回答“运动到哪里”；抓取、放置回答�
 | 层次 | 例子 | 本项目当前边界 |
 | --- | --- | --- |
 | 可直接调用的原语 | MoveJ、MoveL、点动、开合、记点返回 | 本轮统一封装已有内核能力 |
-| 原语组合 | 接近、抬升、后退 | 用 `movel(offset=..., frame=...)` 编写几何动作 |
-| 任务技能 | grasp、pick、place、push、insert、handover | 尚未提供通用实现，需场景与反馈条件 |
+| 原语组合 | 接近、抬升、后退 | `movel` 偏移，或 `task.approach/retreat` 阶段 |
+| 抓放模板 | `task.pick/place` | 组合统一运动接口；pick 必须提供抓取验证，可注入前后两次目标观测 |
+| 其他技能 | push、insert、handover | 尚未提供通用实现，需场景与反馈条件 |
 | 连续路径 | MoveP、圆角衔接 | 有离线路径示例，尚未接入内核执行 |
 
 抓取任务可以拆成：接近 → 闭爪 → 验证抓持 → 抬升。
 没有抓持验证时，不能把“闭爪完成”自动转换成“抓取成功”。
 放置也需要确认对象被释放并处于目标位置，不能仅凭开爪结束作判断。
-这些是后续技能层的完成条件，本轮不添加空壳 `pick()` / `place()`。
+`task.place()` 的完成只表示接近、放置、开爪、退离执行完成；最终物体位置仍由任务的观测判据确认。
+
+```python
+with Robot.sim() as robot:
+    with robot.task("接近并退离") as task:
+        task.approach(xyz=robot.xyz, offset=[0, 0, .02])
+        task.retreat(offset=[0, 0, .02])
+    print(task.result)
+```
+
+抓放程序见 [pick_place.py](../../src/examples/tasks/pick_place.py)：`observe(robot)` 返回
+`Observation(pose, target_id, evidence)`，在接近前后各定位一次；目标 ID 改变会终止任务。
+`verify_grasp(robot)` 返回 `GraspCheck(confirmed, reason, evidence)`，失败后不会抬升或执行后续放置。
+当前夹爪只提供宽度定位；物体阻挡到位可能导致超时，任务层不会将超时偷偷改成接触成功。
+需要接触力控的设备，应在其夹爪适配器中提供实际能力，再接入任务验证。
+
+阶段记录位于 `<run>/tasks/<task_id>/events.jsonl` 和 `result.json`，包含独立阶段状态、错误、
+操作 ID 与主机单调时间；写入发生在任务进程，控制周期不等待这些日志。
+网页“任务 / 技能复核”可查看阶段；`on_event` 可订阅同一事件，回调异常不隐藏已有执行结果。
 
 ## 参考了哪些优秀设计
 
@@ -191,11 +243,12 @@ MoveJ、MoveL、夹爪开合回答“运动到哪里”；抓取、放置回答�
 | [ManiSkill：Controllers / Action Spaces](https://maniskill.readthedocs.io/en/latest/user_guide/concepts/controllers.html) | 区分绝对目标、增量目标及参考坐标系 | `pose` 与 `offset` 分开，`base` / `tool` 显式指定 |
 | [robosuite：Controllers](https://robosuite.ai/docs/modules/controllers.html) | 控制器定义动作含义，机器人按部件组合 | 机械臂运动与 `robot.gripper` 分开，不混淆位置、速度和力矩 |
 | [PyRoboSim：Robot Actions](https://pyrobosim.readthedocs.io/en/latest/usage/robot_actions.html) | 动作、计划、执行结果和取消有统一语义 | 简单动作默认等待；复杂调用可持有 `Motion`，失败不会当作完成 |
-| [MoveIt Task Constructor：Pick and Place](https://moveit.picknik.ai/main/doc/tutorials/pick_and_place_with_moveit_task_constructor/pick_and_place_with_moveit_task_constructor.html) | 抓取放置分成可检查、可组合的阶段 | 先保留动作原语；任务技能补齐感知与结果验证后再封装 |
+| [MoveIt Task Constructor：Pick and Place](https://moveit.picknik.ai/main/doc/tutorials/pick_and_place_with_moveit_task_constructor/pick_and_place_with_moveit_task_constructor.html) | 抓取放置分成可检查、可组合的阶段 | Task 复用 Robot 动作，观测和结果验证由应用显式提供 |
 | [LeRobot：硬件接口](https://huggingface.co/docs/lerobot/main/integrate_hardware) / [数据集](https://huggingface.co/docs/lerobot/main/lerobot-dataset-v3) | 观察、动作、硬件接口和 episode 数据解耦 | 控制与采集分别调用，保留状态、动作、时间和任务语义 |
 | [libfranka：Gripper](https://frankarobotics.github.io/libfranka/0.15.0/classfranka_1_1Gripper.html) | `move` 与带反馈判据的 `grasp` 分开 | 当前只承诺夹爪开合，不伪造抓持检测 |
 
 MTC 的 `attachObject` 修改的是规划场景，不能作为真实抓持的传感反馈。
 libfranka 的抓取判据依赖其夹爪行为，也不能未经标定直接套用到 ARX。
-后续增加技能时，应让每个阶段有清楚的输入、完成条件和失败结果，
-同时保持最外层示例短小、直观。
+本轮还参考 [Bulid_Block 的二次定位](https://github.com/GZF123/Bulid_Block/blob/9879332379dd0d28e230624c017ce72d4a4fc1ad/main.py#L525-L618)
+与 [LIBERO 的状态恢复](https://github.com/GZF123/LIbero_data_collection/blob/fd526095f64986c88f7e3bf5411f56b8e35c4648/libero/libero/envs/env_wrapper.py#L103-L145)。
+仅借鉴流程设计，执行、失败传播和采集边界仍使用本项目的统一内核；不引入这些仓库作为运行依赖。

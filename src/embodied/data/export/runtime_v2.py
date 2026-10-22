@@ -8,8 +8,9 @@ from mcap.reader import make_reader
 from mcap.exceptions import McapError
 from zstandard import ZstdError
 
-from embodied.data.episode.cameras import camera_topic
-from embodied.data.episode.runtime_episode import ACTION, TOPICS, frame_kind, split_tick
+from embodied.data.episode.cameras import camera_topic, camera_metadata, anchor_camera
+from embodied.data.episode.contract import episode_contract, vector, action_definition
+from embodied.data.episode.runtime_episode import TOPICS, frame_kind, split_tick
 from embodied.data.episode.video import media_path
 from embodied.data.alignment.runtime_alignment import align
 from embodied.contracts.runtime.client import validate_tick_joints
@@ -21,14 +22,16 @@ def load_episode(path):
     schema, meta = read(path)
     if schema != RUNTIME:
         raise ValueError(f'Expected a {RUNTIME} episode, found {schema}')
-    if meta.get('action_definition') != ACTION:
+    contract = episode_contract(meta)
+    if meta.get('action_definition') != action_definition(contract):
         raise ValueError('Unsupported action definition')
     if meta.get('lifecycle') != 'complete' or meta.get('error'):
         raise ValueError('Runtime recording is incomplete or failed')
     if meta.get('record_storage') != {'format': 'mcap', 'file': 'episode.mcap'}:
         raise ValueError('Unsupported record storage')
-    cameras = meta.get('cameras') or ({'wrist_rgb': meta['camera']} if meta.get('camera') else {})
-    topics = {**TOPICS, **{frame_kind(c): camera_topic(c) for c in cameras}}
+    cameras = camera_metadata(meta)
+    topics = {**{key: topic for key, topic in TOPICS.items() if key != 'frame' or key in meta.get('counts', {})},
+              **{frame_kind(c): camera_topic(c) for c in cameras}}
     rows = {key: [] for key in topics}
     lookup = {topic: key for key, topic in topics.items()}
     try:
@@ -73,6 +76,7 @@ def load_episode(path):
         if type(timing['completed_ns']) is not int or timing['completed_ns'] <= stamp:
             raise ValueError('Tick timestamps regress')
         for kind, row in split_tick(tick).items():
+            vector(row, contract)
             if type(row['host_monotonic_ns']) is not int or not 0 < row['host_monotonic_ns'] <= timing['completed_ns']:
                 raise ValueError('Invalid feedback/command timestamp')
             extracted[kind].append(row)
@@ -85,9 +89,9 @@ def load_episode(path):
         raise ValueError('Terminal boundary disagrees')
     if meta['stop_reason'] == 'runtime-terminal' and not meta['terminal_received']:
         raise ValueError('Missing runtime terminal')
-    if meta['kind'] == 'quest_runtime_episode' and (not cameras or not rows['frame']):
+    if meta['kind'] == 'quest_runtime_episode' and (not cameras or any(not rows[frame_kind(c)] for c in cameras)):
         raise ValueError('Missing camera data')
-    if meta['kind'] == 'quest_runtime_trace' and (cameras or rows['frame']):
+    if meta['kind'] == 'quest_runtime_trace' and (cameras or rows.get('frame')):
         raise ValueError('Diagnostic trace unexpectedly contains a camera')
     for camera_id, camera in cameras.items():
         previous, stamp = None, 0
@@ -114,7 +118,8 @@ def main(argv=None):
         if args.command == 'alignment':
             if meta['kind'] != 'quest_runtime_episode':
                 raise ValueError('Robot-only trace has no training observations')
-            selected, excluded = align(rows['state'], rows['command'], rows['frame'], sources=('quest', 'phone'))
+            selected, excluded = align(rows['state'], rows['command'], rows[frame_kind(anchor_camera(meta))],
+                                       sources=('quest', 'phone'), contract=episode_contract(meta))
             result.update(eligible_anchors=len(selected), excluded=excluded,
                           note='Export with scripts/datasets/convert.sh; schemas/action definitions remain separate')
         print(json.dumps(result, ensure_ascii=False, indent=2))

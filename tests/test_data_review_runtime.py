@@ -39,7 +39,7 @@ class RuntimeReviewTests(unittest.TestCase):
         self.assertTrue(report['valid'], report)
         self.assertEqual(report['cameras'], ['wrist_rgb'])
         self.assertGreater(report['training']['samples'], 1)
-        self.assertEqual(report['training']['control_stack'], 'arx-televr kernel: sent_q at 250 Hz')
+        self.assertEqual(report['training']['control_stack'], 'runtime kernel: submitted joint position commands')
 
     def test_label_keeps_history_and_cli_dispatches_by_schema(self):
         datasets.label_episode(self.path, 'success', 'looks good')

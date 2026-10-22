@@ -13,6 +13,7 @@
 | 了解平台、演示给别人看 | `./run.sh web site` · [宣传站](apps/site/README.md) |
 | 理解代码、找实现 | [架构概览](docs/architecture/overview.md) · [源码导航](src/README.md) |
 | 学习如何写运动与采集程序 | `./run.sh examples` · [Python 示例](src/examples/README.md) · [Robot 接口](docs/reference/robot-primitives.md) |
+| 编写分阶段任务、重复仿真测试 | `./run.sh examples approach_retreat`、`./run.sh examples sim_task` |
 | 查看后续工作 | [工程计划](docs/plans/README.md) |
 
 ## 安装
@@ -31,6 +32,8 @@ uv sync --locked           # 平台环境（Python 3.12）
 **日常只需要 `./run.sh`**：打开统一工作台（tmux）。总控窗口列出当前可用的按键——启动真机或仿真内核，之后录制、检查、导出、网页控制台、手眼标定、策略都是一个键；每个操作都会把实际命令输入“命令”窗口，可以看到、修改、重复执行。
 
 工作台固定打开 **1 内核、2 命令、3 总控、4 网页、5 VR、6 相机、7 宣传** 七个终端窗口，用 `Ctrl+B` 后按数字切换。默认打开带采集面板的监看页（<http://127.0.0.1:18081/>），只读连接统一内核，并启动宣传网站。VR 未连接、机械臂未通电或相机未就绪时，对应窗口保留状态与操作提示，设备接入不会自动使能机械臂。网页启动失败会显示日志，按 `R` 重试。再次运行 `./run.sh` 会补齐缺少的窗口，保留已有进程。
+
+新版监看页提供“实测速度 · 质量”和“任务 / 技能复核”：查看反馈速度、周期与相机帧质量，复核任务阶段及版本化技能标注。采集数据按机器人关节与夹爪契约保存，可选择外部相机作为参考，见[采集与复核](docs/guides/recording.md)。
 
 通过 SSH 打开工作台时，监看页自动绑定 SSH 连接使用的服务器地址，**以窗口 4 显示的链接为准**；客户端的 `127.0.0.1` 不指向远程机器。也可在 `configs/local.toml` 的 `[viewer_service]` 中指定 `host`，或手动启动时使用 `--host <服务器 IPv4>`。
 
