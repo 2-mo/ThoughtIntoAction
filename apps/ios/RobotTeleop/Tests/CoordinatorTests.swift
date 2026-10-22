@@ -192,6 +192,40 @@ private final class StatusCollector: @unchecked Sendable {
 }
 
 final class CoordinatorTests: XCTestCase {
+  func testPhoneControlConfirmsOwnershipAndRejectsWrongRequestReplies() throws {
+    let clock = ManualClock(1_000_000_000)
+    let fixture = makeCoordinator(sessionIDs: [71], clock: clock.now)
+    fixture.coordinator.connect(endpoint: DatagramEndpoint(host: "127.0.0.1", port: 5005))
+    XCTAssertTrue(waitUntil { fixture.transport.endpoint != nil })
+    fixture.transport.transition(to: .ready)
+    fixture.provider.emit(sample(timestampNs: 1_000_000_000))
+    XCTAssertTrue(waitUntil { !fixture.transport.sentControls.isEmpty })
+    let request = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.transport.sentControls[0]) as? [String: Any])
+    XCTAssertEqual(request["action"] as? String, "monitor")
+    XCTAssertFalse(fixture.status.latest?.controlAvailable ?? true)
+    var reply: [String: Any] = ["protocol": "tia.phone.control.v1", "id": 999, "session_id": 71,
+      "ok": true, "message": "", "kernel_runtime_id": "test", "enabled": false,
+      "active": false, "estop": false, "target_limited": false, "robot_gripper": 0.4]
+    fixture.transport.emit(try JSONSerialization.data(withJSONObject: reply))
+    XCTAssertTrue(waitUntil { (fixture.status.latest?.invalidResponseCount ?? 0) == 1 })
+    reply["id"] = request["id"]
+    fixture.transport.emit(try JSONSerialization.data(withJSONObject: reply))
+    XCTAssertTrue(waitUntil { fixture.status.latest?.controlAvailable == true })
+    fixture.coordinator.requestControl("enable")
+    XCTAssertTrue(waitUntil { fixture.transport.sentControls.count == 2 })
+    let enable = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.transport.sentControls[1]) as? [String: Any])
+    XCTAssertEqual(enable["runtime_id"] as? String, "test")
+    reply["id"] = enable["id"]
+    reply["enabled"] = true
+    fixture.transport.emit(try JSONSerialization.data(withJSONObject: reply))
+    XCTAssertTrue(waitUntil { fixture.status.latest?.phoneControl?.enabled == true })
+    fixture.coordinator.requestControl("disable")
+    XCTAssertTrue(waitUntil { fixture.transport.sentControls.count == 3 })
+    let stop = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.transport.sentControls[2]) as? [String: Any])
+    XCTAssertEqual(stop["action"] as? String, "disable")
+    fixture.coordinator.disconnect()
+  }
+
   func testLatestOnlySenderOverwritesPendingPose() {
     let sink = ManualDatagramSink()
     let sender = LatestOnlyDatagramSender(sendOperation: sink.send)

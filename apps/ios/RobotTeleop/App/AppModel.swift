@@ -57,21 +57,46 @@ final class AppModel: ObservableObject {
   var canControl: Bool {
     status.networkState == .ready
       && status.trackingQuality == .normal
-      && !estopLatched
+      && status.controlAvailable && status.phoneControl?.enabled == true
+      && !stopLatched
       && !estopResetPending
+  }
+
+  var stopLatched: Bool { estopLatched || status.phoneControl?.estop == true }
+
+  var canStartControl: Bool {
+    status.networkState == .ready && status.controlAvailable && status.phoneControl?.kernelRuntimeID != nil
+      && status.trackingQuality == .normal && !stopLatched
+      && !status.controlPending && !estopResetPending && !clutchActive
+      && status.phoneControl?.enabled != true
+  }
+
+  var controlSummary: String {
+    if let message = status.controlMessage, !message.isEmpty { return message }
+    if !status.controlAvailable { return "等待电脑控制服务确认" }
+    if stopLatched { return "停止已锁定 · 点恢复后可重新开始" }
+    if status.phoneControl?.kernelRuntimeID == nil { return "robot 未运行，请在电脑总控启动" }
+    if status.phoneControl?.targetLimited == true { return "目标跟随误差较大，超出部分已丢弃" }
+    return status.phoneControl?.enabled == true ? "遥操已开始 · 按住下方控制区跟随" : "仅监看 · 点开始遥操"
+  }
+
+  func startControl() {
+    guard canStartControl else { return }
+    setClutchActive(false)
+    coordinator?.requestControl("enable")
+  }
+
+  func stopControl() {
+    setClutchActive(false)
+    coordinator?.requestControl("disable")
   }
 
   var canHome: Bool {
-    status.networkState == .ready
-      && status.trackingQuality == .normal
-      && !estopLatched
-      && !estopResetPending
+    canControl && !clutchActive
   }
 
   var canRecoverControl: Bool {
-    status.networkState == .ready
-      && status.trackingQuality == .normal
-      && status.estopResetState != .pending
+    !estopResetPending && !status.controlPending
   }
 
   var estopResetPending: Bool {
@@ -79,11 +104,11 @@ final class AppModel: ObservableObject {
   }
 
   var recoverControlLabel: String {
-    estopResetPending ? "RECOVERING" : "RECOVER"
+    estopResetPending ? "恢复中" : "恢复"
   }
 
   var tuningEnabled: Bool {
-    !clutchActive && !estopLatched && !estopResetPending
+    !clutchActive && !stopLatched && !estopResetPending
   }
 
   var captureSummary: String? {
@@ -117,6 +142,7 @@ final class AppModel: ObservableObject {
 
   func disconnect() {
     setClutchActive(false)
+    coordinator?.requestControl("disable")
     coordinator?.disconnect()
   }
 
@@ -158,12 +184,17 @@ final class AppModel: ObservableObject {
   func recoverControl() {
     guard canRecoverControl else { return }
     setClutchActive(false)
+    if !status.controlAvailable || status.networkState != .ready {
+      disconnect()
+      connect()
+      return
+    }
     coordinator?.requestEstopReset()
     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
   }
 
   func setGripper(_ value: Double) {
-    guard !estopLatched else { return }
+    guard canControl else { return }
     gripper = min(max(value, 0), 1)
     coordinator?.setGripper(Float(gripper))
   }
@@ -187,6 +218,7 @@ final class AppModel: ObservableObject {
   }
 
   private func consume(_ newStatus: TeleopCoordinatorStatus) {
+    let resetCompleted = newStatus.estopResetState == .acknowledged && status.estopResetState != .acknowledged
     let isNetworkReady = newStatus.networkState == .ready
     if isNetworkReady, !wasNetworkReady {
       UINotificationFeedbackGenerator().notificationOccurred(.success)
@@ -194,7 +226,7 @@ final class AppModel: ObservableObject {
     wasNetworkReady = isNetworkReady
     status = newStatus
 
-    if newStatus.estopResetState == .acknowledged {
+    if resetCompleted {
       let wasLatched = estopLatched
       estopLatched = false
       clutchActive = false
@@ -203,8 +235,14 @@ final class AppModel: ObservableObject {
       }
     }
 
-    if !isNetworkReady || newStatus.trackingQuality != .normal {
+    if !canControl {
       clutchActive = false
+      coordinator?.setClutchActive(false)
+    }
+    if !clutchActive, newStatus.controlAvailable, newStatus.phoneControl?.enabled == true,
+      let actual = newStatus.phoneControl?.robotGripper {
+      gripper = min(max(actual, 0), 1)
+      coordinator?.setGripper(Float(gripper))
     }
     switch newStatus.networkState {
     case .failed(let message), .waiting(let message):

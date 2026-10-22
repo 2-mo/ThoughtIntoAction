@@ -5,6 +5,8 @@
 #phone-status { font-size: 12px; color: #e6b96a; }
 .phone-panel[data-state="live"] #phone-status { color: #70d8ab; }
 .phone-panel[data-state="error"] #phone-status { color: #ff9292; }
+.phone-panel[data-state="warning"] { background: #493819; border: 2px solid #e6b96a; }
+.phone-panel[data-state="error"] { background: #431f24; border: 2px solid #ff9292; }
 .phone-panel p { font-size: 12px; line-height: 1.6; margin: 8px 0; overflow-wrap: anywhere; }
 .phone-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .phone-metrics div { display: flex; flex-direction: column; gap: 4px; }

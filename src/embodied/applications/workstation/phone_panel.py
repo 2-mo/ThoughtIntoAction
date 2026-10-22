@@ -19,13 +19,16 @@ def rows():
     tracking = {'normal': '正常', 'limited': '受限', 'unavailable': '无追踪'}
     details += [('ARKit', Status(tracking.get(state.get('tracking'), '等待输入'),
                                 'ready' if state.get('tracking') == 'normal' else 'waiting')),
+                ('相对映射', f'位移 {state.get("position_scale", 1):.2f}× · 旋转 {state.get("rotation_scale", 1):.2f}×'),
                 ('输入帧率', f'{state.get("fps", 0):.1f} Hz' if connected else '—'),
                 ('数据年龄', f'{state["age_s"] * 1000:.0f} ms' if connected else '—'),
                 ('控制权', label if state['available'] else '未接管'),
                 ('Clutch', '按住' if state.get('clutch') else '松开'),
                 ('位置 XYZ', ' / '.join(f'{v:.3f}' for v in state['position']) + ' m' if state.get('position') else '—')]
     if state.get('estop'):
-        details.append(('急停', Status('已锁存', 'error')))
+        details.append(('停止锁定', Status('已锁存 · 在手机点恢复', 'error')))
+    if state.get('target_limited'):
+        details.append(('跟随', Status('目标超前，已丢弃多余位移；可反向移动或松开重新定位', 'waiting')))
     if state.get('error'):
         details.append(('提示', Status(state['error'], 'error')))
     return details, ['手机与电脑使用可互通的网络，RobotTeleop 填上方服务器地址并 Connect。',

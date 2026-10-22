@@ -15,7 +15,8 @@ struct StatusStrip: View {
         value: trackingLabel,
         icon: "viewfinder",
         accent: trackingColor,
-        identifier: "status.tracking"
+        identifier: "status.tracking",
+        highlighted: model.status.trackingQuality != .normal
       )
       MetricCell(
         label: "Send FPS",
@@ -121,6 +122,7 @@ private struct MetricCell: View {
   let icon: String
   let accent: Color
   let identifier: String
+  var highlighted = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 5) {
@@ -141,10 +143,10 @@ private struct MetricCell: View {
     }
     .padding(.horizontal, 10)
     .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
-    .background(TeleopTheme.surface)
+    .background(highlighted ? accent.opacity(0.28) : TeleopTheme.surface)
     .overlay {
       RoundedRectangle(cornerRadius: 6)
-        .stroke(TeleopTheme.border, lineWidth: 1)
+        .stroke(highlighted ? accent : TeleopTheme.border, lineWidth: highlighted ? 2 : 1)
     }
     .clipShape(RoundedRectangle(cornerRadius: 6))
     .accessibilityElement(children: .ignore)

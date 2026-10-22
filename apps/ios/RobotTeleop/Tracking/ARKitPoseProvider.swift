@@ -182,7 +182,8 @@ final class ARKitPoseProvider: NSObject, PoseProvider, ARSessionDelegate, @unche
         linearVelocity: nil,
         angularVelocity: nil,
         trackingQuality: trackingQuality(frame.camera.trackingState),
-        captureTelemetry: telemetry
+        captureTelemetry: telemetry,
+        trackingReason: trackingReason(frame.camera.trackingState)
       )
     )
   }
@@ -203,6 +204,21 @@ final class ARKitPoseProvider: NSObject, PoseProvider, ARSessionDelegate, @unche
       .limited
     case .notAvailable:
       .unavailable
+    }
+  }
+
+  private func trackingReason(_ state: ARCamera.TrackingState) -> String? {
+    switch state {
+    case .normal: return nil
+    case .notAvailable: return "追踪不可用，请检查相机"
+    case .limited(let reason):
+      switch reason {
+      case .initializing: return "正在初始化，缓慢观察周围环境"
+      case .excessiveMotion: return "手机移动过快或画面模糊"
+      case .insufficientFeatures: return "画面特征不足，请对准有纹理、光线充足的区域"
+      case .relocalizing: return "正在重新定位，请观察之前的环境"
+      @unknown default: return "追踪受限，请保持画面清晰"
+      }
     }
   }
 

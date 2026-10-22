@@ -2,6 +2,7 @@
 from dataclasses import replace
 from pathlib import Path
 import socket
+import json
 import tempfile
 import threading
 import time
@@ -12,7 +13,7 @@ from embodied.core.session_protocol import request
 from embodied.devices.inputs.phone import PhoneController
 from embodied.devices.inputs import phone_service
 from embodied.devices.phone.protocol.golden import GOLDEN_POSE
-from embodied.devices.phone.protocol.packet import encode_packet
+from embodied.devices.phone.protocol.packet import encode_packet, decode_packet, EStopResetRequestPacket, EStopResetAckPacket, SourceType
 
 
 class PhoneServiceTests(unittest.TestCase):
@@ -92,6 +93,68 @@ class PhoneServiceTests(unittest.TestCase):
         self.assertEqual(state['error'], 'lease lost')
         client.close.assert_called_once()
         self.assertTrue(self.send()['connected'])
+
+    def test_phone_commands_are_session_bound_ordered_and_retries_do_not_reexecute(self):
+        self.send()
+        self.sock.settimeout(.05)
+        def send(sequence, action, **fields):
+            data = {'protocol': phone_service.CONTROL_PROTOCOL, 'id': sequence, 'session_id': 1,
+                    'client_time_ns': self.controller.last_input.timestamp_ns, 'action': action,
+                    'runtime_id': 'test', **fields}
+            self.sock.sendto(json.dumps(data).encode(), self.controller.transport.local_address)
+            self.service.step()
+        with patch.object(phone_service, 'live_runs', return_value=[]), \
+             patch.object(self.service, 'dispatch', wraps=self.service.dispatch) as dispatch:
+            send(1, 'monitor')
+            self.assertTrue(json.loads(self.sock.recv(2048))['ok'])
+            dispatch.assert_not_called()
+            send(2, 'disable')
+            first = self.sock.recv(2048)
+            dispatch.assert_called_once_with({'command': 'disable', 'runtime_id': 'test'})
+            send(2, 'disable')
+            self.assertEqual(self.sock.recv(2048), first)
+            self.assertEqual(dispatch.call_count, 1)
+            send(1, 'enable')
+            with self.assertRaises(TimeoutError): self.sock.recv(2048)
+            send(3, 'enable', session_id=2)
+            with self.assertRaises(TimeoutError): self.sock.recv(2048)
+            send(3, 'enable', client_time_ns=self.controller.last_input.timestamp_ns - 1_000_000_000)
+            self.assertFalse(json.loads(self.sock.recv(2048))['ok'])
+            self.assertEqual(dispatch.call_count, 1)
+
+    def test_phone_recovery_clears_only_phone_stop_and_never_acquires_robot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.service.latch_path = Path(directory) / 'stop.json'
+            self.send(estop_requested=True)
+            self.assertTrue(json.loads(self.service.latch_path.read_text())['latched'])
+            self.send(estop_requested=False, clutch_active=False)
+            packet = EStopResetRequestPacket(SourceType.ARKIT, 1, 1, time.monotonic_ns())
+            with patch('embodied.devices.inputs.phone.ControlSession') as acquire:
+                self.sock.sendto(encode_packet(packet), self.controller.transport.local_address)
+                self.service.step()
+                self.sock.settimeout(.1)
+                self.assertIsInstance(decode_packet(self.sock.recv(2048)), EStopResetAckPacket)
+                acquire.assert_not_called()
+                self.assertFalse(self.controller.estop)
+                self.assertTrue(self.controller.ghost)
+                self.assertFalse(json.loads(self.service.latch_path.read_text())['latched'])
+                with patch.object(self.controller, 'disable') as disable:
+                    self.assertTrue(self.service.reset_from_phone(packet))
+                    disable.assert_not_called()
+            self.send(estop_requested=True, clutch_active=True)
+            self.assertFalse(self.service.reset_from_phone(packet))
+            self.assertTrue(self.controller.estop)
+            self.send(estop_requested=False, clutch_active=False)
+            self.assertFalse(self.service.reset_from_phone(packet))
+            self.assertTrue(self.controller.estop)  # An old RESET cannot clear a newer stop.
+
+    def test_service_restart_preserves_stop_latch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'stop.json'
+            path.write_text('{"latched":true}')
+            with patch.object(phone_service, 'addresses', return_value=[]):
+                other = phone_service.PhoneService(self.controller, latch_path=path)
+            self.assertTrue(other.controller.estop)
 
     def test_idle_udp_does_not_starve_local_monitor_or_shutdown(self):
         with tempfile.TemporaryDirectory() as directory, \

@@ -27,10 +27,10 @@ struct ControlView: View {
       ScrollView {
         VStack(spacing: 10) {
           TuningControls(model: model, compact: false)
-          ControlActionRow(model: model)
         }
       }
       .scrollIndicators(.hidden)
+      ControlActionRow(model: model)
       HoldControlSurface(model: model, compact: false)
         .frame(height: 122)
     }

@@ -20,16 +20,27 @@ class PhoneInput(ArkitInputSource):
     def __init__(self, transport, on_controls, **options):
         super().__init__(transport, **options)
         self.on_controls = on_controls
+        self.on_message = None
 
     def _handle_payload(self, payload, received_at_ns):
+        if payload.startswith(b'{'):
+            if self.on_message is not None:
+                self.on_message(payload)
+            return None
         value = super()._handle_payload(payload, received_at_ns)
         if value is not None:
             self.on_controls(value)
         return value
 
 
+def phone_settings():
+    return json.loads((PROJECT_ROOT / 'configs/inputs/phone.json').read_text())
+
+
 def phone_tool():
-    return PoseMapping(AxisMapping((1, 0, 2), (1, -1, 1)), 2., 1., MappingOutputFrame.TOOL)
+    settings = phone_settings()
+    return PoseMapping(AxisMapping((1, 0, 2), (1, -1, 1)), settings['position_scale'],
+                       settings['rotation_scale'], MappingOutputFrame.TOOL)
 
 
 def phone_base():
@@ -41,7 +52,10 @@ class PhoneController:
         from embodied.contracts.registry import Registry
         registry = Registry()
         self.mapping = registry.create('mapping', mapping)
-        self.policy = RelativePosePolicy(self.mapping, mapping_provider=lambda: self.mapping)
+        settings = phone_settings()
+        self.policy = RelativePosePolicy(self.mapping, mapping_provider=lambda: self.mapping,
+            max_position_lead_m=settings['max_position_lead_m'],
+            max_rotation_lead_rad=settings['max_rotation_lead_rad'])
         self.ghost = ghost
         self.mapping_name = mapping
         source = PROJECT_ROOT / 'src'
@@ -49,25 +63,28 @@ class PhoneController:
         # One digest over sorted (path, file hash) lines: a per-file map exceeds the gateway's 8 KiB metadata bound.
         tree = hashlib.sha256(''.join(f'{path.relative_to(source)} {hashlib.sha256(path.read_bytes()).hexdigest()}\n'
                                       for path in files).encode()).hexdigest()
-        self.metadata = {'plugin': 'phone.arkit', 'protocol': 1, 'mapping': mapping, 'position_scale': 2.,
-                      'rotation_scale': 1., 'pose_frame': 'base_tcp', 'quaternion': 'xyzw', 'gripper': 'metres',
+        self.metadata = {'plugin': 'phone.arkit', 'protocol': 1, 'mapping': mapping,
+                      **settings, 'pose_frame': 'base_tcp', 'quaternion': 'xyzw', 'gripper': 'metres',
                       'source_tree_sha256': tree, 'source_files': len(files)}
         if directory is None and not ghost:
             raise ValueError('A runtime is required for phone control')
         self.client = (None if directory is None else ControlClient(directory) if ghost else
                        ControlSession(directory, source='phone', purpose='teleop', metadata=self.metadata))
         self.transport = UdpTransport(UdpTransportConfig(bind_host=bind_host, bind_port=port, receive_timeout_s=.02))
+        self.reset_request = lambda _: False
         self.source = registry.create('input', 'arkit', transport=self.transport, on_controls=self._controls,
-            settings_callback=self._settings, estop_reset_request_callback=lambda _: False)
+            settings_callback=self._settings, estop_reset_request_callback=lambda packet: self.reset_request(packet))
         self.released = self.active = False
         self.session_id = None
         self.last_received = 0
         self.estop = self.home = False
+        self.stop_input_time_ns = 0
         self.home_pressed = False
         self.recenter = self.recenter_pressed = False
         self.zero_requested = False
         self.operation_id = None
         self.last_target = None
+        self.last_robot = None
         self.last_input = None
         self.input_count = 0
 
@@ -76,8 +93,9 @@ class PhoneController:
         if not self.ghost:
             raise ValueError('手机已持有控制权')
         if self.estop:
-            raise ValueError('手机急停已锁存；当前真机接口不支持手机端复位')
+            raise ValueError('手机停止已锁存；松开 Clutch 后在手机点恢复')
         client = ControlSession(directory, source='phone', purpose='teleop', metadata=self.metadata)
+        self.last_robot = client.status()
         client.__enter__()
         self.client, self.ghost = client, False
         self.released = self.active = self.home = self.recenter = False
@@ -97,6 +115,7 @@ class PhoneController:
         # Preserve the upstream policy's latch-at-reference semantics.
         accepted = MappingScales(min(scales.position_scale, 3.), scales.rotation_scale)
         self.mapping = self.mapping.with_scales(accepted)
+        self.metadata.update(position_scale=accepted.position_scale, rotation_scale=accepted.rotation_scale)
         if not self.ghost:
             self.client.command('source-metadata', metadata={'mapping': self.mapping_name,
                 'position_scale': accepted.position_scale, 'rotation_scale': accepted.rotation_scale,
@@ -104,6 +123,10 @@ class PhoneController:
         return accepted
 
     def _controls(self, value):
+        self.last_input = value
+        self.last_received = time.monotonic()
+        if value.estop_requested:
+            self.stop_input_time_ns = value.timestamp_ns
         self.estop |= value.estop_requested
         if value.home_requested and not self.home_pressed:
             self.home = True
@@ -136,8 +159,9 @@ class PhoneController:
             self.input_count += 1
         if self.estop:
             if not self.ghost:
-                self.client.request('stop')
-                raise RuntimeError('Phone ESTOP latched; restart the runtime before re-enabling')
+                self.disable()
+                raise RuntimeError('手机停止已锁存，机械臂保持；松开 Clutch 后点恢复，再开始遥操')
+            return None
         if self.zero_requested:
             raise ValueError('Motor zero calibration is not a phone control action; use the explicit calibration workflow')
         if value is None:
@@ -156,6 +180,7 @@ class PhoneController:
         if self.client is None:
             return None
         snapshot = self.client.status()
+        self.last_robot = snapshot
         if self.operation_id:
             op = next((op for op in snapshot['operations'] if op['operation_id'] == self.operation_id), None)
             if op and op['status'] != 'running':
@@ -172,9 +197,6 @@ class PhoneController:
         if not value.clutch_active:
             self._hold()
             self.released = True
-            if value.gripper is not None and not self.ghost:
-                self.client.command('gripper', gripper_width=value.gripper * self.client.parameters['effective_robot_config']['gripper_max_width'],
-                                    source_sequence=value.sequence, ttl_ms=100)
             return None
         if not self.released:
             return None

@@ -1,5 +1,37 @@
 import Foundation
 
+struct PhoneControlReply: Decodable, Equatable, Sendable {
+  let protocolName: String
+  let id: UInt32
+  let sessionID: UInt32
+  let ok: Bool
+  let message: String
+  let kernelRuntimeID: String?
+  let enabled: Bool
+  let active: Bool
+  let estop: Bool
+  let targetLimited: Bool
+  let robotGripper: Double?
+  enum CodingKeys: String, CodingKey {
+    case protocolName = "protocol", id, sessionID = "session_id", ok, message
+    case kernelRuntimeID = "kernel_runtime_id", enabled, active, estop
+    case targetLimited = "target_limited", robotGripper = "robot_gripper"
+  }
+}
+
+private struct PhoneControlRequest: Encodable {
+  let protocolName = "tia.phone.control.v1"
+  let id: UInt32
+  let sessionID: UInt32
+  let clientTimeNs: UInt64
+  let action: String
+  let runtimeID: String?
+  enum CodingKeys: String, CodingKey {
+    case protocolName = "protocol", id, sessionID = "session_id", clientTimeNs = "client_time_ns"
+    case action, runtimeID = "runtime_id"
+  }
+}
+
 enum SettingsDeliveryState: String, Equatable, Sendable {
   case notSent
   case pending
@@ -25,6 +57,11 @@ struct TeleopCoordinatorStatus: Equatable, Sendable {
   var replacedPoseCount: UInt64 = 0
   var invalidResponseCount: UInt64 = 0
   var captureTelemetry: CaptureTelemetry?
+  var trackingReason: String?
+  var phoneControl: PhoneControlReply?
+  var controlAvailable = false
+  var controlPending = false
+  var controlMessage: String?
 }
 
 final class TeleopCoordinator: @unchecked Sendable {
@@ -77,6 +114,10 @@ final class TeleopCoordinator: @unchecked Sendable {
   private var pingSendRequested = false
   private var settingsSendRequested = false
   private var lastStatusPublicationNs: UInt64?
+  private var controlSequence: UInt32 = 0
+  private var pendingControl: (id: UInt32, action: String, data: Data, since: UInt64)?
+  private var lastControlSendNs: UInt64 = 0
+  private var lastControlReplyNs: UInt64?
 
   init(
     provider: any PoseProvider,
@@ -172,6 +213,57 @@ final class TeleopCoordinator: @unchecked Sendable {
     }
   }
 
+  func requestControl(_ action: String) {
+    queue.async { [weak self] in
+      guard let self, action == "enable" || action == "disable" else { return }
+      self.controls.releaseClutch()
+      self.sendSafetyEdgeOnQueue()
+      self.sendControlOnQueue(action)
+    }
+  }
+
+  private func sendControlOnQueue(_ action: String) {
+    guard active, networkReady, hasSentBaselinePose else { return }
+    let now = clock()
+    let packet = PhoneControlRequest(id: controlSequence, sessionID: status.sessionID,
+      clientTimeNs: now, action: action, runtimeID: status.phoneControl?.kernelRuntimeID)
+    controlSequence &+= 1
+    do {
+      let data = try JSONEncoder().encode(packet)
+      transport.sendControl(data)
+      pendingControl = (packet.id, action, data, now)
+      lastControlSendNs = now
+      status.controlPending = action != "monitor"
+      if action != "monitor" { status.controlMessage = "等待机器人确认…" }
+      publishStatus(force: action != "monitor")
+    } catch {
+      status.controlMessage = error.localizedDescription
+      publishStatus(force: true)
+    }
+  }
+
+  private func controlTickOnQueue() {
+    let now = clock()
+    if let lastControlReplyNs, elapsed(from: lastControlReplyNs, to: now) > 1_500_000_000 {
+      status.controlAvailable = false
+      controls.releaseClutch()
+      sendSafetyEdgeOnQueue()
+    }
+    if let pendingControl {
+      if elapsed(from: pendingControl.since, to: now) >= 3_000_000_000 {
+        self.pendingControl = nil
+        status.controlPending = false
+        status.controlAvailable = false
+        status.controlMessage = "操作未确认，请检查电脑接收服务"
+      } else if elapsed(from: lastControlSendNs, to: now) >= 500_000_000 {
+        transport.sendControl(pendingControl.data)
+        lastControlSendNs = now
+      }
+    } else if elapsed(from: lastControlSendNs, to: now) >= 250_000_000 {
+      sendControlOnQueue("monitor")
+    }
+  }
+
   private func connectOnQueue(endpoint: DatagramEndpoint) {
     guard !active else { return }
     active = true
@@ -192,6 +284,10 @@ final class TeleopCoordinator: @unchecked Sendable {
     lastSentEstopRequested = false
     pingSendRequested = false
     settingsSendRequested = false
+    pendingControl = nil
+    controlSequence = 0
+    lastControlSendNs = 0
+    lastControlReplyNs = nil
     clockEstimator.reset()
     controls.deactivate()
     lastStatusPublicationNs = nil
@@ -242,6 +338,9 @@ final class TeleopCoordinator: @unchecked Sendable {
     settingsSendRequested = false
     lastSample = nil
     status.networkState = .disconnected
+    status.controlAvailable = false
+    status.controlPending = false
+    pendingControl = nil
     status.trackingQuality = .unavailable
     status.estopResetState = .notRequested
     publishStatus(force: true)
@@ -319,6 +418,8 @@ final class TeleopCoordinator: @unchecked Sendable {
         settingsSendRequested = true
       }
       sendRequestedControlAfterPoseOnQueue(allowControl: !forceReleased)
+      status.trackingReason = sample.trackingReason
+      controlTickOnQueue()
     } catch {
       status.invalidResponseCount &+= 1
       publishStatus(force: true)
@@ -554,6 +655,28 @@ final class TeleopCoordinator: @unchecked Sendable {
 
   private func handleInboundOnQueue(_ data: Data) {
     guard active else { return }
+    if data.first == 123 {
+      guard data.count <= 2048,
+        let reply = try? JSONDecoder().decode(PhoneControlReply.self, from: data),
+        reply.protocolName == "tia.phone.control.v1",
+        reply.sessionID == status.sessionID,
+        let pendingControl, reply.id == pendingControl.id
+      else { rejectResponse(); return }
+      self.pendingControl = nil
+      lastControlReplyNs = clock()
+      if !reply.message.isEmpty || pendingControl.action != "monitor" || !status.controlAvailable {
+        status.controlMessage = reply.message.isEmpty ? nil : reply.message
+      }
+      status.phoneControl = reply
+      status.controlAvailable = true
+      status.controlPending = false
+      if !reply.enabled || reply.estop {
+        controls.releaseClutch()
+        sendSafetyEdgeOnQueue()
+      }
+      publishStatus(force: true)
+      return
+    }
     do {
       switch try PacketCodec.decode(data) {
       case .pong(let packet):
@@ -628,6 +751,7 @@ final class TeleopCoordinator: @unchecked Sendable {
     }
     self.pendingEStopReset = nil
     status.estopResetState = .acknowledged
+    status.controlMessage = nil
     publishStatus(force: true)
   }
 
@@ -658,6 +782,7 @@ final class TeleopCoordinator: @unchecked Sendable {
   }
 
   private func timerTickOnQueue() {
+    controlTickOnQueue()
     requestPingOnQueue()
     let now = clock()
     if let pendingSettings,
@@ -666,6 +791,14 @@ final class TeleopCoordinator: @unchecked Sendable {
       settingsSendRequested = true
     }
     guard var pendingEStopReset else { return }
+    if elapsed(from: pendingEStopReset.packet.clientTimeNs, to: now) >= 5_000_000_000 {
+      self.pendingEStopReset = nil
+      controls.cancelPendingEstopReset()
+      status.estopResetState = .notRequested
+      status.controlMessage = "恢复未确认；检查追踪和连接后再试"
+      publishStatus(force: true)
+      return
+    }
     guard elapsed(from: pendingEStopReset.sentAtNs, to: now) >= 1_000_000_000 else {
       return
     }

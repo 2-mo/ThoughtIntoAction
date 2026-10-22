@@ -162,22 +162,6 @@ struct TuningControls: View {
       Divider().overlay(TeleopTheme.border)
 
       SliderRow(
-        title: "Gripper",
-        valueText: String(format: "%.0f%%", model.gripper * 100),
-        value: Binding(
-          get: { model.gripper },
-          set: { value in model.setGripper(value) }
-        ),
-        range: 0...1,
-        step: 0.01,
-        tint: TeleopTheme.warning,
-        enabled: !model.estopLatched,
-        compact: compact
-      )
-
-      Divider().overlay(TeleopTheme.border)
-
-      SliderRow(
         title: "Position",
         valueText: String(format: "%.2fx", model.positionScale),
         value: Binding(
@@ -298,63 +282,49 @@ struct ControlActionRow: View {
   @ObservedObject var model: AppModel
 
   var body: some View {
-    HStack(spacing: 10) {
-      Button {
-        model.requestHome()
-      } label: {
-        Label("Home", systemImage: "house")
-          .frame(maxWidth: .infinity, minHeight: 54)
-      }
-      .buttonStyle(
-        TeleopActionButtonStyle(
-          foreground: TeleopTheme.primaryText,
-          background: TeleopTheme.raised,
-          border: TeleopTheme.border
-        )
-      )
-      .disabled(!model.canHome)
-
-      Button {
-        model.recoverControl()
-      } label: {
-        Label(model.recoverControlLabel, systemImage: "arrow.clockwise")
-          .lineLimit(1)
-          .minimumScaleFactor(0.75)
-          .frame(maxWidth: .infinity, minHeight: 54)
-      }
-      .buttonStyle(
-        TeleopActionButtonStyle(
-          foreground: TeleopTheme.primaryText,
-          background: TeleopTheme.raised,
-          border: TeleopTheme.border
-        )
-      )
-      .disabled(!model.canRecoverControl)
-      .accessibilityHint("Releases clutch and automatically restores control")
-
-      if !model.estopLatched {
-        Button {
-          model.latchEstop()
-        } label: {
-          Label("E-STOP", systemImage: "stop.circle.fill")
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .frame(maxWidth: .infinity, minHeight: 54)
+    VStack(spacing: 6) {
+      HStack(spacing: 8) {
+        Button { model.startControl() } label: {
+          Label("开始遥操", systemImage: "play.fill")
+            .frame(maxWidth: .infinity, minHeight: 42)
         }
-        .buttonStyle(
-          TeleopActionButtonStyle(
-            foreground: .white,
-            background: TeleopTheme.danger,
-            border: TeleopTheme.danger
-          )
-        )
-        .accessibilityHint("Latches the software emergency stop request")
+        .buttonStyle(TeleopActionButtonStyle(foreground: TeleopTheme.background,
+          background: TeleopTheme.ready, border: TeleopTheme.ready))
+        .disabled(!model.canStartControl)
+        Button { model.stopControl() } label: {
+          Label("停止遥操", systemImage: "stop.fill")
+            .frame(maxWidth: .infinity, minHeight: 42)
+        }
+        .buttonStyle(TeleopActionButtonStyle(foreground: .white,
+          background: TeleopTheme.danger, border: TeleopTheme.danger))
+        .disabled(model.status.networkState != .ready)
       }
+      HStack(spacing: 8) {
+        Button { model.requestHome() } label: {
+          Label("回零", systemImage: "house").frame(maxWidth: .infinity, minHeight: 36)
+        }.disabled(!model.canHome)
+        Button { model.recoverControl() } label: {
+          Label(model.recoverControlLabel, systemImage: "arrow.clockwise")
+            .frame(maxWidth: .infinity, minHeight: 36)
+        }
+        .disabled(!model.canRecoverControl)
+        .accessibilityHint("恢复连接或清除手机停止锁定，随后手动开始遥操")
+        Button { model.latchEstop() } label: {
+          Label("停止锁定", systemImage: "lock.fill").frame(maxWidth: .infinity, minHeight: 36)
+        }.disabled(model.stopLatched)
+      }
+      .buttonStyle(TeleopActionButtonStyle(foreground: TeleopTheme.primaryText,
+        background: TeleopTheme.raised, border: TeleopTheme.border))
+      Text(model.status.trackingReason ?? model.controlSummary)
+        .font(.caption).foregroundStyle(model.status.trackingQuality == .normal
+          ? TeleopTheme.secondaryText : TeleopTheme.warning)
+        .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
     }
   }
 }
 
 private struct TeleopActionButtonStyle: ButtonStyle {
+  @Environment(\.isEnabled) private var isEnabled
   let foreground: Color
   let background: Color
   let border: Color
@@ -369,7 +339,7 @@ private struct TeleopActionButtonStyle: ButtonStyle {
           .stroke(border, lineWidth: 1)
       }
       .clipShape(RoundedRectangle(cornerRadius: 6))
-      .opacity(configuration.isPressed ? 0.9 : 1)
+      .opacity(isEnabled ? (configuration.isPressed ? 0.9 : 1) : 0.4)
   }
 }
 
@@ -378,6 +348,9 @@ struct HoldControlSurface: View {
   let compact: Bool
 
   @State private var gestureActive = false
+  @State private var gestureBlocked = false
+  @State private var gripperAtTouch = 0.0
+  @GestureState private var touching = false
 
   var body: some View {
     VStack(spacing: 7) {
@@ -404,18 +377,32 @@ struct HoldControlSurface: View {
     .contentShape(Rectangle())
     .gesture(
       DragGesture(minimumDistance: 0)
-        .onChanged { _ in
-          guard !gestureActive else { return }
-          gestureActive = true
-          model.setClutchActive(true)
+        .updating($touching) { _, state, _ in state = true }
+        .onChanged { value in
+          guard model.canControl, !gestureBlocked else { gestureBlocked = true; return }
+          if !gestureActive {
+            gestureActive = true
+            gripperAtTouch = model.gripper
+            model.setClutchActive(true)
+          }
+          model.setGripper(gripperAtTouch - Double(value.translation.height) / 160.0)
         }
         .onEnded { _ in
           gestureActive = false
+          gestureBlocked = false
           model.setClutchActive(false)
         }
     )
+    .onChange(of: touching) { _, down in
+      if !down {
+        gestureActive = false
+        gestureBlocked = false
+        model.setClutchActive(false)
+      }
+    }
     .onChange(of: model.canControl) { _, canControl in
       if !canControl {
+        if gestureActive { gestureBlocked = true }
         gestureActive = false
         model.setClutchActive(false)
       }
@@ -426,24 +413,25 @@ struct HoldControlSurface: View {
     }
     .accessibilityElement(children: .combine)
     .accessibilityAddTraits(.isButton)
-    .accessibilityLabel("Hold to control")
+    .accessibilityLabel("按住跟随，上滑开夹爪，下滑闭夹爪")
     .accessibilityValue(holdState)
   }
 
   private var holdLabel: String {
-    if model.estopLatched { return "CONTROL LOCKED" }
-    return model.clutchActive ? "CONTROLLING" : "HOLD TO CONTROL"
+    if model.stopLatched { return "控制已锁定" }
+    return model.clutchActive ? "跟随中 · 上滑开 / 下滑闭" : "按住跟随 · 上滑开 / 下滑闭"
   }
 
   private var holdState: String {
-    if model.estopLatched { return "E-STOP LATCHED" }
-    if model.status.networkState != .ready { return "NETWORK NOT READY" }
-    if model.status.trackingQuality == .unavailable { return "TRACKING UNAVAILABLE" }
-    return model.clutchActive ? "CLUTCH ACTIVE" : "READY"
+    if model.stopLatched { return "点恢复解除手机锁定" }
+    if !model.status.controlAvailable { return "等待电脑接收服务" }
+    if model.status.trackingQuality != .normal { return "追踪未就绪" }
+    if model.status.phoneControl?.enabled != true { return "先点开始遥操" }
+    return String(format: "夹爪开度 %.0f%% · 松手保持", model.gripper * 100)
   }
 
   private var holdIcon: String {
-    if model.estopLatched { return "lock.fill" }
+    if model.stopLatched { return "lock.fill" }
     return model.clutchActive ? "hand.tap.fill" : "hand.tap"
   }
 
@@ -452,14 +440,14 @@ struct HoldControlSurface: View {
   }
 
   private var holdBackground: Color {
-    if model.estopLatched { return TeleopTheme.danger.opacity(0.24) }
+    if model.stopLatched { return TeleopTheme.danger.opacity(0.24) }
     if model.clutchActive { return TeleopTheme.ready }
     if model.canControl { return TeleopTheme.accent }
     return TeleopTheme.surface
   }
 
   private var holdBorder: Color {
-    if model.estopLatched { return TeleopTheme.danger }
+    if model.stopLatched { return TeleopTheme.danger }
     if model.clutchActive { return TeleopTheme.ready }
     if model.canControl { return TeleopTheme.accent }
     return TeleopTheme.border

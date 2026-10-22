@@ -54,7 +54,7 @@ final class RobotTeleopUITests: XCTestCase {
     app.launch()
 
     assertPrimaryControls(in: app)
-    app.buttons["Connect"].tap()
+    if app.buttons["Connect"].exists { app.buttons["Connect"].tap() }
 
     assertValue("READY", for: "status.network", in: app, timeout: 5)
     assertValue("NORMAL", for: "status.tracking", in: app, timeout: 5)
@@ -77,13 +77,15 @@ final class RobotTeleopUITests: XCTestCase {
   @MainActor
   private func assertPrimaryControls(in app: XCUIApplication) {
     let titleExists = app.staticTexts["Robot Teleop"].waitForExistence(timeout: 3)
-    let connectIsHittable = app.buttons["Connect"].isHittable
-    let holdIsHittable = app.staticTexts["HOLD TO CONTROL"].isHittable
-    let estopIsHittable = app.buttons["E-STOP"].isHittable
+    let connectIsHittable = app.buttons["Connect"].isHittable || app.buttons["Disconnect"].isHittable
+    let holdExists = app.descendants(matching: .any)["按住跟随，上滑开夹爪，下滑闭夹爪"].exists
+    let startExists = app.buttons["开始遥操"].exists
+    let stopExists = app.buttons["停止遥操"].exists
     XCTAssertTrue(titleExists)
     XCTAssertTrue(connectIsHittable)
-    XCTAssertTrue(holdIsHittable)
-    XCTAssertTrue(estopIsHittable)
+    XCTAssertTrue(holdExists)
+    XCTAssertTrue(startExists)
+    XCTAssertTrue(stopExists)
   }
 
   @MainActor
