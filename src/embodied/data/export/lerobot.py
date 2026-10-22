@@ -11,7 +11,7 @@ import uuid
 from contextlib import ExitStack
 
 import numpy as np
-from embodied.data.episode.cameras import camera_metadata, anchor_camera
+from embodied.data.episode.cameras import camera_metadata, anchor_camera, camera_roles
 from embodied.data.episode.contract import episode_contract, feature_names, vector
 
 LEROBOT_REVISION = '0cf864870cf29f4738d3ade893e6fd13fbd7cdb5'
@@ -173,7 +173,7 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
         raise ValueError('Output already exists; choose a new directory')
     paths = [source] if (source/'episode.json').is_file() else sorted(p.parent for p in source.glob('*/episode.json'))
     plans, rejected, robot, shapes = [], [], None, None
-    adapter, contract, reference_camera = None, None, None
+    adapter, contract, reference_camera, roles = None, None, None, None
     for path in tqdm(paths, desc='检查数据', unit='条', disable=not progress, dynamic_ncols=True):
         try:
             if task is not None and json.loads((path/'episode.json').read_text()).get('task') != task:
@@ -181,8 +181,9 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
             meta, rows, report, raw_states = prepare_camera_episode(path)
             current_contract = episode_contract(meta)
             current_reference = anchor_camera(meta)
-            if contract is not None and (current_contract != contract or current_reference != reference_camera):
-                raise ValueError('Mixed vector contracts or reference cameras; export separately')
+            current_roles = camera_roles(camera_metadata(meta), meta.get('camera_roles'))
+            if contract is not None and (current_contract != contract or current_reference != reference_camera or current_roles != roles):
+                raise ValueError('Mixed vector contracts, reference cameras or camera roles; export separately')
             current_adapter = for_episode(path)
             if adapter is not None and current_adapter.identity != adapter.identity:
                 raise ValueError('Mixed episode schemas/action definitions; export separately')
@@ -194,7 +195,7 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
             if shapes is not None and current_shapes != shapes:
                 raise ValueError('Mixed camera sets or image resolutions; export separately')
             robot, shapes = meta['robot'], current_shapes
-            contract, reference_camera = current_contract, current_reference
+            contract, reference_camera, roles = current_contract, current_reference, current_roles
             camera_descriptions = camera_metadata(meta)
             adapter = current_adapter
             plans.append((path, report))
@@ -258,7 +259,7 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
                     'sidecar': 'robot/episode_{episode_index:06d}.npz',
                     'state': 'actual joints (rad)' + (' + actual gripper width (m)' if contract['gripper'] else ''),
                     'action': adapter.identity[1],
-                    'data_contract': contract, 'anchor_camera': reference_camera,
+                    'data_contract': contract, 'anchor_camera': reference_camera, 'camera_roles': roles,
                     'alignment': 'declared RGB anchors; latest preceding robot state and other cameras within max skew; original clocks retained',
                     'camera': '30 FPS reference anchors; other cameras may repeat on alignment; see per-camera report; H264 CRF20 GOP2',
                     'cameras': list(shapes),

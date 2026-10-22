@@ -17,6 +17,14 @@ LAYOUTS = {'aligned30_raw240_v1': ('local/quest_x5', 'pi05_quest_x5'),
 def dataset_config(layout, info):
     if layout.get('layout') not in LAYOUTS or info.get('fps') != 30:
         raise SystemExit('Re-export with the versioned 30 FPS converter first')
+    if layout.get('data_contract') is not None and layout['layout'] != 'aligned30_raw240_v1':
+        from embodied.policy.openpi.adapter import from_dataset, asset_id
+        try:
+            spec = from_dataset(layout, info)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        repo = asset_id(spec)
+        return repo, 'pi05_' + repo.split('/')[-1]
     if layout['layout'] in ('aligned30_raw250_v2', 'aligned30_runtime_v2') and layout.get('action_definition') != 'sent_joint_position + sent_gripper_width':
         raise SystemExit('Unsupported runtime action definition for the X5 training adapter')
     features = info.get('features', {})
@@ -33,6 +41,7 @@ def main():
         raise SystemExit('Use: run.py OPENPI_CHECKOUT EXPORTED_DATASET norm|train [options]')
     layout = json.loads((dataset/"meta"/"quest_export.json").read_text())
     info = json.loads((dataset/"meta"/"info.json").read_text())
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'src'))
     repo_id, name = dataset_config(layout, info)
     cache = Path(__file__).resolve().parents[3]/'outputs'/'openpi-datasets'
     link = cache/repo_id
@@ -55,8 +64,13 @@ def main():
         raise SystemExit(f"OpenPI training source revision differs: {revision}; expected {expected}")
     os.chdir(checkout)
     from openpi.training import config
-    from quest_x5 import train_config
-    item = train_config(repo_id=repo_id, fps=info["fps"], exterior_camera='observation.images.exterior' in info['features'], name=name)
+    if layout.get('data_contract') is not None and layout['layout'] != 'aligned30_raw240_v1':
+        from joint_contract import train_config
+        from embodied.policy.openpi.adapter import from_dataset
+        item = train_config(from_dataset(layout, info), repo_id=repo_id, fps=info['fps'], name=name)
+    else:
+        from quest_x5 import train_config
+        item = train_config(repo_id=repo_id, fps=info['fps'], exterior_camera='observation.images.exterior' in info['features'], name=name)
     config._CONFIGS_DICT[item.name] = item
     script = checkout/'scripts'/('compute_norm_stats.py' if command == 'norm' else 'train.py')
     sys.argv = [str(script), *(['--config-name', item.name] if command == 'norm' else [item.name]), *arguments]

@@ -10,6 +10,7 @@ from zstandard import ZstdError
 
 from embodied.data.episode.cameras import camera_topic, camera_metadata, anchor_camera
 from embodied.data.episode.contract import episode_contract, vector, action_definition
+from embodied.data.episode.provenance import training_sources, training_phases
 from embodied.data.episode.runtime_episode import TOPICS, frame_kind, split_tick
 from embodied.data.episode.video import media_path
 from embodied.data.alignment.runtime_alignment import align
@@ -119,7 +120,7 @@ def main(argv=None):
             if meta['kind'] != 'quest_runtime_episode':
                 raise ValueError('Robot-only trace has no training observations')
             selected, excluded = align(rows['state'], rows['command'], rows[frame_kind(anchor_camera(meta))],
-                                       sources=('quest', 'phone'), contract=episode_contract(meta))
+                                       sources=training_sources(meta), phases=training_phases(meta), contract=episode_contract(meta))
             result.update(eligible_anchors=len(selected), excluded=excluded,
                           note='Export with scripts/datasets/convert.sh; schemas/action definitions remain separate')
         print(json.dumps(result, ensure_ascii=False, indent=2))

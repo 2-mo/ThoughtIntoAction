@@ -8,7 +8,7 @@ from embodied.policy.pi05_sft.checkpoint import ROOT, OPENPI, inspect_jax_checkp
 # OpenPI is installed in the selected policy environment by setup.sh/setup_jax.sh.
 
 
-def load_backend(checkpoint, horizon=15):
+def load_backend(checkpoint, horizon=15, *, adapter_spec=None):
     import numpy as np
     import jax
     import jax.numpy as jnp
@@ -19,7 +19,7 @@ def load_backend(checkpoint, horizon=15):
     from openpi.shared.normalize import load as load_stats
     from openpi.models.tokenizer import PaligemmaTokenizer
     from embodied.policy.openpi.x5 import X5Inputs, X5Outputs
-    spec = inspect_jax_checkpoint(checkpoint, horizon=horizon)
+    spec = inspect_jax_checkpoint(checkpoint, horizon=horizon, adapter_spec=adapter_spec)
     if not any(d.platform == 'gpu' for d in jax.devices()):
         raise RuntimeError('JAX CUDA device unavailable')
     config = Pi0Config(**spec['model'])
@@ -39,11 +39,15 @@ def load_backend(checkpoint, horizon=15):
     tokenizer = object.__new__(PaligemmaTokenizer)
     tokenizer._max_len = config.max_token_len
     tokenizer._tokenizer = sentencepiece.SentencePieceProcessor(model_file=str(token_path))
-    mask = t.make_bool_mask(6, -1)
-    inputs = [X5Inputs(), t.DeltaActions(mask), t.Normalize(stats,use_quantiles=True),
+    if spec['adapter_spec'] is None:
+        adapter_input, adapter_output, mask = X5Inputs(), X5Outputs(config.action_dim), t.make_bool_mask(6, -1)
+    else:
+        from embodied.policy.openpi.adapter import transforms
+        adapter_input, adapter_output, mask = transforms(spec['adapter_spec'])
+    inputs = [adapter_input, t.DeltaActions(mask), t.Normalize(stats,use_quantiles=True),
               t.ResizeImages(224,224), t.TokenizePrompt(tokenizer,discrete_state_input=True),
               t.PadStatesAndActions(config.action_dim)]
-    outputs = [t.Unnormalize(stats,use_quantiles=True), t.AbsoluteActions(mask), X5Outputs()]
+    outputs = [t.Unnormalize(stats,use_quantiles=True), t.AbsoluteActions(mask), adapter_output]
     policy = Policy(model, transforms=inputs, output_transforms=outputs,
                     sample_kwargs={'num_steps':10})
     return policy, spec, stats
