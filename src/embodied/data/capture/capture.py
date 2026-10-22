@@ -20,15 +20,15 @@ def hand_eye(camera_id, metadata):
     return calibration.extrinsics(camera_id, metadata['serial'])
 
 
-def capture(reader, root, task, duration, camera=None, *, cameras=None, video=False):
-    """`cameras` maps camera IDs (wrist_rgb first) to camera objects; `camera` alone is the wrist camera."""
+def capture(reader, root, task, duration, camera=None, *, cameras=None, video=False, anchor=None):
+    """`cameras` maps configured IDs to sources; `anchor` selects the training reference camera."""
     if not math.isfinite(duration) or duration < 0:
         raise ValueError('Duration must be finite and nonnegative')
     if reader.mode != 'full':
         raise ValueError('Collection requires the full runtime stream')
     cameras = cameras or ({'wrist_rgb': camera} if camera else {})
     writer = RuntimeEpisodeWriter(root, reader.descriptor, task,
-                                  cameras={key: source.metadata for key, source in cameras.items()}, video=video,
+                                  cameras={key: source.metadata for key, source in cameras.items()}, video=video, anchor=anchor,
                                   hand_eye={key: hand_eye(key, source.metadata) for key, source in cameras.items()})
     print(f'Recording: {writer.path}', flush=True)
     stop = threading.Event()
@@ -103,6 +103,7 @@ def main(argv=None):
     parser.add_argument('--cameras', help='Comma-separated configured camera IDs from the shared camera service, '
                         'e.g. wrist_rgb,exterior_rgb (replaces --camera)')
     parser.add_argument('--rgb', choices=('mp4', 'png'), default='mp4', help='Image storage with --cameras')
+    parser.add_argument('--anchor-camera', help='Reference camera ID for training alignment (defaults to wrist or first selected camera)')
     args = parser.parse_args(argv)
     if not math.isfinite(args.duration) or args.duration < 0:
         parser.error('duration must be finite and nonnegative')
@@ -115,12 +116,14 @@ def main(argv=None):
                 from embodied.core.project import load_config
                 config, registry = load_config(), Registry()
                 ids = [key.strip() for key in args.cameras.split(',') if key.strip()]
-                if not ids or ids[0] != 'wrist_rgb' or len(set(ids)) != len(ids) or any(k not in config['cameras'] for k in ids):
-                    parser.error('--cameras lists unique configured IDs starting with wrist_rgb')
+                if not ids or len(set(ids)) != len(ids) or any(k not in config['cameras'] for k in ids):
+                    parser.error('--cameras lists unique configured camera IDs')
                 stack.enter_context(closing(recording_guard()))
                 for key in ids:
                     options = config['cameras'][key]
-                    driver = options.get('driver', config['cameras']['wrist_rgb']['driver'])
+                    driver = options.get('driver') or config['cameras'].get('wrist_rgb', {}).get('driver')
+                    if not driver:
+                        parser.error(f'Camera {key} must declare its driver')
                     selected = {k: options[k] for k in ('serial', 'width', 'height', 'fps')}
                     if 'shared-service' in registry.spec('camera', driver).capabilities:
                         selected['camera_id'] = key  # Otherwise the service answers for its default camera.
@@ -140,7 +143,7 @@ def main(argv=None):
                 camera = stack.enter_context(registry.create('camera', driver, **selected))
             reader = stack.enter_context(RuntimeReader(args.run, 'full'))
             path, meta = capture(reader, args.output, args.task, args.duration, camera,
-                                 cameras=cameras or None, video=bool(cameras) and args.rgb == 'mp4')
+                                 cameras=cameras or None, video=bool(cameras) and args.rgb == 'mp4', anchor=args.anchor_camera)
         print(json.dumps({'path': str(path), 'lifecycle': meta['lifecycle'],
                           'counts': meta['counts'], 'error': meta['error']}, ensure_ascii=False))
         return int(meta['lifecycle'] != 'complete')

@@ -116,14 +116,13 @@ def test_reader_rejects_changed_dimensions_and_versions(publisher):
         client.validate_tick_joints(bad, 7)
 
 
-def test_pinned_lerobot_export_rejects_seven_axes_before_alignment(tmp_path):
-    (tmp_path / 'episode.json').write_text(json.dumps({'runtime': {'joint_count': 7}}))
-    with pytest.raises(ValueError, match='supports 6 arm joints; recording has 7'):
-        exporter.prepare_camera_episode(tmp_path)
-    exporter.require_export_joint_count({'runtime': {'joint_count': 6}})
-    with pytest.raises(ValueError, match='recording has 7'):
-        exporter.require_export_joint_count({'runtime': {'parameters': {
-            'effective_robot_config': {'park_q': [0.] * 7}}}})
+def test_pinned_lerobot_features_use_declared_seven_axes():
+    from embodied.data.episode.contract import episode_contract
+    contract = episode_contract({'runtime': {'joint_count': 7, 'joint_names': [f'axis{i}' for i in range(7)]}})
+    features = exporter.export_features(contract, {'external_rgb': {'height': 24, 'width': 32}})
+    assert features['action']['shape'] == (8,)
+    assert features['action']['names'] == [*[f'axis{i}' for i in range(7)], 'gripper_m']
+    assert 'observation.images.wrist' not in features
 
 
 def test_seven_axis_trace_round_trips_through_mcap_v2_storage(publisher, tmp_path):

@@ -7,10 +7,10 @@ import uuid
 
 from mcap.writer import Writer, CompressionType
 from embodied.core.storage import save_json
-from embodied.data.episode.cameras import camera_topic
+from embodied.data.episode.cameras import camera_topic, camera_metadata, anchor_camera
+from embodied.data.episode.contract import runtime_contract, vector, action_definition
 from embodied.data.episode.schema import RUNTIME
 
-ACTION = 'sent_joint_position + sent_gripper_width'
 TOPICS = {'tick': '/robot/tick', 'state': '/robot/state', 'command': '/robot/command',
           'frame': '/camera/wrist/rgb/index'}
 
@@ -38,8 +38,8 @@ class RuntimeEpisodeWriter:
     A process crash leaves lifecycle=recording. Only explicit close boundaries
     commit complete; an observed stream or storage failure commits failed.
     """
-    def __init__(self, root, descriptor, task, camera=None, *, cameras=None, video=False, hand_eye=None):
-        """`camera` is the wrist metadata; `cameras` maps camera IDs (wrist_rgb required) to metadata.
+    def __init__(self, root, descriptor, task, camera=None, *, cameras=None, video=False, hand_eye=None, anchor=None):
+        """`camera` is legacy wrist metadata; `cameras` maps arbitrary RGB IDs to metadata.
 
         video=True stores each camera as H.264 MP4 with per-frame indices; otherwise one PNG per frame.
         """
@@ -47,16 +47,17 @@ class RuntimeEpisodeWriter:
             raise ValueError('Provide a task description (1..2000 characters)')
         if not cameras:
             cameras = {'wrist_rgb': camera} if camera else {}
-        elif 'wrist_rgb' not in cameras:
-            raise ValueError('Recording cameras must include wrist_rgb')
         camera = cameras.get('wrist_rgb')
-        self.cameras, self.video = dict(cameras), bool(video)
-        self.path = Path(root) / f'arx_{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}'
+        self.cameras, self.video = camera_metadata({'cameras': cameras}), bool(video)
+        self.contract = runtime_contract(descriptor)
+        reference = anchor_camera({'cameras': cameras, 'anchor_camera': anchor}) if cameras else None
+        self.path = Path(root) / f'episode_{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}'
         self.path.mkdir(parents=True, exist_ok=False)
         if not self.video:
-            for camera_id in self.cameras or {'wrist_rgb': None}:
+            for camera_id in self.cameras:
                 (self.path / camera_id).mkdir()
-        self.topics = {**TOPICS, **{frame_kind(c): camera_topic(c) for c in self.cameras}}
+        self.topics = {**{key: value for key, value in TOPICS.items() if key != 'frame'},
+                       **{frame_kind(c): camera_topic(c) for c in self.cameras}}
         self.counts = dict.fromkeys(self.topics, 0)
         self.first_sequence = self.last_sequence = None
         self.last_frames = {}
@@ -68,16 +69,15 @@ class RuntimeEpisodeWriter:
         self.terminal = False
         self.owner_context = None
         self.manifest = {
-            'schema': RUNTIME, 'schema_version': 2, 'kind': 'quest_runtime_episode' if camera else 'quest_runtime_trace',
+            'schema': RUNTIME, 'schema_version': 2, 'kind': 'quest_runtime_episode' if cameras else 'quest_runtime_trace',
             'id': self.path.name, 'task': task.strip(), 'lifecycle': 'recording', 'outcome': 'unknown',
             'started_monotonic_ns': time.monotonic_ns(), 'started_unix_ns': time.time_ns(),
             'record_storage': {'format': 'mcap', 'file': 'episode.mcap'},
             'rgb_storage': {'format': 'mp4', 'codec': 'h264', 'crf': 20} if self.video else {'format': 'png'},
-            'depth_recorded': False, 'action_definition': ACTION, 'runtime': descriptor, 'camera': camera,
+            'depth_recorded': False, 'action_definition': action_definition(self.contract), 'runtime': descriptor, 'camera': camera,
+            'cameras': self.cameras, 'anchor_camera': reference, 'data_contract': self.contract,
             'clock': 'host monotonic_ns; feedback receipt, command submission and image receipt are independent',
             'raw_input_recorded': False, 'counts': dict(self.counts)}
-        if len(self.cameras) > 1:
-            self.manifest['cameras'] = self.cameras
         if hand_eye is not None:  # camera id -> extrinsics at recording time, or None if uncalibrated
             self.manifest['hand_eye'] = hand_eye
         self.offset = self.manifest['started_unix_ns'] - self.manifest['started_monotonic_ns']
@@ -105,6 +105,9 @@ class RuntimeEpisodeWriter:
             raise ValueError('Tick after runtime termination')
         if tick['runtime_id'] != self.manifest['runtime']['runtime_id']:
             raise ValueError('Runtime changed during recording')
+        for group in ('feedback', 'command'):
+            if tick.get(group) is not None:
+                vector(tick[group], self.contract)
         sequence = tick['sequence']
         if not tick['terminal'] and tick.get('owner_epoch', 0):
             context = tick['source'], tick['owner_epoch']

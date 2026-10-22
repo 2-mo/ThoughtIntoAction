@@ -1,24 +1,16 @@
 """Causal RGB anchors for separately timestamped robot feedback and commands."""
 from bisect import bisect_right
 from collections import Counter
-import math
+from embodied.data.episode.contract import runtime_contract, vector
 
 
-def vector(row):
-    value = [*row['q'], row['gripper_width']]
-    if len(value) != 7 or any(type(x) not in (int, float) or not math.isfinite(x) for x in value):
-        raise ValueError('Missing/nonfinite 7D robot vector')
-    if not 0 <= value[-1] <= .082:
-        raise ValueError('Gripper outside calibrated width range')
-    return value
-
-
-def align(states, commands, frames, *, max_age_ns=100_000_000, sources=('quest',)):
+def align(states, commands, frames, *, max_age_ns=100_000_000, sources=('quest',), contract=None):
     """Return selected anchors and exclusion counts; leave raw records intact.
 
     Select the latest command first, then check its mode. Searching only valid
     commands would replay an old following action across Home or FreeDrive.
     """
+    contract = contract if contract is not None else runtime_contract({})  # Historical X5 callers.
     clocks = [[row['host_monotonic_ns'] for row in rows] for rows in (states, commands)]
     for clock in clocks:
         if any(type(t) is not int or t <= 0 for t in clock) or any(a > b for a, b in zip(clock, clock[1:])):
@@ -40,14 +32,14 @@ def align(states, commands, frames, *, max_age_ns=100_000_000, sources=('quest',
         if any(row['phase'] != 1 or row['source'] not in sources or row['error'] for row in (state, command)):
             excluded['phase-source-or-error'] += 1
             continue
-        if any(row.get('mode') != 3 or row.get('gripper_mode') != 3 for row in (state, command)):
+        if any(row.get('mode') != 3 or (contract['gripper'] and row.get('gripper_mode') != 3) for row in (state, command)):
             excluded['not-position-following'] += 1
             continue
         if command.get('submitted') is not True:
             excluded['command-not-submitted'] += 1
             continue
         try:
-            observation, action = vector(state), vector(command)
+            observation, action = vector(state, contract), vector(command, contract)
         except (ValueError, KeyError, TypeError):
             excluded['invalid-robot-vector'] += 1
             continue

@@ -5,15 +5,26 @@ import re
 def camera_metadata(manifest):
     cameras = manifest.get('cameras')
     if cameras is None:
-        return {'wrist_rgb': manifest.get('camera', {})}
-    if not isinstance(cameras, dict) or 'wrist_rgb' not in cameras:
-        raise ValueError('Recording must include wrist_rgb metadata')
+        cameras = {'wrist_rgb': manifest['camera']} if manifest.get('camera') else {}
+    if not isinstance(cameras, dict):
+        raise ValueError('Recording cameras must map IDs to metadata')
     for name, meta in cameras.items():
         if not re.fullmatch(r'[a-z][a-z0-9_]*_rgb', name) or not isinstance(meta, dict):
             raise ValueError('Invalid recorded camera identity')
-    if manifest.get('camera') != cameras['wrist_rgb']:
+    if manifest.get('camera') is not None and manifest.get('camera') != cameras.get('wrist_rgb'):
         raise ValueError('Legacy wrist metadata differs from cameras.wrist_rgb')
     return cameras
+
+
+def anchor_camera(manifest):
+    """The explicit reference camera, with wrist ordering only for old recordings."""
+    cameras = camera_metadata(manifest)
+    selected = manifest.get('anchor_camera')
+    if selected is None:
+        selected = 'wrist_rgb' if 'wrist_rgb' in cameras else next(iter(cameras), None)
+    if selected not in cameras:
+        raise ValueError('Episode needs a declared reference camera')
+    return selected
 
 
 def camera_topic(camera_id):

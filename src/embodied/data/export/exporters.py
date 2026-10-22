@@ -1,6 +1,8 @@
-"""Versioned episode embodied.devices.robots.arx5 for the existing LeRobot conversion pipeline."""
+"""Versioned episode adapters for the existing LeRobot conversion pipeline."""
 import json
 import numpy as np
+from embodied.data.episode.cameras import camera_metadata, anchor_camera
+from embodied.data.episode.contract import episode_contract, vector
 
 # Kept camera anchors further apart than this many frame periods form a gap.
 GAP_PERIODS = 1.5
@@ -24,15 +26,15 @@ def anchor_gaps(rows, fps=30):
     return gaps
 
 
-def match_cameras(rows, others, max_skew_ns=60_000_000):
-    """Attach each other camera's latest frame at or before the wrist anchor, within max_skew_ns.
+def match_cameras(rows, others, max_skew_ns=60_000_000, *, anchor_id='wrist_rgb'):
+    """Attach each camera's latest frame at or before the reference anchor, within max_skew_ns.
 
     Anchors without a frame from every camera are dropped (counted as camera-unmatched).
     """
     clocks = {key: np.asarray([f['host_received_monotonic_ns'] for f in frames], np.int64) for key, frames in others.items()}
     kept, unmatched = [], 0
     for observation, action, root, wrist, source in rows:
-        stamp, matched = wrist['host_received_monotonic_ns'], {'wrist_rgb': wrist}
+        stamp, matched = wrist['host_received_monotonic_ns'], {anchor_id: wrist}
         for key, clock in clocks.items():
             index = int(np.searchsorted(clock, stamp, side='right') - 1)
             if index < 0 or stamp - clock[index] > max_skew_ns:
@@ -45,11 +47,11 @@ def match_cameras(rows, others, max_skew_ns=60_000_000):
     return kept, unmatched
 
 
-def camera_report(rows, frames):
-    """Per camera: source frames, repeated images and the largest age behind the wrist anchor."""
+def camera_report(rows, frames, *, anchor_id='wrist_rgb'):
+    """Per camera: source frames, repeated images and the age behind the reference anchor."""
     report = {}
     for key, source in frames.items():
-        used = [row[3].get('camera_frames', {'wrist_rgb': row[3]})[key] for row in rows]
+        used = [row[3].get('camera_frames', {anchor_id: row[3]})[key] for row in rows]
         report[key] = {'source_frames': len(source),
                        'repeated_images': len(used) - len({f['host_received_monotonic_ns'] for f in used}),
                        'max_age_ms': max(r[3]['host_received_monotonic_ns'] - f['host_received_monotonic_ns']
@@ -78,7 +80,7 @@ class Schema1:
         annotate(report, rows, control_stack=stack, backend='real')
         return meta, rows, report, states
 
-    def save_sidecar(self, path, rows):
+    def save_sidecar(self, path, rows, *, contract):
         from embodied.data.export.multirate import save_robot_sidecar
         save_robot_sidecar(path, rows)
 
@@ -88,68 +90,78 @@ class Schema2:
     layout = 'aligned30_raw250_v2'
     raw_hz = 250
 
+    def __init__(self, action_definition='sent_joint_position + sent_gripper_width'):
+        self.identity = (2, action_definition)
+
     def prepare(self, path):
         from embodied.data.export.runtime_v2 import load_episode
         from embodied.data.alignment.runtime_alignment import align
         meta, raw = load_episode(path)
-        if meta['kind'] != 'quest_runtime_episode' or meta['camera']['fps'] != 30:
+        self.identity = (2, meta['action_definition'])
+        cameras = camera_metadata(meta)
+        anchor_id = anchor_camera(meta)
+        contract = episode_contract(meta)
+        if meta['kind'] != 'quest_runtime_episode' or cameras[anchor_id]['fps'] != 30:
             raise ValueError('Training requires a runtime episode with a 30 FPS camera')
         if meta.get('outcome') in ('failure', 'discarded'):
             raise ValueError('Episode is labelled failure/discarded')
-        anchors, excluded = align(raw['state'], raw['command'], raw['frame'], sources=('quest', 'phone'))
+        from embodied.data.episode.runtime_episode import frame_kind
+        reference = raw[frame_kind(anchor_id)]
+        anchors, excluded = align(raw['state'], raw['command'], reference, sources=('quest', 'phone'), contract=contract)
         if len(anchors) < 2:
             raise ValueError('Insufficient causal position-following RGB anchors')
-        parameters = meta['runtime']['parameters']
+        parameters = meta['runtime'].get('parameters', {})
         # Identity uses content hashes, not machine-specific model paths.
         meta['robot'] = {'model': parameters['model']['manifest'], 'backend': meta['runtime']['backend'],
-                         'action_definition': self.identity[1]}
+                         'action_definition': self.identity[1], 'data_contract': contract}
+        meta['data_contract'] = contract
         rows = []
         for anchor in anchors:
             source = {'host_monotonic_ns': anchor['state_monotonic_ns'],
                       'requested_monotonic_ns': anchor['action_monotonic_ns'],
                       'state_sequence': anchor['state_sequence'], 'action_sequence': anchor['action_sequence']}
             rows.append((np.asarray(anchor['observation'], np.float32), np.asarray(anchor['action'], np.float32),
-                         path, {**anchor['frame'], 'wrist_valid': True}, source))
-        from embodied.data.episode.runtime_episode import frame_kind
-        frames = {key: raw[frame_kind(key)] for key in (meta.get('cameras') or {'wrist_rgb': meta['camera']})}
-        if len(frames) > 1:
-            rows, unmatched = match_cameras(rows, {k: v for k, v in frames.items() if k != 'wrist_rgb'})
-            if unmatched:
-                excluded = {**excluded, 'camera-unmatched': unmatched}
-            if len(rows) < 2:
-                raise ValueError('Insufficient anchors with every camera')
+                         path, anchor['frame'], source))
+        frames = {key: raw[frame_kind(key)] for key in cameras}
+        rows, unmatched = match_cameras(rows, {k: v for k, v in frames.items() if k != anchor_id}, anchor_id=anchor_id)
+        if unmatched:
+            excluded = {**excluded, 'camera-unmatched': unmatched}
+        if len(rows) < 2:
+            raise ValueError('Insufficient anchors with every camera')
         report = {'id': meta['id'], 'task': meta['task'], 'source': str(path), 'outcome': meta['outcome'],
                   'samples': len(rows), 'robot_samples': len(raw['state']), 'observation_samples': len(rows),
-                  'excluded_camera_anchors': len(raw['frame'])-len(rows), 'exclusion_reasons': excluded,
+                  'excluded_camera_anchors': len(reference)-len(rows), 'exclusion_reasons': excluded,
                   'start_monotonic_ns': rows[0][3]['host_received_monotonic_ns'],
                   'end_monotonic_ns': rows[-1][3]['host_received_monotonic_ns'],
                   'state_max_age_ms': max(r[3]['host_received_monotonic_ns']-r[4]['host_monotonic_ns'] for r in rows)/1e6,
                   'action_max_age_ms': max(r[3]['host_received_monotonic_ns']-r[4]['requested_monotonic_ns'] for r in rows)/1e6,
                   'image_max_age_ms': 0, 'repeated_images': 0, 'action_definition': self.identity[1],
-                  'cameras': camera_report(rows, frames), 'hand_eye': meta.get('hand_eye')}
+                  'cameras': camera_report(rows, frames, anchor_id=anchor_id), 'anchor_camera': anchor_id,
+                  'hand_eye': meta.get('hand_eye')}
         annotate(report, rows, control_stack='arx-televr kernel: sent_q at 250 Hz',
                  backend=meta['runtime']['backend'])
         return meta, rows, report, raw
 
-    def save_sidecar(self, path, rows):
+    def save_sidecar(self, path, rows, *, contract):
         path.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(path, schema_version=np.asarray(2),
             feedback_timestamp_ns=np.asarray([r['host_monotonic_ns'] for r in rows['state']], np.int64),
             command_timestamp_ns=np.asarray([r['host_monotonic_ns'] for r in rows['command']], np.int64),
-            state=np.asarray([[*r['q'], r['gripper_width']] for r in rows['state']], np.float64),
-            action=np.asarray([[*r['q'], r['gripper_width']] for r in rows['command']], np.float64),
+            state=np.asarray([vector(r, contract) for r in rows['state']], np.float64),
+            action=np.asarray([vector(r, contract) for r in rows['command']], np.float64),
             state_sequence=np.asarray([r['sequence'] for r in rows['state']], np.int64),
             command_sequence=np.asarray([r['sequence'] for r in rows['command']], np.int64),
             raw_ticks_json=np.asarray([json.dumps(r, separators=(',', ':')) for r in rows['tick']]))
 
 
 def for_episode(path, registry=None):
-    from embodied.data.episode.schema import GROOT_RAW, LEROBOT_EXPORTERS, read
-    schema, _ = read(path)
+    from embodied.data.episode.schema import GROOT_RAW, RUNTIME, LEROBOT_EXPORTERS, read
+    schema, metadata = read(path)
     if schema not in LEROBOT_EXPORTERS:
         hint = '; export it with ./run.sh collect groot export' if schema == GROOT_RAW else ''
         raise ValueError(f'{path.name}: {schema} episodes have no LeRobot adapter{hint}')
     # Data selects a schema, never a Python factory. Factory choices belong to
     # the trusted project registry, so a deployment can replace its exporter.
     from embodied.contracts.registry import Registry
-    return (registry or Registry()).create('exporter', LEROBOT_EXPORTERS[schema])
+    options = {'action_definition': metadata['action_definition']} if schema == RUNTIME else {}
+    return (registry or Registry()).create('exporter', LEROBOT_EXPORTERS[schema], **options)
