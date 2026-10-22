@@ -1,4 +1,4 @@
-# ARX5 初学者网页控制台
+# 知行有灵 · Thought into Action 控制台
 
 前端是独立的 `Vue 3 + TypeScript + Vite` 工程，只负责显示状态、可视化预览和
 向版本化 API 发送指令。机械臂、安全检查、任务状态机、相机所有权和数据写入均在
@@ -87,7 +87,7 @@ MJPEG 回退端点。
 首次使用时安装后端和视觉依赖，并构建前端：
 
 ```bash
-cd /home/r2/work/projects/embodied/QuestArmTeleop
+cd /home/r2/work/projects/embodied/ThoughtIntoAction
 ./run.sh components setup analysis
 ./run.sh components setup web
 ./run.sh components setup frontend

@@ -1,7 +1,7 @@
 // Backend selection stays in the terminal; both modes share the same dashboard.
 const meta = await fetch('/api/model').then(r => r.json());
 document.body.dataset.simulation = String(Boolean(meta.simulation));
-document.title = meta.simulation ? 'QuestArm · MuJoCo 遥操' : 'QuestArm · 真机';
+document.title = meta.simulation ? '知行有灵 · Thought into Action · MuJoCo 遥操' : '知行有灵 · Thought into Action · 真机';
 if (meta.simulation) {
   document.getElementById('camera-title').textContent = '相机 · 实物参考';
   const heading = document.createElement('div');

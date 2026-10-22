@@ -1,7 +1,7 @@
 "use strict";
 
 (() => {
-  const repo = "https://github.com/2-mo/QuestArmTeleop/";
+  const repo = "https://github.com/2-mo/ThoughtIntoAction/";
   const source = (path, tree = false) => `${repo}${tree ? "tree" : "blob"}/main/${path}`;
   const modules = {
     applications: { title: "应用与工作台", path: "src/embodied/applications/", description: "组织操作者的工作流：服务启停、动作程序、网页交互和手眼标定。界面处理交互，动作能力由公共接口提供。", interface: "Robot / CLI · 工作台装配 · 控制台与监看", status: "Python 示例和动作 CLI 已共用 Robot；网页控制台仍有待迁移的控制流程。", file: "src/embodied/applications/operations/robot.py" },
