@@ -76,8 +76,8 @@ ACTIONS = {
                  'trajectory', 'limits', 'metrics', 'collision_check', 'tcp', 'workspace'),
                 'Plan without moving: joint path and times, TCP path (<=160 poses), checked against limits, derivative '
                 'bounds and the table plane. MoveJ, home and jog use the shared Ruckig trajectory; MoveL preserves its '
-                'Cartesian path while scaling time to satisfy joint and optional TCP bounds. MovePath uses one blended quintic '
-                'trajectory with no intermediate settling; its coefficients are hashed in trajectory. '
+                'Cartesian path while scaling time to satisfy joint and optional TCP bounds. MovePath uses one arc-length joint spline and the MoveL ninth-order time law '
+                'with no intermediate settling; its coefficients are hashed in trajectory. '
                 'TCP limits use explicit m/s, m/s^2, m/s^3 and rad/s, rad/s^2, rad/s^3 units; '
                 'limits.tcp and sampled FK peak metrics are part of plan_id. trajectory describes the evaluator; '
                 'limits includes requested speed/acceleration/jerk and effective joint_velocity_rad_s; metrics reports '

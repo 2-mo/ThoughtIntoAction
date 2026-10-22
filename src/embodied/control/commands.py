@@ -9,16 +9,7 @@ from collections import OrderedDict, deque
 import numpy as np
 from embodied.contracts.control import ControlCommand, Mode
 from embodied.motion.validation import finite_vector
-
-
-def smoothstep9_derivatives(alpha):
-    """First three derivatives of the normalized ninth-order time law."""
-    u = np.asarray(alpha)
-    complement = 1. - u
-    velocity = 630. * u**4 * complement**4
-    acceleration = 2520. * u**3 * complement**3 * (1. - 2. * u)
-    jerk = 2520. * u**2 * complement**2 * (3. * (1. - 2. * u)**2 - 2. * u * complement)
-    return velocity, acceleration, jerk
+from embodied.motion.profiles import smoothstep9_derivatives
 
 
 class PlannedTrajectory:
@@ -485,8 +476,8 @@ class MotionPlanner:
         else:
             raise ValueError('Unsupported motion primitive')
         if kind == 'move_path':
-            limiting_factors = []
-            derivative_evaluation = 'quintic_analytic'
+            limiting_factors = trajectory.limiting_factors
+            derivative_evaluation = 'sampled_analytic'
         elif kind != 'movel':
             if np.any(goal < self.model.lower) or np.any(goal > self.model.upper):
                 raise ValueError('Target exceeds model limits')

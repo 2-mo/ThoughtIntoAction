@@ -34,6 +34,16 @@ def smoothstep9_fraction(alpha: float) -> float:
     )
 
 
+def smoothstep9_derivatives(alpha):
+    """First three derivatives of the normalized ninth-order time law."""
+    u = np.asarray(alpha)
+    complement = 1. - u
+    velocity = 630. * u**4 * complement**4
+    acceleration = 2520. * u**3 * complement**3 * (1. - 2. * u)
+    jerk = 2520. * u**2 * complement**2 * (3. * (1. - 2. * u)**2 - 2. * u * complement)
+    return velocity, acceleration, jerk
+
+
 def minimum_smoothstep9_duration(
     delta: np.ndarray,
     *,
