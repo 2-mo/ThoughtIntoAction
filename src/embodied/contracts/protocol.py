@@ -37,7 +37,8 @@ ACTIONS = {
                  'control_hz and settling thresholds. Real capabilities come from active SDK configuration; '
                  'simulation capabilities come from nominal robot configuration. These are not measured hardware ratings.'),
     'status': (False, {}, ('runtime_id', 'model_id', 'epoch', 'owner', 'last_revocation', 'lease_remaining_s', 'stopped',
-                           'phase', 'q', 'dq', 'pose', 'gripper_width', 'feedback_monotonic_ns', 'operations', 'ingresses'),
+                           'phase', 'q', 'dq', 'pose', 'gripper_width', 'gripper_velocity', 'gripper_effort',
+                           'gripper_contact', 'feedback_monotonic_ns', 'operations', 'ingresses'),
                'Latest measured state, owner and operations; clients treat feedback older than 150 ms as stale.'),
     'acquire': (False, {'source': ('str', 'ASCII identifier, at most 31 characters', True),
                         'metadata': ('object', 'JSON object, at most 8 KiB, recorded in source-metadata.json', False),
@@ -55,8 +56,16 @@ ACTIONS = {
                 'hold, cancel, stop, fault or lease expiry resets the reference to current feedback.'),
     'hold': (True, {}, ('status', 'physical_stopped'), 'Drop targets and cancel the operation; hold the measured pose.'),
     'cancel': (True, {}, ('status', 'physical_stopped'), 'Same as hold.'),
-    'preview': (False, {'kind': ('str', 'movej, movel, home or jog', False),
+    'preview': (False, {'kind': ('str', 'movej, movel, move_path, home or jog', False),
                         'q': ('q', 'movej / jog goal', False), 'pose': ('pose', 'movel goal (unit quaternion)', False),
+                        'waypoints': ('poses', 'move_path: 1..64 base-frame TCP targets; start is current pose', False),
+                        'blend_radius': ('float', 'move_path internal corner radius in metres; default .01', False),
+                        'tcp_speed': ('float', 'positive TCP linear speed cap in m/s', False),
+                        'tcp_acceleration': ('float', 'positive TCP linear acceleration cap in m/s^2', False),
+                        'tcp_jerk': ('float', 'positive TCP linear jerk cap in m/s^3', False),
+                        'angular_speed': ('float', 'positive TCP angular speed cap in rad/s', False),
+                        'angular_acceleration': ('float', 'positive TCP angular acceleration cap in rad/s^2', False),
+                        'angular_jerk': ('float', 'positive TCP angular jerk cap in rad/s^3', False),
                         'speed': ('float', 'finite nonnegative joint speed cap, rad/s (default 0.15); 0 uses backend per-joint '
                                   'velocity capabilities, positive values use min(speed, capability) on each joint before speed_scale', False),
                         'speed_scale': ('float', 'finite multiplier in (0, 1] on each resolved joint velocity cap; default 1', False),
@@ -67,7 +76,10 @@ ACTIONS = {
                  'trajectory', 'limits', 'metrics', 'collision_check', 'tcp', 'workspace'),
                 'Plan without moving: joint path and times, TCP path (<=160 poses), checked against limits, derivative '
                 'bounds and the table plane. MoveJ, home and jog use the shared Ruckig trajectory; MoveL preserves its '
-                'Cartesian path while scaling time to satisfy the same joint bounds. trajectory describes the evaluator; '
+                'Cartesian path while scaling time to satisfy joint and optional TCP bounds. MovePath uses one blended quintic '
+                'trajectory with no intermediate settling; its coefficients are hashed in trajectory. '
+                'TCP limits use explicit m/s, m/s^2, m/s^3 and rad/s, rad/s^2, rad/s^3 units; '
+                'limits.tcp and sampled FK peak metrics are part of plan_id. trajectory describes the evaluator; '
                 'limits includes requested speed/acceleration/jerk and effective joint_velocity_rad_s; metrics reports '
                 'duration, peak derivatives, limiting_factors and derivative_evaluation. These fields are included in '
                 'plan_id. Acceleration and jerk are planning parameters, not hardware ratings. Valid for 30 s and only '
@@ -92,6 +104,20 @@ ACTIONS = {
     'gripper': (True, {**{k: (*v, False) for k, v in TARGET.items()},
                        'gripper_width': ('float', 'gripper target, 0..gripper_max_width', False)},
                 ('status',), 'Hold the arm and stream a gripper target.'),
+    'grasp': (True, {'effort': ('float', 'positive closing effort in describe.robot.gripper.effort_unit', True),
+                    'minimum_width': ('float', 'minimum closing width in metres; default 0', False),
+                    'timeout': ('float', 'bounded operation duration in seconds, <=60; default 5', False),
+                    'contact_time': ('float', 'sustained contact evidence duration in seconds; default .2', False)},
+              ('operation_id', 'status'),
+              'Capability-dependent contact grasp. The arm holds while closing effort ramps. Poll operations: '
+              'result reports stop_reason (contact, minimum_width, timeout), confirmed, actual_width_m, actual_effort '
+              'and effort_unit. Completed means the bounded operation ended; only confirmed=true indicates contact. '
+              'Contact retains closing effort through subsequent arm moves; gripper position/cancel/release clears it. '
+              'ARX motor_Nm is SDK current-estimated motor torque, not calibrated fingertip force. Detection requires '
+              'a 0.3 s cosine effort ramp, at least 0.5 mm closing travel, width above minimum_width + 1 mm, '
+              'absolute measured velocity <=2 mm/s and absolute measured effort >=20% of requested effort '
+              'throughout contact_time. Feedback must be finite, fresh (<100 ms) and progress without gaps >100 ms. '
+              'Simulation additionally requires actual contacts on both jaws against external bodies.'),
     'simulation-snapshot': (False, {},
                 ('schema', 'schema_version', 'backend', 'engine_version', 'model_id', 'configuration_id',
                  'state_spec', 'state', 'observation'),
@@ -137,7 +163,12 @@ def validate_request(request, *, joint_count=None):
                 errors.append(f'{action}: missing {name}')
             continue
         value = request[name]
-        if kind in ('q', 'pose'):
+        if kind == 'poses':
+            if (not isinstance(value, list) or not 1 <= len(value) <= 64 or any(
+                    not isinstance(pose, list) or len(pose) != 7 or any(
+                        type(v) not in (int, float) or not math.isfinite(v) for v in pose) for pose in value)):
+                errors.append(f'{action}: {name} must be 1..64 finite seven-value poses')
+        elif kind in ('q', 'pose'):
             size = joint_count if kind == 'q' else 7
             valid = (isinstance(value, list) and bool(value) and
                      (size is None or len(value) == size) and

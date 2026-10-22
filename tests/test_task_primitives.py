@@ -15,6 +15,10 @@ class FakeGripper:
     def __init__(self, robot):
         self.robot = robot
 
+    def grasp(self, **kwargs):
+        self.robot.calls.append(("grasp", kwargs))
+        return self.robot.grasp_result
+
     def open(self):
         return self.move(.08)
 
@@ -37,13 +41,14 @@ class FakeRobot:
         self.operations = {}
         self.gripper = FakeGripper(self)
         self.failure = None
+        self.grasp_result = {"confirmed": True, "stop_reason": "contact", "actual_width_m": .025}
 
     @property
     def xyz(self):
         return self.pose[:3]
 
     def describe(self):
-        return {"robot": {"gripper_max_width": .08}}
+        return {"robot": {"gripper_max_width": .08, "gripper": {"present": True, "grasp": True, "effort_max": 1.}}}
 
     def _connected(self):
         return self
@@ -85,7 +90,7 @@ class TaskPrimitiveTests(unittest.TestCase):
     def test_success_waits_every_motion_and_records_monotonic_stage_evidence(self):
         events = []
         with self.robot.task("pick/place", on_event=events.append) as task:
-            task.pick(xyz=[.3, 0., .25], width=.025, verify_grasp=self.confirmed, timeout=4.)
+            task.pick(effort=.2, xyz=[.3, 0., .25], width=.025, verify_grasp=self.confirmed, timeout=4.)
             task.place(xyz=[.32, 0., .25])
         phases = task.result["phases"]
         self.assertEqual([row["phase"] for row in phases],
@@ -116,7 +121,7 @@ class TaskPrimitiveTests(unittest.TestCase):
         with self.assertRaises(TaskFailed):
             with self.robot.task("empty grasp", on_event=events.append) as task:
                 with self.assertRaises(GraspUnconfirmed):
-                    task.pick(xyz=self.robot.xyz, width=.025,
+                    task.pick(effort=.2, xyz=self.robot.xyz, width=.025,
                               verify_grasp=lambda robot: GraspCheck(False, "no contact", {"sensor": "fixture"}))
                 count = len(self.robot.operations)
                 with self.assertRaises(TaskFailed):
@@ -130,6 +135,16 @@ class TaskPrimitiveTests(unittest.TestCase):
         self.assertFalse(last["result"]["confirmed"])
         self.assertTrue(any(call[0] == "cancel" for call in self.robot.calls))
 
+    def test_device_empty_grasp_stops_before_external_verification_and_lift(self):
+        self.robot.grasp_result = {"confirmed": False, "stop_reason": "minimum_width", "actual_width_m": 0.}
+        called = []
+        with self.assertRaises(GraspUnconfirmed):
+            with self.robot.task("empty device grasp") as task:
+                task.pick(xyz=self.robot.xyz, effort=.2, verify_grasp=lambda robot: called.append(robot))
+        self.assertEqual(called, [])
+        self.assertEqual(task.result['phases'][-1]['phase'], 'grasp')
+        self.assertEqual(len(self.robot.operations), 2)
+
     def test_second_observation_repositions_before_descending_and_keeps_identity(self):
         poses = [[.3, 0., .25, 0., 0., 0., 1.], [.305, 0., .25, 0., 0., 0., 1.]]
         seen = []
@@ -139,7 +154,7 @@ class TaskPrimitiveTests(unittest.TestCase):
             return Observation(poses[len(seen) - 1], "block-a", {"frame_index": len(seen)})
 
         with self.robot.task("refine") as task:
-            task.pick(observe=observe, width=.025, verify_grasp=self.confirmed)
+            task.pick(effort=.2, observe=observe, width=.025, verify_grasp=self.confirmed)
         self.assertEqual(len(seen), 2)
         self.assertAlmostEqual(seen[1][2], .3)
         targets = list(self.robot.operations.values())
@@ -151,7 +166,7 @@ class TaskPrimitiveTests(unittest.TestCase):
         ids = iter(["a", "b"])
         with self.assertRaisesRegex(TaskFailed, "target changed"):
             with self.robot.task("lost target") as task:
-                task.pick(observe=lambda robot: Observation(list(robot.pose), next(ids)),
+                task.pick(effort=.2, observe=lambda robot: Observation(list(robot.pose), next(ids)),
                           width=.025, verify_grasp=self.confirmed)
         self.assertEqual(len(self.robot.operations), 1)
         self.assertEqual(task.result["phases"][-1]["phase"], "observe")
@@ -161,7 +176,7 @@ class TaskPrimitiveTests(unittest.TestCase):
         self.robot.failure = TimeoutError("feedback never settled")
         with self.assertRaises(TimeoutError) as caught:
             with self.robot.task("timeout") as task:
-                task.pick(xyz=self.robot.xyz, width=.025, verify_grasp=self.confirmed)
+                task.pick(effort=.2, xyz=self.robot.xyz, width=.025, verify_grasp=self.confirmed)
         self.assertIs(caught.exception, self.robot.failure)
         self.assertEqual([call for call in self.robot.calls if call[0] == "gripper"], [("gripper", .08)])
         self.assertEqual(task.result["phases"][-1]["status"], "failed")
@@ -169,7 +184,7 @@ class TaskPrimitiveTests(unittest.TestCase):
     def test_invalid_width_cannot_start_any_stage_or_motion(self):
         with self.assertRaises(ValueError):
             with self.robot.task("bad target") as task:
-                task.pick(xyz=self.robot.xyz, width=.2, verify_grasp=self.confirmed)
+                task.pick(effort=.2, xyz=self.robot.xyz, width=.2, verify_grasp=self.confirmed)
         self.assertEqual(self.robot.operations, {})
         self.assertEqual(task.result["phases"], [])
         self.assertEqual(task.result["status"], "failed")

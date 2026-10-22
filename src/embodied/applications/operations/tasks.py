@@ -201,17 +201,23 @@ class Task:
             return {"requested_width_m": width, "actual_width_m": actual}
         return self._step(phase, move)
 
-    def pick(self, pose=None, *, xyz=None, width, verify_grasp, observe=None,
+    def pick(self, pose=None, *, xyz=None, width=0., effort, verify_grasp=None, observe=None,
              approach_offset=(0., 0., .05), open_width=None, **motion):
         """Approach, optionally re-observe, descend, close, verify, then lift.
 
         Supply either pose/xyz or ``observe(robot) -> Observation``. With an
         observer, detection runs before and after approach and must retain the
-        same target_id. ``verify_grasp(robot) -> GraspCheck`` is mandatory;
-        closing to ``width`` only establishes gripper position, never contact.
+        same target_id. width is the minimum closing width; effort has the
+        connected driver's declared unit. Actual contact must succeed before
+        optional ``verify_grasp(robot) -> GraspCheck`` checks the object/vision.
         """
-        if not callable(verify_grasp):
+        if verify_grasp is not None and not callable(verify_grasp):
             raise TypeError("verify_grasp must be callable")
+        capability = self.robot.describe()['robot'].get('gripper', {})
+        if not capability.get('grasp'):
+            raise ValueError('pick requires a device with contact grasp capability')
+        if isinstance(effort, bool) or not math.isfinite(effort) or not 0 < effort <= capability['effort_max']:
+            raise ValueError('Grasp effort must be positive and within the device capability')
         if observe is not None and (not callable(observe) or pose is not None or xyz is not None):
             raise ValueError("Use either observe or pose/xyz, not both")
         self.robot.gripper._validate_width(width)
@@ -227,10 +233,16 @@ class Task:
             # Re-align above the refined target before descending vertically.
             self.approach(target, offset=offset, **motion)
         self._move("descend", target, **motion)
-        self._gripper("grasp", width)
+        def grasp():
+            result = self.robot.gripper.grasp(effort=effort, minimum_width=width)
+            if not result['confirmed']:
+                raise GraspUnconfirmed(result['stop_reason'], result=result)
+            return result
+        grasp_result = self._step('grasp', grasp)
 
         def verify():
-            check = verify_grasp(self.robot)
+            check = (verify_grasp(self.robot) if verify_grasp else
+                     GraspCheck(True, 'device contact confirmed', grasp_result))
             if not isinstance(check, GraspCheck) or type(check.confirmed) is not bool:
                 raise TypeError("verify_grasp(robot) must return GraspCheck with a boolean confirmed")
             result = {"confirmed": check.confirmed, "reason": check.reason, "evidence": check.evidence}

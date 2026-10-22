@@ -66,8 +66,13 @@ class Simulation:
         return MujocoBackend(config, **options)
 
     def capabilities(self, config, parameters):
+        actuators = parameters['model_runtime']['actuators_initial'][config.joint_count:]
+        effort_max = min(abs(row['force_range'][0]) for row in actuators)
         return {"joint_velocity_limits_rad_s": list(config.joint_velocity_max),
                 "gripper_velocity_max_m_s": config.gripper_velocity_max_m_s,
+                "gripper": {"present": True, "position": True, "grasp": True, "effort_unit": "N",
+                            "effort_max": effort_max, "contact_detection": "physics_contact",
+                            "effort_description": "Closing force per simulated jaw actuator, not measured hardware force"},
                 "source": {"kind": "simulation_configuration", "description": "Configured model capability; no hardware measurement"}}
 
 
@@ -115,4 +120,7 @@ class Hardware:
         robot = parameters["sdk_runtime"]["robot"]
         return {"joint_velocity_limits_rad_s": robot["joint_vel_max"],
                 "gripper_velocity_max_m_s": robot["gripper_vel_max"],
+                "gripper": {"present": True, "position": True, "grasp": True, "effort_unit": "motor_Nm",
+                            "effort_max": robot['gripper_torque_max'], "contact_detection": "effort_stall",
+                            "effort_description": "SDK current-estimated motor torque; not calibrated fingertip force"},
                 "source": {"kind": "sdk_runtime_configuration", "description": "Active SDK capability, not measured rated hardware speed"}}

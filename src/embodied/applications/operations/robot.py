@@ -59,7 +59,7 @@ class Robot:
     Construction performs no I/O. An explicit run is never started or stopped.
     Motion calls block until feedback settles unless wait=False is requested.
     """
-    def __init__(self, run=None, *, backend=None, viewer=False, speed=None, acceleration=None, jerk=None):
+    def __init__(self, run=None, *, backend=None, viewer=False, config=None, speed=None, acceleration=None, jerk=None):
         if backend not in (None, "sim", "real"):
             raise ValueError("backend must be 'sim' or 'real'")
         if backend == "real" and run is None:
@@ -68,6 +68,9 @@ class Robot:
             raise ValueError("viewer must be a boolean")
         if viewer and (run is not None or backend == "real"):
             raise ValueError("viewer=True is only supported when creating a new simulation")
+        if config is not None and (run is not None or backend == 'real'):
+            raise ValueError('config is only supported when creating a new simulation')
+        self._config = config
         self._expected_backend = backend or ("sim" if run is None else None)
         self._viewer = viewer
         self._requested_run = Path(run) if run is not None else None
@@ -109,7 +112,10 @@ class Robot:
                 root = PROJECT_ROOT / "outputs/robot/runs"
                 root.mkdir(parents=True, exist_ok=True)
                 output = Path(tempfile.mkdtemp(prefix="sim-", dir=root))
-                self.run = stack.enter_context(sim_kernel(output / "runtime.log", viewer=self._viewer))
+                options = {'viewer': self._viewer}
+                if self._config is not None:
+                    options['config'] = self._config
+                self.run = stack.enter_context(sim_kernel(output / "runtime.log", **options))
                 deadline = time.monotonic() + 10
                 while True:
                     try:
@@ -243,9 +249,37 @@ class Robot:
         target[:3] = [p + d for p, d in zip(target[:3], delta)]
         return target
 
-    def plan_movel(self, pose=None, *, xyz=None, offset=None, frame="base", speed=None, acceleration=None, jerk=None):
+    def plan_movel(self, pose=None, *, xyz=None, offset=None, frame="base", speed=None, acceleration=None, jerk=None,
+                   tcp_speed=None, tcp_acceleration=None, tcp_jerk=None,
+                   angular_speed=None, angular_acceleration=None, angular_jerk=None):
         return self._connected().preview("movel", pose=self._pose_target(pose, xyz, offset, frame),
-            **self._limits(dict(speed=speed, acceleration=acceleration, jerk=jerk)))
+            **self._limits(dict(speed=speed, acceleration=acceleration, jerk=jerk,
+                tcp_speed=tcp_speed, tcp_acceleration=tcp_acceleration, tcp_jerk=tcp_jerk,
+                angular_speed=angular_speed, angular_acceleration=angular_acceleration, angular_jerk=angular_jerk)))
+
+    def plan_move_path(self, waypoints, *, blend_radius=.01, **limits):
+        """Preview one continuous Cartesian path. XYZ inherits the preceding orientation.
+
+        The current pose is the implicit start; intermediate corners have the
+        requested radius in metres, with zero radius at both endpoints.
+        """
+        points, orientation = [], self.pose[3:]
+        for waypoint in waypoints:
+            values = list(waypoint)
+            if len(values) == 3:
+                pose = _vector(values, 3, 'waypoint') + orientation
+            else:
+                pose = self._pose_target(values, None, None, 'base')
+            points.append(pose)
+            orientation = pose[3:]
+        return self._connected().preview('move_path', waypoints=points, blend_radius=blend_radius,
+                                          **self._limits(limits))
+
+    def move_path(self, waypoints, *, blend_radius=.01, wait=True, timeout=None, **limits):
+        """Execute a blended path as one operation, settling only at the final pose."""
+        self._acquire()
+        return self.execute(self.plan_move_path(waypoints, blend_radius=blend_radius, **limits),
+                            wait=wait, timeout=timeout)
 
     def execute(self, plan, *, wait=True, timeout=None):
         if timeout is not None:
@@ -271,8 +305,10 @@ class Robot:
     def movel(self, pose=None, *, xyz=None, offset=None, frame="base", wait=True, timeout=None, **limits):
         """Move along a TCP line. XYZ preserves orientation; pose accepts UR or XYZW.
 
-        Positions are metres, rotation vectors radians. Limits are joint limits;
-        this API does not reinterpret them as UR's Cartesian speed/acceleration.
+        Positions are metres, rotation vectors radians. speed/acceleration/jerk
+        retain joint units. tcp_speed/tcp_acceleration/tcp_jerk use m/s, m/s²,
+        m/s³; angular_speed/angular_acceleration/angular_jerk use rad/s, rad/s²,
+        rad/s³. Both TCP and joint limits apply; preview reports the limiting bound.
         """
         self._acquire()
         return self.execute(self.plan_movel(pose, xyz=xyz, offset=offset, frame=frame, **limits), wait=wait, timeout=timeout)
@@ -334,7 +370,7 @@ class Robot:
 
 
 class Gripper:
-    """Width positioning only. Closing is not a grasp-success detector."""
+    """Positioning and capability-checked contact grasping; effort units are explicit."""
     def __init__(self, robot):
         self.robot = robot
 
@@ -343,7 +379,11 @@ class Gripper:
         return self.robot.state["gripper_width"]
 
     def _validate_width(self, width):
-        maximum = self.robot.describe()["robot"]["gripper_max_width"]
+        robot = self.robot.describe()['robot']
+        capability = robot.get('gripper', {'present': robot['gripper_max_width'] > 0})
+        if not capability.get('present'):
+            raise ValueError('The connected robot has no gripper')
+        maximum = robot['gripper_max_width']
         if isinstance(width, bool) or not math.isfinite(width) or not 0 <= width <= maximum:
             raise ValueError(f"Gripper width must be in 0..{maximum} metres")
 
@@ -374,3 +414,29 @@ class Gripper:
 
     def close(self, **options):
         return self.move(0., **options)
+
+    def grasp(self, *, effort, minimum_width=0., timeout=5., contact_time=.2):
+        """Close until contact, travel floor or timeout; return explicit stop_reason.
+
+        effort uses describe().robot.gripper.effort_unit (ARX: motor_Nm; the
+        simulator: N per jaw). It is never silently interpreted as fingertip
+        force. Contact holds the same closing effort during subsequent arm moves;
+        a new gripper position, cancel, release or lost lease clears that effort.
+        """
+        self._validate_width(minimum_width)
+        capability = self.robot.describe()['robot'].get('gripper', {})
+        if not capability.get('grasp'):
+            raise ValueError('The connected device does not support contact grasping')
+        effort, timeout = _positive(effort, 'effort'), _positive(timeout, 'timeout')
+        contact_time = _positive(contact_time, 'contact_time')
+        if effort > capability['effort_max'] or not contact_time < timeout <= 60:
+            raise ValueError('Effort exceeds capability or contact_time < timeout <= 60 is not satisfied')
+        session = self.robot._acquire()
+        try:
+            operation = session.command('grasp', effort=effort, minimum_width=minimum_width,
+                                        timeout=timeout, contact_time=contact_time)
+            completed = session.wait(operation['operation_id'], timeout=timeout + 1.)
+            return {'operation_id': operation['operation_id'], **completed['result']}
+        except BaseException:
+            self.robot._cancel_on_error()
+            raise

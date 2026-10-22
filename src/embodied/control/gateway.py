@@ -20,7 +20,7 @@ from embodied.control.commands import CommandEngine, MotionPlanner
 DESCRIBED_ROBOT_FIELDS = ('variant', 'control_hz', 'joint_min', 'joint_max', 'park_q', 'gripper_max_width',
                           'torque_max', 'joint_step_limit', 'can_interface')
 ACTIONS = ('describe', 'status', 'acquire', 'source-metadata', 'heartbeat', 'release', 'hold', 'cancel', 'stop',
-           'preview', 'execute', 'free-drive', 'joint', 'cartesian', 'gripper',
+           'preview', 'execute', 'free-drive', 'joint', 'cartesian', 'gripper', 'grasp',
            'simulation-snapshot', 'simulation-restore', 'simulation-reset')
 SIMULATION_ACTIONS = ('simulation-snapshot', 'simulation-restore', 'simulation-reset')
 
@@ -36,7 +36,8 @@ class Gateway:
         self.simulation = simulation
         self.feedback = None
         self.motion_limits = motion_limits or MotionLimits.load(config)
-        self.engine = CommandEngine(runtime_id, config, self.model_id, self.ingresses, motion_limits=self.motion_limits)
+        self.engine = CommandEngine(runtime_id, config, self.model_id, self.ingresses, motion_limits=self.motion_limits,
+                                    capabilities=self.capabilities)
         parameters = inspect.signature(planner_factory).parameters
         accepts_limits = ('motion_limits' in parameters or any(
             item.kind == inspect.Parameter.VAR_KEYWORD for item in parameters.values()))
@@ -152,13 +153,18 @@ class Gateway:
         robot = {name: getattr(self.config, name) for name in DESCRIBED_ROBOT_FIELDS if hasattr(self.config, name)}
         robot['joint_count'] = len(self.config.park_q)
         robot['gripper_velocity_max_m_s'] = self.capabilities.get('gripper_velocity_max_m_s', self.config.gripper_velocity_max_m_s)
+        robot['gripper'] = self.capabilities.get('gripper', {'present': self.config.gripper_max_width > 0,
+                                                          'position': self.config.gripper_max_width > 0, 'grasp': False})
         workspace = getattr(self.planner, 'workspace', None)
         motion_limits = getattr(self, 'motion_limits', getattr(self.planner, 'motion_limits', None))
         return {'protocol': 1, 'runtime_id': self.engine.runtime_id, 'model_id': self.model_id,
                 'robot': {k: list(v) if isinstance(v, tuple) else v for k, v in robot.items()},
                 'workspace': workspace.describe() if workspace else None,
                 'motion_limits': motion_limits.describe() if motion_limits else None,
-                'actions': [action for action in ACTIONS if action not in SIMULATION_ACTIONS or self.simulation is not None]}
+                'actions': [action for action in ACTIONS
+                            if (action not in SIMULATION_ACTIONS or self.simulation is not None)
+                            and (action != 'grasp' or robot['gripper'].get('grasp'))
+                            and (action != 'gripper' or robot['gripper'].get('present'))]}
 
     def _simulation_request(self, request, state, now):
         """Optional driver capability. Called only by the simulation worker."""
