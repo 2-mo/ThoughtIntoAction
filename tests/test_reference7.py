@@ -30,17 +30,22 @@ class Reference7Tests(unittest.TestCase):
         self.assertFalse(self.config.hardware_plugin)
         json.dumps(parameters, allow_nan=False)
 
-    def test_shared_movej_and_movel_execute_in_physics_then_restore(self):
+    def test_shared_movej_movel_and_continuous_path_execute_in_physics_then_restore(self):
         initial = self.backend.simulation_snapshot()
         planner = MotionPlanner(self.config, self.config.model_id)
-        for kind in ('movej', 'movel'):
+        for kind in ('movej', 'movel', 'move_path'):
             state = self.backend.read_state(0.)
             if kind == 'movej':
                 goal = state.q.copy(); goal[-1] += .15
                 request = {'kind': kind, 'q': goal, 'speed': .5}
-            else:
+            elif kind == 'movel':
                 pose = state.pose.copy(); pose[0] += .005
-                request = {'kind': kind, 'pose': pose, 'speed': .5}
+                request = {'kind': kind, 'pose': pose, 'speed': .5, 'tcp_speed': .03}
+            else:
+                first = state.pose.copy(); first[0] += .005
+                second = first.copy(); second[1] += .005
+                request = {'kind': kind, 'waypoints': [first.tolist(), second.tolist()],
+                           'blend_radius': .001, 'speed': .5, 'tcp_speed': .03}
             plan = planner.plan(request, {'q': state.q, 'gripper_width': 0., 'epoch': 0, 'owner': None}, 0.)
             for i in range(int((plan['times'][-1] + 1.) * self.config.control_hz)):
                 t = i / self.config.control_hz
