@@ -29,6 +29,12 @@ class CartesianSplineTrajectory:
         speed, _, _ = smoothstep9_derivatives(alpha)
         return self.curve(fraction), self.curve(fraction, 1) * speed / self.duration
 
+    def sample_acceleration(self, elapsed):
+        alpha = min(max(float(elapsed) / self.duration, 0.), 1.)
+        fraction = smoothstep9_fraction(alpha)
+        ds, dds, _ = smoothstep9_derivatives(alpha)
+        return (self.curve(fraction, 2)*ds**2 + self.curve(fraction, 1)*dds) / self.duration**2
+
     def describe(self):
         return {'time_law': 'smoothstep9_cartesian_spline', 'duration_s': self.duration,
                 'path_parameter': 'normalized_cartesian_arc_length',
@@ -43,6 +49,9 @@ class TimeScaledTrajectory:
     def sample(self, elapsed):
         q, dq = self.trajectory.sample(elapsed / self.scale)
         return q, dq / self.scale
+
+    def sample_acceleration(self, elapsed):
+        return self.trajectory.sample_acceleration(elapsed / self.scale) / self.scale**2
 
     def describe(self):
         return {'time_law': 'scaled', 'time_scale': self.scale, 'duration_s': self.duration,

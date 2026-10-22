@@ -168,6 +168,37 @@ class NativeInterfaceChecks(unittest.TestCase):
                 backend.step(ControlCommand(Mode.COMMAND_FOLLOWING), 10.004, feedforward_torque=invalid)
         self.assertEqual(len(backend._hardware.sent), 1)
 
+    def test_planned_acceleration_adds_inertia_without_double_gravity_or_gain_changes(self):
+        backend = self.backend()
+        q = np.array(backend._hardware.state.pos()).copy()
+        dq = np.array([0., 2., 1., -2., 0., 0.])
+        ddq = np.array([0., -30., -20., 30., 0., 0.])
+        command = ControlCommand(Mode.COMMAND_FOLLOWING, joint_target=q,
+            joint_velocity_target=dq, joint_acceleration_target=ddq,
+            joint_step_limit=np.array(backend.config.joint_velocity_max)/250, planned=True)
+        expected = backend.kinematics.dynamic_torque(q, dq, ddq)
+        extra = np.full(6, .01)
+        backend.step(command, 10., feedforward_torque=extra)
+        packet = backend._hardware.command
+        np.testing.assert_allclose(packet.torque(), expected + extra)
+        np.testing.assert_array_equal(packet.pos(), q)
+        np.testing.assert_array_equal(packet.vel(), dq)
+        np.testing.assert_array_equal(backend._hardware.gain.kd(), backend.config.kd)
+        self.assertTrue(backend._hardware.control.gravity_compensation)
+        np.testing.assert_allclose(backend.telemetry()['dynamics_feedforward_torque'], expected)
+        np.testing.assert_allclose(backend.telemetry()['user_feedforward_torque'], extra)
+        for invalid in (replace(command, joint_acceleration_target=[float('nan')]*6),
+                        replace(command, joint_acceleration_target=[1.]*5),
+                        replace(command, joint_acceleration_target=[1e8]*6),
+                        replace(command, planned=False)):
+            with self.subTest(invalid=invalid), self.assertRaises((ValueError, RuntimeError)):
+                backend.step(invalid, 10.004)
+        self.assertEqual(len(backend._hardware.sent), 1)
+        for stop in (ControlCommand(Mode.COMMAND_FOLLOWING, hold=True), ControlCommand(Mode.FREE_DRIVE)):
+            backend.step(stop, 10.008)
+            np.testing.assert_array_equal(backend._hardware.command.torque(), np.zeros(6))
+            np.testing.assert_array_equal(backend.telemetry()['sent_ddq'], np.zeros(6))
+
     def test_zero_home_ramp_and_no_velocity_after_home(self):
         config = load_settings().robot
         np.testing.assert_array_equal(config.park_q, np.zeros(6))

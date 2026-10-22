@@ -83,6 +83,23 @@ class X5Model:
         self._forward(q)
         return self.data.qfrc_bias[:6].copy()
 
+    def dynamic_torque(self, q, dq, ddq):
+        """M(q) ddq + C(q,dq) dq, excluding the SDK's existing gravity term.
+
+        Uses the same calibrated inertials as FK/gravity. No differentiation of
+        noisy motor feedback, integral correction, friction or extra gain loop.
+        """
+        self.data.qpos[:6] = finite_vector(q, 6, 'dynamics q')
+        self.data.qvel[:] = 0.
+        self.data.qvel[:6] = finite_vector(dq, 6, 'dynamics dq')
+        acceleration = np.zeros(self.model.nv)
+        acceleration[:6] = finite_vector(ddq, 6, 'dynamics ddq')
+        mujoco.mj_forward(self.model, self.data)
+        bias = self.data.qfrc_bias[:6].copy()
+        inertia = np.zeros(self.model.nv)
+        mujoco.mj_mulM(self.model, self.data, inertia, acceleration)
+        return inertia[:6] + bias - self.gravity(q)
+
     def solve_ik(self, target, q_seed, q_anchor=None):
         target = finite_vector(target, 7, 'target pose')
         if np.linalg.norm(target[3:]) < 1e-12:
@@ -125,6 +142,7 @@ class JointTargetController:
         self.gripper_mode = Mode.DISABLED
         self.q_target = None
         self.dq_target = np.zeros(6)
+        self.ddq_target = np.zeros(6)
         self._joint_goal = None
         self._ik_seed = None
         self.gripper_target = config.gripper_max_width
@@ -142,6 +160,9 @@ class JointTargetController:
     def update(self, command: ControlCommand, q, now):
         q = finite_vector(q, 6, 'measured q')
         self.dq_target[:] = 0.0
+        self.ddq_target[:] = 0.0
+        if command.joint_acceleration_target is not None and not command.planned:
+            raise ValueError('Joint acceleration requires a planned command')
         transition = self._mode_since is None or command.mode != self.mode or command.reset_reference
         if transition:
             self.mode = command.mode
@@ -245,6 +266,8 @@ class JointTargetController:
             # A second position slew would destroy its matching q/dq reference.
             self.q_target = candidate.copy()
             self.dq_target[:] = velocity
+            if command.joint_acceleration_target is not None:
+                self.ddq_target[:] = finite_vector(command.joint_acceleration_target, 6, 'joint acceleration target')
             return self.q_target.copy()
         requested_delta = candidate - self.q_target
         delta = np.clip(requested_delta, -step_limit, step_limit)

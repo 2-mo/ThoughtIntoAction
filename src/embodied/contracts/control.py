@@ -56,3 +56,4 @@ class ControlCommand:
     joint_velocity_target: np.ndarray | None = None
     planned: bool = False
     gripper_effort: float | None = None  # Positive closing magnitude; units declared by the driver.
+    joint_acceleration_target: np.ndarray | None = None  # rad/s², from the same planned q/dq curve.

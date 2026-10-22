@@ -61,10 +61,21 @@ class RobotPanelTests(unittest.TestCase):
         self.assertEqual(rows['操作结果'].level, 'error')
         self.assertIn('未满足到位条件', str(rows['操作结果']))
         self.assertIn('J4', str(rows['操作结果']))
-        self.assertIn('0.20°', str(rows['操作结果']))
+        self.assertIn('1.00°', str(rows['操作结果']))
         self.robot.close.assert_called_once()
         self.robot.cancel.assert_not_called()
         self.assertIsNone(self.controls.motion)
+
+    def test_completed_result_keeps_recorded_error_and_runtime_tolerance(self):
+        self.controls.press('p', self.found)
+        self.state['operations'] = [{'operation_id': 'test-op', 'status': 'completed',
+            'settling': {'worst_joint': 4, 'max_joint_error_rad': .005711059570312482,
+                         'position_tolerance_rad': .017453292519943295}}]
+        rows = dict(self.controls.rows(self.found))
+        self.assertEqual(rows['操作结果'].level, 'ready')
+        self.assertIn('J4 最大偏差 0.33° / 容差 1.00°', str(rows['操作结果']))
+        self.assertIn('每轴误差 < 1.00°', rows['到位判定'])
+        self.robot.cancel.assert_not_called()
 
     def test_damping_requires_two_explicit_keys_and_owned_real_runtime(self):
         with patch.object(bench, 'owned_run', return_value=self.found), patch.object(bench, 'stop_kernel') as stop:

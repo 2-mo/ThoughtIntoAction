@@ -49,6 +49,22 @@ class PlannedTrajectory:
         a, b, c, d = self.coefficients[:, index]
         return ((a * offset + b) * offset + c) * offset + d, ((3. * a * offset + 2. * b) * offset + c) * speed
 
+    def sample_acceleration(self, elapsed):
+        if elapsed <= 0 or elapsed >= self.duration:
+            return np.zeros_like(self.start)
+        from embodied.motion.profiles import smoothstep9_fraction
+        alpha = elapsed / self.duration
+        fraction = smoothstep9_fraction(alpha)
+        ds, dds, _ = smoothstep9_derivatives(alpha)
+        ds, dds = ds / self.duration, dds / self.duration**2
+        if self.knots is None:
+            return self.delta * dds
+        index = int(np.clip(np.searchsorted(self.knots, fraction, side='right') - 1,
+                            0, len(self.knots) - 2))
+        offset = fraction - self.knots[index]
+        a, b, c, _ = self.coefficients[:, index]
+        return (6*a*offset + 2*b)*ds**2 + ((3*a*offset + 2*b)*offset + c)*dds
+
 
 class RuckigTrajectory:
     """Keep the shared planner's exact evaluator for the command loop."""
@@ -69,6 +85,9 @@ class RuckigTrajectory:
         q, dq, _ = self.trajectory.at_time(max(0., float(elapsed)))
         return np.asarray(q), np.asarray(dq)
 
+    def sample_acceleration(self, elapsed):
+        return self.trajectory.at_time(max(0., float(elapsed)))[2]
+
 
 class StationaryTrajectory:
     """A zero-distance request only needs a reference and settling feedback."""
@@ -80,6 +99,9 @@ class StationaryTrajectory:
 
     def sample(self, elapsed):
         return self.goal.copy(), np.zeros_like(self.goal)
+
+    def sample_acceleration(self, elapsed):
+        return np.zeros_like(self.goal)
 
 
 class SettlingWindow:
@@ -263,7 +285,9 @@ class CommandEngine:
             key = plan['plan_id']
             if key in self.operations:
                 return {k: v for k, v in self.operations[key].items() if k != 'plan'}
-            start_tolerance = self.settling.position_limit if plan.get('_trajectory') is not None else .03
+            # A preview must still start where it was planned. The final arrival
+            # tolerance is a separate criterion and must not allow a start jump.
+            start_tolerance = .0035 if plan.get('_trajectory') is not None else .03
             if np.max(np.abs(state.q - plan['q'][0])) > start_tolerance or np.max(np.abs(state.dq)) > .05:
                 raise ValueError('Robot moved since preview')
             if self.operation:
@@ -358,6 +382,8 @@ class CommandEngine:
             op, plan = self.operation, self.operation['plan']
             elapsed = now - op['started']
             trajectory = plan.get('_trajectory')
+            acceleration = getattr(trajectory, 'sample_acceleration', None)
+            ddq = acceleration(elapsed) if acceleration is not None else None
             if trajectory is not None:
                 q, dq = trajectory.sample(elapsed)
             else:
@@ -366,18 +392,15 @@ class CommandEngine:
                 q = np.array([np.interp(elapsed, plan['times'], plan['q'][:, i]) for i in range(len(self.config.park_q))])
                 dq = None
             command = ControlCommand(Mode.COMMAND_FOLLOWING, joint_target=q,
-                joint_velocity_target=dq, gripper_target=plan['gripper_width'],
+                joint_velocity_target=dq, joint_acceleration_target=ddq, gripper_target=plan['gripper_width'],
                 joint_step_limit=self.motion_limits.step_limits(plan.get('limits')),
                 planned=trajectory is not None)
             if elapsed >= plan['times'][-1]:
-                if self.settling.update(now, state.q, state.dq, q):
-                    op['status'] = 'completed'
-                    self.operation = None
-                    self.completed_target = (q.copy(), plan['gripper_width'], plan.get('limits'), trajectory is not None)
-                    self.settling.clear()
-                elif elapsed > plan['times'][-1] + self.motion_limits.settling['timeout_s']:
-                    op['status'] = 'failed'
-                    op['reason'] = 'Robot did not settle'
+                settled = self.settling.update(now, state.q, state.dq, q)
+                timed_out = elapsed > plan['times'][-1] + self.motion_limits.settling['timeout_s']
+                if settled or timed_out:
+                    # Retain measured accuracy on success as well as failure;
+                    # passing a tolerance never means the error was zero.
                     errors = np.abs(state.q - q)
                     op['settling'] = {
                         'joint_error_rad': errors.tolist(), 'worst_joint': int(np.argmax(errors)) + 1,
@@ -386,6 +409,14 @@ class CommandEngine:
                         'trajectory_duration_s': float(plan['times'][-1]),
                         'settling_elapsed_s': elapsed - float(plan['times'][-1]),
                     }
+                if settled:
+                    op['status'] = 'completed'
+                    self.operation = None
+                    self.completed_target = (q.copy(), plan['gripper_width'], plan.get('limits'), trajectory is not None)
+                    self.settling.clear()
+                elif timed_out:
+                    op['status'] = 'failed'
+                    op['reason'] = 'Robot did not settle'
                     self.operation = None
                     self.completed_target = None
                     self.reset_reference = True
@@ -403,6 +434,7 @@ class CommandEngine:
             q, width, limits, planned = self.completed_target
             command = ControlCommand(Mode.COMMAND_FOLLOWING, joint_target=q.copy(),
                 joint_velocity_target=np.zeros_like(q), gripper_target=width,
+                joint_acceleration_target=np.zeros_like(q) if planned else None,
                 joint_step_limit=self.motion_limits.step_limits(limits), planned=planned)
             self.phase = 'hold'
         else:
