@@ -12,7 +12,9 @@ function render(value) {
   const fresh = value.connected === true;
   panel.dataset.control = value.enabled ? value.active ? 'active' : 'enabled' : 'idle';
   byId('phone-control-banner').hidden = !value.enabled;
-  byId('phone-control-banner').textContent = value.active ? '● 手机遥操已开启 · 正在跟随' : '● 手机遥操已开启 · 松手保持';
+  const presetBusy = ['opening', 'moving'].includes(value.preset?.phase);
+  byId('phone-control-banner').textContent = presetBusy ? '● ' + value.preset.message
+    : value.active ? '● 手机遥操已开启 · 正在跟随' : '● 手机遥操已开启 · 松手保持';
   panel.dataset.state = value.estop || (value.error && value.available) ? 'error' : fresh
     ? value.tracking === 'normal' ? 'live' : value.tracking === 'limited' ? 'warning' : 'error' : 'offline';
   put('status', !value.available ? '接收服务未启动' : !fresh ? '等待手机连接' : value.enabled ? '已接管' : '仅监看');
@@ -31,6 +33,7 @@ function render(value) {
   if (value.error && value.available) { message(value.error, true); serviceMessage = true; }
   else if (value.estop) { message('手机停止已锁存；松开 Clutch 后在手机点恢复。', true); serviceMessage = true; }
   else if (fresh && value.tracking !== 'normal') { message('追踪受限：请保持相机画面清晰，观察有纹理的环境。'); serviceMessage = true; }
+  else if (value.preset && !value.active) { message(value.preset.message); serviceMessage = true; }
   else if (value.target_limited) { message('目标跟随误差较大，超出部分已丢弃；可反向移动或松开重新定位。'); serviceMessage = true; }
   else if (serviceMessage || byId('phone-message').dataset.error !== 'true') {
     message(value.enabled ? '按住跟随，上滑开夹爪、下滑闭夹爪；松手保持。' : '仅监看；可在手机、终端或本页开始遥操。');

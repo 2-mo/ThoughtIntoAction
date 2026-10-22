@@ -65,6 +65,10 @@
           <div><span>Clutch</span><b id="phone-clutch">—</b></div>
           <div><span>夹爪输入</span><b id="phone-gripper">—</b></div>
         </div>
+        <div class="phone-pose-view">
+          <canvas id="phone-pose-canvas" aria-label="手机相对于启动时初始姿态的实时朝向"></canvas>
+          <div><strong>手机实时姿态</strong><p id="phone-pose-status" role="status">等待手机姿态</p><p>以启动时姿态为参考<br>X 红 · Y 绿 · Z 蓝</p><p>仅监看，无需开启遥操</p></div>
+        </div>
         <details class="phone-details"><summary>连接与映射详情</summary>
         <p id="phone-endpoint">手机与电脑连接同一网络 · UDP 5005</p>
         <p id="phone-position">XYZ —</p>

@@ -13,6 +13,7 @@ from embodied.devices.phone.policies.relative_pose import RelativePosePolicy
 from embodied.devices.phone.transports.udp import UdpTransport, UdpTransportConfig
 from embodied.contracts.runtime.control import ControlClient, ControlSession
 from embodied.core.project import PROJECT_ROOT, port
+from embodied.core.presets import DEFAULT_GRASP_READY_JOINTS
 
 
 class PhoneInput(ArkitInputSource):
@@ -83,6 +84,8 @@ class PhoneController:
         self.recenter = self.recenter_pressed = False
         self.zero_requested = False
         self.operation_id = None
+        self.preset = None
+        self.open_deadline = 0.
         self.last_target = None
         self.last_robot = None
         self.last_input = None
@@ -100,6 +103,7 @@ class PhoneController:
         self.client, self.ghost = client, False
         self.released = self.active = self.home = self.recenter = False
         self.operation_id = None
+        self.preset = None
 
     def disable(self):
         """Release control; keep the independent phone input available to monitors."""
@@ -110,6 +114,8 @@ class PhoneController:
             self.client, self.ghost = None, True
             self.active = self.released = self.home = self.recenter = False
             self.operation_id = None
+            if self.preset_busy:
+                self.preset.update(phase='cancelled', message='动作已停止，机械臂保持')
 
     def _settings(self, scales):
         # Preserve the upstream policy's latch-at-reference semantics.
@@ -147,9 +153,69 @@ class PhoneController:
             raise
 
     def _hold(self):
-        if self.active and not self.ghost:
+        if (self.active or self.preset_busy) and not self.ghost:
             self.client.command('hold')
+        if self.preset_busy:
+            self.preset.update(phase='cancelled', message='输入中断，动作已停止；请重新选择')
+            self.operation_id = None
         self.active = False
+
+    @property
+    def preset_busy(self):
+        return self.preset is not None and self.preset['phase'] in ('opening', 'moving')
+
+    def request_preset(self, name):
+        """Use the current phone lease; opening and arm motion are separate steps."""
+        if name not in ('home', 'pregrasp'):
+            raise ValueError('未知预设动作')
+        if self.ghost or self.client is None:
+            raise ValueError('先开始手机遥操，再选择预设动作')
+        value = self.last_input
+        if (self.estop or value is None or time.monotonic() - self.last_received > .1
+                or value.tracking_quality != TrackingQuality.NORMAL or value.clutch_active):
+            raise ValueError('松开 Clutch，等待手机正常追踪后再选择预设动作')
+        if self.preset_busy:
+            raise ValueError('动作正在执行；停止后可重新选择，不排队重复动作')
+        if name == 'pregrasp' and self.client.identity.get('plugins', {}).get('robot') not in ('arx.real', 'arx.sim'):
+            raise ValueError('当前机器人未配置预抓取位姿')
+        self.last_robot = self.client.status()
+        self._hold()
+        self.released = self.home = False
+        self.operation_id = None
+        config = self.client.parameters['effective_robot_config']
+        opening = name == 'home' and config['gripper_max_width'] > 0
+        self.preset = {'name': name, 'phase': 'opening' if opening else 'moving',
+                       'message': '先张开夹爪，确认松开后回零' if opening else '正在回零' if name == 'home' else '正在前往预抓取位'}
+        if opening:
+            # Full stroke at the existing configured speed, plus settling time.
+            self.open_deadline = time.monotonic() + config['gripper_max_width'] / config['gripper_velocity_max_m_s'] + 2.
+
+    def _advance_preset(self, snapshot, now):
+        name = self.preset['name']
+        label = '回零' if name == 'home' else '预抓取'
+        config = self.client.parameters['effective_robot_config']
+        if self.preset['phase'] == 'opening':
+            width = config['gripper_max_width']
+            if abs(snapshot['gripper_width'] - width) > .002:
+                if now >= self.open_deadline:
+                    raise RuntimeError('夹爪未能张开，已取消回零；请检查是否卡住')
+                self.client.command('gripper', gripper_width=width, ttl_ms=100)
+                return
+            self.preset.update(phase='moving', message='夹爪已张开，正在回零')
+        if self.operation_id is None:
+            fields = {'gripper_width': config['gripper_max_width']} if name == 'home' else {'q': list(DEFAULT_GRASP_READY_JOINTS)}
+            plan = self.client.preview('home' if name == 'home' else 'movej', **fields)
+            self.operation_id = self.client.execute(plan)['operation_id']
+            return
+        op = next((op for op in snapshot['operations'] if op['operation_id'] == self.operation_id), None)
+        if op is None:
+            raise RuntimeError(f'{label}状态丢失，未确认到位')
+        if op['status'] != 'running':
+            if op['status'] != 'completed':
+                raise RuntimeError(f'{label}未完成：{op.get("reason") or op["status"]}')
+            self.operation_id = None
+            self.preset.update(phase='completed', message=f'{label}已完成；按住 Clutch 可继续遥操')
+            self.released = self.active = False
 
     def latest(self):
         value = self.source.latest()
@@ -178,21 +244,18 @@ class PhoneController:
             self.released = False
             return None
         if self.client is None:
+            self.home = False
             return None
         snapshot = self.client.status()
         self.last_robot = snapshot
-        if self.operation_id:
-            op = next((op for op in snapshot['operations'] if op['operation_id'] == self.operation_id), None)
-            if op and op['status'] != 'running':
-                self.operation_id = None
-                self.released = self.active = False
+        if self.preset_busy:
+            self.home = False
+            self._advance_preset(snapshot, now)
             return None
         if self.home:
             self.home = False
-            self._hold()
             if not self.ghost:
-                plan = self.client.preview('home')
-                self.operation_id = self.client.execute(plan)['operation_id']
+                self.request_preset('home')
             return None
         if not value.clutch_active:
             self._hold()
@@ -208,6 +271,7 @@ class PhoneController:
         if not self.active or self.recenter:
             self.policy.reset(value, robot)
             self.active = True
+            self.preset = None
             self.recenter = False
         target = self.policy.update(value, robot, 0.)
         pose = [*target.target_pose.position.as_tuple(), *target.target_pose.orientation.as_tuple()]

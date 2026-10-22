@@ -13,6 +13,8 @@ from embodied.core.session_protocol import request
 from embodied.devices.inputs.phone import PhoneController
 from embodied.devices.inputs import phone_service
 from embodied.devices.phone.protocol.golden import GOLDEN_POSE
+from embodied.devices.phone.core.models import TrackingQuality
+from embodied.core.presets import DEFAULT_GRASP_READY_JOINTS
 from embodied.devices.phone.protocol.packet import encode_packet, decode_packet, EStopResetRequestPacket, EStopResetAckPacket, SourceType
 
 
@@ -36,6 +38,139 @@ class PhoneServiceTests(unittest.TestCase):
         self.sock.sendto(encode_packet(packet), self.controller.transport.local_address)
         self.service.step()
         return self.service.snapshot()
+
+    def enable_fake_robot(self):
+        self.send()
+        client = Mock(identity={'runtime_id': 'test', 'plugins': {'robot': 'arx.sim'}})
+        client.status.return_value = {'operations': [], 'pose': [.3, 0, .2, 0, 0, 0, 1],
+            'q': [0] * 6, 'dq': [0] * 6, 'feedback_monotonic_ns': time.monotonic_ns(), 'gripper_width': .02}
+        client.parameters = {'effective_robot_config': {'gripper_max_width': .082, 'gripper_velocity_max_m_s': .04}}
+        client.preview.return_value = {'plan_id': 'plan'}
+        client.execute.return_value = {'operation_id': 'motion'}
+        self.controller.client, self.controller.ghost = client, False
+        self.service.run = 'test'
+        return client
+
+    def test_raw_phone_pose_is_available_without_control_and_expires(self):
+        state = self.send()
+        self.assertEqual(state['phone_pose'], {'frame': 'phone_reference',
+            'quaternion_xyzw': list(GOLDEN_POSE.pose.orientation.as_tuple())})
+        self.assertIsNone(state['orientation_preview'])
+        self.assertIsNone(self.controller.client)
+        self.controller.last_received -= 1
+        self.assertIsNone(self.service.snapshot()['phone_pose'])
+        self.assertIsNone(self.send(tracking_quality=TrackingQuality.LIMITED)['phone_pose'])
+
+    def test_home_opens_gripper_before_planning_and_reports_completion(self):
+        client = self.enable_fake_robot()
+        state = self.service.dispatch({'command': 'home', 'runtime_id': 'test'})
+        self.assertEqual(state['preset']['phase'], 'opening')
+        client.preview.assert_not_called()
+        self.send()
+        client.command.assert_called_with('gripper', gripper_width=.082, ttl_ms=100)
+        self.send()
+        client.preview.assert_not_called()  # elapsed ticks are not evidence of opening
+        client.status.return_value['gripper_width'] = .081
+        self.send()
+        client.preview.assert_called_once_with('home', gripper_width=.082)
+        client.execute.assert_called_once_with({'plan_id': 'plan'})
+        client.status.return_value['operations'] = [{'operation_id': 'motion', 'status': 'running'}]
+        self.send(home_requested=True)  # no queued repeat while the preset is running
+        client.execute.assert_called_once()
+        client.status.return_value['operations'][0]['status'] = 'completed'
+        self.assertEqual(self.send()['preset']['phase'], 'completed')
+        self.send(clutch_active=True)
+        self.assertNotEqual(client.command.call_args.args, ('cartesian',))  # rearm after completion
+        self.send()
+        self.send(clutch_active=True)
+        self.assertEqual(client.command.call_args.args, ('cartesian',))
+
+    def test_pregrasp_uses_shared_pose_and_preserves_gripper(self):
+        client = self.enable_fake_robot()
+        self.service.dispatch({'command': 'pregrasp', 'runtime_id': 'test'})
+        self.send()
+        client.preview.assert_called_once_with('movej', q=list(DEFAULT_GRASP_READY_JOINTS))
+        client.command.assert_not_called()  # no gripper open/close, no new speed override
+
+    def test_preset_rejects_wrong_run_held_clutch_and_concurrent_actions(self):
+        client = self.enable_fake_robot()
+        with self.assertRaisesRegex(ValueError, '实例已变化'):
+            self.service.dispatch({'command': 'home', 'runtime_id': 'old'})
+        self.send(clutch_active=True)
+        with self.assertRaisesRegex(ValueError, '松开 Clutch'):
+            self.service.dispatch({'command': 'home', 'runtime_id': 'test'})
+        self.send()
+        client.identity['plugins']['robot'] = 'other.real'
+        with self.assertRaisesRegex(ValueError, '未配置预抓取'):
+            self.service.dispatch({'command': 'pregrasp', 'runtime_id': 'test'})
+        self.service.dispatch({'command': 'home', 'runtime_id': 'test'})
+        with self.assertRaisesRegex(ValueError, '正在执行'):
+            self.service.dispatch({'command': 'home', 'runtime_id': 'test'})
+        client.execute.assert_not_called()
+
+    def test_blocked_gripper_never_starts_home(self):
+        client = self.enable_fake_robot()
+        self.service.dispatch({'command': 'home', 'runtime_id': 'test'})
+        self.controller.open_deadline = time.monotonic() - 1
+        state = self.send()
+        self.assertIn('夹爪未能张开', state['error'])
+        self.assertFalse(state['enabled'])
+        client.execute.assert_not_called()
+        client.close.assert_called_once()
+
+    def test_stopping_opening_discards_arm_move(self):
+        client = self.enable_fake_robot()
+        self.service.dispatch({'command': 'home', 'runtime_id': 'test'})
+        self.send()
+        self.service.dispatch({'command': 'disable'})
+        self.assertEqual(self.send()['preset']['phase'], 'cancelled')
+        client.execute.assert_not_called()
+        client.close.assert_called_once()
+
+    def test_tracking_loss_cancels_running_preset_without_resuming(self):
+        client = self.enable_fake_robot()
+        self.service.dispatch({'command': 'pregrasp', 'runtime_id': 'test'})
+        self.send()
+        state = self.send(tracking_quality=TrackingQuality.LIMITED)
+        self.assertEqual(state['preset']['phase'], 'cancelled')
+        client.command.assert_called_with('hold')
+        self.send()
+        client.execute.assert_called_once()
+
+    def test_input_loss_cancels_gripper_open_without_moving_arm(self):
+        client = self.enable_fake_robot()
+        self.service.dispatch({'command': 'home', 'runtime_id': 'test'})
+        self.send()
+        self.controller.last_received -= .2
+        self.service.step()
+        client.command.assert_called_with('hold')
+        self.send()
+        client.execute.assert_not_called()
+
+    def test_preset_failure_is_visible_instead_of_reported_as_completed(self):
+        client = self.enable_fake_robot()
+        self.service.dispatch({'command': 'pregrasp', 'runtime_id': 'test'})
+        self.send()
+        client.status.return_value['operations'] = [{'operation_id': 'motion', 'status': 'failed', 'reason': '未到位'}]
+        state = self.send()
+        self.assertIn('预抓取未完成：未到位', state['error'])
+        self.assertFalse(state['enabled'])
+
+    def test_preset_command_retry_does_not_restart_sequence(self):
+        client = self.enable_fake_robot()
+        self.sock.settimeout(.1)
+        payload = json.dumps({'protocol': phone_service.CONTROL_PROTOCOL, 'id': 1, 'session_id': 1,
+            'client_time_ns': self.controller.last_input.timestamp_ns, 'action': 'home', 'runtime_id': 'test'}).encode()
+        with patch.object(phone_service, 'live_runs', return_value=[]), \
+             patch.object(self.controller, 'request_preset', wraps=self.controller.request_preset) as preset:
+            for _ in range(2):
+                self.sock.sendto(payload, self.controller.transport.local_address)
+                self.service.step()
+                reply = json.loads(self.sock.recv(2048))
+                self.assertTrue(reply['ok'])
+                self.assertEqual(reply['preset']['phase'], 'opening')
+            preset.assert_called_once_with('home')
+        client.execute.assert_not_called()
 
     def test_observation_needs_no_robot_and_stale_data_cannot_enable(self):
         with patch('embodied.devices.inputs.phone.ControlSession') as session:

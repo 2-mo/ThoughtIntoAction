@@ -60,7 +60,10 @@ final class AppModel: ObservableObject {
       && status.controlAvailable && status.phoneControl?.enabled == true
       && !stopLatched
       && !estopResetPending
+      && !status.controlPending && !presetBusy
   }
+
+  var presetBusy: Bool { status.phoneControl?.preset?.busy == true }
 
   var stopLatched: Bool { estopLatched || status.phoneControl?.estop == true }
 
@@ -76,6 +79,7 @@ final class AppModel: ObservableObject {
     if !status.controlAvailable { return "等待电脑控制服务确认" }
     if stopLatched { return "停止已锁定 · 点恢复后可重新开始" }
     if status.phoneControl?.kernelRuntimeID == nil { return "robot 未运行，请在电脑总控启动" }
+    if let preset = status.phoneControl?.preset { return preset.message }
     if status.phoneControl?.targetLimited == true { return "目标跟随误差较大，超出部分已丢弃" }
     return status.phoneControl?.enabled == true ? "遥操已开始 · 按住下方控制区跟随" : "仅监看 · 点开始遥操"
   }
@@ -168,8 +172,15 @@ final class AppModel: ObservableObject {
 
   func requestHome() {
     guard canHome else { return }
-    clutchActive = false
-    coordinator?.requestHome()
+    setClutchActive(false)
+    coordinator?.requestControl("home")
+    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+  }
+
+  func requestPregrasp() {
+    guard canHome else { return }
+    setClutchActive(false)
+    coordinator?.requestControl("pregrasp")
     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
   }
 
