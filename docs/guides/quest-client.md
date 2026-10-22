@@ -55,7 +55,7 @@ adb devices -l
 adb -s QUEST_SERIAL install -r outputs/build/quest-client/ThoughtIntoAction-Quest-USB.apk
 ```
 
-日常从项目目录执行 `./run.sh`，在工作台 VR 窗口查看实际客户端包名、USB 授权、转发和连接状态。电脑端应复用已有客户端，避免官方版与新包同时连接。只有选中的包名为 `com.thoughtintoaction.quest` 时，才能期待这份补丁的自动 Connect 行为。
+日常从项目目录执行 `./run.sh`，在工作台 VR 窗口查看客户端版本、USB 授权、转发和连接状态。电脑端应复用已有客户端，避免官方版与新包同时连接。只有显示“自动连接版”（包名 `com.thoughtintoaction.quest`）时，才能期待这份补丁的自动 Connect 行为。
 
 头显验证需覆盖以下顺序；观察网络状态即可，不需要机器人运动：
 

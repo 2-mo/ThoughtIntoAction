@@ -32,7 +32,7 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传'
-UI_REVISION = '8'
+UI_REVISION = '9'
 ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
@@ -134,7 +134,7 @@ def dashboard_command():
 def panel_command(role):
     return (f'env PYTHONPATH={shlex.quote(str(ROOT / "src"))} EMBODIED_BENCH_SESSION={shlex.quote(SESSION)} '
             f'{shlex.quote(sys.executable)} -B -m embodied.applications.workstation.bench_panels {role}'
-            + (' --serve' if role in ('web', 'site', 'camera') else ''))
+            + (' --serve' if role in ('web', 'site', 'camera', 'vr') else ''))
 
 
 def activity(role):
@@ -474,7 +474,7 @@ def stop_kernel():
 
 # Dashboard
 
-def dashboard_view(found, episode, message, failed=False, show_help=False, show_restart=False):
+def dashboard_view(found, episode, message, failed=False, show_help=False, show_restart=False, *, vr_transport=None):
     """Build the screen separately from input, using literal text for all state."""
     from rich.console import Group
     from rich.panel import Panel
@@ -523,7 +523,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
                              Text(label + note, style=None if usable else 'dim'))
                 first = False
         menu.add_row('停止', 'S', Text('连按两次停止内核；真机进入阻尼，请先扶住', style='yellow'))
-    vr, _ = vr_rows(found)
+    vr, _ = vr_rows(found, vr_transport)
     label, value = vr[0]
     status.add_row('◉', Text(label), status_text(value))
     _, cameras, _ = snapshot('camera')
@@ -582,12 +582,15 @@ def dashboard():
     import tty
     from rich.console import Console
     from rich.live import Live
+    from embodied.applications.workstation.bench_panels import VRConnection
 
     message, failed, pending_stop, show_help = '直接按键开始；? 查看操作帮助。', False, 0., False
     show_restart = False
+    vr = VRConnection()
 
     def view():
-        return dashboard_view(current_run(), latest_episode(), message, failed, show_help, show_restart)
+        return dashboard_view(current_run(), latest_episode(), message, failed, show_help, show_restart,
+                              vr_transport=vr.snapshot())
 
     def operate(key):
         nonlocal pending_stop, show_help, show_restart
@@ -670,6 +673,7 @@ def dashboard():
                     message, failed = str(exc), True
                 shown = 0.
     finally:
+        vr.close()
         termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, previous)
 
 

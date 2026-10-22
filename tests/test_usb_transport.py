@@ -13,6 +13,35 @@ spec.loader.exec_module(transport)
 
 
 class TransportTests(unittest.TestCase):
+    def test_client_launch_waits_for_boot_and_reuses_running_client(self):
+        with patch.object(transport, 'client_state', return_value={'boot_completed': False, 'client_running': False, 'client_package': transport.CLIENT_PACKAGE}) as state, \
+             patch.object(transport, 'command') as command:
+            with self.assertRaisesRegex(RuntimeError, '正在开机'):
+                transport.launch_client('QUEST')
+            command.assert_not_called()
+            state.return_value = {'boot_completed': True, 'client_running': True, 'client_package': transport.CLIENT_PACKAGE}
+            transport.launch_client('QUEST')
+            command.assert_not_called()
+            state.return_value['client_running'] = False
+            command.return_value = 'Starting: Intent'
+            transport.launch_client('QUEST')
+            command.assert_called_once_with('adb', '-s', 'QUEST', 'shell', 'am', 'start', '-n', transport.CLIENT_PACKAGE + '/com.unity3d.player.UnityPlayerActivity')
+            command.return_value = 'Error type 3: Activity does not exist'
+            with self.assertRaisesRegex(RuntimeError, 'Activity does not exist'):
+                transport.launch_client('QUEST')
+
+    def test_client_state_prefers_installed_auto_client_and_reuses_running_official_client(self):
+        with patch.object(transport, 'command', side_effect=['1', 'NAME\n',
+                'package:' + transport.AUTO_CLIENT_PACKAGE]) as command:
+            self.assertEqual(transport.client_state('QUEST'), {'boot_completed': True,
+                'client_running': False, 'client_package': transport.AUTO_CLIENT_PACKAGE})
+            command.side_effect = ['1', 'NAME\n' + transport.CLIENT_PACKAGE]
+            state = transport.client_state('QUEST')
+            self.assertTrue(state['client_running'])
+            self.assertEqual(state['client_package'], transport.CLIENT_PACKAGE)
+            command.side_effect = ['']
+            self.assertFalse(transport.client_state('QUEST')['boot_completed'])
+
     def json_status(self, *, devices='', reverse='', peers='', listening=True, adb_error=None):
         def read(*args):
             if args == ('ss', '-Hltn', 'sport = :63901'):
@@ -21,6 +50,8 @@ class TransportTests(unittest.TestCase):
                 if adb_error:
                     raise adb_error
                 return 'List of devices attached\n' + devices
+            if args[:2] == ('adb', '-s') and args[3] == 'shell':
+                return '1\n'
             if args == ('ss', '-Htn'):
                 return peers
             if args[:2] == ('adb', '-s') and args[-2:] == ('reverse', '--list'):
@@ -83,7 +114,7 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(state, {
             'receiver_listening': True, 'usb_devices': [], 'usb_serial': None,
             'usb_status': 'missing', 'reverse_configured': False, 'peers': [],
-            'usb_connected': False, 'error': None,
+            'usb_connected': False, 'boot_completed': False, 'client_running': False, 'client_package': None, 'error': None,
         })
         self.assertFalse(any('reverse' in call for call in calls))
 

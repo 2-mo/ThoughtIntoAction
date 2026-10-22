@@ -15,6 +15,8 @@ from rich.panel import Panel
 from rich.text import Text
 
 console = Console()
+CLIENT_PACKAGE = 'com.xrobotoolkit.client.quest'
+AUTO_CLIENT_PACKAGE = 'com.thoughtintoaction.quest'
 
 
 def command(*args):
@@ -110,11 +112,41 @@ def peers_from_ss(output):
     return peers
 
 
+def client_state(serial):
+    adb = ('adb', '-s', serial, 'shell')
+    state = {'boot_completed': command(*adb, 'getprop', 'sys.boot_completed').strip() == '1',
+             'client_running': False, 'client_package': CLIENT_PACKAGE}
+    if not state['boot_completed']:
+        return state
+    processes = command(*adb, 'ps', '-A', '-o', 'NAME').split()
+    for package in (AUTO_CLIENT_PACKAGE, CLIENT_PACKAGE):
+        if package in processes:
+            return {**state, 'client_running': True, 'client_package': package}
+    packages = command(*adb, 'pm', 'list', 'packages', AUTO_CLIENT_PACKAGE).split()
+    if 'package:' + AUTO_CLIENT_PACKAGE in packages:
+        state['client_package'] = AUTO_CLIENT_PACKAGE
+    return state
+
+
+def launch_client(serial):
+    state = client_state(serial)
+    if not state['boot_completed']:
+        raise RuntimeError('Quest 正在开机；系统就绪后工作台会继续准备连接。')
+    if state['client_running']:
+        return  # Never relaunch or interrupt an already running client.
+    activity = state['client_package'] + '/com.unity3d.player.UnityPlayerActivity'
+    output = command('adb', '-s', serial, 'shell', 'am', 'start', '-n', activity)
+    if 'Error' in output or 'Exception' in output:
+        raise RuntimeError('Quest 客户端未启动：' + output.strip())
+    console.print('已请求打开 Quest 客户端；连接结果以 TCP 状态为准。')
+
+
 def status_snapshot():
     """Independent read-only probes; missing USB must not hide receiver/network state."""
     state = {'receiver_listening': False, 'usb_devices': [], 'usb_serial': None,
              'usb_status': 'missing', 'reverse_configured': False, 'peers': [],
-             'usb_connected': False, 'error': None}
+             'usb_connected': False, 'boot_completed': False, 'client_running': False,
+             'client_package': None, 'error': None}
     errors = []
     failures = (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired)
     try:
@@ -133,6 +165,10 @@ def status_snapshot():
                                               for line in reverse.splitlines())
         except failures as exc:
             errors.append(f'ADB 转发查询失败：{exc}')
+        try:
+            state.update(client_state(state['usb_serial']))
+        except failures as exc:
+            errors.append(f'Quest 客户端查询失败：{exc}')
     peers = []
     try:
         peers = peers_from_ss(command('ss', '-Htn'))
@@ -175,7 +211,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", nargs="?", default="prepare", choices=["prepare", "wait", "status"])
     parser.add_argument('--json', action='store_true', help='status: print independent receiver/USB/TCP state as JSON')
+    parser.add_argument('--launch-client', action='store_true', help='prepare: open Quest client after Android finishes booting')
     args = parser.parse_args(argv)
+    if args.launch_client and args.action != 'prepare':
+        parser.error('--launch-client 仅用于 prepare')
     if args.json:
         if args.action != 'status':
             parser.error('--json 仅用于 status')
@@ -188,6 +227,8 @@ def main(argv=None):
             serial = usb_device()
             # Idempotent; don't remove a working mapping and interrupt its stream.
             command("adb", "-s", serial, "reverse", "tcp:63901", "tcp:63901")
+            if args.launch_client:
+                launch_client(serial)
         state = inspect()
         if not state[0] and not xr_listening():
             console.print('[yellow]主机 XR 接收服务未运行；按 W 重试会自动启动。[/yellow]')

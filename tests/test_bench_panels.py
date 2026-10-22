@@ -1,11 +1,15 @@
 """Waiting panes and web-service ownership, without devices or real child processes."""
 import builtins
+from concurrent.futures import Future
 from contextlib import nullcontext
 import io
 import os
 from pathlib import Path
 import signal
 import subprocess
+import sys
+import threading
+import time
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -15,6 +19,171 @@ from embodied.applications.workstation import bench, bench_panels as panels
 
 
 class BenchPanelTests(unittest.TestCase):
+    def test_transport_timeout_and_close_cancel_the_private_process_group(self):
+        # These disposable Python children model a stalled CLI and its ADB child.
+        # They never call adb, open devices, or touch a running workbench.
+        script = ('import subprocess, sys, time; '
+                  'subprocess.Popen([sys.executable, "-c", "import time; time.sleep(5)"]); '
+                  'time.sleep(5)')
+        for cancel in (False, True):
+            with self.subTest(cancel=cancel):
+                stop = threading.Event()
+                timer = threading.Timer(.15, stop.set) if cancel else None
+                if timer:
+                    timer.start()
+                started = time.monotonic()
+                try:
+                    with patch.object(panels.os, 'killpg', wraps=os.killpg) as kill, \
+                         self.assertRaises(InterruptedError if cancel else subprocess.TimeoutExpired):
+                        panels.transport_command([sys.executable, '-c', script], timeout=.3 if not cancel else 5, stop=stop)
+                    self.assertEqual(kill.call_count, 1)
+                    self.assertEqual(kill.call_args.args[1], signal.SIGKILL)
+                    self.assertLess(time.monotonic() - started, 2)
+                finally:
+                    if timer:
+                        timer.join()
+
+    def test_vr_transport_and_robot_input_are_independent(self):
+        transport = {'receiver_listening': True, 'usb_status': 'missing',
+                     'reverse_configured': False, 'usb_connected': False, 'boot_completed': True}
+        found = (Path('/test-run'), {'input': 'none'})
+        rows = dict(panels.vr_rows(found, transport)[0])
+        self.assertIn('未检测到', str(rows['VR']))
+        self.assertEqual(rows['主机接收'].level, 'ready')
+        self.assertEqual(rows['遥操接入'].level, 'disabled')
+        for status, expected in [('unauthorized', '允许 USB 调试'), ('offline', '离线'), ('ready', '建立转发')]:
+            transport['usb_status'] = status
+            self.assertIn(expected, str(panels.vr_rows(found, transport)[0][0][1]))
+        transport.update(reverse_configured=True, client_running=True)
+        self.assertIn('等待头显 Connect', str(panels.vr_rows(found, transport)[0][0][1]))
+        transport.update(usb_connected=True)
+        self.assertEqual(panels.vr_rows(found, transport)[0][0][1].level, 'waiting')
+        with patch.object(panels, 'vr_control_rows', return_value=([('遥操接入', panels.Status('跟踪就绪', 'ready'))], [])):
+            self.assertEqual(panels.vr_rows(found, transport)[0][0][1].level, 'ready')
+            transport['error'] = 'ADB query failed'
+            self.assertEqual(panels.vr_rows(found, transport)[0][0][1].level, 'error')
+
+    def test_vr_status_preserves_partial_evidence_and_bounds_probe_time(self):
+        with patch.object(panels, 'transport_command', return_value=subprocess.CompletedProcess(
+                [], 1, stdout='{"receiver_listening": true, "error": "ADB failed"}')) as command:
+            state = panels.vr_transport_status()
+            self.assertTrue(state['receiver_listening'])
+            self.assertEqual(state['error'], 'ADB failed')
+            self.assertLessEqual(command.call_args.kwargs['timeout'], 3)
+            self.assertEqual(command.call_args.args[0][-2:], ['status', '--json'])
+            command.side_effect = subprocess.TimeoutExpired('adb', 1)
+            self.assertIn('error', panels.vr_transport_status())
+
+    def test_vr_background_connect_waits_for_authorization_and_does_not_repeat_failures(self):
+        jobs = []
+
+        def submit(fn, stop):
+            future = Future()
+            jobs.append((fn, future))
+            return future
+
+        with patch.object(panels, 'ThreadPoolExecutor') as executor, \
+             patch.object(panels.time, 'monotonic', return_value=10) as now:
+            executor.return_value.submit.side_effect = submit
+            vr = panels.VRConnection(auto_prepare=True)
+            self.assertTrue(vr.snapshot()['checking'])
+            vr.snapshot()  # Pending query returns immediately without duplicating it.
+            self.assertEqual(len(jobs), 1)
+            state = {'receiver_listening': True, 'usb_status': 'unauthorized', 'usb_serial': None}
+            jobs[-1][1].set_result(state)
+            self.assertEqual(vr.snapshot()['usb_status'], 'unauthorized')
+            self.assertEqual(len(jobs), 1)
+            now.return_value = 12
+            vr.snapshot()
+            state = dict(state, usb_status='ready', usb_serial='test-device', boot_completed=True, client_running=False)
+            jobs[-1][1].set_result(state)
+            vr.snapshot()
+            self.assertIs(jobs[-1][0], panels.prepare_vr)
+            vr.snapshot()
+            self.assertEqual(len(jobs), 3)
+            jobs[-1][1].set_result(panels.Status('prepare failed', 'error'))
+            vr.snapshot()
+            self.assertIs(jobs[-1][0], panels.vr_transport_status)
+            jobs[-1][1].set_result(state)
+            vr.snapshot()
+            self.assertEqual(len(jobs), 4)  # Same failure is not retried on every repaint.
+            self.assertIn('prepare failed', str(vr.message))
+            now.return_value = 14
+            vr.snapshot()  # Bounded backoff automatically retries a transient startup failure.
+            self.assertIs(jobs[-1][0], panels.prepare_vr)
+            jobs[-1][1].set_result(panels.Status('still starting', 'waiting'))
+            vr.snapshot()
+            jobs[-1][1].set_result(state)
+            vr.snapshot()
+            vr.retry = True  # R explicitly retries the same state.
+            vr.snapshot()
+            self.assertIs(jobs[-1][0], panels.prepare_vr)
+            jobs[-1][1].set_result(panels.Status('prepared', 'ready'))
+            vr.snapshot()
+            jobs[-1][1].set_result(dict(state, reverse_configured=True, usb_connected=True, client_running=True))
+            vr.snapshot()
+            self.assertIsNone(vr.message)
+            vr.close()
+            executor.return_value.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
+
+    def test_vr_dashboard_monitor_never_prepares_and_noninteractive_serve_is_readonly(self):
+        future = Future()
+        with patch.object(panels, 'ThreadPoolExecutor') as executor:
+            executor.return_value.submit.return_value = future
+            vr = panels.VRConnection()
+            vr.snapshot()
+            future.set_result({'receiver_listening': False, 'usb_status': 'missing'})
+            vr.snapshot()
+            executor.return_value.submit.assert_called_once_with(panels.vr_transport_status, vr.stop)
+            vr.close()
+        with patch.object(panels.sys.stdin, 'isatty', return_value=False), \
+             patch.object(panels, 'snapshot', return_value=('VR', [], [])), \
+             patch.object(panels, 'prepare_vr') as prepare, \
+             patch.object(panels, 'VRConnection') as monitor, \
+             patch('sys.stdout', new_callable=io.StringIO):
+            self.assertEqual(panels.main(['vr', '--serve']), 0)
+            prepare.assert_not_called()
+            monitor.assert_not_called()
+
+    def test_late_headset_boot_and_usb_replug_resume_preparation(self):
+        with patch.object(panels, 'ThreadPoolExecutor') as executor, \
+             patch.object(panels.time, 'monotonic', return_value=10) as now:
+            executor.return_value.submit.side_effect = lambda fn, stop: Future()
+            vr = panels.VRConnection(auto_prepare=True)
+            base = {'receiver_listening': True, 'usb_status': 'missing', 'boot_completed': False,
+                    'reverse_configured': False, 'client_running': False}
+            # Start workbench with headset off, then USB, authorization and Android boot.
+            for state in [base, dict(base, usb_status='unauthorized'),
+                          dict(base, usb_status='ready', usb_serial='QUEST')]:
+                now.return_value += 2
+                vr.snapshot()
+                vr.future.set_result(state)
+                vr.snapshot()
+                self.assertIsNone(vr.future)
+                self.assertFalse(vr.preparing)
+            now.return_value += 2
+            vr.snapshot()
+            ready = dict(base, usb_status='ready', usb_serial='QUEST', boot_completed=True)
+            vr.future.set_result(ready)
+            vr.snapshot()
+            self.assertTrue(vr.preparing)
+            vr.future.set_result(panels.Status('prepared', 'ready'))
+            vr.snapshot()
+            vr.future.set_result(dict(ready, reverse_configured=True, client_running=True))
+            vr.snapshot()
+            self.assertIsNone(vr.attempt)
+            # A reconnect with the same serial must recreate the lost reverse mapping.
+            now.return_value += 2
+            vr.snapshot()
+            vr.future.set_result(base)
+            vr.snapshot()
+            now.return_value += 2
+            vr.snapshot()
+            vr.future.set_result(ready)
+            vr.snapshot()
+            self.assertTrue(vr.preparing)
+            vr.close()
+
     def test_robot_waiting_page_preserves_failure_until_an_explicit_retry(self):
         result = subprocess.CompletedProcess([], 0, stdout='failed\n')
         with patch.dict(os.environ, {'TMUX_PANE': '%test'}), \
@@ -123,18 +292,18 @@ class BenchPanelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, \
              patch('embodied.contracts.runtime.control.ControlClient') as client:
             run = Path(directory)
-            self.assertEqual(panels.vr_rows(None)[0][0][1].level, 'waiting')
-            self.assertEqual(panels.vr_rows((run, {'input': 'none'}))[0][0][1].level, 'disabled')
+            self.assertEqual(panels.vr_control_rows(None)[0][0][1].level, 'disabled')
+            self.assertEqual(panels.vr_control_rows((run, {'input': 'none'}))[0][0][1].level, 'disabled')
             found = (run, {'input': 'quest'})
-            self.assertEqual(panels.vr_rows(found)[0][0][1].level, 'waiting')
+            self.assertEqual(panels.vr_control_rows(found)[0][0][1].level, 'waiting')
             client.assert_not_called()
             (run / 'commands.sock').touch()
             for ingress, expected in [(None, 'waiting'), ({'ready': False}, 'waiting'),
                                       ({'ready': True, 'armed': True, 'permit': True}, 'ready')]:
                 client.return_value.status.return_value = {'ingresses': {'native': ingress}}
-                self.assertEqual(panels.vr_rows(found)[0][0][1].level, expected)
+                self.assertEqual(panels.vr_control_rows(found)[0][0][1].level, expected)
             client.return_value.status.side_effect = RuntimeError('Runtime feedback is stale')
-            state = panels.vr_rows(found)[0][0][1]
+            state = panels.vr_control_rows(found)[0][0][1]
             self.assertEqual(state.level, 'error')
             self.assertIn('Runtime feedback is stale', str(state))
 
@@ -144,7 +313,8 @@ class BenchPanelTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory, \
              patch('embodied.contracts.runtime.control.ControlClient') as client, \
-             patch('embodied.applications.workstation.ports.summary', return_value=('测试端口', False)):
+             patch('embodied.applications.workstation.ports.summary', return_value=('测试端口', False)), \
+             patch.object(panels, 'vr_transport_status', return_value={'usb_status': 'missing'}):
             run = Path(directory)
             found = (run, {'backend': 'sim', 'input': 'none'})
             self.assertEqual(bench.kernel_summary(*found)[1].level, 'waiting')
@@ -224,6 +394,7 @@ class BenchPanelTests(unittest.TestCase):
              patch.object(Path, 'glob', return_value=[]), \
              patch.object(panels.subprocess, 'Popen') as spawn, \
              patch.object(panels.subprocess, 'run') as command, \
+             patch.object(panels, 'vr_transport_status', return_value={'usb_status': 'missing'}), \
              patch('builtins.__import__', side_effect=without_sdk):
             states = {role: panels.snapshot(role) for role in ('kernel', 'vr', 'camera')}
             spawn.assert_not_called()
@@ -231,7 +402,7 @@ class BenchPanelTests(unittest.TestCase):
         for role, (title, rows, hints) in states.items():
             with self.subTest(role=role):
                 self.assertTrue(title)
-                self.assertIn('等待', str(rows))
+                self.assertTrue(rows)
                 self.assertTrue(hints)
         self.assertIn('未通电', str(states['kernel'][2]))
         self.assertIn('missing-can', dict(states['kernel'][1])['配置'])
