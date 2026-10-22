@@ -161,7 +161,7 @@ async function initialize() {
   const actualMeshes = [], targetMeshes = [];
   const grippers = [];
   await Promise.all(manifest.meshes.map(async (spec, index) => {
-    let source, geometry;
+    let digest, geometry;
     if (spec.primitive) {
       const shape = spec.primitive;
       if (shape.kind === 'box') geometry = new THREE.BoxGeometry(...shape.size);
@@ -173,12 +173,12 @@ async function initialize() {
     } else if (spec.link === 'link6') {
       const response = await fetch(spec.url);
       if (!response.ok) throw new Error(`${spec.url}: HTTP ${response.status}`);
-      source = await response.arrayBuffer();
-      geometry = loader.parse(source);
+      digest = response.headers.get('X-Content-SHA256');
+      geometry = loader.parse(await response.arrayBuffer());
     } else geometry = await loader.loadAsync(spec.url);
     geometry.scale(...spec.scale);
     geometry.computeVertexNormals();
-    const parts = source ? await splitGripperGeometry(source, geometry, spec.scale) : null;
+    const parts = digest ? splitGripperGeometry(digest, geometry, spec.scale) : null;
     // The Desktop scene uses black housings and a brushed-metal link3.
     const metal = spec.link === 'link3';
     const material = new THREE.MeshStandardMaterial({

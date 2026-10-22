@@ -122,7 +122,10 @@ class SceneTests(unittest.TestCase):
         np.testing.assert_allclose(manifest['joint_limits']['upper'], self.robot.upper)
         self.assertIn(b'robot-canvas', self.read(''))
         for spec in manifest['meshes']:
-            self.assertGreater(len(self.read(spec['url'].lstrip('/'))), 1000)
+            with self.http.open(self.scene.url.rstrip('/') + spec['url'], timeout=2) as response:
+                content = response.read()
+                self.assertGreater(len(content), 1000)
+                self.assertEqual(response.headers['X-Content-SHA256'], hashlib.sha256(content).hexdigest())
         for path in ('../configs/local.toml', 'scene.py', 'meshes/999.stl'):
             with self.assertRaises(HTTPError) as error:
                 self.read(path)
@@ -133,6 +136,19 @@ class SceneTests(unittest.TestCase):
         provenance = json.loads((WEB_ROOT / 'provenance.json').read_text())
         for path, digest in provenance['sha256'].items():
             self.assertEqual(hashlib.sha256((WEB_ROOT / path).read_bytes()).hexdigest(), digest, path)
+
+    def test_mesh_digest_matches_the_served_bytes_after_resource_change(self):
+        mesh_url = self.scene._manifest['meshes'][-1]['url']
+        with tempfile.TemporaryDirectory() as folder:
+            mesh = Path(folder) / 'changing.STL'
+            self.scene._files[mesh_url] = mesh
+            for content in (b'first mesh', b'changed mesh'):
+                mesh.write_bytes(content)
+                for method in ('GET', 'HEAD'):
+                    request = Request(self.scene.url.rstrip('/') + mesh_url, method=method)
+                    with self.http.open(request, timeout=2) as response:
+                        self.assertEqual(response.headers['X-Content-SHA256'], hashlib.sha256(content).hexdigest())
+                        self.assertEqual(response.read(), content if method == 'GET' else b'')
 
     def test_close_releases_port_and_old_meshcat_selector_is_removed(self):
         self.scene.close()
@@ -177,6 +193,7 @@ class SceneTests(unittest.TestCase):
                         self.http.open(request, timeout=2)
                     self.assertEqual(error.exception.code, 404)
                     self.assertEqual(error.exception.headers['Cache-Control'], 'no-store')
+                    self.assertIsNone(error.exception.headers['X-Content-SHA256'])
                     content = error.exception.read()
                     if method == 'GET':
                         payload = json.loads(content)
