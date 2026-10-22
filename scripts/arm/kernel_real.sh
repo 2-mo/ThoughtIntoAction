@@ -13,19 +13,20 @@ while (($#)); do
     *) ARGS+=("$1"); shift ;;
   esac
 done
-cat <<'TEXT'
-真机 · arx 内核（待验收）
-  - 启动会使能电机；先扶好机械臂。原生 Quest 会回 Home（park_q，默认全零）并打开夹爪。
-  - managed 模式初始保持，随后按输入来源的命令动作；real-manual 默认无来源，保持启动姿态与夹爪宽度。
-  - Ctrl+C 退出进入 SDK 阻尼，不回 Home；退出前先支撑机械臂。
-  - Quest 右手：A 按住至少 150 ms 后松开切换模式，A+B 回 Home，Grip 跟随，Trigger 夹爪。
-  - 旧机械臂服务仍占用 CAN 时内核拒绝启动：先执行 ./run.sh real shutdown。
-  - 验收步骤见 docs/guides/real-arm-acceptance.md。
-TEXT
-[[ -n "$PROFILE" ]] && echo "  - 模式：$PROFILE（带命令网关：网页控制台、动作、标定、策略可接入）"
+if [[ "$PROFILE" == real-manual ]]; then
+  echo 'robot · 真机原位保持'
+  echo '启动后使能电机，保持当前位置和夹爪；网页自动接收反馈。'
+elif [[ -n "$PROFILE" ]]; then
+  echo "robot · 真机配置 $PROFILE"
+  echo '启动后使能电机并先保持当前位置，随后按所选输入控制。'
+else
+  echo 'robot · Quest 原生遥操'
+  echo '启动后使能电机、回 Home 并打开夹爪；Grip 跟随，Trigger 控制夹爪。'
+fi
+echo 'Ctrl+C 退出进入阻尼，退出前请支撑机械臂。'
 if ((YES == 0)); then
-  read -r -p "机械臂周围安全、急停在手边，开始？[y/N] " answer
-  [[ "$answer" == [yY] ]] || { echo "未启动。"; exit 1; }
+  read -r -p "准备好后输入 y 启动 robot：[y/N] " answer
+  [[ "$answer" == [yY] ]] || { echo "未启动。"; exit 0; }
 fi
 if [[ -z "$PROFILE" || "$PROFILE" == *quest* ]]; then
   "$ROOT/run.sh" quest-transport prepare

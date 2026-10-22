@@ -105,7 +105,10 @@ def build_sdk(headers):
                '--source-archive', str(vendor / 'source.tar'), '--patch-header', str(vendor / 'gripper_turns.h'),
                '--build-dir', str(CONTROL_BUILD / 'arx-gripper'), '--headers', str(headers.resolve())]
     subprocess.run(command, cwd=ROOT, env=control_environment(), check=True)
-    hardware_environment(control_environment())
+    subprocess.run([str(CONTROL_PYTHON), '-B', '-c',
+                    'from embodied.applications.workstation.control import control_environment, hardware_environment; '
+                    'hardware_environment(control_environment())'],
+                   cwd=ROOT, env=control_environment(), check=True)
     return 0
 
 
@@ -192,6 +195,7 @@ def runtime_directory(selected=None):
 
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--print-command", action="store_true", help="Resolve only; do not launch")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -266,10 +270,17 @@ def main(argv=None):
         if args.print_command:
             print(json.dumps({"argv": command, "cwd": str(ROOT)}, ensure_ascii=False))
             return 0
-        os.chdir(ROOT)
         env = control_environment()
-        if args.command == 'start' and args.backend == 'real':
-            env = hardware_environment(env, robot_plugin=args.robot_plugin, config=args.config)
+        real_start = args.command == 'start' and args.backend == 'real'
+        if real_start and Path(sys.prefix).resolve() != CONTROL_PYTHON.parent.parent.resolve():
+            # Profile and driver plugins belong to the control environment. The
+            # stdlib bootstrap must hand over before importing their dependencies.
+            os.execvpe(str(CONTROL_PYTHON), [str(CONTROL_PYTHON), '-B', '-m',
+                       'embodied.applications.workstation.control', *argv], env)
+        config = str(Path(args.config).resolve()) if real_start and args.config else None
+        os.chdir(ROOT)
+        if real_start:
+            env = hardware_environment(env, robot_plugin=args.robot_plugin, config=config)
         os.execvpe(command[0], command, env)
     except (OSError, ValueError, EOFError, subprocess.SubprocessError) as exc:
         print(f"Control launch error: {exc}", file=sys.stderr)
