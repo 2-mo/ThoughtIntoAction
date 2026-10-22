@@ -1,5 +1,32 @@
 # X5 原始采集与 π0.5 训练导出
 
+## 统一内核的通用关节适配
+
+schema 2 导出在 `meta/quest_export.json` 保留 `data_contract` 和显式 `camera_roles`。采集时指定，例如 `--camera-roles '{"base_0_rgb":"front_rgb"}'`。支持 OpenPI 的 `base_0_rgb`、`left_wrist_0_rgb`、`right_wrist_0_rgb` 三个角色；未声明角色使用模型 mask，已声明的相机缺失会报错。不同角色、关节顺序、夹爪语义的数据分别导出。
+
+训练 `scripts/training/openpi/run.py` 自动验证 `info.json` 中 state/action 的维数和名称顺序，然后使用 `joint_contract.py`。7 轴无夹爪为 7 维，7 轴有夹爪为 8 维；所有关节转相对观测的 delta，夹爪保持绝对米。共享实现位于 `embodied.policy.openpi.adapter`，模型输出必须符合已声明的 32 维模型补齐规则，不能按任意长度静默截取。
+
+归一化资产 ID 包含完整适配契约的哈希，不能把同为 7 维的“六轴 + 夹爪”统计量用于“七轴无夹爪”。历史无契约 X5 数据仍使用原具名 X5 预设；新契约需显式相机角色。
+
+PyTorch 和 JAX 的推理 backend 共用训练转换器。PyTorch 可读 checkpoint 训练元数据中的 adapter_spec；Orbax 不保存训练配置，因此需从原训练数据取得并显式传入：
+
+```python
+import json
+from pathlib import Path
+from embodied.policy.openpi.adapter import from_dataset
+from embodied.policy.pi05_sft.backend_jax import load_backend
+
+meta = Path("/path/to/exported-dataset/meta")
+spec = from_dataset(json.loads((meta / "quest_export.json").read_text()),
+                    json.loads((meta / "info.json").read_text()))
+policy, checkpoint, stats = load_backend("/path/to/checkpoint", adapter_spec=spec)
+# policy.infer({"state": ordered_q, "front_rgb": rgb, "front_rgb_valid": True, "prompt": task})
+```
+
+加载时校验资产标识与适配契约一致，不会因七维统计量而猜成 X5。上述接口只负责模型输入输出转换；已有 X5 真机 rollout 仍是 X5 预设，不把通用预测自动连接到任意硬件。这里的离线回归覆盖 MCAP、导出行/特征和适配器；没有据此宣称已完成模型训练或真实策略评估。
+
+## 历史 X5 数据与服务器流程
+
 本地只采集、回放和打包，不再在任务结束时转换 LeRobot 或重编码视频。任务名来自 `scripts/shortcuts/启动遥操.sh` 的 COLLECTION_TASK。
 
 ## 本地压缩记录

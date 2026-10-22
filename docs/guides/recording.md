@@ -19,15 +19,49 @@
 
 原始数据默认保存在 `outputs/datasets/runtime/episode_*/`。`episode.json` 保存运行身份、任务、录制状态、参考相机和 `data_contract`；`episode.mcap` 保存反馈、实际下发指令和相机帧索引，RGB 保存在对应相机的视频或图像文件。导出时仍需复制完整 episode 目录。
 
-`data_contract` 描述关节名称与顺序、rad 单位、夹爪是否存在及米制范围。数据写入、对齐和导出按契约决定维度：七轴机械臂不截断，无夹爪机器人不补一维，未知夹爪上限不套用 ARX 标定。相机使用配置 ID，`--anchor-camera` 决定对齐参考。当前视觉训练导出仍要求 30 FPS 相机、有效因果时间匹配和允许的遥操来源；无相机诊断、RPC 脚本动作或被标记失败的录制不会因此自动获得训练资格。旧版六轴数据仍按其原始协议读取。
+`data_contract` 描述关节名称与顺序、rad 单位、夹爪是否存在及米制范围。数据写入、对齐和导出按契约决定维度：七轴机械臂不截断，无夹爪机器人不补一维，未知夹爪上限不套用 ARX 标定。相机使用配置 ID，`--anchor-camera` 决定对齐参考。当前视觉训练导出要求 30 FPS 相机、有效因果时间匹配和明确的示范来源。历史数据仅允许 Quest/Phone；脚本示范必须通过下文的任务录制上下文声明 robot-api 来源并关联已完成任务。无相机诊断、未声明来源的 RPC 动作和失败录制仍不能导出训练。旧版六轴数据仍按其原始协议读取。
 
-每路相机必须声明自己的 `driver`，不继承腕部相机配置。新版导出布局名为 `aligned30_runtime_v2`，每条报告的 `robot_timing` 分别给出配置控制频率与反馈、指令时间戳统计的平均采样率；缺口会降低该平均值，不能用它代替周期抖动分析。旧布局仍可读取。随仓库提供的 OpenPI 训练适配器仍面向六轴、夹爪和腕部图像；其他数据契约需要对应训练适配，通用导出不等于现成模型已支持任意硬件。
+每路相机必须声明自己的 `driver`，不继承腕部相机配置。新版导出布局名为 `aligned30_runtime_v2`，每条报告的 `robot_timing` 分别给出配置控制频率与反馈、指令时间戳统计的平均采样率；缺口会降低该平均值，不能用它代替周期抖动分析。旧布局仍可读取。OpenPI 训练入口与推理 backend 共用显式关节/相机契约；关节按记录顺序转 delta，夹爪存在时保留绝对米，图像按 camera_roles 映射。原 X5 预设保留。通用数据适配不代表现成 X5 权重已学会其他硬件。
 
 使用 `with robot.task(...) as task:` 编写的任务会将阶段事件和结果保存到 `<RUN>/tasks/<TASK_ID>/`，参见[操作原语](../reference/robot-primitives.md)。事件标注会核对内核运行 ID 和主机启动 ID，只取实际相机帧覆盖的阶段区间；不能把另一轮运行的时间戳拼进当前录制。`--confidence` 是显式提供的标签置信度，不是算法算出的成功率。
 
 标注保存在派生目录 `annotations/skills.v000001.json`，记录阶段、对象、证据、帧范围和置信度，初始状态为 `needs_review`。在新版网页的“任务 / 技能复核”里点击“刷新记录”，可查看任务阶段、选择已保存的 episode 并批准或拒绝标注。每次复核新增版本；过期版本或已变化的源记录会被拒绝，原始 MCAP、图像和任务结果不会被覆盖。
 
 网页顶部“实测速度 · 质量”显示关节反馈速度、反馈帧龄和连续 tick 的周期统计；命令与反馈的偏差保留各自时间戳，不能当作严格对齐的跟踪误差。相机源帧缺口与网页预览跳帧分开统计。界面和字段说明见[监看模块](../../src/embodied/applications/monitor/web/README.md)。
+
+## 将脚本任务录成示范
+
+`record_task` 在调用线程执行现有 Task 原语，在独立线程读取 observer 和相机。传相机 ID 列表时由上下文打开/关闭配置中的源；传 ID → 已打开源映射时由调用者管理源生命周期。示例连接显式运行目录，在当前 TCP 位置向上 2 cm 再返回，不启动内核或硬件：
+
+```bash
+./run.sh examples record_task --run <RUN> --cameras front_rgb \
+  --camera-roles '{"base_0_rgb":"front_rgb"}' --annotator operator --confidence 0.8
+```
+
+相机 ID 必须存在于本机配置。代码接口：
+
+```python
+from embodied.applications.operations.recording import record_task
+
+recording = record_task(robot, "approach and retreat", cameras=["front_rgb"],
+    camera_roles={"base_0_rgb": "front_rgb"}, annotator="operator", confidence=0.8)
+with recording as task:
+    task.retreat(offset=(0., 0., .02))
+    task.retreat(offset=(0., 0., -.02))
+print(recording.path)  # 完整原始 episode，含 task/events.jsonl、task/result.json、annotations/
+```
+
+可传 `scene=<SimulationTask>, reset_scene=True`：先按场景快照 reset，再取得控制权、等待每路相机至少两帧后执行任务；保存场景描述和录制起点快照。没有场景判据时，完成任务的 `outcome` 仍为 `unknown`；只有显式场景判据为真才写 `success`。动作或采集失败保留原始条目并拒绝训练导出。reset/restore 导致 owner epoch 改变时仍拒绝跨边界拼接。
+
+示范来源使用 `embodied.demonstration/1`，脚本仅接受 `robot-api` 与已完成且 ID 一致的任务执行；导出显式接受执行阶段 4，继续检查 position-following、真实 submitted、owner 一致与独立因果时间。`record_task` 结束会从明确任务事件生成 `needs_review` 标注，不从夹爪命令推断接触或场景成功。
+
+示例默认做离线导出预检；若当前环境已装项目锁定的 LeRobot 导出依赖，可加 `--export <NEW_DATASET_DIR>` 执行真实转换。模型训练/GPU 推理需另行运行对应环境；此示例不安装依赖。
+
+## 实时录制状态
+
+每条 episode 的 `capture-status.json` 每 0.25 秒更新：记录 runtime/boot 身份、PID 与 Linux 进程启动时钟、帧/状态/指令计数、队列深度/容量、相机丢帧和写盘错误。心跳线程独立于控制循环。正在录制的计数表示已交给 writer，完成 manifest 提交后才代表正式完成。
+
+控制台以 `episode.json.lifecycle` 判断完成。仍为 recording 且进程消失显示中断；进程仍在但心跳超过 2 秒显示陈旧，保留末次计数并去掉实时标识。正常结束或检测到失败都会保留最终心跳，不能把进程退出当作采集成功。
 
 ## 旧采集会话工作流
 

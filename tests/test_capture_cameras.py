@@ -12,6 +12,22 @@ class Stop(Exception):
 
 
 class CaptureCameraTests(unittest.TestCase):
+    def test_direct_camera_plugin_does_not_read_wrist_config(self):
+        created = []
+        class Registry:
+            def spec(self, kind, name):
+                return SimpleNamespace(capabilities=('rgb',))
+            def create(self, kind, name, **options):
+                created.append((name, options))
+                return nullcontext(SimpleNamespace(metadata={}))
+        with patch('embodied.contracts.registry.Registry', Registry), \
+                patch('embodied.core.project.load_config', side_effect=AssertionError('unrelated wrist configuration')), \
+                patch.object(capture, 'RuntimeReader', side_effect=Stop):
+            with self.assertRaises(Stop):
+                capture.main(['--run', '/nonexistent', '--task', 't', '--camera', 'synthetic',
+                              '--camera-id', 'front_rgb', '--camera-options', '{"width": 32}'])
+        self.assertEqual(created, [('synthetic', {'width': 32})])
+
     def test_only_external_camera_needs_no_wrist_configuration(self):
         created = []
         class Registry:
@@ -55,7 +71,7 @@ class CaptureCameraTests(unittest.TestCase):
         with patch('embodied.contracts.registry.Registry') as registry, \
                 patch('embodied.core.project.load_config', return_value=config), \
                 patch('embodied.devices.sensors.control.recording_guard', return_value=SimpleNamespace(close=lambda: None)):
-            with self.assertRaisesRegex(SystemExit, '2'):
+            with self.assertRaisesRegex(SystemExit, '1'):
                 capture.main(['--run', '/nonexistent', '--task', 't', '--cameras', 'external_rgb'])
             registry.return_value.create.assert_not_called()
 

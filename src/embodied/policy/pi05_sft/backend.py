@@ -7,7 +7,7 @@ from embodied.policy.pi05_sft.checkpoint import ROOT, OPENPI, inspect_checkpoint
 # OpenPI is installed in the selected policy environment by setup.sh/setup_jax.sh.
 
 
-def load_backend(checkpoint):
+def load_backend(checkpoint, *, adapter_spec=None):
     import numpy as np
     import torch
     from safetensors.torch import load_model
@@ -18,7 +18,7 @@ def load_backend(checkpoint):
     from openpi.shared.normalize import load as load_stats
     from openpi.models.tokenizer import PaligemmaTokenizer
     from embodied.policy.openpi.x5 import X5Inputs, X5Outputs
-    spec = inspect_checkpoint(checkpoint)
+    spec = inspect_checkpoint(checkpoint, adapter_spec=adapter_spec)
     torch.set_num_threads(8)
     (torch.ones(1, device='cuda')+1).cpu()
     config = Pi0Config(**spec['model'])
@@ -42,11 +42,15 @@ def load_backend(checkpoint):
     tokenizer = object.__new__(PaligemmaTokenizer)
     tokenizer._max_len = config.max_token_len
     tokenizer._tokenizer = sentencepiece.SentencePieceProcessor(model_file=str(token_path))
-    mask = t.make_bool_mask(6, -1)
-    inputs = [X5Inputs(), t.DeltaActions(mask), t.Normalize(stats,use_quantiles=True),
+    if spec['adapter_spec'] is None:
+        adapter_input, adapter_output, mask = X5Inputs(), X5Outputs(config.action_dim), t.make_bool_mask(6, -1)
+    else:
+        from embodied.policy.openpi.adapter import transforms
+        adapter_input, adapter_output, mask = transforms(spec['adapter_spec'])
+    inputs = [adapter_input, t.DeltaActions(mask), t.Normalize(stats,use_quantiles=True),
               t.ResizeImages(224,224), t.TokenizePrompt(tokenizer,discrete_state_input=True),
               t.PadStatesAndActions(config.action_dim)]
-    outputs = [t.Unnormalize(stats,use_quantiles=True), t.AbsoluteActions(mask), X5Outputs()]
+    outputs = [t.Unnormalize(stats,use_quantiles=True), t.AbsoluteActions(mask), adapter_output]
     policy = Policy(model, transforms=inputs, output_transforms=outputs,
                     sample_kwargs={'num_steps':10}, is_pytorch=True, pytorch_device='cuda')
     return policy, spec, stats

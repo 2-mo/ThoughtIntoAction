@@ -7,8 +7,9 @@ import uuid
 
 from mcap.writer import Writer, CompressionType
 from embodied.core.storage import save_json
-from embodied.data.episode.cameras import camera_topic, camera_metadata, anchor_camera
+from embodied.data.episode.cameras import camera_topic, camera_metadata, anchor_camera, camera_roles as validate_roles
 from embodied.data.episode.contract import runtime_contract, vector, action_definition
+from embodied.data.episode.provenance import validate_demonstration
 from embodied.data.episode.schema import RUNTIME
 
 TOPICS = {'tick': '/robot/tick', 'state': '/robot/state', 'command': '/robot/command',
@@ -38,7 +39,8 @@ class RuntimeEpisodeWriter:
     A process crash leaves lifecycle=recording. Only explicit close boundaries
     commit complete; an observed stream or storage failure commits failed.
     """
-    def __init__(self, root, descriptor, task, camera=None, *, cameras=None, video=False, hand_eye=None, anchor=None):
+    def __init__(self, root, descriptor, task, camera=None, *, cameras=None, video=False, hand_eye=None, anchor=None,
+                 demonstration=None, camera_roles=None):
         """`camera` is legacy wrist metadata; `cameras` maps arbitrary RGB IDs to metadata.
 
         video=True stores each camera as H.264 MP4 with per-frame indices; otherwise one PNG per frame.
@@ -50,6 +52,8 @@ class RuntimeEpisodeWriter:
         camera = cameras.get('wrist_rgb')
         self.cameras, self.video = camera_metadata({'cameras': cameras}), bool(video)
         self.contract = runtime_contract(descriptor)
+        demonstration = validate_demonstration(demonstration) if demonstration is not None else None
+        camera_roles = validate_roles(self.cameras, camera_roles)
         reference = anchor_camera({'cameras': cameras, 'anchor_camera': anchor}) if cameras else None
         self.path = Path(root) / f'episode_{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}'
         self.path.mkdir(parents=True, exist_ok=False)
@@ -78,6 +82,10 @@ class RuntimeEpisodeWriter:
             'cameras': self.cameras, 'anchor_camera': reference, 'data_contract': self.contract,
             'clock': 'host monotonic_ns; feedback receipt, command submission and image receipt are independent',
             'raw_input_recorded': False, 'counts': dict(self.counts)}
+        if demonstration is not None:
+            self.manifest['demonstration'] = demonstration
+        if camera_roles is not None:
+            self.manifest['camera_roles'] = camera_roles
         if hand_eye is not None:  # camera id -> extrinsics at recording time, or None if uncalibrated
             self.manifest['hand_eye'] = hand_eye
         self.offset = self.manifest['started_unix_ns'] - self.manifest['started_monotonic_ns']
@@ -175,7 +183,7 @@ class RuntimeEpisodeWriter:
             except (OSError, ValueError) as exc:
                 error = error or f'Source metadata could not be preserved: {exc}'
         self.error = error or self.error
-        if reason not in ('duration', 'operator-stop', 'runtime-terminal'):
+        if reason not in ('duration', 'operator-stop', 'runtime-terminal', 'context-exit'):
             self.error = self.error or 'Recording ended without an explicit complete boundary'
         if reason == 'runtime-terminal' and not self.terminal:
             self.error = self.error or 'Runtime terminal was not received'

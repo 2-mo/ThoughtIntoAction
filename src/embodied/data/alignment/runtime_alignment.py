@@ -4,7 +4,7 @@ from collections import Counter
 from embodied.data.episode.contract import runtime_contract, vector
 
 
-def align(states, commands, frames, *, max_age_ns=100_000_000, sources=('quest',), contract=None):
+def align(states, commands, frames, *, max_age_ns=100_000_000, sources=('quest',), phases=(1,), contract=None):
     """Return selected anchors and exclusion counts; leave raw records intact.
 
     Select the latest command first, then check its mode. Searching only valid
@@ -29,7 +29,7 @@ def align(states, commands, frames, *, max_age_ns=100_000_000, sources=('quest',
         if max(stamp - clocks[0][si], stamp - clocks[1][ci]) > max_age_ns:
             excluded['stale-robot-data'] += 1
             continue
-        if any(row['phase'] != 1 or row['source'] not in sources or row['error'] for row in (state, command)):
+        if any(row['phase'] not in phases or row['source'] not in sources or row['error'] for row in (state, command)):
             excluded['phase-source-or-error'] += 1
             continue
         if any(row.get('mode') != 3 or (contract['gripper'] and row.get('gripper_mode') != 3) for row in (state, command)):

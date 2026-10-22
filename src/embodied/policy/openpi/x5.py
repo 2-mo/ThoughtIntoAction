@@ -1,38 +1,32 @@
-"""Device-free X5 observation/action adaptation, shared by train and inference."""
-import dataclasses
-import numpy as np
+"""Named six-joint + gripper preset, backed by the shared contract adapter."""
+from dataclasses import dataclass
 
-@dataclasses.dataclass(frozen=True)
+from embodied.policy.openpi.adapter import adapter_spec, JointInputs, JointOutputs
+
+
+def x5_spec(*, exterior=False, model_action_dim=32):
+    roles = {'left_wrist_0_rgb': 'wrist_rgb'}
+    if exterior:
+        roles['base_0_rgb'] = 'exterior_rgb'
+    return adapter_spec({'schema': 'embodied.joint_vectors/1', 'representation': 'absolute_joint_position',
+        'joint_names': [f'joint{i + 1}' for i in range(6)], 'joint_unit': 'rad',
+        'gripper': {'name': 'gripper_m', 'unit': 'm', 'range': [0., .082]}, 'robot_type': 'stanford_x5'},
+        roles, model_action_dim=model_action_dim)
+
+
+@dataclass(frozen=True)
 class X5Inputs:
     def __call__(self, data):
-        wrist = np.asarray(data['wrist_image'])
-        if wrist.ndim != 3:
-            raise ValueError('Expected a wrist RGB image')
-        if wrist.shape[0] == 3:
-            wrist = wrist.transpose(1, 2, 0)
-        if np.issubdtype(wrist.dtype, np.floating):
-            wrist = (np.clip(wrist, 0, 1) * 255).astype(np.uint8)
-        result = {'state': np.asarray(data['state'], dtype=np.float32),
-                  'image': {'base_0_rgb': np.zeros_like(wrist), 'left_wrist_0_rgb': wrist,
-                            'right_wrist_0_rgb': np.zeros_like(wrist)},
-                  'image_mask': {'base_0_rgb': np.False_, 'left_wrist_0_rgb': np.bool_(np.asarray(data.get('wrist_valid', True)).reshape(-1)[0]), 'right_wrist_0_rgb': np.False_}}
-        if 'exterior_image' in data:
-            exterior = np.asarray(data['exterior_image'])
-            if exterior.ndim != 3:
-                raise ValueError('Expected an exterior RGB image')
-            if exterior.shape[0] == 3:
-                exterior = exterior.transpose(1, 2, 0)
-            if np.issubdtype(exterior.dtype, np.floating):
-                exterior = (np.clip(exterior, 0, 1) * 255).astype(np.uint8)
-            result['image']['base_0_rgb'] = exterior
-            result['image_mask']['base_0_rgb'] = np.bool_(np.asarray(data.get('exterior_valid', True)).reshape(-1)[0])
-        if result['state'].shape != (7,): raise ValueError('X5 state must have 7 dimensions')
-        if 'actions' in data: result['actions'] = np.asarray(data['actions'], dtype=np.float32)
-        if 'prompt' in data: result['prompt'] = data['prompt']
-        return result
+        values = dict(data, wrist_rgb=data['wrist_image'], wrist_rgb_valid=data.get('wrist_valid', True))
+        exterior = 'exterior_image' in data
+        if exterior:
+            values.update(exterior_rgb=data['exterior_image'], exterior_rgb_valid=data.get('exterior_valid', True))
+        return JointInputs(x5_spec(exterior=exterior))(values)
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclass(frozen=True)
 class X5Outputs:
+    model_action_dim: int = 32
+
     def __call__(self, data):
-        return {'actions': np.asarray(data['actions'])[..., :7]}
+        return JointOutputs(x5_spec(model_action_dim=self.model_action_dim))(data)
