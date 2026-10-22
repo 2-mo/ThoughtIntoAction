@@ -6,7 +6,7 @@
 
 - 唯一插件目录为 `configs/plugins.json`。装配层按 profile 选择工厂；驱动拥有 preflight、资源标识、能力、关闭策略和模型快照元数据；诊断、viewer 和路由由注册表选择，输入配置惰性读取。公共 runtime 不拥有某品牌的特殊配置解释器。
 - 参数位于 `configs/robots/`、`configs/inputs/` 与 `configs/control/`；控制环境声明在 `configs/environments/control/`，安装结果在 `outputs/envs/control/`，运行记录在 `outputs/runtime/control/`。
-- `third_party/` 为只读参考，不从中导入模块、查动态库、启动模型或安装环境。正式依赖锁版本；受管安装工作区在 `outputs/dependencies/`，维护的 vendor 源码保留来源与许可证。
+- `third_party/` 为 Git 忽略的本地只读参考，来源记录在 `docs/provenance/`，不从中导入模块、查动态库、启动模型或安装环境。正式依赖锁版本；受管安装工作区在 `outputs/dependencies/`，维护的 vendor 源码保留来源与许可证。
 - 当前遥测是 RobotTick V3：显式关节数与 15 轴容量，JSON 仅包含实际轴数；episode schema 2 仍表示 MCAP 存储和动作语义。当前完整后端仍是 X5；LeRobot X5 导出器明确拒绝非六轴记录。
 - 本轮参考了 [PhyAgentOS 的能力声明与生命周期设计](phyagent-reference.md)，未引入其运行依赖，也未宣称获得新的机器人驱动。
 

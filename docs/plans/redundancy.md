@@ -4,7 +4,7 @@
 
 ## 可直接删除
 
-以下各项审查时已核对：在 `src/`、`control/`、`scripts/`、`configs/`、`apps/` 中没有运行时引用，只出现在 `third_party/migration/manifest.json` 中。
+以下各项审查时已核对：在 `src/`、`control/`、`scripts/`、`configs/`、`apps/` 中没有运行时引用，只出现在 `docs/provenance/migration/manifest.json` 中。
 
 - [x] **X-01** `src/operations/vendor/arx_motion/{contracts,geometry,interpolation,limits}.py`（f1f0425）
   - 与 `src/arx5_control/motion/` 中的同名文件逐字节相同，没有任何导入。

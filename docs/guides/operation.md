@@ -125,7 +125,7 @@ configs/local.toml       本机设备和存储路径，不提交
 configs/profiles/        绑定特定命令的参数组合
 configs/plugins.json     可替换组件的名称、工厂与能力声明
 assets/robots/x5/        当前 X5-2025 hybrid URDF、网格和来源校验
-third_party/             外部依赖与可选参考源码，版本由 dependencies.lock.toml 固定
+docs/provenance/         上游来源、许可证索引与历史迁移记录；本地 third_party/ 由 Git 忽略
 pyproject.toml / uv.lock Python 依赖声明与版本锁
 .python-version / .venv/ Python 版本与本机 uv 环境（.venv 不提交）
 configs/environments/snapshots/  历史环境盘点

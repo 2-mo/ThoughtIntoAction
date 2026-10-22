@@ -49,7 +49,7 @@
   - 验证：基线通过；人为新增一处违规、添加一条过期条目，两种情况都会失败。
 
 - [ ] **G-05** 删除前的引用检查 `P2`
-  - 做法：小脚本，输入模块或目录，列出 `src/`、`control/`、`scripts/`、`configs/`、`apps/` 中的运行时引用，排除 `tests/`、`docs/` 和 `third_party/migration/manifest.json`。`redundancy.md` 中的删除都先运行它。
+  - 做法：小脚本，输入模块或目录，列出 `src/`、`control/`、`scripts/`、`configs/`、`apps/` 中的运行时引用，排除 `tests/`、`docs/` 和 `docs/provenance/migration/manifest.json`。`redundancy.md` 中的删除都先运行它。
 
 - [ ] **G-07** 基线上失败的两项测试 `P1`
   - 现状：在 `172982f` 上用 unittest 同样失败，与测试运行器无关。

@@ -14,7 +14,7 @@ verify = "./run.sh control verify"
 name = "robot-teleop-phone"
 path = "src/embodied/devices/phone"
 commit = "864d6501a3eeef99b7facdc8f592d80e0ff52843"
-manifest = "third_party/phone_input/PROVENANCE.json"
+manifest = "docs/provenance/phone_input/PROVENANCE.json"
 snapshot = "working tree including local changes; iOS, protocol, mapping and UDP only"
 
 [[vendored]]
@@ -85,24 +85,24 @@ required = false
 name = "consolidated-motion"
 path = "src/legacy/arx5_control"
 commit = "a18d6b67906e450411d56e3d0fd08fd18a01675c"
-manifest = "third_party/migration/manifest.json"
-patches = "third_party/migration/patches.json"
+manifest = "docs/provenance/migration/manifest.json"
+patches = "docs/provenance/migration/patches.json"
 snapshot = "Full functional source, assets and tests; original working tree retained in outputs/archives/migration/originals"
 
 [[vendored]]
 name = "consolidated-rebot"
 path = "src/embodied/devices/robots/rebot"
 commit = "0324b734c86866ea23d6ea4c097833739329d6d3"
-manifest = "third_party/migration/manifest.json"
-patches = "third_party/migration/patches.json"
+manifest = "docs/provenance/migration/manifest.json"
+patches = "docs/provenance/migration/patches.json"
 snapshot = "Full functional source, assets and tests; original working tree retained in outputs/archives/migration/originals"
 
 [[vendored]]
 name = "consolidated-phone"
 path = "src/embodied/devices/phone"
 commit = "864d6501a3eeef99b7facdc8f592d80e0ff52843"
-manifest = "third_party/migration/manifest.json"
-patches = "third_party/migration/patches.json"
+manifest = "docs/provenance/migration/manifest.json"
+patches = "docs/provenance/migration/patches.json"
 snapshot = "Full functional source, assets and tests; original working tree retained in outputs/archives/migration/originals"
 
 [[repositories]]

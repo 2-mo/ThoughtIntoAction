@@ -19,7 +19,7 @@
 | 夹爪、负载标定 | `src/legacy/arx_tools/` | `calibration.gripper/payload` |
 | 方块感知、抓取/旋转/堆叠 | `src/legacy/arx_tools/rgb_cube_detector.py`、`src/experiments/`、`src/embodied/applications/console/features/cube/` | `perception.rgb_cube`、`task_planner.*`、`task.cube` |
 | 双相机采集、审核、GR00T 导出 | `src/embodied/data/groot/` | `collection.groot`、`episode_store.groot`、`dataset_export.groot_v21` |
-| GR00T 权重检查、异步推理及动作分块 | `src/embodied/policy/groot/`、`third_party/Isaac-GR00T/` | `policy.groot`、`policy_actions.groot`、`checkpoint.groot` |
+| GR00T 权重检查、异步推理及动作分块 | `src/embodied/policy/groot/`、`outputs/dependencies/groot-<commit>/` | `policy.groot`、`policy_actions.groot`、`checkpoint.groot` |
 | 手机 mock/replay、握手、诊断、回放检查 | `src/embodied/devices/phone/`、`configs/phone/`、`assets/phone/` | `input.mock/replay`、`test_robot.mock`、`diagnostic.*`、`phone.tools` |
 
 ### 一处选择和运行
@@ -71,13 +71,13 @@ GR00T 导出使用独立的双相机/Rot6D/16 维数据定义，关节 action �
 
 ## 来源、修复和验证
 
-`third_party/migration/manifest.json` 逐项记录 1,297 个原文件、目标位置、原始 SHA256 与导入状态；`patches.json` 记录迁入后的路径适配和修复。已有实现遇到同名文件时保留本地版本，原文件仍可由恢复归档核查。GR00T 依赖来源另记在 `groot.json`。迁移已完成，这两份清单作为历史记录保留；迁入代码此后按平台代码正常修改，不再校验与导入时逐字节一致（arx-televr 的 `control/` 仍与上游同步，保留哈希台账）。
+`docs/provenance/migration/manifest.json` 逐项记录 1,297 个原文件、目标位置、原始 SHA256 与导入状态；`patches.json` 记录迁入后的路径适配和修复。已有实现遇到同名文件时保留本地版本，原文件仍可由恢复归档核查。GR00T 依赖来源另记在 `groot.json`。迁移已完成，这两份清单作为历史记录保留；迁入代码此后按平台代码正常修改，不再校验与导入时逐字节一致（arx-televr 的 `control/` 仍与上游同步，保留哈希台账）。
 
 迁移中修复了 reBot 梯形时间剖面越界/不连续、关节限位用 joint ID 错位索引、MeshCat 轨迹数组方向和 Pinocchio 重力读取；自动保持积分按 dt 换算原 500 Hz 增益。运动学与动力学库加载不再隐式导入电机 SDK。相关能力仍须按各机器人实际设备验收，B601 特定增益不应用到 X5。
 
 离线证据位于 `outputs/migration/consolidation/`：迁入测试 328 项通过；迁移契约 5 项通过；现有项目通过正式启动入口回归 302 项、4 项跳过；DM/RS 模型与动力学、梯形轨迹检查通过；网页完成 TypeScript/Vite 构建；原生 arx demo、采集及终止封存检查通过；手机实际本机 UDP/mock 的握手、追踪恢复和失效检查通过。
 
-`groot-synthetic-final/` 使用真实编码器生成双路视频并导出 121 帧 Parquet，核对 16 维状态/动作以及下一帧测量关节动作；普通统计、相对统计与官方 GR00T loader 均通过。没有伪造真实设备数据或模型预测。TensorRT 依赖已拆为可选 extra，版本和补丁由 `third_party/migration/groot.json` 及 `groot-tensorrt.patch` 固定，`components setup groot` 能从锁定提交恢复源码和补丁。
+`groot-synthetic-final/` 使用真实编码器生成双路视频并导出 121 帧 Parquet，核对 16 维状态/动作以及下一帧测量关节动作；普通统计、相对统计与官方 GR00T loader 均通过。没有伪造真实设备数据或模型预测。TensorRT 依赖已拆为可选 extra，版本和补丁由 `configs/dependencies/groot.json` 及 `configs/dependencies/groot-tensorrt.patch` 固定，`components setup groot` 能从锁定提交恢复源码和补丁。
 
 `isolated-checkout/` 从迁入源码、资源和锁文件重新构建了 analysis/rebot 环境，328 项迁入测试与 B601 检查再次通过。运行时禁止访问三个原目录、恢复归档，以及主工作树的源码/配置/模型，验证不会暗中借用旧实现。
 

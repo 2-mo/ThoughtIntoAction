@@ -112,7 +112,7 @@
 | `configs/environments/control/` | Python 3.10 声明与锁文件；安装到 `outputs/envs/control/` |
 | `configs/workbench/*.json` | 内核工作台组合 profile |
 
-`third_party/` 仅用于只读参考；运行依赖通过锁版本安装，受管构建工作区在 `outputs/dependencies/`。维护的 vendor 代码与原生资源随设备模块保留来源、许可证及补丁记录。参考决策见 [PhyAgentOS 取舍](phyagent-reference.md)。
+`third_party/` 是 Git 忽略的本地只读参考目录；来源记录在 `docs/provenance/`；运行依赖通过锁版本安装，受管构建工作区在 `outputs/dependencies/`。维护的 vendor 代码与原生资源随设备模块保留来源、许可证及补丁记录。参考决策见 [PhyAgentOS 取舍](phyagent-reference.md)。
 
 ## 现状与计划
 
