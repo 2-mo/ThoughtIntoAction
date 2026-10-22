@@ -75,7 +75,7 @@ bash src/embodied/policy/pi05_sft/setup.sh
 PYTHONPATH=src/embodied/policy/pi05_sft outputs/envs/pi05-sft/bin/python -m unittest discover -s src/embodied/policy/pi05_sft -p 'test_*.py' -v
 ```
 
-环境在 `outputs/envs/pi05-sft`，不改遥操和旧 zero-shot 环境。使用 CUDA 12.8 PyTorch 支持 RTX 5090；JAX 仅作为 OpenPI 的 CPU 辅助依赖。首次安装需要网络，正常推理使用本地权重、统计和已校验的公开 PaliGemma 分词器。`--help` 不加载模型、不连接硬件。
+环境在 `outputs/envs/pi05-sft`，不改遥操和旧 zero-shot 环境。使用 CUDA 12.8 PyTorch；JAX 仅作为 OpenPI 的 CPU 辅助依赖。首次安装需要网络，正常推理使用本地权重、统计和已校验的公开 PaliGemma 分词器。`--help` 不加载模型、不连接硬件。
 
 已验证 checkpoint 严格加载、真实相机观测得到 15×7 输出（首轮约 384 ms），以及 4 项 metadata/变换检查和共享控制循环的 3 项模拟服务检查。完整真机抓放效果尚未验证。
 
@@ -94,7 +94,7 @@ bash src/embodied/policy/pi05_sft/run_jax.sh --checkpoint ~/work/checkpoints/blu
 
 首次 JIT 编译用虚拟观测预热，在连接机械臂之前完成（最多等待 600 秒）；之后每轮耗时包含 JAX 同步和输出转换。正常入口会到预抓取位、张开夹爪再执行；`--preview` 也会定位，但不执行模型预测。停止和回零继续使用本目录原有脚本。
 
-本机已验证：5090 上恢复 15000 步权重、完成 JIT 预热，使用已保存的真实观测连续推理两次均输出有限的 15×7 动作，耗时约 63 ms、62 ms（包含同步；仅两次样本，不是完整基准）。结果在 `outputs/diagnostics/jax-verify-20260911-161112/`。尚未验证此 JAX checkpoint 的完整真机抓放效果。
+本机已验证：恢复 15000 步权重、完成 JIT 预热，使用已保存的真实观测连续推理两次均输出有限的 15×7 动作，耗时约 63 ms、62 ms（包含同步；仅两次样本，不是完整基准）。结果在 `outputs/diagnostics/jax-verify-20260911-161112/`。尚未验证此 JAX checkpoint 的完整真机抓放效果。
 
 
 ### 预抓取失败与停止状态

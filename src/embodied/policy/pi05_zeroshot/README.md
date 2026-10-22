@@ -54,7 +54,7 @@ bash src/embodied/policy/pi05_zeroshot/run.sh --image /path/to/wrist.png \
 
 默认每次创建 `outputs/zero-shot/<时间>/`，也可 `--output /path/to/new-directory`，拒绝覆盖已有目录。
 
-- `report.json`：参数、输入来源/时间戳、加载时间、每个动作块耗时、GPU 峰值分配量、输出范围、状态被裁剪的维度。
+- `report.json`：参数、输入来源/时间戳、加载时间、每个动作块耗时、输出范围、状态被裁剪的维度；不采集显卡型号或显存统计。
 - `sample_NNN.png`：对应输入图像。
 - `sample_NNN.npz`：`actions_model_space`（50×32）、`state_physical`（7）、`state_model_input`（32）。用 `numpy.load(..., allow_pickle=False)` 读取。
 
@@ -70,7 +70,7 @@ bash src/embodied/policy/pi05_zeroshot/run.sh --image /path/to/wrist.png \
 
 ## 本机实测
 
-2026-09-11，RTX 5090，PyTorch 2.7.1+cu128，bfloat16、10 次去噪，使用上述 episode 的第 0/30/60 帧与指令 `Pick up the blue cube.`。三个动作块均为有限值的 50×32 数组。模型加载 59.2 秒；首块 0.609 秒，后两块分别 0.133/0.133 秒；PyTorch 峰值分配 8.87 GiB（不等于整卡显存占用）。单次小样本测量，不是任务成功率评测。
+2026-09-11，PyTorch 2.7.1+cu128，bfloat16、10 次去噪，使用上述 episode 的第 0/30/60 帧与指令 `Pick up the blue cube.`。三个动作块均为有限值的 50×32 数组。模型加载 59.2 秒；首块 0.609 秒，后两块分别 0.133/0.133 秒。单次小样本测量，不是任务成功率评测。
 
 实际结果保存在 `outputs/zero-shot/blue-cube-cuda128/`。当前测试只证明本地权重可在真实观测上完成推理，未验证抓取效果。
 
