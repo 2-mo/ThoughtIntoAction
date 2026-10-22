@@ -14,13 +14,13 @@ while (($#)); do
   esac
 done
 if [[ "$PROFILE" == real-manual ]]; then
-  echo 'robot · 真机原位保持'
+  echo '◇ robot · 真机原位保持'
   echo '启动后使能电机，保持当前位置和夹爪；网页自动接收反馈。'
 elif [[ -n "$PROFILE" ]]; then
-  echo "robot · 真机配置 $PROFILE"
+  echo "◇ robot · 真机配置 $PROFILE"
   echo '启动后使能电机并先保持当前位置，随后按所选输入控制。'
 else
-  echo 'robot · Quest 原生遥操'
+  echo '◇ robot · Quest 原生遥操'
   echo '启动后使能电机、回 Home 并打开夹爪；Grip 跟随，Trigger 控制夹爪。'
 fi
 echo 'Ctrl+C 退出进入阻尼，退出前请支撑机械臂。'
@@ -31,7 +31,18 @@ fi
 if [[ -z "$PROFILE" || "$PROFILE" == *quest* ]]; then
   "$ROOT/run.sh" quest-transport prepare
 fi
-"$ROOT/run.sh" can-up
+mkdir -p "$ROOT/outputs/logs/bench"
+CAN_LOG=$(mktemp "$ROOT/outputs/logs/bench/can-XXXXXXXX.log")
+echo '↔ USB-CAN · 准备通信接口；若提示密码，请输入本机登录密码。'
+if "$ROOT/run.sh" can-up >"$CAN_LOG" 2>&1; then
+  echo '↔ USB-CAN · 已就绪'
+else
+  CAN_RESULT=$?
+  printf '↔ USB-CAN · 准备失败（退出码 %s）\n' "$CAN_RESULT" >&2
+  cat "$CAN_LOG" >&2
+  printf '详细日志：%s\n' "$CAN_LOG" >&2
+  exit "$CAN_RESULT"
+fi
 if [[ -n "$PROFILE" ]]; then
   exec "$ROOT/run.sh" kernel profiles start --profile "$PROFILE" "${ARGS[@]}"
 fi
