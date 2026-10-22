@@ -1,16 +1,17 @@
-"""Persistent workbench windows; device panels only observe existing services.
+"""Persistent workbench windows with shared camera and web service startup.
 
     python -m embodied.applications.workstation.bench_panels kernel
     python -m embodied.applications.workstation.bench_panels web --serve
 
-Only web/site with --serve may start a child, and neither service connects the arm
-automatically. A noninteractive invocation always prints one read-only snapshot.
+Interactive --serve starts web/site children or ensures the independent camera
+service. No panel connects the arm. Noninteractive invocations stay read-only.
 """
 from __future__ import annotations
 
 import argparse
 from datetime import datetime
 import ipaddress
+import math
 import os
 from pathlib import Path
 import signal
@@ -24,7 +25,7 @@ from embodied.core.project import PROJECT_ROOT as ROOT, load_config, port, resol
 from embodied.contracts.robot import load_robot_profile
 from embodied.applications.workstation.status import Status, status_text
 
-TITLES = {'kernel': '机械臂 · 内核', 'vr': 'Quest · VR', 'camera': '共享相机',
+TITLES = {'kernel': 'robot · 机械臂', 'vr': 'Quest · VR', 'camera': '共享相机',
           'web': '监看与采集', 'site': '项目宣传网站'}
 SERVICE_COMMANDS = {
     'web': ['./run.sh', 'web', 'monitor', '--kernel', '--mode', 'real', '--no-camera', '--no-connections'],
@@ -161,36 +162,47 @@ def camera_rows():
         try:
             state = request(camera_socket, 'monitor', timeout=.3)
             feeds = state.get('cameras', {})
-            rows.append(('共享服务', '在线（只读查询）'))
+            rows.append(('共享服务', Status('在线（只读查询）', 'ready')))
         except (OSError, ValueError, RuntimeError, KeyError) as exc:
-            rows.append(('共享服务', f'尚未就绪：{exc}'))
+            rows.append(('共享服务', Status(f'尚未就绪：{exc}', 'error')))
     else:
-        rows.append(('共享服务', '等待启动'))
-    serials = set()
-    for path in Path('/sys/bus/usb/devices').glob('*/serial'):
+        rows.append(('共享服务', Status('等待启动', 'waiting')))
+    detected = []
+    for path in Path('/sys/bus/usb/devices').glob('*/product'):
         try:
-            serials.add(path.read_text().strip())
+            product = path.read_text().strip()
+            if 'realsense' in product.lower():
+                detected.append(product)
         except OSError:
             pass
     for name, options in config.get('cameras', {}).items():
         serial = str(options.get('serial', ''))
         feed = feeds.get(name, {}).get('camera', {})
-        if not options.get('enabled', False):
-            detail = '配置中未启用'
+        age = feed.get('age_s')
+        valid_age = type(age) in (int, float) and math.isfinite(age) and age >= 0
+        if feed.get('enabled') is False or (not feed and not options.get('enabled', False)):
+            detail, level = '相机已关闭' if feed else '配置中未启用', 'disabled'
         elif feed.get('error'):
-            detail = str(feed['error'])
-        elif feed.get('metadata'):
-            detail = '共享服务已报告相机信息'
-        elif serial and serial in serials:
-            detail = 'USB 设备可见；等待相机服务提供帧'
+            detail, level = str(feed['error']), 'error'
+        elif feed.get('enabled') is True and valid_age and age < .5:
+            detail, level = f'画面在线 · 帧龄 {age * 1000:.0f} ms', 'ready'
+        elif feed:
+            stale = valid_age and age >= .5
+            detail = f'画面已过期 · 帧龄 {age:.2f} s' if stale else '等待相机服务提供有效帧'
+            level = 'error' if stale else 'waiting'
+        elif serial and detected:
+            detail, level = 'RealSense USB 可见；等待相机服务确认', 'waiting'
         elif serial:
-            detail = '等待 USB 相机连接'
+            detail, level = '等待 USB 相机连接', 'waiting'
         else:
-            detail = '未指定序列号；检查相机配置'
-        rows.append((options.get('label', name), f'{detail} · {name}'))
-    return rows, ['本窗口保留等待，不会打开相机设备。',
-                  '启动共享服务：./run.sh camera service',
-                  '采集或标定前，确认所需相机已经连接并配置。']
+            detail, level = '未指定序列号；检查相机配置', 'error'
+        rows.append((options.get('label', name), Status(f'{detail} · {name}', level)))
+    if detected:
+        rows.append(('USB 识别', '；'.join(detected)))
+    return rows, ['工作台会启动共享相机服务；按 R 重试，设备断线后服务自动重连。',
+                  '关闭或刷新本窗口不会停止共享服务，也不会中断采集。',
+                  '每台相机由共享服务按 SDK 序列号确认；USB 序列号不用于匹配配置。',
+                  '独立启动共享服务：./run.sh camera service']
 
 
 def snapshot(role):
@@ -213,11 +225,11 @@ def snapshot(role):
 
 
 class Service:
-    """Own only the web process group created by this panel, never an existing listener."""
+    """Own web children; only request startup of the independent shared camera service."""
 
     def __init__(self, role):
-        if role not in SERVICE_COMMANDS:
-            raise ValueError('Only web/site panels may start a service')
+        if role not in (*SERVICE_COMMANDS, 'camera'):
+            raise ValueError('Only web/site/camera panels may start a service')
         self.role = role
         self.process = None
         self.log_path = None
@@ -255,6 +267,17 @@ class Service:
         return result.si_status if result.si_code == os.CLD_EXITED else -result.si_status
 
     def start(self):
+        if self.role == 'camera':
+            from embodied.devices.sensors.client import ensure_service
+            self.attempted = True
+            try:
+                logs = load_config().get('paths', {}).get('log_dir', 'outputs/logs')
+                self.log_path = resolve_path(logs) / 'camera-service.log'
+                ensure_service()
+                self.message = '共享服务已连接；相机是否出帧见上方状态'
+            except (OSError, ValueError, RuntimeError, KeyError) as exc:
+                self.message = Status(f'共享服务未启动：{exc}；修复后按 R 重试', 'error')
+            return
         if self.process is not None and self.exit_code() is None:
             return
         if self.process is not None:
@@ -311,6 +334,8 @@ class Service:
             return [f'日志暂不可读：{exc}']
 
     def stop(self):
+        if self.role == 'camera':
+            return  # The shared service may be feeding a recorder after this pane closes.
         child = self.process
         if child is None:
             return
@@ -384,7 +409,7 @@ def mark_waiting(role):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('role', choices=TITLES)
-    parser.add_argument('--serve', action='store_true', help='web/site: start once; press R to retry after a failure')
+    parser.add_argument('--serve', action='store_true', help='web/site/camera: start once; press R to retry after a failure')
     args = parser.parse_args(argv)
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         title, rows, hints = snapshot(args.role)
@@ -395,7 +420,7 @@ def main(argv=None):
     from embodied.core.terminal_keys import read_key, terminal_keys
 
     mark_waiting(args.role)
-    service = Service(args.role) if args.serve and args.role in SERVICE_COMMANDS else None
+    service = Service(args.role) if args.serve and args.role in (*SERVICE_COMMANDS, 'camera') else None
     stopping = False
 
     def stop_requested(*_):
