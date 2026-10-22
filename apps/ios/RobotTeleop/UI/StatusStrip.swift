@@ -11,7 +11,7 @@ struct StatusStrip: View {
   var body: some View {
     LazyVGrid(columns: columns, spacing: 8) {
       MetricCell(
-        label: "Tracking",
+        label: "追踪",
         value: trackingLabel,
         icon: "viewfinder",
         accent: trackingColor,
@@ -19,35 +19,35 @@ struct StatusStrip: View {
         highlighted: model.status.trackingQuality != .normal
       )
       MetricCell(
-        label: "Send FPS",
+        label: "发送 Hz",
         value: fpsLabel,
         icon: "speedometer",
         accent: TeleopTheme.accent,
         identifier: "status.send-fps"
       )
       MetricCell(
-        label: "Sequence",
+        label: "帧号",
         value: sequenceLabel,
         icon: "number",
         accent: TeleopTheme.accent,
         identifier: "status.sequence"
       )
       MetricCell(
-        label: "RTT",
+        label: "往返延迟",
         value: rttLabel,
         icon: "arrow.left.arrow.right",
         accent: rttColor,
         identifier: "status.rtt"
       )
       MetricCell(
-        label: "Session",
+        label: "会话",
         value: sessionLabel,
         icon: "number.square",
         accent: TeleopTheme.warning,
         identifier: "status.session"
       )
       MetricCell(
-        label: "Network",
+        label: "UDP 链路",
         value: networkLabel,
         icon: "network",
         accent: networkColor,
@@ -58,9 +58,9 @@ struct StatusStrip: View {
 
   private var trackingLabel: String {
     switch model.status.trackingQuality {
-    case .normal: "NORMAL"
-    case .limited: "LIMITED"
-    case .unavailable: "UNAVAILABLE"
+    case .normal: "正常"
+    case .limited: "受限"
+    case .unavailable: "无追踪"
     }
   }
 
@@ -98,11 +98,11 @@ struct StatusStrip: View {
 
   private var networkLabel: String {
     switch model.status.networkState {
-    case .disconnected: "OFFLINE"
-    case .preparing: "CONNECTING"
-    case .ready: "READY"
-    case .waiting: "WAITING"
-    case .failed: "FAILED"
+    case .disconnected: "未连接"
+    case .preparing: "连接中"
+    case .ready: "就绪"
+    case .waiting: "等待中"
+    case .failed: "失败"
     }
   }
 
@@ -142,13 +142,13 @@ private struct MetricCell: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     .padding(.horizontal, 10)
-    .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+    .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
     .background(highlighted ? accent.opacity(0.28) : TeleopTheme.surface)
     .overlay {
-      RoundedRectangle(cornerRadius: 6)
+      RoundedRectangle(cornerRadius: 12)
         .stroke(highlighted ? accent : TeleopTheme.border, lineWidth: highlighted ? 2 : 1)
     }
-    .clipShape(RoundedRectangle(cornerRadius: 6))
+    .clipShape(RoundedRectangle(cornerRadius: 12))
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(label)
     .accessibilityValue(value)

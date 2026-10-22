@@ -17,12 +17,14 @@ class GripperPositionServo:
             raise ValueError('Invalid ARX gripper position servo configuration')
         self.radians_per_metre = open_readout / width
         self.kp, self.kd = kp * self.MOTOR_TORQUE_CONSTANT, kd * self.MOTOR_TORQUE_CONSTANT
-        self.limit, self.step = effort_limit, speed * dt
+        self.limit, self.step, self.speed, self.dt = effort_limit, speed * dt, speed, dt
         self.reference = None
+        self.reference_velocity = 0.
         self.limited = False
 
     def reset(self):
         self.reference = None
+        self.reference_velocity = 0.
         self.limited = False
 
     def update(self, target, actual, velocity):
@@ -30,6 +32,7 @@ class GripperPositionServo:
             raise ValueError('Gripper position servo requires finite feedback and target')
         if self.reference is None:
             self.reference = actual
+        previous = self.reference
         # Keep the SDK's configured width rate. Do not accumulate a position goal
         # through an object: the reference stays within the effort envelope.
         self.reference += max(-self.step, min(self.step, target - self.reference))
@@ -37,7 +40,11 @@ class GripperPositionServo:
         if stiffness > 0:
             lead = self.limit / stiffness
             self.reference = max(actual - lead, min(actual + lead, self.reference))
-        requested = (self.kp * (self.reference - actual) - self.kd * velocity) * self.radians_per_metre
+        # Derivative of the commanded reference, after anti-windup projection.
+        # Damping against zero velocity would brake the entire free-space move.
+        self.reference_velocity = max(-self.speed, min(self.speed, (self.reference - previous) / self.dt))
+        requested = (self.kp * (self.reference - actual)
+                     + self.kd * (self.reference_velocity - velocity)) * self.radians_per_metre
         effort = max(-self.limit, min(self.limit, requested))
         self.limited = abs(requested) >= self.limit - 1e-9
         return effort

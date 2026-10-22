@@ -15,224 +15,153 @@ enum TeleopTheme {
 
 struct EndpointHeader: View {
   @ObservedObject var model: AppModel
-  let compact: Bool
+  @State private var settingsOpen = false
 
-  @FocusState private var focusedField: Field?
+  var body: some View {
+    HStack(spacing: 10) {
+      Image(systemName: "move.3d")
+        .font(.system(size: 24, weight: .semibold))
+        .foregroundStyle(TeleopTheme.accent)
+      VStack(alignment: .leading, spacing: 3) {
+        Text("知行有灵").font(.headline).foregroundStyle(TeleopTheme.primaryText)
+        Text("手机遥操 · RobotTeleop").font(.caption2).foregroundStyle(TeleopTheme.secondaryText)
+      }
+      Spacer(minLength: 6)
+      Button { settingsOpen = true } label: {
+        VStack(alignment: .trailing, spacing: 4) {
+          Label("连接设置", systemImage: "network").font(.caption.weight(.semibold))
+          Text(model.host).font(.caption2.monospaced()).lineLimit(1)
+        }
+        .frame(minHeight: 44)
+      }
+      .buttonStyle(.plain).foregroundStyle(TeleopTheme.secondaryText)
+      .disabled(model.clutchActive)
+      .accessibilityIdentifier("connection.settings")
+    }
+    .sheet(isPresented: $settingsOpen) {
+      NavigationStack {
+        Form {
+          Section("电脑接收服务") {
+            TextField("服务器地址", text: $model.host)
+              .textInputAutocapitalization(.never).autocorrectionDisabled()
+              .keyboardType(.numbersAndPunctuation).disabled(!model.endpointEditable)
+            TextField("UDP 端口", text: $model.port)
+              .keyboardType(.numberPad).disabled(!model.endpointEditable)
+            Button(model.connectionOpen ? "断开连接" : "连接") { model.performConnectionAction() }
+              .accessibilityIdentifier("connection.toggle")
+            Text("更换地址前先断开连接。断开也会停止手机遥操。")
+              .font(.caption).foregroundStyle(.secondary)
+          }
+          Section("采集与连接详情") {
+            LabeledContent("姿态来源", value: model.providerKind == .simulated ? "模拟姿态" : "ARKit")
+            if let capture = model.captureSummary { Text(capture).font(.caption.monospaced()) }
+            if let message = model.endpointMessage { Text(message).foregroundStyle(TeleopTheme.warning) }
+          }
+        }
+        .navigationTitle("连接设置").navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { settingsOpen = false } } }
+      }
+      .preferredColorScheme(.dark)
+      .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+    }
+  }
+}
 
-  private enum Field {
-    case host
-    case port
+struct ControlStatusCard: View {
+  @ObservedObject var model: AppModel
+
+  private var color: Color {
+    if model.stopLatched || model.status.trackingQuality == .unavailable { return TeleopTheme.danger }
+    if model.status.trackingQuality != .normal || !model.status.controlAvailable { return TeleopTheme.warning }
+    return model.status.phoneControl?.enabled == true ? TeleopTheme.accent : TeleopTheme.secondaryText
+  }
+
+  private var title: String {
+    if model.stopLatched { return "停止已锁定" }
+    if model.status.trackingQuality != .normal { return "等待追踪恢复" }
+    if !model.status.controlAvailable { return "等待电脑确认" }
+    if model.presetBusy { return "预设动作执行中" }
+    if model.clutchActive { return "正在跟随" }
+    return model.status.phoneControl?.enabled == true ? "遥操已开启 · 松手保持" : "仅监看 · 尚未接管"
   }
 
   var body: some View {
-    VStack(spacing: 6) {
-      if compact {
-        HStack(spacing: 12) {
-          brand
-            .frame(width: 170, alignment: .leading)
-          endpointFields
-        }
-      } else {
-        brand
-        endpointFields
+    HStack(spacing: 10) {
+      Image(systemName: model.stopLatched ? "lock.fill" : "dot.radiowaves.left.and.right")
+        .font(.title3).foregroundStyle(color)
+      VStack(alignment: .leading, spacing: 3) {
+        Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(color)
+        Text(model.status.trackingReason ?? model.controlSummary)
+          .font(.caption2).foregroundStyle(TeleopTheme.secondaryText).lineLimit(2)
       }
-      Text(endpointStatusMessage ?? " ")
-        .font(.caption2)
-        .foregroundStyle(messageColor)
-        .lineLimit(1)
-        .frame(maxWidth: .infinity, minHeight: 14, alignment: .leading)
-        .opacity(endpointStatusMessage == nil ? 0 : 1)
+      Spacer(minLength: 0)
     }
-  }
-
-  private var brand: some View {
-    HStack(spacing: 9) {
-      Image(systemName: "move.3d")
-        .font(.system(size: 19, weight: .semibold))
-        .foregroundStyle(TeleopTheme.accent)
-        .frame(width: 28, height: 28)
-      VStack(alignment: .leading, spacing: 1) {
-        Text("Robot Teleop")
-          .font(.headline)
-          .foregroundStyle(TeleopTheme.primaryText)
-        Text(model.providerKind == .simulated ? "SIMULATED POSE" : "ARKIT POSE")
-          .font(.caption2.weight(.semibold))
-          .foregroundStyle(TeleopTheme.secondaryText)
-      }
-      Spacer(minLength: 8)
-    }
-  }
-
-  private var endpointFields: some View {
-    HStack(spacing: 8) {
-      TextField("Ubuntu host", text: $model.host)
-        .focused($focusedField, equals: .host)
-        .textInputAutocapitalization(.never)
-        .autocorrectionDisabled()
-        .keyboardType(.numbersAndPunctuation)
-        .submitLabel(.next)
-        .onSubmit { focusedField = .port }
-        .disabled(!model.endpointEditable)
-        .accessibilityLabel("Ubuntu host")
-        .frame(maxWidth: .infinity)
-        .teleopTextField()
-
-      TextField("Port", text: $model.port)
-        .focused($focusedField, equals: .port)
-        .keyboardType(.numberPad)
-        .multilineTextAlignment(.center)
-        .disabled(!model.endpointEditable)
-        .accessibilityLabel("UDP port")
-        .frame(width: 72)
-        .teleopTextField()
-
-      Button {
-        focusedField = nil
-        model.performConnectionAction()
-      } label: {
-        Label(connectionCommand, systemImage: connectionIcon)
-          .font(.subheadline.weight(.semibold))
-          .lineLimit(1)
-          .frame(width: 120, height: 42)
-      }
-      .buttonStyle(.plain)
-      .foregroundStyle(connectionForeground)
-      .background(connectionBackground)
-      .overlay {
-        RoundedRectangle(cornerRadius: 6)
-          .stroke(connectionBorder, lineWidth: 1)
-      }
-      .clipShape(RoundedRectangle(cornerRadius: 6))
-      .accessibilityLabel(connectionCommand)
-    }
-  }
-
-  private var connectionCommand: String {
-    model.connectionOpen ? "Disconnect" : "Connect"
-  }
-
-  private var connectionIcon: String {
-    model.connectionOpen ? "xmark" : "antenna.radiowaves.left.and.right"
-  }
-
-  private var connectionForeground: Color {
-    model.connectionOpen ? TeleopTheme.primaryText : TeleopTheme.background
-  }
-
-  private var connectionBackground: Color {
-    model.connectionOpen ? TeleopTheme.raised : TeleopTheme.ready
-  }
-
-  private var connectionBorder: Color {
-    model.connectionOpen ? TeleopTheme.border : TeleopTheme.ready
-  }
-
-  private var messageColor: Color {
-    switch model.status.networkState {
-    case .waiting:
-      TeleopTheme.warning
-    case .failed:
-      TeleopTheme.danger
-    case .disconnected, .preparing, .ready:
-      TeleopTheme.secondaryText
-    }
-  }
-
-  private var endpointStatusMessage: String? {
-    model.endpointMessage ?? model.captureSummary
+    .padding(.horizontal, 12).padding(.vertical, 8)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(color.opacity(0.09), in: RoundedRectangle(cornerRadius: 12))
+    .overlay { RoundedRectangle(cornerRadius: 12).stroke(color.opacity(0.35), lineWidth: 1) }
+    .accessibilityElement(children: .combine).accessibilityIdentifier("control.status")
   }
 }
 
 struct TuningControls: View {
   @ObservedObject var model: AppModel
-  let compact: Bool
+  @State private var settingsOpen = false
+
+  private var syncLabel: String {
+    model.status.settingsState == .acknowledged ? "已同步" : model.status.settingsState == .pending ? "同步中" : "本地"
+  }
 
   var body: some View {
-    VStack(spacing: 0) {
-      HStack {
-        Label("Controls", systemImage: "slider.horizontal.3")
-          .font(.subheadline.weight(.semibold))
-          .foregroundStyle(TeleopTheme.primaryText)
-        Spacer()
+    Button { settingsOpen = true } label: {
+      HStack(spacing: 8) {
+        Image(systemName: "slider.horizontal.3")
+        Text("映射").fontWeight(.semibold)
+        Text(String(format: "位移 %.2f× · 旋转 %.2f×", model.positionScale, model.rotationScale))
+          .font(.caption.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.8)
+        Spacer(minLength: 0)
         settingsState
+        Image(systemName: "chevron.right").font(.caption2)
       }
-      .padding(.horizontal, 14)
-      .frame(height: compact ? 32 : 38)
-
-      Divider().overlay(TeleopTheme.border)
-
-      SliderRow(
-        title: "Position",
-        valueText: String(format: "%.2fx", model.positionScale),
-        value: Binding(
-          get: { model.positionScale },
-          set: { value in model.setPositionScale(value) }
-        ),
-        range: 0...Double(ControlDefaults.maximumPositionScale),
-        step: 0.05,
-        tint: TeleopTheme.accent,
-        enabled: model.tuningEnabled,
-        compact: compact,
-        onEditingEnded: { model.commitMappingScales() }
-      )
-
-      Divider().overlay(TeleopTheme.border)
-
-      SliderRow(
-        title: "Rotation",
-        valueText: String(format: "%.2fx", model.rotationScale),
-        value: Binding(
-          get: { model.rotationScale },
-          set: { value in model.setRotationScale(value) }
-        ),
-        range: 0...Double(ControlDefaults.maximumRotationScale),
-        step: 0.05,
-        tint: TeleopTheme.accent,
-        enabled: model.tuningEnabled,
-        compact: compact,
-        onEditingEnded: { model.commitMappingScales() }
-      )
+      .font(.caption).foregroundStyle(TeleopTheme.primaryText)
+      .padding(.horizontal, 12).frame(minHeight: 44)
+      .background(TeleopTheme.surface, in: RoundedRectangle(cornerRadius: 12))
     }
-    .background(TeleopTheme.surface)
-    .overlay {
-      RoundedRectangle(cornerRadius: 6)
-        .stroke(TeleopTheme.border, lineWidth: 1)
+    .buttonStyle(.plain).disabled(!model.tuningEnabled || model.presetBusy)
+    .accessibilityIdentifier("mapping.settings")
+    .accessibilityValue(syncLabel)
+    .sheet(isPresented: $settingsOpen) {
+      NavigationStack {
+        Form {
+          Section("相对映射倍率") {
+            SliderRow(title: "位移", valueText: String(format: "%.2f×", model.positionScale),
+              value: Binding(get: { model.positionScale }, set: { model.setPositionScale($0) }),
+              range: 0...Double(ControlDefaults.maximumPositionScale), step: 0.05,
+              tint: TeleopTheme.accent, enabled: model.tuningEnabled, compact: false,
+              onEditingEnded: { model.commitMappingScales() })
+            SliderRow(title: "旋转", valueText: String(format: "%.2f×", model.rotationScale),
+              value: Binding(get: { model.rotationScale }, set: { model.setRotationScale($0) }),
+              range: 0...Double(ControlDefaults.maximumRotationScale), step: 0.05,
+              tint: TeleopTheme.accent, enabled: model.tuningEnabled, compact: false,
+              onEditingEnded: { model.commitMappingScales() })
+            Text("1× 表示等比例跟随，松开后在下一次按住时生效。")
+              .font(.caption).foregroundStyle(.secondary)
+          }
+          Section("空间方向") {
+            Text("在预抓取位，竖直握持手机、后置相机朝向操作前方，再按住 Clutch 建立参考。松开重握保持空间方向；需要重新标定时点“方向对齐”。")
+              .font(.subheadline)
+          }
+        }
+        .navigationTitle("映射设置").navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { settingsOpen = false } } }
+      }
+      .preferredColorScheme(.dark)
+      .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
     }
-    .clipShape(RoundedRectangle(cornerRadius: 6))
   }
 
   private var settingsState: some View {
-    Label(settingsLabel, systemImage: settingsIcon)
-      .font(.caption2.weight(.semibold))
-      .foregroundStyle(settingsColor)
-      .lineLimit(1)
-      .accessibilityLabel("Settings")
-      .accessibilityValue(settingsLabel)
-      .accessibilityIdentifier("status.settings")
-  }
-
-  private var settingsLabel: String {
-    switch model.status.settingsState {
-    case .notSent: "LOCAL"
-    case .pending: "SYNCING"
-    case .acknowledged: "SYNCED"
-    }
-  }
-
-  private var settingsIcon: String {
-    switch model.status.settingsState {
-    case .notSent: "minus.circle"
-    case .pending: "clock"
-    case .acknowledged: "checkmark.circle.fill"
-    }
-  }
-
-  private var settingsColor: Color {
-    switch model.status.settingsState {
-    case .notSent: TeleopTheme.secondaryText
-    case .pending: TeleopTheme.warning
-    case .acknowledged: TeleopTheme.ready
-    }
+    Text(syncLabel).font(.caption2).foregroundStyle(model.status.settingsState == .acknowledged ? TeleopTheme.ready : TeleopTheme.warning)
   }
 }
 
@@ -280,51 +209,59 @@ private struct SliderRow: View {
 
 struct ControlActionRow: View {
   @ObservedObject var model: AppModel
-  var compact = false
 
   var body: some View {
-    VStack(spacing: 6) {
+    VStack(spacing: 8) {
       HStack(spacing: 8) {
         Button { model.startControl() } label: {
-          Label("开始遥操", systemImage: "play.fill")
-            .frame(maxWidth: .infinity, minHeight: 42)
+          Label("开始遥操", systemImage: "play.fill").frame(maxWidth: .infinity, minHeight: 46)
         }
         .buttonStyle(TeleopActionButtonStyle(foreground: TeleopTheme.background,
-          background: TeleopTheme.ready, border: TeleopTheme.ready))
+          background: TeleopTheme.accent, border: TeleopTheme.accent))
         .disabled(!model.canStartControl)
         Button { model.stopControl() } label: {
-          Label("停止遥操", systemImage: "stop.fill")
-            .frame(maxWidth: .infinity, minHeight: 42)
+          Label("停止遥操", systemImage: "stop.fill").frame(maxWidth: .infinity, minHeight: 46)
         }
         .buttonStyle(TeleopActionButtonStyle(foreground: .white,
           background: TeleopTheme.danger, border: TeleopTheme.danger))
         .disabled(model.status.networkState != .ready)
       }
-      LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: compact ? 4 : 2), spacing: 6) {
+      HStack(spacing: 8) {
         Button { model.requestHome() } label: {
-          Label("回零", systemImage: "house").frame(maxWidth: .infinity, minHeight: 36)
+          Label("回零", systemImage: "house").frame(maxWidth: .infinity, minHeight: 44)
         }.disabled(!model.canHome)
-        .accessibilityHint("先张开夹爪，确认松开后机械臂回零")
+          .accessibilityHint("先张开夹爪，确认松开后机械臂回零")
         Button { model.requestPregrasp() } label: {
-          Label("预抓取", systemImage: "scope").frame(maxWidth: .infinity, minHeight: 36)
+          Label("预抓取", systemImage: "scope").frame(maxWidth: .infinity, minHeight: 44)
         }.disabled(!model.canHome)
-        Button { model.recoverControl() } label: {
-          Label(model.recoverControlLabel, systemImage: "arrow.clockwise")
-            .frame(maxWidth: .infinity, minHeight: 36)
-        }
-        .disabled(!model.canRecoverControl)
-        .accessibilityHint("恢复连接或清除手机停止锁定，随后手动开始遥操")
-        Button { model.latchEstop() } label: {
-          Label("停止锁定", systemImage: "lock.fill").frame(maxWidth: .infinity, minHeight: 36)
-        }.disabled(model.stopLatched)
+        Button { model.requestAlignment() } label: {
+          Label("方向对齐", systemImage: "move.3d").frame(maxWidth: .infinity, minHeight: 44)
+        }.disabled(!model.canHome)
+          .accessibilityHint("松开后重新摆正手机，下次按住 Clutch 建立方向参考，不移动机械臂")
       }
       .buttonStyle(TeleopActionButtonStyle(foreground: TeleopTheme.primaryText,
         background: TeleopTheme.raised, border: TeleopTheme.border))
-      Text(model.status.trackingReason ?? model.controlSummary)
-        .font(.caption).foregroundStyle(model.status.trackingQuality == .normal
-          ? TeleopTheme.secondaryText : TeleopTheme.warning)
-        .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
     }
+  }
+}
+
+struct ControlUtilityRow: View {
+  @ObservedObject var model: AppModel
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Button { model.recoverControl() } label: {
+        Label(model.recoverControlLabel, systemImage: "arrow.clockwise")
+          .frame(maxWidth: .infinity, minHeight: 44)
+      }
+      .disabled(!model.canRecoverControl)
+      .accessibilityHint("恢复连接或清除手机停止锁定，随后手动开始遥操")
+      Button { model.latchEstop() } label: {
+        Label("停止锁定", systemImage: "lock.fill").frame(maxWidth: .infinity, minHeight: 44)
+      }.disabled(model.stopLatched)
+    }
+    .buttonStyle(TeleopActionButtonStyle(foreground: TeleopTheme.secondaryText,
+      background: TeleopTheme.surface, border: TeleopTheme.border))
   }
 }
 
@@ -340,10 +277,10 @@ private struct TeleopActionButtonStyle: ButtonStyle {
       .foregroundStyle(foreground)
       .background(configuration.isPressed ? background.opacity(0.72) : background)
       .overlay {
-        RoundedRectangle(cornerRadius: 6)
+        RoundedRectangle(cornerRadius: 12)
           .stroke(border, lineWidth: 1)
       }
-      .clipShape(RoundedRectangle(cornerRadius: 6))
+      .clipShape(RoundedRectangle(cornerRadius: 12))
       .opacity(isEnabled ? (configuration.isPressed ? 0.9 : 1) : 0.4)
   }
 }
@@ -358,27 +295,36 @@ struct HoldControlSurface: View {
   @GestureState private var touching = false
 
   var body: some View {
-    VStack(spacing: 7) {
-      Image(systemName: holdIcon)
-        .font(.system(size: compact ? 27 : 30, weight: .semibold))
-      Text(holdLabel)
-        .font(.headline.weight(.bold))
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
-      Text(holdState)
-        .font(.caption.monospacedDigit().weight(.medium))
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
+    VStack(spacing: compact ? 8 : 12) {
+      HStack {
+        Text("CLUTCH · 跟随").font(.caption.weight(.semibold))
+        Spacer()
+        Text(String(format: "夹爪 %.0f%%", model.gripper * 100)).font(.caption.monospacedDigit())
+      }
+      Spacer(minLength: 0)
+      if compact {
+        HStack(spacing: 12) {
+          Image(systemName: holdIcon).font(.system(size: 26, weight: .medium))
+          holdInstructions
+        }
+      } else {
+        Image(systemName: holdIcon).font(.system(size: 34, weight: .medium))
+        holdInstructions
+      }
+      Spacer(minLength: 0)
+      HStack {
+        Label("上滑 · 张开", systemImage: "arrow.up")
+        Spacer()
+        Label("下滑 · 闭合", systemImage: "arrow.down")
+      }.font(.caption.weight(.medium))
+      ProgressView(value: model.gripper).tint(holdForeground).accessibilityHidden(true)
     }
+    .padding(compact ? 12 : 16)
     .foregroundStyle(holdForeground)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .frame(minHeight: compact ? 148 : 116)
-    .background(holdBackground)
-    .overlay {
-      RoundedRectangle(cornerRadius: 8)
-        .stroke(holdBorder, lineWidth: model.clutchActive ? 2 : 1)
-    }
-    .clipShape(RoundedRectangle(cornerRadius: 8))
+    .frame(minHeight: compact ? 148 : 160)
+    .background(holdBackground, in: RoundedRectangle(cornerRadius: 20))
+    .overlay { RoundedRectangle(cornerRadius: 20).stroke(holdBorder, lineWidth: model.clutchActive ? 2 : 1) }
     .contentShape(Rectangle())
     .gesture(
       DragGesture(minimumDistance: 0)
@@ -419,13 +365,22 @@ struct HoldControlSurface: View {
     .accessibilityElement(children: .combine)
     .accessibilityAddTraits(.isButton)
     .accessibilityLabel("按住跟随，上滑开夹爪，下滑闭夹爪")
+    .accessibilityIdentifier("control.clutch")
     .accessibilityValue(holdState)
+  }
+
+  private var holdInstructions: some View {
+    VStack(spacing: 4) {
+      Text(holdLabel).font(.system(size: compact ? 19 : 23, weight: .semibold))
+        .lineLimit(1).minimumScaleFactor(0.7)
+      Text(holdState).font(.caption).lineLimit(2).multilineTextAlignment(.center)
+    }
   }
 
   private var holdLabel: String {
     if model.stopLatched { return "控制已锁定" }
     if model.presetBusy { return "预设动作执行中" }
-    return model.clutchActive ? "跟随中 · 上滑开 / 下滑闭" : "按住跟随 · 上滑开 / 下滑闭"
+    return model.clutchActive ? "正在跟随" : "按住跟随"
   }
 
   private var holdState: String {
@@ -443,13 +398,13 @@ struct HoldControlSurface: View {
   }
 
   private var holdForeground: Color {
-    model.canControl || model.clutchActive ? TeleopTheme.background : TeleopTheme.secondaryText
+    model.clutchActive ? TeleopTheme.background : model.canControl ? TeleopTheme.accent : TeleopTheme.secondaryText
   }
 
   private var holdBackground: Color {
     if model.stopLatched { return TeleopTheme.danger.opacity(0.24) }
-    if model.clutchActive { return TeleopTheme.ready }
-    if model.canControl { return TeleopTheme.accent }
+    if model.clutchActive { return TeleopTheme.accent }
+    if model.canControl { return TeleopTheme.accent.opacity(0.12) }
     return TeleopTheme.surface
   }
 
@@ -458,27 +413,5 @@ struct HoldControlSurface: View {
     if model.clutchActive { return TeleopTheme.ready }
     if model.canControl { return TeleopTheme.accent }
     return TeleopTheme.border
-  }
-}
-
-private struct TeleopTextFieldModifier: ViewModifier {
-  func body(content: Content) -> some View {
-    content
-      .font(.subheadline.monospaced())
-      .foregroundStyle(TeleopTheme.primaryText)
-      .padding(.horizontal, 11)
-      .frame(height: 42)
-      .background(TeleopTheme.surface)
-      .overlay {
-        RoundedRectangle(cornerRadius: 6)
-          .stroke(TeleopTheme.border, lineWidth: 1)
-      }
-      .clipShape(RoundedRectangle(cornerRadius: 6))
-  }
-}
-
-extension View {
-  fileprivate func teleopTextField() -> some View {
-    modifier(TeleopTextFieldModifier())
   }
 }

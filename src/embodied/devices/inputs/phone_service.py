@@ -166,7 +166,7 @@ class PhoneService:
             try:
                 if abs(stamp - value.timestamp_ns) > 500_000_000:
                     raise ValueError('操作已过期，请重试')
-                if data.get('action') not in ('monitor', 'enable', 'disable', 'home', 'pregrasp'):
+                if data.get('action') not in ('monitor', 'enable', 'disable', 'home', 'pregrasp', 'align'):
                     raise ValueError('不支持的手机操作')
                 if data['action'] != 'monitor':
                     self.dispatch({'command': data['action'], 'runtime_id': data.get('runtime_id')})
@@ -179,7 +179,7 @@ class PhoneService:
                         'ok': error is None, 'message': (error or self.error or '')[:240],
                         'kernel_runtime_id': runtime_id,
                         **{key: state[key] for key in ('connected', 'enabled', 'active', 'estop', 'tracking',
-                            'position_scale', 'rotation_scale', 'target_limited', 'position_lead_m', 'preset')}}
+                            'position_scale', 'rotation_scale', 'target_limited', 'position_lead_m', 'preset', 'aligned')}}
             client, robot = self.controller.client, self.controller.last_robot
             response['robot_gripper'] = (robot['gripper_width'] /
                 client.parameters['effective_robot_config']['gripper_max_width'] if client is not None and robot else None)
@@ -209,6 +209,7 @@ class PhoneService:
                 'phone_pose': ({'frame': 'phone_reference', 'quaternion_xyzw': list(value.pose.orientation.as_tuple())}
                                if fresh and value and value.tracking_quality.value == 'normal' else None),
                 'preset': dict(controller.preset) if controller.preset else None,
+                'aligned': controller.policy.rotation_alignment is not None,
                 'orientation_preview': ({'frame': 'base_tcp',
                     'input_quaternion': list(controller.policy.mapped_orientation.as_tuple()),
                     'target_quaternion': controller.last_target['pose'][3:]}
@@ -245,10 +246,13 @@ class PhoneService:
                 self.controller.disable()
                 self.run = None
                 self.error = None
-            elif action in ('home', 'pregrasp'):
+            elif action in ('home', 'pregrasp', 'align'):
                 if not self.run or data.get('runtime_id') != self.run:
                     raise ValueError('robot 运行实例已变化，请重新开始手机遥操')
-                self.controller.request_preset(action)
+                if action == 'align':
+                    self.controller.request_alignment()
+                else:
+                    self.controller.request_preset(action)
                 self.error = None
             else:
                 raise ValueError('Unknown phone service action')

@@ -6,7 +6,7 @@
   "phone": {
     "bind_host": "127.0.0.1",
     "port": 5005,
-    "mapping": "phone_tool"
+    "mapping": "phone_aligned"
   },
   "controller": "arx.joint_target"
 }

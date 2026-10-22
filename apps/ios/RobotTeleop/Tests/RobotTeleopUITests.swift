@@ -54,38 +54,44 @@ final class RobotTeleopUITests: XCTestCase {
     app.launch()
 
     assertPrimaryControls(in: app)
-    if app.buttons["Connect"].exists { app.buttons["Connect"].tap() }
-
-    assertValue("READY", for: "status.network", in: app, timeout: 5)
-    assertValue("NORMAL", for: "status.tracking", in: app, timeout: 5)
+    assertValue("就绪", for: "status.network", in: app, timeout: 5)
+    assertValue("正常", for: "status.tracking", in: app, timeout: 5)
     assertValueIsNotPlaceholder(for: "status.sequence", in: app, timeout: 5)
     guard valueIsNotPlaceholder(for: "status.rtt", in: app, timeout: 3) else {
       app.terminate()
       throw XCTSkip("Start the Python pose monitor on UDP port \(port) for live validation")
     }
-    assertValue("SYNCED", for: "status.settings", in: app, timeout: 5)
+    assertValue("已同步", for: "mapping.settings", in: app, timeout: 5)
 
-    let disconnect = app.buttons["Disconnect"]
-    XCTAssertTrue(disconnect.waitForExistence(timeout: 2))
-    XCTAssertGreaterThanOrEqual(disconnect.frame.width, 120)
     keepScreenshot(named: "iPhone-16-Pro-Max-Connected")
+    app.buttons["connection.settings"].tap()
+    let disconnect = app.buttons["connection.toggle"]
+    XCTAssertTrue(disconnect.waitForExistence(timeout: 2))
+    XCTAssertEqual(disconnect.label, "断开连接")
     disconnect.tap()
-    assertValue("OFFLINE", for: "status.network", in: app, timeout: 5)
+    app.buttons["完成"].tap()
+    assertValue("未连接", for: "status.network", in: app, timeout: 5)
     app.terminate()
   }
 
   @MainActor
   private func assertPrimaryControls(in app: XCUIApplication) {
-    let titleExists = app.staticTexts["Robot Teleop"].waitForExistence(timeout: 3)
-    let connectIsHittable = app.buttons["Connect"].isHittable || app.buttons["Disconnect"].isHittable
-    let holdExists = app.descendants(matching: .any)["按住跟随，上滑开夹爪，下滑闭夹爪"].exists
-    let startExists = app.buttons["开始遥操"].exists
-    let stopExists = app.buttons["停止遥操"].exists
-    XCTAssertTrue(titleExists)
-    XCTAssertTrue(connectIsHittable)
-    XCTAssertTrue(holdExists)
-    XCTAssertTrue(startExists)
-    XCTAssertTrue(stopExists)
+    XCTAssertTrue(app.staticTexts["知行有灵"].waitForExistence(timeout: 3))
+    XCTAssertTrue(app.buttons["connection.settings"].isHittable)
+    for identifier in ["status.tracking", "status.send-fps", "status.sequence",
+                       "status.rtt", "status.session", "status.network"] {
+      let card = app.descendants(matching: .any)[identifier]
+      XCTAssertTrue(card.exists, identifier)
+      XCTAssertTrue(app.frame.contains(card.frame), identifier)
+    }
+    for label in ["开始遥操", "停止遥操", "回零", "预抓取", "方向对齐"] {
+      XCTAssertTrue(app.buttons[label].exists, label)
+      XCTAssertTrue(app.frame.contains(app.buttons[label].frame), label)
+    }
+    let clutch = app.descendants(matching: .any)["control.clutch"]
+    XCTAssertTrue(clutch.exists)
+    XCTAssertTrue(app.frame.contains(clutch.frame))
+    XCTAssertGreaterThanOrEqual(clutch.frame.height, 148)
   }
 
   @MainActor

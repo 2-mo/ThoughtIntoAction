@@ -69,6 +69,19 @@ class RobotApiTests(unittest.TestCase):
                 arm.gripper.grasp(effort=.1)
         self.session_factory.assert_not_called()
 
+    def test_release_then_home_uses_one_lease_and_feedback_before_execution(self):
+        self.session.parameters = {'effective_robot_config': {'gripper_max_width': .08, 'gripper_velocity_max_m_s': .3}}
+        with Robot.connect('/fake/run') as arm:
+            motion = arm.home(release_gripper=True, wait=False)
+            motion.step(self.state)
+            self.session.command.assert_called_with('gripper', gripper_width=.08, ttl_ms=200)
+            self.session.execute.assert_not_called()
+            self.state['gripper_width'] = .08
+            motion.step(self.state)
+            self.session.preview.assert_called_with('home', gripper_width=.08)
+            self.session.execute.assert_called_once()
+        self.session_factory.assert_called_once()
+
     def test_simulation_config_is_forwarded_only_when_creating(self):
         with tempfile.TemporaryDirectory() as folder:
             run = Path(folder)

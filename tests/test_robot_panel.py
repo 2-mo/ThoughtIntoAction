@@ -15,13 +15,18 @@ class RobotPanelTests(unittest.TestCase):
     def setUp(self):
         self.found = (Path('/test/runtime'), {'backend': 'real', 'managed': True, 'plugins': {'robot': 'arx.real'}})
         self.state = {'owner': None, 'stopped': False, 'q': [0.] * 6,
-                      'dq': [0.] * 6, 'operations': []}
+                      'dq': [0.] * 6, 'operations': [], 'gripper_width': .02}
         self.robot = Mock()
         self.robot.__enter__ = Mock(return_value=self.robot)
         self.robot.state = self.state
         self.robot.describe.return_value = {'robot': {'park_q': [.1] * 6}}
         self.robot.movej.return_value = SimpleNamespace(operation_id='test-op', metrics={
             'duration_s': 1.9, 'peak_velocity_rad_s': 1.5})
+        self.session = Mock()
+        self.session.parameters = {'effective_robot_config': {'gripper_max_width': .082, 'gripper_velocity_max_m_s': .04}}
+        self.session.preview.return_value = {'plan_id': 'home', 'metrics': {'duration_s': 1., 'peak_velocity_rad_s': 1.5}}
+        self.session.execute.return_value = {'operation_id': 'home'}
+        self.robot.home.side_effect = lambda **_: robot_panel.ReleaseThenHome(self.session)
         self.connect = self.enterContext(patch.object(robot_panel.Robot, 'connect', return_value=self.robot))
         client = self.enterContext(patch.object(robot_panel, 'ControlClient'))
         client.return_value.status.return_value = self.state
@@ -73,8 +78,41 @@ class RobotPanelTests(unittest.TestCase):
         for key, target in [('p', list(DEFAULT_GRASP_READY_JOINTS)), ('h', [.1] * 6)]:
             with self.subTest(key=key):
                 self.controls.press(key, self.found)
-                self.robot.movej.assert_called_with(target, wait=False)
+                if key == 'p':
+                    self.robot.movej.assert_called_with(target, wait=False)
+                else:
+                    self.robot.home.assert_called_once_with(release_gripper=True, wait=False)
                 self.controls.close()
+
+    def test_h_waits_for_gripper_feedback_and_space_can_cancel_opening(self):
+        self.controls.press('h', self.found)
+        self.controls.rows(self.found)
+        self.session.command.assert_called_with('gripper', gripper_width=.082, ttl_ms=200)
+        self.session.execute.assert_not_called()
+        self.controls.press(' ', self.found)
+        self.controls.rows(self.found)
+        self.session.execute.assert_not_called()
+        self.robot.cancel.assert_called_once()
+
+    def test_h_only_moves_after_opening_and_keeps_jaws_open_in_home_plan(self):
+        self.controls.press('h', self.found)
+        self.controls.rows(self.found)
+        self.state['gripper_width'] = .081
+        rows = dict(self.controls.rows(self.found))
+        self.session.preview.assert_called_once_with('home', gripper_width=.082)
+        self.assertIn('夹爪已张开', str(rows['操作结果']))
+        self.state['operations'] = [{'operation_id': 'home', 'status': 'completed'}]
+        self.controls.rows(self.found)
+        self.robot.cancel.assert_not_called()
+        self.robot.close.assert_called_once()
+
+    def test_h_blocked_gripper_preserves_the_failure_and_never_moves_arm(self):
+        self.controls.press('h', self.found)
+        self.controls.motion.open_deadline = 0
+        rows = dict(self.controls.rows(self.found))
+        self.assertIn('夹爪未能张开', str(rows['操作结果']))
+        self.session.execute.assert_not_called()
+        self.robot.cancel.assert_called_once()
 
     def test_repeat_keys_never_queue_and_space_cancels_only_owned_motion(self):
         self.controls.press(' ', self.found)

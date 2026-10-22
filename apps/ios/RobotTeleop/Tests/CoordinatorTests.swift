@@ -232,6 +232,17 @@ final class CoordinatorTests: XCTestCase {
       XCTAssertTrue(waitUntil { fixture.status.latest?.phoneControl?.preset?.name == action })
       XCTAssertEqual(fixture.status.latest?.phoneControl?.preset?.busy, true)
     }
+    let alignCount = fixture.transport.sentControls.count
+    fixture.coordinator.requestControl("align")
+    XCTAssertTrue(waitUntil { fixture.transport.sentControls.count == alignCount + 1 })
+    let align = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.transport.sentControls[alignCount]) as? [String: Any])
+    XCTAssertEqual(align["action"] as? String, "align")
+    XCTAssertEqual(align["runtime_id"] as? String, "test")
+    reply["id"] = align["id"]
+    reply.removeValue(forKey: "preset")
+    reply["aligned"] = false
+    fixture.transport.emit(try JSONSerialization.data(withJSONObject: reply))
+    XCTAssertTrue(waitUntil { fixture.status.latest?.phoneControl?.aligned == false })
     let count = fixture.transport.sentControls.count
     fixture.coordinator.requestControl("disable")
     XCTAssertTrue(waitUntil { fixture.transport.sentControls.count == count + 1 })
