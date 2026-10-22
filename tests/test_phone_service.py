@@ -75,7 +75,12 @@ class PhoneServiceTests(unittest.TestCase):
             self.send(gripper=None)
             self.send(clutch_active=True)
             self.assertEqual(session.command.call_args.args, ('cartesian',))
+            preview = self.service.snapshot()['orientation_preview']
+            self.assertEqual(preview['frame'], 'base_tcp')
+            self.assertEqual(preview['target_quaternion'], self.controller.last_target['pose'][3:])
+            self.assertEqual(preview['input_quaternion'], [0., 0., 0., 1.])
             self.controller.last_received -= 1
+            self.assertIsNone(self.service.snapshot()['orientation_preview'])
             self.service.step()
             self.assertEqual(session.command.call_args.args, ('hold',))
             self.service.dispatch({'command': 'disable'})

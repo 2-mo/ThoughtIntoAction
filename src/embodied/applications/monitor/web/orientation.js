@@ -48,6 +48,9 @@ function glowingDevice(color, kind) {
     part(new THREE.BoxGeometry(.105, .044, .03), [-.042, 0, 0]);                         // face along controller forward
     part(new THREE.BoxGeometry(.034, .036, .085), [-.083, 0, -.045], [0, -.35, 0]);      // grip
     part(new THREE.TorusGeometry(.034, .007, 8, 32), [.03, 0, .006], [0, Math.PI / 2, 0]); // tracking ring
+  } else if (kind === 'phone') {
+    part(new THREE.BoxGeometry(.012, .07, .13), [0, 0, 0]);
+    part(new THREE.BoxGeometry(.004, .05, .1), [.008, 0, 0]);
   } else {
     part(new THREE.BoxGeometry(.032, .1, .042), [-.072, 0, 0]);                          // palm
     for (const y of [-.034, .034]) part(new THREE.BoxGeometry(.086, .013, .028), [-.016, y, 0]); // fingers
@@ -69,12 +72,22 @@ for (const [i, color] of [0x55dcec, 0xffb84c, 0xe5edf2].entries()) {
   scene.add(model, referenceRing());
   scenes.push(scene); models.push(model);
 }
+const phoneModel = glowingDevice(0x55dcec, 'phone');
+scenes[0].add(phoneModel);
 // Canonical model +X is controller forward (-Z), +Z is controller up (+Y).
 // C maps controller-local to Quest-world; K maps Quest-world to robot base.
 const toolToController = new THREE.Matrix4().set(0,-1,0,0, 0,0,1,0, -1,0,0,0, 0,0,0,1);
-let teleop = null, arm = null, inputAt = 0, armAt = 0;
+let teleop = null, phone = null, arm = null, inputAt = 0, phoneAt = 0, armAt = 0;
 window.addEventListener('teleop-preview', e => { teleop = e.detail; inputAt = performance.now(); });
+window.addEventListener('phone-preview', e => { phone = e.detail; phoneAt = performance.now(); });
 window.addEventListener('arm-preview', e => { arm = e.detail; armAt = performance.now(); });
+function setQuaternion(model, values) {
+  if (!Array.isArray(values) || values.length !== 4 || !values.every(Number.isFinite)) return false;
+  const q = new THREE.Quaternion(...values);
+  if (q.lengthSq() < 1e-8) return false;
+  model.quaternion.copy(q.normalize());
+  return true;
+}
 function setPose(model, values) {
   if (!Array.isArray(values) || values.length !== 16 || !values.every(Number.isFinite)) return false;
   model.quaternion.setFromRotationMatrix(new THREE.Matrix4().fromArray(values));
@@ -94,6 +107,7 @@ function update() {
     now - deviceAt < 500 && deviceStamp > 0 && preview?.input_ready && hand?.pose?.length === 7 && hand.pose.every(Number.isFinite);
   const k = preview?.basis;
   models[0].visible = false;
+  phoneModel.visible = false;
   if (handLive && Array.isArray(k) && k.length === 3 && k.every(row => Array.isArray(row) && row.length === 3 && row.every(Number.isFinite))) {
     const q = new THREE.Quaternion(...hand.pose.slice(3));
     if (q.lengthSq() > 1e-8) {
@@ -106,10 +120,33 @@ function update() {
   }
   models[1].visible = !!(handLive && preview?.active && setPose(models[1], preview.target));
   models[2].visible = !!(arm?.stream?.status === 'live' && now - armAt < 500 && setPose(models[2], arm.actual?.eef));
-  el('orientation-status').textContent = !fresh ? '等待遥操新数据（更新后需重启遥操）' : !preview ? '需重启遥操以启用姿态对照' : !k ? '当前模式尚无方向参考' : !handLive ? '手柄跟踪暂停或数据过期' : preview.active ? 'Grip 按住 · 正在显示遥操目标' : 'Grip 松开 / 待机 · 仅显示手柄与实际朝向';
+  const phoneFresh = now - phoneAt < 1800 && phone?.connected && phone.age_s < .5;
+  // Ownership wins over the other connected input. Never reuse a phone target
+  // from a different robot run, or mix ARKit world orientation with base TCP.
+  const phoneSelected = now - phoneAt < 1800 && (phone?.enabled || (phoneFresh && !handLive));
+  if (phoneSelected) {
+    const phonePreview = phone.orientation_preview;
+    const sameRun = phone.runtime_id && phone.runtime_id === arm?.stream?.stream_id;
+    const live = phoneFresh && sameRun && phone.tracking === 'normal' && phone.active && phonePreview?.frame === 'base_tcp';
+    models[0].visible = false;
+    phoneModel.visible = !!(live && setQuaternion(phoneModel, phonePreview.input_quaternion));
+    models[1].visible = !!(live && setQuaternion(models[1], phonePreview.target_quaternion));
+    el('orientation-source').textContent = '手机 · 基座坐标系';
+    el('orientation-input-label').textContent = '手机映射 · 青';
+    el('orientation-status').textContent = !phoneFresh ? '手机姿态过期' : !phone.enabled ? '手机仅监看 · 开始遥操后建立参考'
+      : !sameRun ? '等待当前 robot 反馈' : phone.tracking !== 'normal' ? '手机追踪受限 · 目标已隐藏'
+      : phone.active ? 'Clutch 按住 · 显示相对映射与执行目标' : 'Clutch 松开 · 按住后建立相对参考';
+  } else {
+    el('orientation-source').textContent = handLive ? 'Quest · 基座坐标系' : '等待控制源';
+    el('orientation-input-label').textContent = '手柄映射 · 青';
+    el('orientation-status').textContent = !fresh ? '等待手机或 Quest 遥操输入' : !preview ? '等待姿态对照数据'
+      : !k ? '当前模式尚无方向参考' : !handLive ? '手柄跟踪暂停或数据过期'
+      : preview.active ? 'Grip 按住 · 正在显示遥操目标' : 'Grip 松开 · 仅显示手柄与实际朝向';
+  }
+  canvas.dataset.source = phoneSelected ? 'phone' : handLive ? 'quest' : 'none';
   const degrees = (a, b) => (a.angleTo(b) * 180 / Math.PI).toFixed(1) + '°';
   el('orientation-error').textContent = '目标与实际角度差：' + (models[1].visible && models[2].visible ? degrees(models[1].quaternion, models[2].quaternion) : '—');
-  canvas.dataset.handVisible = String(models[0].visible);
+  canvas.dataset.handVisible = String(models[0].visible || phoneModel.visible);
   canvas.dataset.targetVisible = String(models[1].visible);
   canvas.dataset.actualVisible = String(models[2].visible);
 }

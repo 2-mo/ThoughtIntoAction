@@ -133,6 +133,7 @@ class Hardware:
         return {"joint_velocity_limits_rad_s": robot["joint_vel_max"],
                 "gripper_velocity_max_m_s": robot["gripper_vel_max"],
                 "gripper": {"present": True, "position": True, "grasp": True, "effort_unit": "motor_Nm",
+                            "position_effort_limit": config.gripper_position_effort_limit_nm,
                             "effort_max": robot['gripper_torque_max'], "contact_detection": "effort_stall",
                             "effort_description": "SDK current-estimated motor torque; not calibrated fingertip force"},
                 "source": {"kind": "sdk_runtime_configuration", "description": "Active SDK capability, not measured rated hardware speed"}}

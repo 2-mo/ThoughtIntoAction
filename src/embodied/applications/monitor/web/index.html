@@ -14,6 +14,7 @@
   <main>
     <section class="stage" aria-label="机械臂三维场景">
       <div class="scene-viewport"><canvas id="robot-canvas" aria-label="旋转、缩放和查看机械臂"></canvas></div>
+      <div class="project-brand"><strong>知行有灵</strong><span>Thought into Action</span></div>
       <div class="stage-top"><span id="connection" role="status" data-state="waiting">等待场景</span><span class="view-switch"><button id="view-live" type="button" aria-pressed="true">实时</button><button id="open-replay" type="button" aria-pressed="false">回放</button></span><span id="live-arm-status" title="实时机械臂连接，与回放画面独立">真机 —</span><button id="reset-view" type="button">重置视角</button></div>
       <div id="table-safety" role="status" hidden></div>
       <div id="loading" role="status">等待运行时模型与反馈…</div>
@@ -39,22 +40,7 @@
       <p class="collection-controls"><span>A 预抓取后开始 / 保存后返位 · B 预抓取/长按回零 · 下拨1秒切换控制 · X 网页回放 · Y 真机回放</span><span>摇杆：左开始任务 · 右暂停 · 上作废上一条 · 按住 1 秒结束清零</span></p>
     </section>
     <aside>
-      <section class="phone-panel" aria-label="手机遥操" data-state="offline">
-        <h2><span><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="3" y="1" width="10" height="18" rx="2"/><path d="M6 4h4M7 16h2"/></svg>手机 · RobotTeleop</span><span id="phone-status" role="status">等待接收服务</span></h2>
-        <p id="phone-endpoint">手机与电脑连接同一网络 · UDP 5005</p>
-        <div class="phone-metrics">
-          <div><span>ARKit 追踪</span><b id="phone-tracking">—</b></div>
-          <div><span>输入帧率</span><b id="phone-fps">—</b></div>
-          <div title="主机收到最新有效姿态帧距今；不是端到端或机械臂响应延迟"><span>数据年龄</span><b id="phone-age">—</b></div>
-          <div><span>控制权</span><b id="phone-control">未接管</b></div>
-          <div><span>Clutch</span><b id="phone-clutch">—</b></div>
-          <div><span>夹爪输入</span><b id="phone-gripper">—</b></div>
-        </div>
-        <p id="phone-position">XYZ —</p>
-        <p id="phone-mapping">相对控制 · 位移 1× · 旋转 1×</p>
-        <div class="phone-actions"><button id="phone-start" type="button">启动接收</button><button id="phone-enable" type="button" disabled>启用手机遥操</button><button id="phone-disable" type="button" disabled>停止遥操</button></div>
-        <p id="phone-message" role="status">默认仅监看。手机晚打开也可连接；启用前松开 Clutch。</p>
-      </section>
+
 
       <section class="camera-panel" aria-label="相机预览"><h2><span id="camera-title">相机 · 实时</span><span class="camera-actions"><span id="camera-count" role="status">等待连接</span><button id="depth-toggle" type="button" aria-pressed="false">显示深度</button></span></h2>
         <div id="recorded-camera" hidden><div id="recorded-grid" class="camera-grid" data-count="1">
@@ -68,10 +54,29 @@
         <span id="input-status" class="visually-hidden" role="status">无输入</span>
         <div class="hands"><div><h3>左 · X / Y</h3><div id="left-hand">—</div></div><div><h3>右 · A / B / R3</h3><div id="right-hand">—</div></div></div>
         <p id="button-response" role="status">等待按键响应</p><p class="hint">进度来自控制程序实际长按计时；按键亮起仅代表输入已收到。</p>
+      <section class="phone-panel" aria-label="手机遥操" data-state="offline">
+        <h2><span><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="3" y="1" width="10" height="18" rx="2"/><path d="M6 4h4M7 16h2"/></svg>手机 · RobotTeleop</span><span id="phone-status" role="status">等待接收服务</span></h2>
+        <p id="phone-control-banner" role="status" hidden></p>
+        <div class="phone-metrics">
+          <div><span>ARKit 追踪</span><b id="phone-tracking">—</b></div>
+          <div><span>输入帧率</span><b id="phone-fps">—</b></div>
+          <div title="主机收到最新有效姿态帧距今；不是端到端或机械臂响应延迟"><span>数据年龄</span><b id="phone-age">—</b></div>
+          <div><span>控制权</span><b id="phone-control">未接管</b></div>
+          <div><span>Clutch</span><b id="phone-clutch">—</b></div>
+          <div><span>夹爪输入</span><b id="phone-gripper">—</b></div>
+        </div>
+        <details class="phone-details"><summary>连接与映射详情</summary>
+        <p id="phone-endpoint">手机与电脑连接同一网络 · UDP 5005</p>
+        <p id="phone-position">XYZ —</p>
+        <p id="phone-mapping">相对控制 · 位移 1× · 旋转 1×</p>
+        </details>
+        <div class="phone-actions"><button id="phone-start" type="button">启动接收</button><button id="phone-enable" type="button" disabled>启用手机遥操</button><button id="phone-disable" type="button" disabled>停止遥操</button></div>
+        <p id="phone-message" role="status">默认仅监看。手机晚打开也可连接；启用前松开 Clutch。</p>
+      </section>
         <section class="orientation-panel">
-        <h2>姿态对齐 <span>同一基座坐标系</span></h2>
-        <div class="orientation-labels"><span>手柄 · 青</span><span>遥操目标 · 橙</span><span>夹爪实际 · 白</span></div>
-        <canvas id="orientation-canvas" aria-label="同一视角下的手柄、遥操目标和实际夹爪姿态"></canvas>
+        <h2>姿态对齐 <span id="orientation-source">等待控制源</span></h2>
+        <div class="orientation-labels"><span id="orientation-input-label">输入映射 · 青</span><span>遥操目标 · 橙</span><span>夹爪实际 · 白</span></div>
+        <canvas id="orientation-canvas" aria-label="同一基座坐标系下的当前输入、遥操目标和实际夹爪姿态"></canvas>
         <p id="orientation-status" role="status">等待遥操姿态数据</p>
         <p id="orientation-error">目标与实际角度差：—</p>
         <p class="hint">箭头指向前端，短柱指向上方。三个模型仅比较朝向，位置已分开展示。拖动可一起转动视角。</p>

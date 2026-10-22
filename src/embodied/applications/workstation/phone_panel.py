@@ -7,9 +7,11 @@ def rows():
     state = phone_service.monitor()
     connected = state.get('connected', False)
     enabled = state.get('enabled', False)
-    label = ('遥操中' if state.get('active') else '已接管 · 松开后按住 Clutch 控制') if enabled else '仅监看'
+    label = ('遥操开启 · 正在跟随' if state.get('active') else '遥操开启 · 松手保持') if enabled else '仅监看'
     details = [('手机', Status('已连接 · ' + label if connected else '等待 RobotTeleop 连接',
-                              'ready' if connected else 'waiting'))]
+                              'active' if enabled else 'ready' if connected else 'waiting'))]
+    if enabled:
+        details.append(('停止操作', Status('S / 空格 停止遥操；手机也可点停止', 'active')))
     if not state['available']:
         details.append(('接收服务', Status('未就绪 · 按 R 启动', 'waiting')))
     endpoints = [f'{host}:{state["port"]}' for host in state.get('addresses', [])]
@@ -22,7 +24,7 @@ def rows():
                 ('相对映射', f'位移 {state.get("position_scale", 1):.2f}× · 旋转 {state.get("rotation_scale", 1):.2f}×'),
                 ('输入帧率', f'{state.get("fps", 0):.1f} Hz' if connected else '—'),
                 ('数据年龄', f'{state["age_s"] * 1000:.0f} ms' if connected else '—'),
-                ('控制权', label if state['available'] else '未接管'),
+                ('控制权', Status(label, 'active') if enabled else '未接管'),
                 ('Clutch', '按住' if state.get('clutch') else '松开'),
                 ('位置 XYZ', ' / '.join(f'{v:.3f}' for v in state['position']) + ' m' if state.get('position') else '—')]
     if state.get('estop'):
