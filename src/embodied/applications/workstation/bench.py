@@ -4,8 +4,8 @@
     ./run.sh help --all list every command
     ./run.sh bench stop stop the kernel and web console it started, and close it
 
-Windows: 1 总控, 2 命令, 3 内核, 4 网页, 5 VR, 6 相机, 7 宣传.
-Web services start with the workbench; device windows stay visible while waiting for setup.
+Windows: 1 总控, 2 命令, 3 robot, 4 网页, 5 VR, 6 相机, 7 宣传.
+Web and shared camera services start with the workbench; robot startup remains explicit.
 The dashboard only types commands and sends Ctrl+C to the kernel window; it never owns a device.
 """
 import argparse
@@ -27,10 +27,10 @@ from embodied.applications.workstation.status import Status, status_text
 DEFAULT_SESSION = 'emb'
 LEGACY_SESSION = 'embodied-' + hashlib.sha256(str(ROOT).encode()).hexdigest()[:8]
 SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
-WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': '内核', 'web': '网页',
+WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传'}
-WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 内核 · 4 网页 · 5 VR · 6 相机 · 7 宣传'
-UI_REVISION = '5'
+WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传'
+UI_REVISION = '6'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
 KERNELS = [  # key, label, command typed into the kernel window, real arm
@@ -126,7 +126,7 @@ def dashboard_command():
 def panel_command(role):
     return (f'env PYTHONPATH={shlex.quote(str(ROOT / "src"))} EMBODIED_BENCH_SESSION={shlex.quote(SESSION)} '
             f'{shlex.quote(sys.executable)} -B -m embodied.applications.workstation.bench_panels {role}'
-            + (' --serve' if role in ('web', 'site') else ''))
+            + (' --serve' if role in ('web', 'site', 'camera') else ''))
 
 
 def activity(role):
@@ -205,6 +205,7 @@ def start(attach=True):
         if found:
             if source != occupied:
                 tmux('move-window', '-s', source, '-t', destination)
+            tmux('rename-window', '-t', found[0], WINDOWS[role])
             revision = tmux('display-message', '-p', '-t', found[0], '#{@bench_ui_revision}').stdout.strip()
             original = tmux('display-message', '-p', '-t', found[0], '#{pane_start_command}').stdout
             tmux('set-option', '-w', '-t', found[0], 'remain-on-exit', 'on')
@@ -403,14 +404,14 @@ def start_kernel(command):
         raise RuntimeError('已有内核在运行；先按 S 停止（或在其原终端退出）。')
     target = window('kernel')
     if target is None or kernel_busy():
-        raise RuntimeError('内核窗口不空闲；Ctrl+B 3 查看。')
+        raise RuntimeError('robot 窗口不空闲；Ctrl+B 3 查看。')
     # A waiting panel owns no device. Replace only that panel (or an idle shell),
     # then return to it after the explicitly selected kernel has finished exiting.
     script = f'trap ":" INT; {command}; result=$?; echo "内核已退出（状态 $result）。"; exec {panel_command("kernel")}'
     tmux('set-option', '-p', '-t', target[0], '@bench_activity', 'kernel')
     tmux('respawn-pane', '-k', '-t', target[0], '-c', str(ROOT), 'bash -c ' + shlex.quote(script))
     tmux('select-window', '-t', target[0])
-    return '内核窗口正在启动；按提示确认，就绪后 Ctrl+B 1 回总控。'
+    return 'robot 窗口正在启动；按提示确认，就绪后 Ctrl+B 1 回总控。'
 
 
 def open_web(run=None):
@@ -440,6 +441,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
     from rich.panel import Panel
     from rich.table import Table
     from rich.text import Text
+    from embodied.applications.workstation.bench_panels import snapshot, vr_rows
 
     status = Table.grid(padding=(0, 1), expand=True)
     menu = Table.grid(padding=(0, 1), expand=True)
@@ -447,7 +449,10 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
     menu.add_column(style='bold color(215)', width=2)
     menu.add_column(ratio=1)
     if found is None:
-        status.add_row(status_text(Status('机械臂 · 等待启动 / 尚未收到反馈', 'waiting')))
+        _, robot_rows, _ = snapshot('kernel')
+        for label, value in robot_rows:
+            if isinstance(value, Status):
+                status.add_row(Text.assemble('robot · ' if label == '内核' else f'{label} · ', status_text(value)))
         status.add_row(Text('真机测试按 3，仿真按 5；启动后 Ctrl+B → 1 返回总控。', style='dim'))
         status.add_row(Text('网页已随工作台启动；内核就绪后自动连接。', style='dim'))
         for real, section in ((False, '仿真'), (True, '真机')):
@@ -456,7 +461,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
                 if is_real == real:
                     menu.add_row(section if first else '', key, Text(label.split(' · ', 1)[1]))
                     first = False
-        menu.add_row('', '', Text('真机启动前扶好机械臂，并按内核窗口提示确认。', style='yellow'))
+        menu.add_row('', '', Text('真机启动前扶好机械臂，并按 robot 窗口提示确认。', style='yellow'))
         menu.add_row('网页', 'W', Text('查看监看与采集网页（无需先启动内核）'))
     else:
         run, identity = found
@@ -474,10 +479,13 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
                              Text(label + note, style=None if usable else 'dim'))
                 first = False
         menu.add_row('停止', 'S', Text('连按两次停止内核；真机进入阻尼，请先扶住', style='yellow'))
-    from embodied.applications.workstation.bench_panels import vr_rows
     vr, _ = vr_rows(found)
     label, value = vr[0]
     status.add_row(Text.assemble(f'{label} · ', status_text(value)))
+    _, cameras, _ = snapshot('camera')
+    for label, value in cameras:
+        if isinstance(value, Status):
+            status.add_row(Text.assemble(f'{label} · ', status_text(value)))
     try:
         from embodied.core.project import load_config
         from embodied.applications.workstation.ports import summary
