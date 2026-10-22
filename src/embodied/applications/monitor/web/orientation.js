@@ -48,6 +48,10 @@ function glowingDevice(color, kind) {
     part(new THREE.BoxGeometry(.105, .044, .03), [-.042, 0, 0]);                         // face along controller forward
     part(new THREE.BoxGeometry(.034, .036, .085), [-.083, 0, -.045], [0, -.35, 0]);      // grip
     part(new THREE.TorusGeometry(.034, .007, 8, 32), [.03, 0, .006], [0, Math.PI / 2, 0]); // tracking ring
+  } else if (kind === 'phone-arkit') {
+    // ARKit camera-local: +X right, +Y up, +Z out of the display.
+    part(new THREE.BoxGeometry(.07, .13, .012), [0, 0, 0]);
+    part(new THREE.BoxGeometry(.05, .1, .004), [0, 0, .008]);
   } else if (kind === 'phone') {
     part(new THREE.BoxGeometry(.012, .07, .13), [0, 0, 0]);
     part(new THREE.BoxGeometry(.004, .05, .1), [.008, 0, 0]);
@@ -74,6 +78,23 @@ for (const [i, color] of [0x55dcec, 0xffb84c, 0xe5edf2].entries()) {
 }
 const phoneModel = glowingDevice(0x55dcec, 'phone');
 scenes[0].add(phoneModel);
+// The raw phone attitude is independent of robot ownership and relative mapping.
+// The iOS provider rebases ARKit to its first valid camera pose. This local
+// reference has +Y along the initial phone top; it is not robot base or gravity.
+const phoneCanvas = el('phone-pose-canvas');
+const phoneRenderer = new THREE.WebGLRenderer({canvas: phoneCanvas, antialias: true, alpha: true});
+phoneRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const phoneCamera = new THREE.PerspectiveCamera(40, 1, .01, 10);
+phoneCamera.position.set(.3, .24, .44);
+const phoneControls = new OrbitControls(phoneCamera, phoneCanvas);
+phoneControls.enablePan = false;
+phoneControls.enableZoom = false;
+const phoneScene = new THREE.Scene();
+const rawPhoneModel = glowingDevice(0x55dcec, 'phone-arkit');
+const phoneRing = referenceRing();
+phoneRing.position.set(0, -.075, 0);
+phoneRing.rotation.x = -Math.PI / 2;
+phoneScene.add(rawPhoneModel, phoneRing);
 // Canonical model +X is controller forward (-Z), +Z is controller up (+Y).
 // C maps controller-local to Quest-world; K maps Quest-world to robot base.
 const toolToController = new THREE.Matrix4().set(0,-1,0,0, 0,0,1,0, -1,0,0,0, 0,0,0,1);
@@ -121,6 +142,12 @@ function update() {
   models[1].visible = !!(handLive && preview?.active && setPose(models[1], preview.target));
   models[2].visible = !!(arm?.stream?.status === 'live' && now - armAt < 500 && setPose(models[2], arm.actual?.eef));
   const phoneFresh = now - phoneAt < 1800 && phone?.connected && phone.age_s < .5;
+  rawPhoneModel.visible = !!(phoneFresh && phone.tracking === 'normal' && phone.phone_pose?.frame === 'phone_reference'
+    && setQuaternion(rawPhoneModel, phone.phone_pose.quaternion_xyzw));
+  phoneCanvas.dataset.poseVisible = String(rawPhoneModel.visible);
+  el('phone-pose-status').textContent = !phoneFresh ? '等待手机姿态 / 数据过期'
+    : phone.tracking !== 'normal' ? '追踪受限 · 姿态已隐藏'
+    : rawPhoneModel.visible ? '实时朝向 · 可拖动观察' : '等待姿态数据';
   // Ownership wins over the other connected input. Never reuse a phone target
   // from a different robot run, or mix ARKit world orientation with base TCP.
   const phoneSelected = now - phoneAt < 1800 && (phone?.enabled || (phoneFresh && !handLive));
@@ -155,9 +182,16 @@ const resize = new ResizeObserver(() => {
   if (w && h) { renderer.setSize(w, h, false); camera.aspect = w / 3 / h; camera.updateProjectionMatrix(); }
 });
 resize.observe(canvas);
+const phoneResize = new ResizeObserver(() => {
+  const w = phoneCanvas.clientWidth, h = phoneCanvas.clientHeight;
+  if (w && h) { phoneRenderer.setSize(w, h, false); phoneCamera.aspect = w / h; phoneCamera.updateProjectionMatrix(); }
+});
+phoneResize.observe(phoneCanvas);
 renderer.setScissorTest(true);
 renderer.setAnimationLoop(() => {
   update(); controls.update();
+  phoneControls.update();
+  phoneRenderer.render(phoneScene, phoneCamera);
   const w = canvas.clientWidth / 3, h = canvas.clientHeight;
   scenes.forEach((scene, i) => {
     renderer.setViewport(i * w, 0, w, h); renderer.setScissor(i * w, 0, w, h);
@@ -166,9 +200,10 @@ renderer.setAnimationLoop(() => {
 });
 window.addEventListener('pagehide', () => {
   renderer.setAnimationLoop(null); resize.disconnect(); controls.dispose();
+  phoneResize.disconnect(); phoneControls.dispose();
   const materials = new Set();
-  scenes.forEach(scene => scene.traverse(node => {
+  [...scenes, phoneScene].forEach(scene => scene.traverse(node => {
     node.geometry?.dispose(); if (node.material) materials.add(node.material);
   }));
-  materials.forEach(material => material.dispose()); renderer.dispose();
+  materials.forEach(material => material.dispose()); renderer.dispose(); phoneRenderer.dispose();
 }, { once: true });

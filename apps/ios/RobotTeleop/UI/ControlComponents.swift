@@ -280,6 +280,7 @@ private struct SliderRow: View {
 
 struct ControlActionRow: View {
   @ObservedObject var model: AppModel
+  var compact = false
 
   var body: some View {
     VStack(spacing: 6) {
@@ -299,9 +300,13 @@ struct ControlActionRow: View {
           background: TeleopTheme.danger, border: TeleopTheme.danger))
         .disabled(model.status.networkState != .ready)
       }
-      HStack(spacing: 8) {
+      LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: compact ? 4 : 2), spacing: 6) {
         Button { model.requestHome() } label: {
           Label("回零", systemImage: "house").frame(maxWidth: .infinity, minHeight: 36)
+        }.disabled(!model.canHome)
+        .accessibilityHint("先张开夹爪，确认松开后机械臂回零")
+        Button { model.requestPregrasp() } label: {
+          Label("预抓取", systemImage: "scope").frame(maxWidth: .infinity, minHeight: 36)
         }.disabled(!model.canHome)
         Button { model.recoverControl() } label: {
           Label(model.recoverControlLabel, systemImage: "arrow.clockwise")
@@ -419,11 +424,13 @@ struct HoldControlSurface: View {
 
   private var holdLabel: String {
     if model.stopLatched { return "控制已锁定" }
+    if model.presetBusy { return "预设动作执行中" }
     return model.clutchActive ? "跟随中 · 上滑开 / 下滑闭" : "按住跟随 · 上滑开 / 下滑闭"
   }
 
   private var holdState: String {
     if model.stopLatched { return "点恢复解除手机锁定" }
+    if model.presetBusy { return "可随时点停止遥操取消动作" }
     if !model.status.controlAvailable { return "等待电脑接收服务" }
     if model.status.trackingQuality != .normal { return "追踪未就绪" }
     if model.status.phoneControl?.enabled != true { return "先点开始遥操" }

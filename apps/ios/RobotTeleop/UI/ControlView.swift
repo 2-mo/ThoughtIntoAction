@@ -10,7 +10,7 @@ struct ControlView: View {
         if useLandscapeLayout(geometry.size) {
           landscapeLayout
         } else {
-          portraitLayout
+          portraitLayout(geometry.size)
         }
       }
       .padding(.horizontal, 14)
@@ -20,19 +20,21 @@ struct ControlView: View {
     .background(TeleopTheme.background.ignoresSafeArea())
   }
 
-  private var portraitLayout: some View {
+  private func portraitLayout(_ size: CGSize) -> some View {
     VStack(spacing: 10) {
       EndpointHeader(model: model, compact: false)
-      StatusStrip(model: model)
       ScrollView {
         VStack(spacing: 10) {
+          StatusStrip(model: model)
           TuningControls(model: model, compact: false)
         }
       }
       .scrollIndicators(.hidden)
+      .frame(maxHeight: dynamicTypeSize.isAccessibilitySize ? .infinity : 320)
       ControlActionRow(model: model)
       HoldControlSurface(model: model, compact: false)
-        .frame(height: 122)
+        .frame(minHeight: min(240, max(160, size.height * 0.30)), maxHeight: .infinity)
+        .layoutPriority(1)
     }
   }
 
@@ -50,7 +52,7 @@ struct ControlView: View {
         .frame(maxWidth: .infinity)
 
         VStack(spacing: 10) {
-          ControlActionRow(model: model)
+          ControlActionRow(model: model, compact: true)
           HoldControlSurface(model: model, compact: true)
         }
         .frame(width: 390)

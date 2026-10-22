@@ -1,5 +1,12 @@
 import Foundation
 
+struct PhonePresetReply: Decodable, Equatable, Sendable {
+  let name: String
+  let phase: String
+  let message: String
+  var busy: Bool { phase == "opening" || phase == "moving" }
+}
+
 struct PhoneControlReply: Decodable, Equatable, Sendable {
   let protocolName: String
   let id: UInt32
@@ -12,10 +19,12 @@ struct PhoneControlReply: Decodable, Equatable, Sendable {
   let estop: Bool
   let targetLimited: Bool
   let robotGripper: Double?
+  let preset: PhonePresetReply?
   enum CodingKeys: String, CodingKey {
     case protocolName = "protocol", id, sessionID = "session_id", ok, message
     case kernelRuntimeID = "kernel_runtime_id", enabled, active, estop
     case targetLimited = "target_limited", robotGripper = "robot_gripper"
+    case preset
   }
 }
 
@@ -215,7 +224,9 @@ final class TeleopCoordinator: @unchecked Sendable {
 
   func requestControl(_ action: String) {
     queue.async { [weak self] in
-      guard let self, action == "enable" || action == "disable" else { return }
+      guard let self, ["enable", "disable", "home", "pregrasp"].contains(action) else { return }
+      // Stop can always supersede an unconfirmed action. Never queue presets.
+      if action != "disable", self.status.controlPending { return }
       self.controls.releaseClutch()
       self.sendSafetyEdgeOnQueue()
       self.sendControlOnQueue(action)
@@ -670,7 +681,7 @@ final class TeleopCoordinator: @unchecked Sendable {
       status.phoneControl = reply
       status.controlAvailable = true
       status.controlPending = false
-      if !reply.enabled || reply.estop {
+      if !reply.enabled || reply.estop || reply.preset?.busy == true {
         controls.releaseClutch()
         sendSafetyEdgeOnQueue()
       }

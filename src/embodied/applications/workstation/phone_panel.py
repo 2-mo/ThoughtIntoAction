@@ -31,6 +31,10 @@ def rows():
         details.append(('停止锁定', Status('已锁存 · 在手机点恢复', 'error')))
     if state.get('target_limited'):
         details.append(('跟随', Status('目标超前，已丢弃多余位移；可反向移动或松开重新定位', 'waiting')))
+    if state.get('preset'):
+        preset = state['preset']
+        details.append(('预设动作', Status(preset['message'],
+            'active' if preset['phase'] in ('opening', 'moving') else 'ready' if preset['phase'] == 'completed' else 'waiting')))
     if state.get('error'):
         details.append(('提示', Status(state['error'], 'error')))
     return details, ['手机与电脑使用可互通的网络，RobotTeleop 填上方服务器地址并 Connect。',

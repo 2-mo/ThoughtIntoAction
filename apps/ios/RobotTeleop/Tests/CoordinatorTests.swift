@@ -219,9 +219,23 @@ final class CoordinatorTests: XCTestCase {
     reply["enabled"] = true
     fixture.transport.emit(try JSONSerialization.data(withJSONObject: reply))
     XCTAssertTrue(waitUntil { fixture.status.latest?.phoneControl?.enabled == true })
+    for action in ["home", "pregrasp"] {
+      let count = fixture.transport.sentControls.count
+      fixture.coordinator.requestControl(action)
+      XCTAssertTrue(waitUntil { fixture.transport.sentControls.count == count + 1 })
+      let preset = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.transport.sentControls[count]) as? [String: Any])
+      XCTAssertEqual(preset["action"] as? String, action)
+      XCTAssertEqual(preset["runtime_id"] as? String, "test")
+      reply["id"] = preset["id"]
+      reply["preset"] = ["name": action, "phase": "opening", "message": "先张开夹爪"]
+      fixture.transport.emit(try JSONSerialization.data(withJSONObject: reply))
+      XCTAssertTrue(waitUntil { fixture.status.latest?.phoneControl?.preset?.name == action })
+      XCTAssertEqual(fixture.status.latest?.phoneControl?.preset?.busy, true)
+    }
+    let count = fixture.transport.sentControls.count
     fixture.coordinator.requestControl("disable")
-    XCTAssertTrue(waitUntil { fixture.transport.sentControls.count == 3 })
-    let stop = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.transport.sentControls[2]) as? [String: Any])
+    XCTAssertTrue(waitUntil { fixture.transport.sentControls.count == count + 1 })
+    let stop = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.transport.sentControls[count]) as? [String: Any])
     XCTAssertEqual(stop["action"] as? String, "disable")
     fixture.coordinator.disconnect()
   }
