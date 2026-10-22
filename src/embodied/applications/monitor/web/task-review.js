@@ -49,7 +49,7 @@ async function load() {
     options('review-episode', snapshot.episodes || [], e => `${e.id} · ${e.task || ''}`, selected);
     // A newly selected first episode needs its own annotation read.
     if (!selected && el('review-episode').value) {
-      busy = false; return load();
+      busy = false; return await load();
     }
     taskTimeline(); el('review-error').textContent = '';
   } catch (error) {snapshot = {}; annotations = null; taskTimeline(); el('review-error').textContent = error.message;}

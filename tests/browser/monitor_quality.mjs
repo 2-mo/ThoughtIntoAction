@@ -31,17 +31,25 @@ const annotations = {revision: 2, annotation_status: 'needs_review', camera_id: 
 const payload = {tasks: [{task_id: 'task-1', task_name: 'pick', status: 'failed', phases: [
   {phase: 'verify_grasp', status: 'failed', elapsed_s: 1, operation_id: 'op-1'}]}],
   episodes: [{id: 'episode-1', task: 'pick'}]};
-let posted;
+let posted, annotationReply;
 globalThis.fetch = async (url, options = {}) => {
   if (options.method === 'POST') {
     posted = JSON.parse(options.body);
     return {ok: true, json: async () => ({annotations: {...annotations, revision: 3, annotation_status: 'approved'}})};
   }
-  return {ok: true, json: async () => ({...payload, annotations: url.includes('episode_id=') ? annotations : null})};
+  if (url.includes('episode_id=')) return new Promise(resolve => {annotationReply = resolve;});
+  return {ok: true, json: async () => ({...payload, annotations: null})};
 };
 await module('task-review.js');
 nodes.get('open-task-review').onclick();
 await new Promise(resolve => setImmediate(resolve));
+assert.equal(typeof annotationReply, 'function');
+assert.equal(nodes.get('review-episode').disabled, true, 'Episode selection stays locked during second fetch');
+assert.equal(nodes.get('review-refresh').disabled, true);
+assert.equal(nodes.get('annotation-approve').disabled, true);
+annotationReply({ok: true, json: async () => ({...payload, annotations})});
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(nodes.get('review-episode').disabled, false);
 assert.equal(nodes.get('task-timeline').children.length, 1);
 assert.equal(nodes.get('annotation-timeline').children[0].children[0].textContent, 'grasp');
 assert.equal(nodes.get('annotation-approve').disabled, false);
