@@ -10,6 +10,7 @@ import time
 from embodied.contracts.runtime import RuntimeReader
 from embodied.core.project import PROJECT_ROOT, load_config, resolve_path
 from embodied.core.telemetry import SCHEMA
+from embodied.applications.monitor.quality import MotionQuality
 
 KERNEL_URDF = PROJECT_ROOT / 'assets/robots/x5/runtime/x5_2025.urdf'
 
@@ -120,6 +121,7 @@ class KernelMonitor:
             resolve_path(load_config()['paths']['dataset_dir']) / 'mujoco']
         self.reader = self.directory = self.identity = self.latest = None
         self.robot_config = {}
+        self.motion_quality = MotionQuality()
         self.scene = self.thread = None
         self.error = '等待运行中的统一内核；监看不会启动或控制机械臂。'
         self.closed = threading.Event()
@@ -145,6 +147,7 @@ class KernelMonitor:
                 with self.lock:
                     self.directory, self.identity = (found if found else (None, None))
                     self.latest = None
+                    self.motion_quality.reset()
                     self.collection_at = self.display_at = 0
             if candidate is None:
                 self.error = '等待运行中的统一内核；监看不会启动或控制机械臂。'
@@ -165,10 +168,12 @@ class KernelMonitor:
                     self.display_at = time.monotonic() + 1 / 30
                 with self.lock:
                     self.latest, self.error = tick, None
+                    self.motion_quality.accept(tick)
         except (OSError, ValueError, RuntimeError, EOFError, KeyError, TypeError) as exc:
             self._disconnect()
             with self.lock:
                 self.latest, self.error = None, f'等待内核反馈：{exc}'
+                self.motion_quality.reset()
             if self.scene:
                 self.scene.set_stream_error(self.error)
 
@@ -179,6 +184,7 @@ class KernelMonitor:
                 self.collection = collection_snapshot(identity, self.roots)
                 self.collection_at = time.monotonic() + 2
             payload = deepcopy(self.collection)
+            payload['motion_quality'] = self.motion_quality.snapshot()
         stamp = (tick or {}).get('timing', {}).get('feedback_received_ns')
         age = max(0., (time.monotonic_ns() - stamp) / 1e9) if stamp else None
         payload.update(runtime_monitor=True, runtime_id=(identity or {}).get('runtime_id'),

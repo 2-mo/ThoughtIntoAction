@@ -14,7 +14,7 @@
 - `textures/oak_veneer_01/`：Poly Haven，作者 Jenelle van Heerden，CC0，原来源说明和许可随附。
 - `provenance.json`：下载来源、版本与各资产 SHA-256。离线测试校验哈希。
 
-HTTP 只暴露本模块静态资源、指定模型的 STL、`GET /api/model` 和 `GET /api/state`（也支持 HEAD）。监听 `127.0.0.1` 上的独立端口，退出监看进程才关闭。网页不发送运动指令。页面轮询状态，连接断开会明确标记最后画面；每次启动应打开终端新打印的地址。
+HTTP 提供本模块静态资源、指定模型的 STL，以及模型、状态、传感器和采集复核 API（GET 也支持 HEAD）。监听 `127.0.0.1` 上的独立端口，退出监看进程才关闭。网页不发送运动指令。页面轮询状态，连接断开会明确标记最后画面；每次启动应打开终端新打印的地址。
 
 Python 检查：`./run.sh test`。可选浏览器验证（依赖仅用于测试，不进入运行环境）：
 
@@ -28,3 +28,13 @@ node tests/browser/browser_scene.mjs
 可通过 `SCENE_TEST_BROWSER=/path/to/chromium` 指定现有浏览器。脚本使用软件 WebGL，从 `/tmp` 分别启动监看、虚拟服务与控制；验证控制来源更换不刷新页面、监看重启不影响控制、实际渲染、运动、过期状态与显示开关。截图及日志写入 `outputs/logs/`，不连接真机。
 
 实时与网页回放共用 `robot-canvas`，浏览器本地模式由 `display-state.js` 管理，切换不改变真机控制权。回放的模型、速度、力矩与 RGB 使用同一播放时间；实时连接与 Quest 状态独立保留。速度反馈沿 telemetry 传输，末端速度由 Scene 的 URDF 雅可比计算。隔离回放验证：`node tests/browser/browser_replay.mjs`（不启动相机或设备服务）。
+
+## 统一内核质量与任务复核
+
+工作台默认入口是 `./run.sh web monitor --kernel --no-camera --no-connections`（18081），对应本目录，区别于 `apps/console` 的另一套 ARX 控制前端。顶部“实测速度 · 质量”显示反馈 `dq`、各关节速度、反馈帧龄、命令位置与反馈的偏差和两个独立时间戳。该偏差未经时间对齐，不是严格同一时刻的跟踪误差。周期均值、标准差、最大值仅来自最近最多 256 个连续序号的内核 tick；监看跳样、遥测发布丢样和 observer 缺口分别显示，缺失或过期数据为 `—`。
+
+相机质量复用现有 `CameraFeed`，比较最新主机接收时间，不宣称曝光同步。源帧号缺口在采集线程累计，每次重连重置；无法可靠计数时显示未提供。页面预览降采样不计作源丢帧，也不等同于录制写入丢帧。
+
+“任务 / 技能复核”通过 `GET /api/review` 查看当前内核 `tasks/*/result.json` 的阶段与结果，以及配置采集目录里已完整保存 Episode 的技能区间、证据和置信度。`POST /api/annotations/review` 只调用数据层的版本化复核接口，携带 `expected_revision`，不发送运动命令、不修改原始录制；旧版本或源记录变化会拒绝复核。任务完成不自动变成正确技能标签。页面需点击“刷新记录”更新任务阶段。
+
+无服务、无硬件的针对性验证：`PYTHONPATH=src <项目 Python> -m pytest -q tests/test_monitor_quality.py` 和 `node tests/browser/monitor_quality.mjs`。后者使用 DOM stub 检查缺失值、过期值、任务显示和复核版本传递，不替代真实浏览器视觉验证。
