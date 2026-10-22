@@ -19,27 +19,36 @@ from embodied.devices.phone.core.models import (
     Vector3,
 )
 from embodied.devices.phone.policies.relative_pose import RelativePosePolicy
-from embodied.devices.inputs.phone import phone_aligned
+from embodied.devices.inputs.phone import phone_calibrated
 
 
 @pytest.mark.parametrize('phone_axis, expected', [((1, 0, 0), (0, -1, 0)), ((0, 1, 0), (0, 0, 1)), ((0, 0, -1), (1, 0, 0))])
-def test_aligned_pregrasp_maps_phone_right_up_forward_to_base(phone_axis, expected):
-    policy = RelativePosePolicy(phone_aligned())
-    robot = _robot(quaternion_from_axis_angle(Vector3(0, 1, 0), math.pi / 2))
+def test_manual_alignment_maps_phone_axes_using_current_tool_pose(phone_axis, expected):
+    policy = RelativePosePolicy(phone_calibrated())
+    robot = _robot(quaternion_from_axis_angle(Vector3(0, 1, 0), .9))
     # ARKit's initial frame need not be upright or have the current phone heading.
     phone_q = quaternion_from_axis_angle(Vector3(1, 1, 1), .8)
     origin = _input(Vector3(0, 0, 0), phone_q)
+    policy.calibrate(phone_q, robot.tcp_pose.orientation)
     policy.reset(origin, robot)
     movement = rotate_vector(phone_q, Vector3(*phone_axis)) * .03
     target = policy.update(_input(movement, phone_q), robot, 0)
-    assert (target.target_pose.position - robot.tcp_pose.position).as_tuple() == pytest.approx(tuple(.03*v for v in expected))
+    wanted = rotate_vector(robot.tcp_pose.orientation, Vector3(*expected)) * .03
+    assert (target.target_pose.position - robot.tcp_pose.position).as_tuple() == pytest.approx(wanted.as_tuple())
     assert quaternion_angular_distance(target.target_pose.orientation, robot.tcp_pose.orientation) < 1e-8
+    world_axis = rotate_vector(phone_q, Vector3(*phone_axis))
+    rotated = _input(Vector3(0, 0, 0), quaternion_multiply(quaternion_from_axis_angle(world_axis, .1), phone_q))
+    wanted_axis = rotate_vector(robot.tcp_pose.orientation, Vector3(*expected))
+    wanted_rotation = quaternion_multiply(quaternion_from_axis_angle(wanted_axis, .1), robot.tcp_pose.orientation)
+    result = policy.update(rotated, robot, 0).target_pose
+    assert quaternion_angular_distance(result.orientation, wanted_rotation) < 1e-7
 
 
 def test_aligned_reference_survives_clutch_release_and_tool_rotation_without_jumps():
-    policy = RelativePosePolicy(phone_aligned())
-    robot = _robot(quaternion_from_axis_angle(Vector3(0, 1, 0), math.pi / 2))
+    policy = RelativePosePolicy(phone_calibrated())
+    robot = _robot(Quaternion(0, 0, 0, 1))
     origin = _input(Vector3(0, 0, 0), Quaternion(0, 0, 0, 1))
+    policy.calibrate(origin.pose.orientation, robot.tcp_pose.orientation)
     policy.reset(origin, robot)
     alignment = policy.rotation_alignment
     new_robot = _robot(quaternion_multiply(quaternion_from_axis_angle(Vector3(0, 0, 1), .7), robot.tcp_pose.orientation))
@@ -56,8 +65,8 @@ def test_aligned_reference_survives_clutch_release_and_tool_rotation_without_jum
     expected = quaternion_multiply(quaternion_from_axis_angle(Vector3(0, 0, 1), .1), new_robot.tcp_pose.orientation)
     assert quaternion_angular_distance(policy.update(turn, new_robot, 0).target_pose.orientation, expected) < 1e-8
     policy.clear_alignment()
-    policy.reset(new_phone, new_robot)
-    assert policy.rotation_alignment is not None
+    with pytest.raises(ValueError, match='手动方向校准'):
+        policy.reset(new_phone, new_robot)
 
 
 def test_bounded_rotation_reverses_without_saved_excess_and_resets_on_clutch():

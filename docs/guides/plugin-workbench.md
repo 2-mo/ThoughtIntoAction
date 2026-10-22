@@ -42,7 +42,7 @@ flowchart LR
 | `controller` | `arx.joint_target` | real/sim 相同 `factory(config, kinematics)` 注入；使用原目标控制器与 IK |
 | `source` | `cli`、`quest`、`phone.arkit` | Python 3.12；`factory(directory, **options).run()`；CLI 待机不占控制权；Quest 是 `NativeSession` 租约管理，手机拥有 UDP 输入并显式续租 |
 | `input` | 新 `arkit` 及旧输入 | 原始报文、session、序号、追踪状态；`start/latest/stop` |
-| `mapping` | `phone_aligned`、`phone_tool`、`phone_base` | 默认固定空间对齐；工具/基座相对映射可显式选择 |
+| `mapping` | `phone_calibrated`、`phone_tool`、`phone_base` | 默认单键手动对齐；工具/基座相对映射可显式选择 |
 | `planner` | `motion.default` | Python 3.10；`factory(config, model_id).plan(request, snapshot, now)`，独立的可变 IK 数据 |
 | `camera` | `realsense`、`synthetic` | Python 3.12；上下文生命周期、`metadata/read()`；RealSense 沿用独立共享相机服务 |
 | `exporter` | `schema1`、`schema2` | 独立 LeRobot 环境；`prepare/save_sidecar`，数据只能选择 schema，不能指定 Python 工厂 |

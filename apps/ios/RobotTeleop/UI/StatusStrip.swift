@@ -143,12 +143,7 @@ private struct MetricCell: View {
     }
     .padding(.horizontal, 10)
     .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-    .background(highlighted ? accent.opacity(0.28) : TeleopTheme.surface)
-    .overlay {
-      RoundedRectangle(cornerRadius: 12)
-        .stroke(highlighted ? accent : TeleopTheme.border, lineWidth: highlighted ? 2 : 1)
-    }
-    .clipShape(RoundedRectangle(cornerRadius: 12))
+    .background(highlighted ? accent.opacity(0.28) : TeleopTheme.surface, in: TeleopTheme.cardShape)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(label)
     .accessibilityValue(value)

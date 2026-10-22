@@ -33,6 +33,9 @@ class MonitorPhoneTests(unittest.TestCase):
             self.assertTrue(post({'action': 'enable', 'runtime_id': 'test'})['ok'])
             command.assert_called_once_with('enable', runtime_id='test')
             command.reset_mock()
+            self.assertTrue(post({'action': 'align', 'runtime_id': 'test'})['ok'])
+            command.assert_called_once_with('align', runtime_id='test')
+            command.reset_mock()
             with self.assertRaises(HTTPError) as error:
                 post({'action': 'enable'}, 'https://unrelated.invalid')
             self.assertEqual(error.exception.code, 403)

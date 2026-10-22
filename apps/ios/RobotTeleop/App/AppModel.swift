@@ -54,13 +54,21 @@ final class AppModel: ObservableObject {
     !connectionOpen
   }
 
-  var canControl: Bool {
+  private var canOperate: Bool {
     status.networkState == .ready
       && status.trackingQuality == .normal
       && status.controlAvailable && status.phoneControl?.enabled == true
       && !stopLatched
       && !estopResetPending
       && !status.controlPending && !presetBusy
+  }
+
+  var canControl: Bool { canOperate && status.phoneControl?.aligned == true }
+
+  var canAlign: Bool {
+    status.networkState == .ready && status.controlAvailable && status.phoneControl?.kernelRuntimeID != nil
+      && status.trackingQuality == .normal && !stopLatched && !estopResetPending
+      && !status.controlPending && !clutchActive && !presetBusy
   }
 
   var presetBusy: Bool { status.phoneControl?.preset?.busy == true }
@@ -79,12 +87,13 @@ final class AppModel: ObservableObject {
     if !status.controlAvailable { return "等待电脑控制服务确认" }
     if stopLatched { return "停止已锁定 · 点恢复后可重新开始" }
     if status.phoneControl?.kernelRuntimeID == nil { return "robot 未运行，请在电脑总控启动" }
-    if let preset = status.phoneControl?.preset { return preset.message }
-    if status.phoneControl?.targetLimited == true { return "目标跟随误差较大，超出部分已丢弃" }
-    if status.phoneControl?.enabled == true && status.phoneControl?.aligned == false {
-      return "竖持手机、相机朝前，按住 Clutch 建立空间方向参考"
+    if let preset = status.phoneControl?.preset, preset.busy { return preset.message }
+    if status.phoneControl?.aligned != true {
+      return "手机前端对准夹爪方向，点一次“对齐方向”"
     }
-    return status.phoneControl?.enabled == true ? "遥操已开始 · 按住下方控制区跟随" : "仅监看 · 点开始遥操"
+    if status.phoneControl?.targetLimited == true { return "目标跟随误差较大，超出部分已丢弃" }
+    if let preset = status.phoneControl?.preset { return preset.message }
+    return status.phoneControl?.enabled == true ? "方向已对齐 · 按住跟随，松手保持" : "方向已对齐 · 点开始遥操"
   }
 
   func startControl() {
@@ -99,7 +108,7 @@ final class AppModel: ObservableObject {
   }
 
   var canHome: Bool {
-    canControl && !clutchActive
+    canOperate && !clutchActive
   }
 
   var canRecoverControl: Bool {
@@ -188,7 +197,7 @@ final class AppModel: ObservableObject {
   }
 
   func requestAlignment() {
-    guard canHome else { return }
+    guard canAlign else { return }
     setClutchActive(false)
     coordinator?.requestControl("align")
     UIImpactFeedbackGenerator(style: .medium).impactOccurred()

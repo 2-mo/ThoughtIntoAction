@@ -174,6 +174,8 @@ class PhoneService:
                 error = str(exc)
             runs = live_runs(PROJECT_ROOT / 'outputs/runtime/control')
             runtime_id = ControlClient(runs[-1]).identity['runtime_id'] if runs else None
+            if self.controller.calibrated_runtime_id not in (None, runtime_id):
+                self.controller.clear_calibration()
             state = self.snapshot()
             response = {'protocol': CONTROL_PROTOCOL, 'id': sequence, 'session_id': value.session_id,
                         'ok': error is None, 'message': (error or self.error or '')[:240],
@@ -246,13 +248,24 @@ class PhoneService:
                 self.controller.disable()
                 self.run = None
                 self.error = None
-            elif action in ('home', 'pregrasp', 'align'):
+            elif action == 'align':
+                # Calibration observes the phone even in monitor mode. It never
+                # acquires a robot lease and cannot start a robot or a preset.
+                client = self.controller.client
+                if client is None:
+                    runs = live_runs(PROJECT_ROOT / 'outputs/runtime/control')
+                    if not runs:
+                        raise ValueError('请先启动 robot 取得当前夹爪姿态')
+                    client = ControlClient(runs[-1])
+                runtime_id = client.identity['runtime_id']
+                if data.get('runtime_id') != runtime_id:
+                    raise ValueError('robot 运行实例已变化，请刷新后重新对齐')
+                self.controller.request_alignment(client.status(), runtime_id)
+                self.error = None
+            elif action in ('home', 'pregrasp'):
                 if not self.run or data.get('runtime_id') != self.run:
                     raise ValueError('robot 运行实例已变化，请重新开始手机遥操')
-                if action == 'align':
-                    self.controller.request_alignment()
-                else:
-                    self.controller.request_preset(action)
+                self.controller.request_preset(action)
                 self.error = None
             else:
                 raise ValueError('Unknown phone service action')

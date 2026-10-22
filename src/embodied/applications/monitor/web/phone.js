@@ -14,6 +14,7 @@ function render(value) {
   byId('phone-control-banner').hidden = !value.enabled;
   const presetBusy = ['opening', 'moving'].includes(value.preset?.phase);
   byId('phone-control-banner').textContent = presetBusy ? '● ' + value.preset.message
+    : value.aligned !== true ? '● 方向待对齐 · 手机与夹爪同向后点对齐方向'
     : value.active ? '● 手机遥操已开启 · 正在跟随' : '● 手机遥操已开启 · 松手保持';
   panel.dataset.state = value.estop || (value.error && value.available) ? 'error' : fresh
     ? value.tracking === 'normal' ? 'live' : value.tracking === 'limited' ? 'warning' : 'error' : 'offline';
@@ -30,9 +31,11 @@ function render(value) {
   byId('phone-start').disabled = pending || value.available;
   byId('phone-enable').disabled = pending || !fresh || value.enabled || value.estop || value.clutch || value.tracking !== 'normal' || !value.kernel_runtime_id;
   byId('phone-disable').disabled = pending || !value.enabled;
+  byId('phone-align').disabled = pending || !fresh || value.estop || value.clutch || value.tracking !== 'normal' || presetBusy || !value.kernel_runtime_id;
   if (value.error && value.available) { message(value.error, true); serviceMessage = true; }
   else if (value.estop) { message('手机停止已锁存；松开 Clutch 后在手机点恢复。', true); serviceMessage = true; }
   else if (fresh && value.tracking !== 'normal') { message('追踪受限：请保持相机画面清晰，观察有纹理的环境。'); serviceMessage = true; }
+  else if (fresh && !presetBusy && value.aligned !== true) { message('手机前端（后置相机朝向）与夹爪同向，点一次“对齐方向”；机械臂不运动。'); serviceMessage = true; }
   else if (value.preset && !value.active) { message(value.preset.message); serviceMessage = true; }
   else if (value.target_limited) { message('目标跟随误差较大，超出部分已丢弃；可反向移动或松开重新定位。'); serviceMessage = true; }
   else if (serviceMessage || byId('phone-message').dataset.error !== 'true') {
@@ -52,7 +55,7 @@ async function poll() {
     message(error.message, true);
   } finally { if (!closed) setTimeout(poll, 300); }
 }
-for (const action of ['start', 'enable', 'disable']) {
+for (const action of ['start', 'enable', 'disable', 'align']) {
   byId('phone-' + action).addEventListener('click', async () => {
     pending = true; render(state);
     try {
@@ -60,7 +63,7 @@ for (const action of ['start', 'enable', 'disable']) {
         body: JSON.stringify({action, runtime_id: state.kernel_runtime_id}), signal: AbortSignal.timeout(6000)});
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || '操作未完成');
-      message({start: '接收已启动。打开 RobotTeleop，填写上方地址。', enable: '手机已接管。先松开，再按住 Clutch 移动。', disable: '已停止手机遥操，继续监看输入。'}[action]);
+      message({start: '接收已启动。打开 RobotTeleop，填写上方地址。', enable: '手机已接管。先松开，再按住 Clutch 移动。', disable: '已停止手机遥操，继续监看输入。', align: '方向已对齐；松开重握保留方向。'}[action]);
     } catch (error) { message(error.message, true); }
     finally { pending = false; render(state); }
   });

@@ -630,7 +630,7 @@ def render(state, service=None):
                          ('连接 / 刷新' if title == TITLES['vr'] else '重试 / 刷新' if service is not None else '刷新') +
                          (' · W 模拟佩戴 · U 取消模拟佩戴' if title == TITLES['vr'] else '') +
                          (' · P 预抓取 · H 回零 · 空格停止 · D 阻尼' if title == TITLES['kernel'] else '') +
-                         (' · T 手机遥操 · S / 空格停止' if title == TITLES['phone'] else '') +
+                         (' · C 对齐方向 · T 手机遥操 · S / 空格停止' if title == TITLES['phone'] else '') +
                          (' · W 打开浏览器' if service is not None and service.role == 'web' else ''), style='dim'))
     return Group(*sections)
 
@@ -723,7 +723,7 @@ def main(argv=None):
                     from embodied.applications.workstation import bench
                     robot.press(key, bench.current_run())
                     refreshed = 0.
-                if args.role == 'phone' and key in ('t', 's', ' '):
+                if args.role == 'phone' and key in ('c', 't', 's', ' '):
                     from embodied.applications.workstation.phone_panel import press
                     try:
                         message = press(key)

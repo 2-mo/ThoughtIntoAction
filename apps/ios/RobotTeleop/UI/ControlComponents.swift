@@ -2,9 +2,9 @@ import SwiftUI
 
 enum TeleopTheme {
   static let background = Color(red: 0.045, green: 0.052, blue: 0.060)
-  static let surface = Color(red: 0.085, green: 0.096, blue: 0.106)
-  static let raised = Color(red: 0.12, green: 0.133, blue: 0.145)
-  static let border = Color(red: 0.22, green: 0.24, blue: 0.26)
+  static let surface = Color(red: 0.095, green: 0.110, blue: 0.125)
+  static let raised = Color(red: 0.145, green: 0.165, blue: 0.185)
+  static let cardShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
   static let primaryText = Color(red: 0.94, green: 0.95, blue: 0.96)
   static let secondaryText = Color(red: 0.61, green: 0.65, blue: 0.68)
   static let accent = Color(red: 0.18, green: 0.61, blue: 0.86)
@@ -19,9 +19,9 @@ struct EndpointHeader: View {
 
   var body: some View {
     HStack(spacing: 10) {
-      Image(systemName: "move.3d")
-        .font(.system(size: 24, weight: .semibold))
-        .foregroundStyle(TeleopTheme.accent)
+      Image("BrandMark")
+        .resizable().scaledToFit().frame(width: 34, height: 34)
+        .accessibilityHidden(true)
       VStack(alignment: .leading, spacing: 3) {
         Text("知行有灵").font(.headline).foregroundStyle(TeleopTheme.primaryText)
         Text("手机遥操 · RobotTeleop").font(.caption2).foregroundStyle(TeleopTheme.secondaryText)
@@ -73,6 +73,7 @@ struct ControlStatusCard: View {
   private var color: Color {
     if model.stopLatched || model.status.trackingQuality == .unavailable { return TeleopTheme.danger }
     if model.status.trackingQuality != .normal || !model.status.controlAvailable { return TeleopTheme.warning }
+    if model.status.phoneControl?.aligned != true { return TeleopTheme.warning }
     return model.status.phoneControl?.enabled == true ? TeleopTheme.accent : TeleopTheme.secondaryText
   }
 
@@ -81,6 +82,7 @@ struct ControlStatusCard: View {
     if model.status.trackingQuality != .normal { return "等待追踪恢复" }
     if !model.status.controlAvailable { return "等待电脑确认" }
     if model.presetBusy { return "预设动作执行中" }
+    if model.status.phoneControl?.aligned != true { return "方向待对齐" }
     if model.clutchActive { return "正在跟随" }
     return model.status.phoneControl?.enabled == true ? "遥操已开启 · 松手保持" : "仅监看 · 尚未接管"
   }
@@ -98,8 +100,7 @@ struct ControlStatusCard: View {
     }
     .padding(.horizontal, 12).padding(.vertical, 8)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(color.opacity(0.09), in: RoundedRectangle(cornerRadius: 12))
-    .overlay { RoundedRectangle(cornerRadius: 12).stroke(color.opacity(0.35), lineWidth: 1) }
+    .background(color.opacity(0.14), in: TeleopTheme.cardShape)
     .accessibilityElement(children: .combine).accessibilityIdentifier("control.status")
   }
 }
@@ -125,7 +126,7 @@ struct TuningControls: View {
       }
       .font(.caption).foregroundStyle(TeleopTheme.primaryText)
       .padding(.horizontal, 12).frame(minHeight: 44)
-      .background(TeleopTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+      .background(TeleopTheme.surface, in: TeleopTheme.cardShape)
     }
     .buttonStyle(.plain).disabled(!model.tuningEnabled || model.presetBusy)
     .accessibilityIdentifier("mapping.settings")
@@ -148,7 +149,7 @@ struct TuningControls: View {
               .font(.caption).foregroundStyle(.secondary)
           }
           Section("空间方向") {
-            Text("在预抓取位，竖直握持手机、后置相机朝向操作前方，再按住 Clutch 建立参考。松开重握保持空间方向；需要重新标定时点“方向对齐”。")
+            Text("让手机前端（后置相机朝向）与夹爪朝同一个方向，松开 Clutch，点一次“对齐方向”立即生效。平移与旋转使用同一方向；松开重握、回零和预抓取都保留校准。")
               .font(.subheadline)
           }
         }
@@ -217,13 +218,13 @@ struct ControlActionRow: View {
           Label("开始遥操", systemImage: "play.fill").frame(maxWidth: .infinity, minHeight: 46)
         }
         .buttonStyle(TeleopActionButtonStyle(foreground: TeleopTheme.background,
-          background: TeleopTheme.accent, border: TeleopTheme.accent))
+          background: TeleopTheme.accent))
         .disabled(!model.canStartControl)
         Button { model.stopControl() } label: {
           Label("停止遥操", systemImage: "stop.fill").frame(maxWidth: .infinity, minHeight: 46)
         }
         .buttonStyle(TeleopActionButtonStyle(foreground: .white,
-          background: TeleopTheme.danger, border: TeleopTheme.danger))
+          background: TeleopTheme.danger))
         .disabled(model.status.networkState != .ready)
       }
       HStack(spacing: 8) {
@@ -235,12 +236,12 @@ struct ControlActionRow: View {
           Label("预抓取", systemImage: "scope").frame(maxWidth: .infinity, minHeight: 44)
         }.disabled(!model.canHome)
         Button { model.requestAlignment() } label: {
-          Label("方向对齐", systemImage: "move.3d").frame(maxWidth: .infinity, minHeight: 44)
-        }.disabled(!model.canHome)
-          .accessibilityHint("松开后重新摆正手机，下次按住 Clutch 建立方向参考，不移动机械臂")
+          Label("对齐方向", systemImage: "move.3d").frame(maxWidth: .infinity, minHeight: 44)
+        }.disabled(!model.canAlign)
+          .accessibilityHint("手机前端与夹爪同向，点一次立即校准，不移动机械臂")
       }
       .buttonStyle(TeleopActionButtonStyle(foreground: TeleopTheme.primaryText,
-        background: TeleopTheme.raised, border: TeleopTheme.border))
+        background: TeleopTheme.raised))
     }
   }
 }
@@ -261,7 +262,7 @@ struct ControlUtilityRow: View {
       }.disabled(model.stopLatched)
     }
     .buttonStyle(TeleopActionButtonStyle(foreground: TeleopTheme.secondaryText,
-      background: TeleopTheme.surface, border: TeleopTheme.border))
+      background: TeleopTheme.surface))
   }
 }
 
@@ -269,18 +270,12 @@ private struct TeleopActionButtonStyle: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
   let foreground: Color
   let background: Color
-  let border: Color
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.subheadline.weight(.semibold))
       .foregroundStyle(foreground)
-      .background(configuration.isPressed ? background.opacity(0.72) : background)
-      .overlay {
-        RoundedRectangle(cornerRadius: 12)
-          .stroke(border, lineWidth: 1)
-      }
-      .clipShape(RoundedRectangle(cornerRadius: 12))
+      .background(background, in: TeleopTheme.cardShape)
       .opacity(isEnabled ? (configuration.isPressed ? 0.9 : 1) : 0.4)
   }
 }
@@ -323,8 +318,7 @@ struct HoldControlSurface: View {
     .foregroundStyle(holdForeground)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .frame(minHeight: compact ? 148 : 160)
-    .background(holdBackground, in: RoundedRectangle(cornerRadius: 20))
-    .overlay { RoundedRectangle(cornerRadius: 20).stroke(holdBorder, lineWidth: model.clutchActive ? 2 : 1) }
+    .background(holdBackground, in: TeleopTheme.cardShape)
     .contentShape(Rectangle())
     .gesture(
       DragGesture(minimumDistance: 0)
@@ -388,6 +382,7 @@ struct HoldControlSurface: View {
     if model.presetBusy { return "可随时点停止遥操取消动作" }
     if !model.status.controlAvailable { return "等待电脑接收服务" }
     if model.status.trackingQuality != .normal { return "追踪未就绪" }
+    if model.status.phoneControl?.aligned != true { return "手机与夹爪同向，先点对齐方向" }
     if model.status.phoneControl?.enabled != true { return "先点开始遥操" }
     return String(format: "夹爪开度 %.0f%% · 松手保持", model.gripper * 100)
   }
@@ -404,14 +399,7 @@ struct HoldControlSurface: View {
   private var holdBackground: Color {
     if model.stopLatched { return TeleopTheme.danger.opacity(0.24) }
     if model.clutchActive { return TeleopTheme.accent }
-    if model.canControl { return TeleopTheme.accent.opacity(0.12) }
+    if model.canControl { return TeleopTheme.accent.opacity(0.18) }
     return TeleopTheme.surface
-  }
-
-  private var holdBorder: Color {
-    if model.stopLatched { return TeleopTheme.danger }
-    if model.clutchActive { return TeleopTheme.ready }
-    if model.canControl { return TeleopTheme.accent }
-    return TeleopTheme.border
   }
 }

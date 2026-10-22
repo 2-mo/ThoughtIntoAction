@@ -39,7 +39,7 @@ class PhoneServiceTests(unittest.TestCase):
         self.service.step()
         return self.service.snapshot()
 
-    def enable_fake_robot(self):
+    def enable_fake_robot(self, *, align=True):
         self.send()
         client = Mock(identity={'runtime_id': 'test', 'plugins': {'robot': 'arx.sim'}})
         client.status.return_value = {'operations': [], 'pose': [.3, 0, .2, 0, 0, 0, 1],
@@ -49,6 +49,9 @@ class PhoneServiceTests(unittest.TestCase):
         client.execute.return_value = {'operation_id': 'motion'}
         self.controller.client, self.controller.ghost = client, False
         self.service.run = 'test'
+        if align:
+            self.controller.request_alignment(client.status(), 'test')
+            client.command.reset_mock()
         return client
 
     def test_raw_phone_pose_is_available_without_control_and_expires(self):
@@ -61,7 +64,7 @@ class PhoneServiceTests(unittest.TestCase):
         self.assertIsNone(self.service.snapshot()['phone_pose'])
         self.assertIsNone(self.send(tracking_quality=TrackingQuality.LIMITED)['phone_pose'])
 
-    def test_alignment_is_latched_across_clutch_and_cleared_by_explicit_align_and_preset(self):
+    def test_one_press_alignment_is_immediate_and_survives_clutch_and_preset(self):
         client = self.enable_fake_robot()
         self.send()
         self.send(clutch_active=True)
@@ -71,16 +74,53 @@ class PhoneServiceTests(unittest.TestCase):
         self.assertEqual(self.controller.policy.rotation_alignment, basis)
         before = client.command.call_count
         self.service.dispatch({'command': 'align', 'runtime_id': 'test'})
-        self.assertFalse(self.service.snapshot()['aligned'])
-        self.assertEqual(client.command.call_count, before)  # alignment does not command arm motion
+        self.assertTrue(self.service.snapshot()['aligned'])
+        self.assertEqual([call.args[0] for call in client.command.call_args_list[before:]], ['source-metadata'])
         self.send()
         self.send(clutch_active=True)
         self.assertTrue(self.service.snapshot()['aligned'])
         self.send()
         self.service.dispatch({'command': 'pregrasp', 'runtime_id': 'test'})
-        self.assertFalse(self.service.snapshot()['aligned'])
+        self.assertTrue(self.service.snapshot()['aligned'])
         with self.assertRaisesRegex(ValueError, '等待动作结束'):
             self.service.dispatch({'command': 'align', 'runtime_id': 'test'})
+
+    def test_uncalibrated_clutch_never_commands_motion_then_one_press_releases_gate(self):
+        client = self.enable_fake_robot(align=False)
+        self.send()
+        self.send(clutch_active=True)
+        client.command.assert_not_called()
+        self.send()
+        self.service.dispatch({'command': 'align', 'runtime_id': 'test'})
+        self.assertTrue(self.service.snapshot()['aligned'])
+        self.send()
+        self.send(clutch_active=True)
+        self.assertEqual(client.command.call_args.args, ('cartesian',))
+        self.assertEqual(client.command.call_args.kwargs['pose'], client.status.return_value['pose'])
+
+    def test_alignment_in_monitor_mode_never_acquires_robot_and_tracking_loss_invalidates(self):
+        client = self.enable_fake_robot(align=False)
+        self.controller.disable()
+        self.send()
+        with patch.object(phone_service, 'live_runs', return_value=[Path('/test/runtime')]), \
+             patch.object(phone_service, 'ControlClient', return_value=client), \
+             patch('embodied.devices.inputs.phone.ControlSession') as lease:
+            self.service.dispatch({'command': 'align', 'runtime_id': 'test'})
+            lease.assert_not_called()
+        client.command.assert_not_called()
+        self.assertFalse(self.service.snapshot()['enabled'])
+        self.assertTrue(self.send(tracking_quality=TrackingQuality.LIMITED)['aligned'])
+        self.assertFalse(self.send(tracking_quality=TrackingQuality.UNAVAILABLE)['aligned'])
+
+    def test_alignment_rejects_stale_robot_and_resets_on_new_phone_session(self):
+        client = self.enable_fake_robot(align=False)
+        client.status.return_value['feedback_monotonic_ns'] -= 1_000_000_000
+        with self.assertRaisesRegex(ValueError, '反馈过期'):
+            self.service.dispatch({'command': 'align', 'runtime_id': 'test'})
+        self.assertFalse(self.service.snapshot()['aligned'])
+        client.status.return_value['feedback_monotonic_ns'] = time.monotonic_ns()
+        self.service.dispatch({'command': 'align', 'runtime_id': 'test'})
+        self.assertFalse(self.send(session_id=2)['aligned'])
 
     def test_home_opens_gripper_before_planning_and_reports_completion(self):
         client = self.enable_fake_robot()
@@ -208,7 +248,7 @@ class PhoneServiceTests(unittest.TestCase):
 
     def test_explicit_enable_checks_identity_and_rearms_clutch_then_disable_releases(self):
         client = Mock(identity={'runtime_id': 'test'})
-        session = Mock()
+        session = Mock(identity={'runtime_id': 'test'})
         session.__enter__ = Mock(return_value=session)
         session.status.return_value = {'operations': [], 'pose': [.3, 0, .2, 0, 0, 0, 1],
             'q': [0] * 6, 'dq': [0] * 6, 'feedback_monotonic_ns': time.monotonic_ns(), 'gripper_width': .04}
@@ -228,6 +268,8 @@ class PhoneServiceTests(unittest.TestCase):
             session.command.assert_not_called()
             self.send(clutch_active=True)
             session.command.assert_not_called()  # must release again after acquiring
+            self.send(gripper=None)
+            self.service.dispatch({'command': 'align', 'runtime_id': 'test'})
             self.send(gripper=None)
             self.send(clutch_active=True)
             self.assertEqual(session.command.call_args.args, ('cartesian',))
