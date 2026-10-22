@@ -152,8 +152,8 @@ async function initialize() {
   const manifest = await readJSON('/api/model');
   if (manifest.matrix_order !== 'column-major') throw new Error('未知的模型变换格式');
   element('model-name').textContent = manifest.model_file;
-  element('eef-name').textContent = `${manifest.robot.eef_frame} · ${manifest.robot.base_frame}`;
-  element('model-id').textContent = `模型 SHA256 ${manifest.robot.urdf_sha256.slice(0, 12)}`;
+  element('eef-name').textContent = manifest.robot.eef_frame ? `${manifest.robot.eef_frame} · ${manifest.robot.base_frame}` : '等待运行时模型';
+  element('model-id').textContent = `模型 SHA256 ${(manifest.robot.urdf_sha256 || '未提供').slice(0, 12)}`;
   const actualModel = new THREE.Group();
   const targetModel = new THREE.Group();
   actualModel.visible = targetModel.visible = false;
@@ -162,7 +162,15 @@ async function initialize() {
   const grippers = [];
   await Promise.all(manifest.meshes.map(async (spec, index) => {
     let source, geometry;
-    if (spec.link === 'link6') {
+    if (spec.primitive) {
+      const shape = spec.primitive;
+      if (shape.kind === 'box') geometry = new THREE.BoxGeometry(...shape.size);
+      else if (shape.kind === 'sphere') geometry = new THREE.SphereGeometry(shape.radius, 24, 16);
+      else if (shape.kind === 'cylinder') {
+        geometry = new THREE.CylinderGeometry(shape.radius, shape.radius, shape.length, 24);
+        geometry.rotateX(Math.PI / 2); // URDF cylinders point along local Z.
+      } else throw Error(`Unsupported geometry: ${shape.kind}`);
+    } else if (spec.link === 'link6') {
       const response = await fetch(spec.url);
       if (!response.ok) throw new Error(`${spec.url}: HTTP ${response.status}`);
       source = await response.arrayBuffer();
@@ -242,6 +250,7 @@ async function initialize() {
     element(id).addEventListener('change', displayOptions);
   }
   function applyState(state) {
+    if (!state?.actual) return;
     latest = state;
     // Pinocchio supplies world matrices including URDF visual origins. There is
     // no hardcoded joint chain, Euler conversion or feedback smoothing in JS.

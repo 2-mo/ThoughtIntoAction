@@ -3,55 +3,66 @@ import {mode, replayFrame, displayedState} from './display-state.js';
 const byId = id => document.getElementById(id);
 byId('open-telemetry-details').onclick = () => byId('telemetry-details').showModal();
 byId('telemetry-details-close').onclick = () => byId('telemetry-details').close();
-const commandRows = Array.from({length: 7}, (_, i) => {
-  const row = document.createElement('tr');
-  row.innerHTML = `<th>${i < 6 ? `J${i + 1}` : '夹爪'}</th>${'<td>—</td>'.repeat(6)}`;
-  byId('command-feedback').append(row);
-  return row;
-});
+let jointCount = 0, hasGripper = false, modelViewerId;
+let commandRows = [], jointRows = [], velocityRows = [], torqueRows = [], motorRows = [];
+function configureModel(model) {
+  const names = model.data_contract?.joint_names || model.robot?.joint_names || [];
+  jointCount = names.length;
+  hasGripper = model.data_contract ? !!model.data_contract.gripper : jointCount > 0;
+  for (const id of ['command-feedback', 'joints', 'velocities', 'torques', 'motor-feedback']) byId(id).replaceChildren();
+  byId('gripper').hidden = byId('gripper-velocity').hidden = !hasGripper;
+  commandRows = Array.from({length: jointCount + (hasGripper ? 1 : 0)}, (_, i) => {
+    const row = document.createElement('tr');
+    row.innerHTML = `<th>${i < jointCount ? `J${i + 1}` : '夹爪'}</th>${'<td>—</td>'.repeat(6)}`;
+    byId('command-feedback').append(row);
+    return row;
+  });
+  jointRows = Array.from({length: jointCount}, (_, index) => {
+    const row = document.createElement('div');
+    row.className = 'position-row';
+    row.innerHTML = `<span class="position-name">J${index + 1}</span><div class="position-track"><i class="position-zero" style="left:50%"></i><i class="position-fill target" hidden></i><i class="position-fill actual" hidden></i></div><span class="position-values"><b>—</b><b>—</b></span>`;
+    byId('joints').append(row);
+    return row;
+  });
+  velocityRows = jointRows.map((_, index) => {
+    const row = document.createElement('div');
+    row.className = 'position-row';
+    row.innerHTML = `<span class="position-name">J${index + 1}<small class="velocity-range">—</small><small class="chart-clipped" hidden>超范围</small></span><svg class="velocity-chart" viewBox="0 0 200 24" preserveAspectRatio="none" role="img" aria-label="J${index + 1} 速度，最近五秒"><path class="torque-grid" d="M50 0V24 M100 0V24 M150 0V24"/><path class="chart-zero" d="M0 12H200"/><path class="velocity-line target"/><path class="velocity-line actual"/></svg><span class="position-values"><b>—</b><b>—</b></span>`;
+    byId('velocities').append(row); return row;
+  });
+  torqueRows = [...jointRows, ...(hasGripper ? [null] : [])].map((_, index) => {
+    const label = index < jointCount ? `J${index + 1}` : '夹爪';
+    const row = document.createElement('div');
+    row.className = 'torque-row';
+    row.innerHTML = `<span>${label}<small class="torque-range">—</small><small class="chart-clipped" hidden>超范围</small></span><svg viewBox="0 0 200 24" preserveAspectRatio="none" role="img" aria-label="${label} 力矩，最近五秒"><path class="torque-grid" d="M0 3H200 M0 21H200 M50 0V24 M100 0V24 M150 0V24"/><path class="chart-zero" d="M0 12H200"/><path class="torque-line"/></svg><b>—</b>`;
+    byId('torques').append(row);
+    return row;
+  });
+  motorRows = Array.from({length: jointCount + (hasGripper ? 1 : 0)}, (_, i) => {
+    const row = document.createElement('div');
+    row.className = 'motor-row'; row.setAttribute('role', 'row');
+    row.innerHTML = `<span>${i < jointCount ? `J${i + 1}` : '夹爪'}</span>${Array.from({length:3}, (_, c) => `<span class="motor-cell"><b>—</b><span class="motor-track${c === 0 ? ' bipolar' : ''}"><i hidden></i></span></span>`).join('')}${'<b class="motor-detail">—</b>'.repeat(3)}`;
+    byId('motor-feedback').append(row);
+    return row;
+  });
+
+  jointRows.forEach((row, i) => {row.dataset.jointName = names[i];});
+}
 function showCommands(live) {
   const data = live ? state?.command_details : null;
   commandRows.forEach((row, i) => {
-    const values = i < 6
+    const values = i < jointCount
       ? [data?.submission?.pos?.[i], ...['sdk_cmd_pos', 'sdk_cmd_vel', 'sdk_cmd_torque', 'kp', 'kd'].map(k => data?.[k]?.[i])]
       : [data?.submission?.gripper_pos, ...['gripper_sdk_cmd_pos', 'gripper_sdk_cmd_vel', 'gripper_sdk_cmd_torque', 'gripper_kp', 'gripper_kd'].map(k => data?.[k])];
     row.querySelectorAll('td').forEach((cell, j) => {cell.textContent = finite(values[j]) ? values[j].toFixed(4) : '—';});
   });
-  byId('command-feedback-status').textContent = data ? `${mode === 'replay' ? '录制样本' : '实时'} · 夹爪模式 ${data.gripper_mode || '—'}` : '当前数据源未提供';
+  byId('command-feedback-status').textContent = data ? `${mode === 'replay' ? '录制样本' : '实时'}${hasGripper ? ' · 夹爪模式 ' + (data.gripper_mode || '—') : ''}` : '当前数据源未提供';
   byId('command-timestamps').textContent = 'SDK 时间戳（s） · ' + [['反馈', 'feedback_timestamp'], ['指令', 'command_timestamp'], ['控制器', 'controller_timestamp']]
     .map(([label, key]) => `${label} ${finite(data?.[key]) ? data[key].toFixed(6) : '—'}`).join(' · ');
 }
-const jointRows = Array.from({length: 6}, (_, index) => {
-  const row = document.createElement('div');
-  row.className = 'position-row';
-  row.innerHTML = `<span class="position-name">J${index + 1}</span><div class="position-track"><i class="position-zero" style="left:50%"></i><i class="position-fill target" hidden></i><i class="position-fill actual" hidden></i></div><span class="position-values"><b>—</b><b>—</b></span>`;
-  byId('joints').append(row);
-  return row;
-});
-const velocityRows = jointRows.map((_, index) => {
-  const row = document.createElement('div');
-  row.className = 'position-row';
-  row.innerHTML = `<span class="position-name">J${index + 1}<small class="velocity-range">—</small><small class="chart-clipped" hidden>超范围</small></span><svg class="velocity-chart" viewBox="0 0 200 24" preserveAspectRatio="none" role="img" aria-label="J${index + 1} 速度，最近五秒"><path class="torque-grid" d="M50 0V24 M100 0V24 M150 0V24"/><path class="chart-zero" d="M0 12H200"/><path class="velocity-line target"/><path class="velocity-line actual"/></svg><span class="position-values"><b>—</b><b>—</b></span>`;
-  byId('velocities').append(row); return row;
-});
-const torqueRows = [...jointRows, null].map((_, index) => {
-  const label = index < 6 ? `J${index + 1}` : '夹爪';
-  const row = document.createElement('div');
-  row.className = 'torque-row';
-  row.innerHTML = `<span>${label}<small class="torque-range">—</small><small class="chart-clipped" hidden>超范围</small></span><svg viewBox="0 0 200 24" preserveAspectRatio="none" role="img" aria-label="${label} 力矩，最近五秒"><path class="torque-grid" d="M0 3H200 M0 21H200 M50 0V24 M100 0V24 M150 0V24"/><path class="chart-zero" d="M0 12H200"/><path class="torque-line"/></svg><b>—</b>`;
-  byId('torques').append(row);
-  return row;
-});
-const motorRows = Array.from({length: 7}, (_, i) => {
-  const row = document.createElement('div');
-  row.className = 'motor-row'; row.setAttribute('role', 'row');
-  row.innerHTML = `<span>${i < 6 ? `J${i + 1}` : '夹爪'}</span>${Array.from({length:3}, (_, c) => `<span class="motor-cell"><b>—</b><span class="motor-track${c === 0 ? ' bipolar' : ''}"><i hidden></i></span></span>`).join('')}${'<b class="motor-detail">—</b>'.repeat(3)}`;
-  byId('motor-feedback').append(row);
-  return row;
-});
 function showMotors(live) {
   const data = state?.motor_diagnostics;
-  const order = [...(data?.joint_order || []), data?.gripper_id];
+  const order = [...(data?.joint_order || []), ...(hasGripper ? [data?.gripper_id] : [])];
   motorRows.forEach((row, i) => {
     const motor = live ? data?.motors?.find(m => m.motor_id === order[i]) : null;
     const fresh = motor?.feedback_status === 'live';
@@ -126,11 +137,12 @@ function showPositions(live) {
   gripRow.classList.toggle('feedback-inactive', !live);
   gripRow.dataset.state = finite(grip?.actual) ? (live ? 'live' : 'stale') : 'waiting';
   [grip?.actual, grip?.target].forEach((value, side) => {
-    const valid = finite(value) && finite(grip?.max) && grip.max > 0;
+    const valid = finite(value);
+    const validRange = finite(grip?.max) && grip.max > 0;
     gripRow.querySelectorAll('b')[side].textContent = valid ? `${(value * 1000).toFixed(1)}mm` : '—';
     const group = byId(side ? 'gripper-target' : 'gripper-actual');
     group.replaceChildren();
-    if (!valid) return;
+    if (!valid || !validRange) return;
     const gap = 52 * Math.max(0, Math.min(1, value / grip.max));
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', `M${76-gap} 9V26H${80-gap} M${84+gap} 9V26H${80+gap}`);
@@ -188,7 +200,7 @@ function render() {
   // Keep one point before the boundary so the trace can be clipped continuously.
   while (history.length > 1 && history[1].time <= windowStart) history.shift();
   byId('torque-scale').textContent = 'N·m · 5 s';
-  const values = live ? [...(state?.actual_torque || Array(6).fill(null)), state?.gripper_actual_torque] : null;
+  const values = live ? [...(state?.actual_torque || Array(jointCount).fill(null)), ...(hasGripper ? [state?.gripper_actual_torque] : [])] : null;
   byId('torques').dataset.state = values?.some(finite) ? 'live' : 'waiting';
   torqueRows.forEach((row, index) => {
     const scale = torqueLimits?.[index] / Number(byId('torque-zoom').value);
@@ -230,17 +242,21 @@ async function poll() {
       if (response.ok) {
         const model = await response.json();
         limits = model.joint_limits; torqueLimits = model.torque_limits; velocityLimits = model.velocity_limits;
+        configureModel(model); modelViewerId = model.viewer_id;
       }
     }
     const response = await fetch('/api/state', {cache: 'no-store', signal: AbortSignal.timeout(2000)});
     if (!response.ok) throw new Error('Feedback unavailable');
     const liveState = await response.json();
+    if (modelViewerId && liveState.viewer_id !== modelViewerId) {
+      limits = null; state = null; history = []; throw Error('模型已切换，等待新描述');
+    }
     state = displayedState(liveState);
     received = performance.now();
     if (state.stream?.stream_id !== streamId) {
       history = []; lastSample = undefined; streamId = state.stream?.stream_id;
     }
-    const values = [...(state.actual_torque || Array(6).fill(null)), state.gripper_actual_torque];
+    const values = [...(state.actual_torque || Array(jointCount).fill(null)), ...(hasGripper ? [state.gripper_actual_torque] : [])];
     if (mode !== 'replay' && state.stream?.status === 'live' && state.stream.sequence !== lastSample &&
         (values.some(finite) || state.actual_vel?.some(finite))) {
       lastSample = state.stream.sequence;

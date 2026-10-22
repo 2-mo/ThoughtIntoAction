@@ -13,9 +13,31 @@ from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
 
-from embodied.core.telemetry import SCHEMA, joint_pair, path_data, gripper_data, torque_data, scalar_torque
+from embodied.core.telemetry import SCHEMA, path_data, scalar_torque
 
 WEB_ROOT = Path(__file__).with_name("web")
+
+
+def joint_values(value, count, *, optional=False):
+    if value is None and optional:
+        return None
+    values = np.asarray(value, dtype=float)
+    if values.shape != (count,) or not np.isfinite(values).all():
+        raise ValueError(f'Expected {count} finite joint values')
+    return values.tolist()
+
+
+def gripper_feedback(value):
+    if value is None:
+        return None
+    actual, target, maximum = value.get('actual'), value.get('target'), value.get('max')
+    if type(actual) not in (int, float) or not np.isfinite(actual):
+        raise ValueError('Invalid gripper feedback')
+    if target is not None and (type(target) not in (int, float) or not np.isfinite(target)):
+        raise ValueError('Invalid gripper target')
+    if maximum is not None and (type(maximum) not in (int, float) or not np.isfinite(maximum) or maximum <= 0):
+        raise ValueError('Invalid gripper range')
+    return {'actual': actual, 'target': target, 'max': maximum}
 
 
 class Scene:
@@ -129,8 +151,10 @@ class Scene:
                             raise ValueError('任务时间轴与技能复核需要统一内核监看页')
                         query = parse_qs(urlsplit(self.path).query)
                         episode_id = query.get('episode_id', [None])[0]
-                        payload = {'tasks': owner.review_store.tasks(), 'episodes': owner.review_store.episodes(),
-                                   'annotations': owner.review_store.annotations(episode_id) if episode_id else None}
+                        payload = {'tasks': owner.review_store.tasks()}
+                        if query.get('tasks_only') != ['1']:
+                            payload.update(episodes=owner.review_store.episodes(),
+                                           annotations=owner.review_store.annotations(episode_id) if episode_id else None)
                     except (OSError, ValueError, TypeError, ImportError) as exc:
                         payload = {'error': str(exc)}
                     content = json.dumps(payload, allow_nan=False).encode()
@@ -209,7 +233,7 @@ class Scene:
         except BaseException:
             self._server.server_close()
             raise
-        print(f"Scene (Three.js · {robot.urdf.name}): {self.url}", flush=True)
+        print(f"Scene (Three.js · {robot.urdf.name if robot else '等待运行时模型'}): {self.url}", flush=True)
 
     def set_model(self, robot, simulation=None):
         """Replace display state without restarting HTTP, camera or connection services."""
@@ -220,6 +244,14 @@ class Scene:
             self._paths = {}
             self._sequence = 0
             self.history.clear()
+            self._files = {"/" + str(p.relative_to(WEB_ROOT)): p for p in WEB_ROOT.rglob("*") if p.is_file()}
+            self._files["/"] = WEB_ROOT / "index.html"
+            if robot is None:
+                self._manifest = {'robot': {}, 'model_file': '等待运行时模型', 'viewer_id': uuid.uuid4().hex,
+                    'meshes': [], 'matrix_order': 'column-major', 'joint_limits': {'lower': [], 'upper': []},
+                    'velocity_limits': [], 'torque_limits': [], 'data_contract': None, 'reference': None,
+                    'runtime_monitor': self.runtime_monitor is not None}
+                return
             # Own FK buffers; never mutate the controller's model data.
             self._data = robot.model.createData()
             self._visual = pin.buildGeomFromUrdf(
@@ -227,25 +259,33 @@ class Scene:
                 package_dirs=[str(robot.urdf.parent)],
             )
             self._geometry_data = pin.GeometryData(self._visual)
-            self._files = {"/" + str(p.relative_to(WEB_ROOT)): p
-                           for p in WEB_ROOT.rglob("*") if p.is_file()}
-            self._files["/"] = WEB_ROOT / "index.html"
             meshes = []
             for index, geometry in enumerate(self._visual.geometryObjects):
+                spec = {'name': geometry.name, 'link': robot.model.frames[geometry.parentFrame].name,
+                        'scale': geometry.meshScale.tolist()}
                 mesh = Path(geometry.meshPath).resolve()
-                if not mesh.is_file() or mesh.suffix.lower() != ".stl":
-                    raise ValueError(f"Scene requires an existing STL visual: {mesh}")
-                url = f"/meshes/{index}.stl"
-                self._files[url] = mesh
-                meshes.append({"name": geometry.name,
-                               "link": robot.model.frames[geometry.parentFrame].name,
-                               "url": url, "scale": geometry.meshScale.tolist()})
+                if mesh.is_file() and mesh.suffix.lower() == '.stl':
+                    spec['url'] = f'/meshes/{index}.stl'
+                    self._files[spec['url']] = mesh
+                else:
+                    shape = geometry.geometry
+                    kind = type(shape).__name__
+                    if kind == 'Box':
+                        spec['primitive'] = {'kind': 'box', 'size': (2 * shape.halfSide).tolist()}
+                    elif kind == 'Sphere':
+                        spec['primitive'] = {'kind': 'sphere', 'radius': float(shape.radius)}
+                    elif kind == 'Cylinder':
+                        spec['primitive'] = {'kind': 'cylinder', 'radius': float(shape.radius), 'length': 2 * float(shape.halfLength)}
+                    else:
+                        raise ValueError(f'Unsupported display geometry: {kind} ({geometry.meshPath})')
+                meshes.append(spec)
             if not meshes:
                 raise ValueError("Robot has no visual meshes")
             self._manifest = {"robot": robot.metadata(), "model_file": robot.urdf.name,
                               "viewer_id": uuid.uuid4().hex,
                               "meshes": meshes, "matrix_order": "column-major",
-                              "joint_limits": {"lower": robot.lower.tolist(), "upper": robot.upper.tolist()}}
+                              "joint_limits": {"lower": robot.lower.tolist(), "upper": robot.upper.tolist()},
+                              "data_contract": getattr(robot, "data_contract", None)}
             if simulation is not None:
                 self._manifest['simulation'] = {'engine': 'arx-televr / MuJoCo', 'control_hz': 250}
             if self.runtime_monitor is not None:
@@ -261,8 +301,10 @@ class Scene:
             elif simulation is None:
                 self._hardware_velocity = velocity.copy()
             self._manifest["velocity_limits"] = velocity.tolist()
-            self._manifest["torque_limits"] = [*robot.model.effortLimit.tolist(), gripper_max]
-            reference = np.zeros(6)
+            contract = self._manifest['data_contract']
+            has_gripper = contract is None or contract.get('gripper') is not None
+            self._manifest["torque_limits"] = [*robot.model.effortLimit.tolist(), *([gripper_max] if has_gripper else [])]
+            reference = pin.neutral(robot.model)
             self._manifest["reference"] = {"sequence": 0, "actual": self._pose(reference),
                                            "target": self._pose(reference), "target_visible": False, "paths": {}}
 
@@ -290,12 +332,14 @@ class Scene:
             raise ValueError("Expected a robot state object")
         if packet["schema"] != SCHEMA or packet["robot"] != self._manifest["robot"]:
             raise ValueError("Robot model/frame or state schema mismatch")
-        actual, target = joint_pair(packet["actual"], packet["target"])
-        gripper = gripper_data(packet.get("gripper"))
-        torque = torque_data(packet.get("actual_torque"))
+        count = self.robot.model.nq
+        actual = joint_values(packet['actual'], count)
+        target = joint_values(packet['target'], count)
+        gripper = gripper_feedback(packet.get('gripper'))
+        torque = joint_values(packet.get('actual_torque'), count, optional=True)
         grip_torque = scalar_torque(packet.get("gripper_actual_torque"))
-        velocity = torque_data(packet.get("actual_vel"))
-        target_velocity = torque_data(packet.get("target_vel"))
+        velocity = joint_values(packet.get("actual_vel"), count, optional=True)
+        target_velocity = joint_values(packet.get("target_vel"), count, optional=True)
         grip_velocity = scalar_torque(packet.get("gripper_actual_vel"))
         stream_id, source = packet["stream_id"], packet["source"]
         if not isinstance(stream_id, str) or not stream_id or not isinstance(source, dict):
@@ -371,8 +415,8 @@ class Scene:
     def update(self, actual, target=None):
         actual = np.asarray(actual, dtype=float)
         target = actual if target is None else np.asarray(target, dtype=float)
-        if actual.shape != (6,) or target.shape != (6,) or not np.isfinite([actual, target]).all():
-            raise ValueError("Viewer needs six finite actual and target joint angles")
+        if actual.shape != (self.robot.model.nq,) or target.shape != actual.shape or not np.isfinite([actual, target]).all():
+            raise ValueError("Viewer joint vectors disagree with the selected model")
         with self._lock:
             if self.closed:
                 raise RuntimeError("Viewer is closed")
