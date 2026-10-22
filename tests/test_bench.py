@@ -333,7 +333,7 @@ class BenchTmuxTests(unittest.TestCase):
     def test_all_windows_reopen_repair_and_close_without_touching_external_kernel(self):
         session = f'bench-test-{os.getpid()}-{time.monotonic_ns()}'
         self.addCleanup(subprocess.run, ['tmux', 'kill-session', '-t', session], capture_output=True)
-        expected = ['1:总控', '2:命令', '3:robot', '4:网页', '5:VR', '6:相机', '7:宣传']
+        expected = ['1:总控', '2:命令', '3:robot', '4:网页', '5:VR', '6:相机', '7:宣传', '8:手机']
 
         def names():
             return bench.tmux('list-windows', '-t', session, '-F', '#{window_index}:#{window_name}').stdout.split()

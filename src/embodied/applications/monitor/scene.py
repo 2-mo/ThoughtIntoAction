@@ -71,20 +71,30 @@ class Scene:
                 self.respond(body=True)
 
             def do_POST(self):
-                if urlsplit(self.path).path not in ("/api/replay", "/api/camera", "/api/simulation", "/api/annotations/review"):
+                if urlsplit(self.path).path not in ("/api/replay", "/api/camera", "/api/simulation", "/api/annotations/review", "/api/phone"):
                     self.send_error(404); return
                 if self.headers.get("Origin") not in (None, owner.url.rstrip("/"),
                         owner.url.rstrip("/").replace("127.0.0.1", "localhost")):
                     self.send_error(403); return
                 try:
-                    if owner.runtime_monitor is not None and urlsplit(self.path).path not in ('/api/camera', '/api/annotations/review'):
+                    if owner.runtime_monitor is not None and urlsplit(self.path).path not in ('/api/camera', '/api/annotations/review', '/api/phone'):
                         raise ValueError('统一内核监看为只读；录制请使用总控 C / collect run，旧回放控制未接入。')
                     length = int(self.headers.get("Content-Length", "0"))
                     if not 0 < length <= 4096: raise ValueError("Invalid request size")
                     data = json.loads(self.rfile.read(length))
                     if not isinstance(data, dict): raise ValueError("Expected object")
                     result = {"ok": True}
-                    if urlsplit(self.path).path == '/api/annotations/review':
+                    if urlsplit(self.path).path == '/api/phone':
+                        from embodied.devices.inputs import phone_service
+                        action = data.get('action')
+                        if action == 'start':
+                            phone_service.ensure_service()
+                            result['phone'] = phone_service.monitor()
+                        elif action in ('enable', 'disable') and owner.runtime_monitor is not None:
+                            result['phone'] = phone_service.command(action, runtime_id=data.get('runtime_id'))
+                        else:
+                            raise ValueError('手机遥操只支持统一内核的显式接管 / 停止')
+                    elif urlsplit(self.path).path == '/api/annotations/review':
                         if owner.review_store is None:
                             raise ValueError('标注复核只支持统一内核采集记录')
                         result['annotations'] = owner.review_store.review(data)
@@ -124,7 +134,14 @@ class Scene:
                 path = urlsplit(self.path).path
                 status = 200
                 mesh_digest = None
-                if path == '/api/simulation':
+                if path == '/api/phone':
+                    from embodied.devices.inputs.phone_service import monitor
+                    payload = monitor()
+                    identity = owner.runtime_monitor.identity if owner.runtime_monitor is not None else None
+                    payload['kernel_runtime_id'] = (identity or {}).get('runtime_id')
+                    payload['kernel_backend'] = (identity or {}).get('backend')
+                    content, mime = json.dumps(payload, allow_nan=False).encode(), 'application/json'
+                elif path == '/api/simulation':
                     content = json.dumps(owner.simulation.status() if owner.simulation else {}).encode()
                     mime = 'application/json'
                 elif path == '/api/replay' and (owner.simulation is not None or owner.runtime_monitor is not None):

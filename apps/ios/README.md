@@ -1,104 +1,31 @@
-# iOS application
+# RobotTeleop · iPhone 输入
 
-The Phase 2 app lives in `RobotTeleop/RobotTeleop.xcodeproj`. Simulator builds
-select `SimulatedPoseProvider`; physical-device builds select
-`ARKitPoseProvider`. Both feed the same coordinator, binary codec, latest-only
-UDP sender, controls, and metrics. ARKit emits at most one sample for each new
-`ARFrame` and no timer resends an old camera pose.
+源码工程：`apps/ios/RobotTeleop/RobotTeleop.xcodeproj`。真机使用 ARKit，模拟器使用合成姿态，复用同一 UDP 协议、相对映射、Clutch 和设置握手。工程最低目标 iOS 26.0，使用 Swift 6；bundle ID 为 `com.mo.robotteleop`。
 
-The project targets iOS 26.0, Swift 6, Xcode 26.6, and the iOS 26.5 runtime.
-Warnings are errors. The first physical target is an iPhone 16 Pro Max on iOS
-26.5.2 with bundle identifier `com.mo.robotteleop`.
+## 安装或更新过期 App
 
-## Simulator
-
-The portable test destination is the installed iPhone 17 Pro Max simulator:
+在已配置 Xcode 和签名账号的 **Mac 项目根目录**执行，iPhone 解锁并连接 Mac：
 
 ```bash
-make ios-test
+bash apps/ios/install.sh
+# 也可指定 devicectl 列出的设备名称或标识：
+bash apps/ios/install.sh 'Surface Phone'
 ```
 
-An exact local iPhone 16 Pro Max simulator can be selected with:
+脚本重新构建、签名、安装并请求启动。构建产物在 `outputs/build/ios-device/`。首次设置时，打开 Xcode 工程的 Signing & Capabilities，选择自己的 Team，并保留自动签名；账号在 Xcode → Settings → Accounts 中登录。iPhone 按系统提示信任电脑、开启开发者模式，首次启动允许相机和本地网络。
 
-```bash
-make ios-test \
-  IOS_DESTINATION='platform=iOS Simulator,name=RobotTeleop iPhone 16 Pro Max,OS=26.5'
-```
+如果输出 **App installed**，随后提示 `profile has not been explicitly trusted`，说明安装已成功、启动被签名信任检查拒绝：在 iPhone **设置 → 通用 → VPN 与设备管理 → 开发者 App** 中信任开发者，然后手动打开 RobotTeleop。若信任后仍失败，保留完整错误检查签名和描述文件，不能仅凭安装成功认为启动成功。
 
-Run the real Swift-to-Python UDP loopback with:
+Personal Team 描述文件有有效期，到期需要重新构建安装。参考 [Apple 账号能力说明](https://developer.apple.com/help/account/basics/about-your-developer-account)、[真机运行](https://help.apple.com/xcode/mac/current/en.lproj/dev5a825a1ca.html) 和 [开发者信任](https://help.apple.com/xcode/mac/current/en.lproj/dev96a12fb84.html)。
 
-```bash
-make ios-network-test
-```
+## 连接工作台
 
-Exercise the same downstream path with a 120 Hz simulator Pose source with:
+1. Ubuntu 项目根目录运行 `./run.sh`，进入 **8 手机**；接收服务自动启动，手机晚打开也可连接。
+2. App 当前默认自动连接 `192.168.5.8:5005`。换电脑或网络后，填写手机窗口显示的可达电脑地址和端口，再 Connect。
+3. 窗口和网页显示输入帧率、ARKit 追踪、数据年龄及 XYZ。数据年龄是主机最新收包距今，不是端到端延迟。
+4. robot 已运行、追踪正常且 Clutch 松开后，窗口按 `T` 或网页点击“启用手机遥操”。先松开再按住 Clutch 移动，松开保持；夹爪滑块在接管后可独立控制。
+5. 窗口 `S` / 空格或网页“停止遥操”释放控制权，输入监看继续。启动接收、打开或刷新网页不会自动控制机械臂。
 
-```bash
-make ios-network-test-120
-```
+ARKit 只发送新的 `ARFrame`，不通过重发旧姿态伪造帧率。追踪受限时让后摄像头观察有纹理、光线充足的环境。Home 请求走内核预览轨迹。ESTOP 锁存停止请求；当前真机组合不接受手机 RESET 解除，断开再连接也不会清除锁存，需按真机停止/恢复流程处理。手机 joint-zero 不能代替电机零位标定。
 
-This is a transport and receiver readiness check only. It does not claim that a
-physical ARKit session produces 120 fresh `ARFrame` poses; that remains a
-connected-device measurement.
-
-The app is launched against `127.0.0.1:5005` only for that UI test. A normal app
-launch defaults to `100.112.78.10:5005`, remains disconnected until Connect is
-pressed, and permits editing both fields.
-
-## Personal Team device install
-
-A paid developer membership is not required for testing on the owner's iPhone.
-Apple calls the free signing identity a Personal Team. Its provisioning profile
-expires after seven days, so the app must be rebuilt and reinstalled
-periodically. Personal Team signing is for personal device testing, not App
-Store distribution.
-
-For a connected device:
-
-1. Connect and trust the iPhone, then enable Developer Mode if iOS requests it.
-2. Open the project, select the `RobotTeleop` target, and leave Automatically
-   manage signing enabled.
-3. Select the signed-in Personal Team and keep `com.mo.robotteleop` unless Xcode
-   reports that the identifier is unavailable.
-4. Select the connected iPhone 16 Pro Max as the run destination and press Run.
-5. Grant Camera and Local Network access on first launch.
-6. On Ubuntu, run the hardware-free monitor shown below.
-7. Confirm the app endpoint is `100.112.78.10:5005`, press Connect, and verify
-   NORMAL tracking, nonempty sequence/FPS, RTT, and SYNCED settings.
-
-```bash
-uv run python tools/pose_monitor.py \
-  --bind-host 0.0.0.0 \
-  --port 5005 \
-  --duration 60 \
-  --exit-after-round-trip
-```
-
-This test sends only input data to a hardware-free monitor. It does not connect
-to MockRobot, ARX5, CAN, or any robot SDK.
-
-E-stop is intentionally latched. Disconnect/Connect and returning from the
-home screen do not clear it. Pressing `REQUEST RESET` sends a session-scoped
-v1.1 reset request and a released, normal-tracking Pose, but the app remains
-locked in `RESET PENDING`. Ubuntu must explicitly complete its reset authority
-before it returns an ACK with the same source, session, sequence, and timestamp.
-Only that matching ACK unlocks the app; a phone-only unlock is not a safe reset
-protocol.
-
-The current reset composition is Mock-only. For a connected-iPhone Phase 3
-session, run this local Ubuntu console and type `reset` only after the app is in
-`RESET PENDING` and the operator has checked the situation:
-
-```bash
-./run.sh components run diagnostic.phone_reset_console
-```
-
-The console cannot enable a real backend, initialize CAN, or substitute for a
-physical emergency stop. Connected-device reset and coordinate validation remain
-open Phase 3 checklist items.
-
-Apple's current Personal Team limits are documented at
-<https://developer.apple.com/help/account/basics/about-your-developer-account>.
-Protocol and frame contracts remain in `docs/protocol.md` and
-`docs/coordinate_frames.md`. Completed and remaining physical-device checks are
-tracked in `docs/phase2_report.md` and `TODO.md`.
+独立协议调试和源插件配置见 [插件工作台](../../docs/guides/plugin-workbench.md#手机与切换来源)。工作台接收器已占用 UDP 5005 时，独立调试接收器使用另一端口并同步修改 App 设置。

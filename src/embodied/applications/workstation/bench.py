@@ -5,7 +5,7 @@
     ./run.sh bench restart --target interfaces reload web services and terminal panels
     ./run.sh bench stop stop the kernel and web console it started, and close it
 
-Windows: 1 总控, 2 命令, 3 robot, 4 网页, 5 VR, 6 相机, 7 宣传.
+Windows: 1 总控, 2 命令, 3 robot, 4 网页, 5 VR, 6 相机, 7 宣传, 8 手机.
 Web and shared camera services start with the workbench; interactive startup opens
 the robot's confirmation prompt before any motor is enabled.
 The dashboard only types commands and sends Ctrl+C to the kernel window; it never owns a device.
@@ -30,9 +30,9 @@ DEFAULT_SESSION = 'emb'
 LEGACY_SESSION = 'embodied-' + hashlib.sha256(str(ROOT).encode()).hexdigest()[:8]
 SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
-           'vr': 'VR', 'camera': '相机', 'site': '宣传'}
-WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传'
-UI_REVISION = '13'
+           'vr': 'VR', 'camera': '相机', 'site': '宣传', 'phone': '手机'}
+WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传 · 8 手机'
+UI_REVISION = '14'
 ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
@@ -134,7 +134,7 @@ def dashboard_command():
 def panel_command(role):
     return (f'env PYTHONPATH={shlex.quote(str(ROOT / "src"))} EMBODIED_BENCH_SESSION={shlex.quote(SESSION)} '
             f'{shlex.quote(sys.executable)} -B -m embodied.applications.workstation.bench_panels {role}'
-            + (' --serve' if role in ('web', 'site', 'camera', 'vr') else ''))
+            + (' --serve' if role in ('web', 'site', 'camera', 'vr', 'phone') else ''))
 
 
 def activity(role):
@@ -278,7 +278,7 @@ def start(attach=True):
                        and 'embodied.applications.workstation.bench _dashboard' in original)
             panel_upgrade = revision != UI_REVISION and (
                 f'embodied.applications.workstation.bench_panels {role}' in original
-                and role in ('web', 'site', 'vr', 'camera'))
+                and role in ('web', 'site', 'vr', 'camera', 'phone'))
             if not found[1] or upgrade:
                 tmux('respawn-pane', '-k', '-t', found[0], '-c', str(ROOT), command)
                 if role == 'kernel' and activity('kernel') != 'failed':
@@ -329,7 +329,7 @@ def stop(wait_s=30):
         time.sleep(.2)
     if owned_run() or (stopping_kernel and kernel_busy()):
         raise RuntimeError('内核仍在退出，工作台保留；查看窗口 3。')
-    for role in ('web', 'site', 'vr', 'camera', 'kernel'):
+    for role in ('web', 'site', 'vr', 'camera', 'phone', 'kernel'):
         found = window(role)
         if found and found[1] and found[1] not in SHELLS:
             tmux('send-keys', '-t', found[0], 'C-c')
@@ -577,6 +577,9 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
     vr, _ = vr_rows(found, vr_transport)
     label, value = vr[0]
     status.add_row('◉', Text(label), status_text(value))
+    from embodied.applications.workstation.phone_panel import rows as phone_rows
+    phone, _ = phone_rows()
+    status.add_row('▯', '手机', status_text(phone[0][1]))
     if vr_wearing is not None:
         status.add_row('◉', '佩戴请求', status_text(vr_wearing))
     menu.add_row('VR', 'F', Text('模拟佩戴（仅头显，需要 USB 授权）'))

@@ -31,7 +31,7 @@ from embodied.contracts.robot import load_robot_profile
 from embodied.applications.workstation.status import Status, status_text
 
 TITLES = {'kernel': 'robot · 机械臂', 'vr': 'Quest · VR', 'camera': '共享相机',
-          'web': '监看与采集', 'site': '项目宣传网站'}
+          'web': '监看与采集', 'site': '项目宣传网站', 'phone': '手机 · RobotTeleop'}
 SERVICE_COMMANDS = {
     'web': ['./run.sh', 'web', 'monitor', '--kernel', '--mode', 'real', '--no-camera', '--no-connections'],
     'site': ['./run.sh', 'web', 'site'],
@@ -435,6 +435,9 @@ def snapshot(role):
             rows, hints = vr_rows(bench.current_run())
         elif role == 'camera':
             rows, hints = camera_rows()
+        elif role == 'phone':
+            from embodied.applications.workstation.phone_panel import rows as phone_rows
+            rows, hints = phone_rows()
         else:
             number, url = service_address(role)
             rows = [('地址', url), ('端口', '已有监听；未确认服务身份' if listening(number, service_host(role)) else '尚未监听')]
@@ -448,8 +451,8 @@ class Service:
     """Own web children; only request startup of the independent shared camera service."""
 
     def __init__(self, role):
-        if role not in (*SERVICE_COMMANDS, 'camera'):
-            raise ValueError('Only web/site/camera panels may start a service')
+        if role not in (*SERVICE_COMMANDS, 'camera', 'phone'):
+            raise ValueError('Only web/site/camera/phone panels may start a service')
         self.role = role
         self.process = None
         self.log_path = None
@@ -487,6 +490,16 @@ class Service:
         return result.si_status if result.si_code == os.CLD_EXITED else -result.si_status
 
     def start(self):
+        if self.role == 'phone':
+            from embodied.devices.inputs.phone_service import ensure_service, LOG
+            self.attempted = True
+            self.log_path = LOG
+            try:
+                ensure_service()
+                self.message = '手机接收已就绪 · 默认仅监看'
+            except (OSError, ValueError, RuntimeError) as exc:
+                self.message = Status(str(exc), 'error')
+            return
         if self.role == 'camera':
             from embodied.devices.sensors.client import ensure_service
             self.attempted = True
@@ -554,7 +567,7 @@ class Service:
             return [f'日志暂不可读：{exc}']
 
     def stop(self):
-        if self.role == 'camera':
+        if self.role in ('camera', 'phone'):
             return  # The shared service may be feeding a recorder after this pane closes.
         child = self.process
         if child is None:
@@ -614,6 +627,7 @@ def render(state, service=None):
                          ('连接 / 刷新' if title == TITLES['vr'] else '重试 / 刷新' if service is not None else '刷新') +
                          (' · W 模拟佩戴 · U 取消模拟佩戴' if title == TITLES['vr'] else '') +
                          (' · P 预抓取 · H 回零 · 空格停止 · D 阻尼' if title == TITLES['kernel'] else '') +
+                         (' · T 手机遥操 · S / 空格停止' if title == TITLES['phone'] else '') +
                          (' · W 打开浏览器' if service is not None and service.role == 'web' else ''), style='dim'))
     return Group(*sections)
 
@@ -645,7 +659,7 @@ def main(argv=None):
     from embodied.core.terminal_keys import read_key, terminal_keys
 
     mark_waiting(args.role)
-    service = Service(args.role) if args.serve and args.role in (*SERVICE_COMMANDS, 'camera') else None
+    service = Service(args.role) if args.serve and args.role in (*SERVICE_COMMANDS, 'camera', 'phone') else None
     stopping = False
     vr = VRConnection(auto_prepare=args.serve) if args.role == 'vr' else None
     from embodied.applications.workstation.robot_panel import RobotControls
@@ -705,6 +719,15 @@ def main(argv=None):
                 if robot is not None and key is not None:
                     from embodied.applications.workstation import bench
                     robot.press(key, bench.current_run())
+                    refreshed = 0.
+                if args.role == 'phone' and key in ('t', 's', ' '):
+                    from embodied.applications.workstation.phone_panel import press
+                    try:
+                        message = press(key)
+                    except (OSError, ValueError, RuntimeError) as exc:
+                        message = Status(str(exc), 'error')
+                    if service is not None:
+                        service.message = message
                     refreshed = 0.
     finally:
         if robot is not None:

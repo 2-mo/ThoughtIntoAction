@@ -113,7 +113,7 @@ class BenchRestartTests(unittest.TestCase):
              patch('embodied.devices.sensors.lifecycle.stop_service') as camera_stop, \
              patch('embodied.devices.sensors.client.ensure_service') as camera_start:
             message = restart.restart('interfaces')
-        self.assertEqual([call.args[0] for call in refresh.call_args_list], ['%web', '%camera', '%home'])
+        self.assertEqual([call.args[0] for call in refresh.call_args_list], ['%web', '%camera', '%phone', '%home'])
         self.assertFalse(any(call.args[0] in ('kernel', 'shell') for call in window.call_args_list))
         self.assertTrue(all('-k' not in call.args for call in run.call_args_list))
         run.assert_any_call('respawn-pane', '-t', '%site', '-c', str(bench.ROOT), bench.panel_command('site'))

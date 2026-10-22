@@ -37,7 +37,7 @@ def phone_base():
 
 
 class PhoneController:
-    def __init__(self, directory, bind_host='127.0.0.1', port=5005, mapping='phone_tool', ghost=False):
+    def __init__(self, directory=None, bind_host='127.0.0.1', port=5005, mapping='phone_tool', ghost=False):
         from embodied.contracts.registry import Registry
         registry = Registry()
         self.mapping = registry.create('mapping', mapping)
@@ -49,10 +49,13 @@ class PhoneController:
         # One digest over sorted (path, file hash) lines: a per-file map exceeds the gateway's 8 KiB metadata bound.
         tree = hashlib.sha256(''.join(f'{path.relative_to(source)} {hashlib.sha256(path.read_bytes()).hexdigest()}\n'
                                       for path in files).encode()).hexdigest()
-        self.client = ControlClient(directory) if ghost else ControlSession(directory, source='phone', purpose='teleop',
-            metadata={'plugin': 'phone.arkit', 'protocol': 1, 'mapping': mapping, 'position_scale': 2.,
+        self.metadata = {'plugin': 'phone.arkit', 'protocol': 1, 'mapping': mapping, 'position_scale': 2.,
                       'rotation_scale': 1., 'pose_frame': 'base_tcp', 'quaternion': 'xyzw', 'gripper': 'metres',
-                      'source_tree_sha256': tree, 'source_files': len(files)})
+                      'source_tree_sha256': tree, 'source_files': len(files)}
+        if directory is None and not ghost:
+            raise ValueError('A runtime is required for phone control')
+        self.client = (None if directory is None else ControlClient(directory) if ghost else
+                       ControlSession(directory, source='phone', purpose='teleop', metadata=self.metadata))
         self.transport = UdpTransport(UdpTransportConfig(bind_host=bind_host, bind_port=port, receive_timeout_s=.02))
         self.source = registry.create('input', 'arkit', transport=self.transport, on_controls=self._controls,
             settings_callback=self._settings, estop_reset_request_callback=lambda _: False)
@@ -65,6 +68,30 @@ class PhoneController:
         self.zero_requested = False
         self.operation_id = None
         self.last_target = None
+        self.last_input = None
+        self.input_count = 0
+
+    def enable(self, directory):
+        """Explicitly acquire an existing kernel without restarting the receiver."""
+        if not self.ghost:
+            raise ValueError('手机已持有控制权')
+        if self.estop:
+            raise ValueError('手机急停已锁存；当前真机接口不支持手机端复位')
+        client = ControlSession(directory, source='phone', purpose='teleop', metadata=self.metadata)
+        client.__enter__()
+        self.client, self.ghost = client, False
+        self.released = self.active = self.home = self.recenter = False
+        self.operation_id = None
+
+    def disable(self):
+        """Release control; keep the independent phone input available to monitors."""
+        try:
+            if not self.ghost and self.client is not None:
+                self.client.close()
+        finally:
+            self.client, self.ghost = None, True
+            self.active = self.released = self.home = self.recenter = False
+            self.operation_id = None
 
     def _settings(self, scales):
         # Preserve the upstream policy's latch-at-reference semantics.
@@ -104,10 +131,13 @@ class PhoneController:
     def latest(self):
         value = self.source.latest()
         now = time.monotonic()
+        if value is not None:
+            self.last_input = value
+            self.input_count += 1
         if self.estop:
             if not self.ghost:
                 self.client.request('stop')
-            raise RuntimeError('Phone ESTOP latched; restart the runtime before re-enabling')
+                raise RuntimeError('Phone ESTOP latched; restart the runtime before re-enabling')
         if self.zero_requested:
             raise ValueError('Motor zero calibration is not a phone control action; use the explicit calibration workflow')
         if value is None:
@@ -122,6 +152,8 @@ class PhoneController:
         if value.tracking_quality != TrackingQuality.NORMAL:
             self._hold()
             self.released = False
+            return None
+        if self.client is None:
             return None
         snapshot = self.client.status()
         if self.operation_id:
