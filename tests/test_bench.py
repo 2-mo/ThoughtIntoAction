@@ -31,6 +31,32 @@ def run(root, name, *, pid=999_999_999, ready=True, managed=False):
 
 
 class BenchStateTests(unittest.TestCase):
+    def test_dashboard_shows_each_device_without_starting_services(self):
+        from rich.console import Console
+        from rich.color import Color
+        from embodied.applications.workstation import bench_panels as panels
+        from embodied.applications.workstation.status import Status
+
+        states = {
+            'kernel': ('robot', [('内核', Status('等待机械臂反馈', 'waiting'))], []),
+            'camera': ('相机', [('腕部相机', Status('图像正常', 'ready')),
+                               ('外部相机', Status('图像已过期', 'error'))], []),
+        }
+        with patch.object(panels, 'snapshot', side_effect=states.__getitem__), \
+             patch.object(panels, 'vr_rows', return_value=([('VR', Status('未启用', 'disabled'))], [])), \
+             patch('embodied.applications.workstation.ports.summary', return_value=('测试端口', False)), \
+             patch('embodied.devices.sensors.client.ensure_service') as start:
+            view = bench.dashboard_view(None, None, '')
+            start.assert_not_called()
+        console = Console(width=140, force_terminal=True, color_system='standard')
+        fragments = list(console.render(view))
+        rendered = ''.join(fragment.text for fragment in fragments)
+        for name in ('robot', 'VR', '腕部相机', '外部相机'):
+            self.assertIn(name, rendered)
+        for message, color in [('等待机械臂反馈', 'yellow'), ('图像正常', 'green'), ('图像已过期', 'red')]:
+            self.assertTrue(any(message in fragment.text and fragment.style.color == Color.parse(color)
+                                for fragment in fragments))
+
     def test_panel_reload_waits_for_cleanup_and_never_force_kills(self):
         done = subprocess.CompletedProcess([], 0, stdout='1\n')
         with patch.object(bench, 'tmux', return_value=done) as tmux:
@@ -193,7 +219,7 @@ class BenchTmuxTests(unittest.TestCase):
     def test_all_windows_reopen_repair_and_close_without_touching_external_kernel(self):
         session = f'bench-test-{os.getpid()}-{time.monotonic_ns()}'
         self.addCleanup(subprocess.run, ['tmux', 'kill-session', '-t', session], capture_output=True)
-        expected = ['1:总控', '2:命令', '3:内核', '4:网页', '5:VR', '6:相机', '7:宣传']
+        expected = ['1:总控', '2:命令', '3:robot', '4:网页', '5:VR', '6:相机', '7:宣传']
 
         def names():
             return bench.tmux('list-windows', '-t', session, '-F', '#{window_index}:#{window_name}').stdout.split()
@@ -221,6 +247,7 @@ class BenchTmuxTests(unittest.TestCase):
             self.assertEqual(names(), expected)
             until(lambda: all(bench.idle(role) for role in bench.WINDOWS))
             original = panes()
+            bench.tmux('rename-window', '-t', original['kernel'][0], '内核')
             bench.start(attach=False)
             self.assertEqual(names(), expected)
             self.assertEqual(panes(), original)  # reopening preserves live work
