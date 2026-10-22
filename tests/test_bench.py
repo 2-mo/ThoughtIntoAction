@@ -31,6 +31,45 @@ def run(root, name, *, pid=999_999_999, ready=True, managed=False):
 
 
 class BenchStateTests(unittest.TestCase):
+    def test_real_restart_requires_one_explicit_confirmation(self):
+        found = (Path('/run/test-only'), {'backend': 'real', 'managed': True})
+        with patch.object(bench, 'owned_run', return_value=found), \
+             patch.object(sys.stdin, 'isatty', return_value=True), \
+             patch('sys.stdout', new_callable=io.StringIO), \
+             patch('builtins.input', return_value='n') as answer, \
+             patch('embodied.applications.workstation.restart.restart', return_value='已重启') as restart:
+            bench.main(['restart', '--target', 'robot'])
+            restart.assert_not_called()
+            answer.assert_called_once()
+            answer.reset_mock()
+            answer.return_value = 'y'
+            bench.main(['restart', '--target', 'robot'])
+            answer.assert_called_once()
+            restart.assert_called_once_with('robot', robot_confirmed=True)
+            restart.reset_mock()
+            with patch.object(sys.stdin, 'isatty', return_value=False):
+                bench.main(['restart', '--target', 'robot'])
+                restart.assert_not_called()
+
+    def test_restart_menu_routes_digits_without_starting_a_kernel(self):
+        with patch.object(sys.stdin, 'isatty', return_value=True), \
+             patch.object(sys.stdin, 'fileno', return_value=0), \
+             patch.object(sys.stdout, 'isatty', return_value=True), \
+             patch('termios.tcgetattr', return_value=[]), \
+             patch('termios.tcsetattr'), patch('tty.setcbreak'), \
+             patch('select.select', return_value=([sys.stdin], [], [])), \
+             patch.object(bench.os, 'read', side_effect=[b'r', b'2', b'']), \
+             patch.object(bench, 'current_run', return_value=None), \
+             patch.object(bench, 'latest_episode', return_value=None), \
+             patch.object(bench, 'dashboard_view') as view, \
+             patch('rich.live.Live'), \
+             patch.object(bench, 'type_command', return_value='重启命令已提交') as command, \
+             patch.object(bench, 'start_kernel') as start:
+            bench.dashboard()
+        command.assert_called_once_with('./run.sh bench restart --target robot')
+        start.assert_not_called()
+        self.assertTrue(any(call.args[-1] is True for call in view.call_args_list))
+
     def test_dashboard_shows_each_device_without_starting_services(self):
         from rich.console import Console
         from rich.color import Color
@@ -53,6 +92,8 @@ class BenchStateTests(unittest.TestCase):
         rendered = ''.join(fragment.text for fragment in fragments)
         for name in ('robot', 'VR', '腕部相机', '外部相机'):
             self.assertIn(name, rendered)
+        for icon in ('🦾', '🥽', '📷'):
+            self.assertIn(icon, rendered)
         for message, color in [('等待机械臂反馈', 'yellow'), ('图像正常', 'green'), ('图像已过期', 'red')]:
             self.assertTrue(any(message in fragment.text and fragment.style.color == Color.parse(color)
                                 for fragment in fragments))
@@ -191,6 +232,7 @@ class BenchStateTests(unittest.TestCase):
              patch.object(bench, 'tmux') as tmux:
             bench.start_kernel('test-kernel-command')
         commands = [call.args for call in tmux.call_args_list]
+        self.assertIn(('set-option', '-p', '-t', '%test', '@bench_kernel_command', 'test-kernel-command'), commands)
         replaced = [command for command in commands if command[0] == 'respawn-pane']
         self.assertEqual(len(replaced), 1)
         self.assertIn('%test', replaced[0])
