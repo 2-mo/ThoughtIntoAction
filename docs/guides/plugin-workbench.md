@@ -2,7 +2,7 @@
 
 三个参考仓库的扩展算法、设备及操作已集中迁入，使用 `./run.sh components list` 查看；代码位置、环境和独立操作边界见 [合并后的组件说明](consolidated-components.md)。本页描述共用 arx gateway 的原生工作台。
 
-代码、模型、原生程序、iOS App 和来源记录均在 QuestArmTeleop 内。控制内核复用 `control/` 中的 arx-televr：原 Quest coordinator/router、映射、IK、SDK 和 MuJoCo 仍是主实现。插件解决外围装配、替换和独立验证。
+代码、模型、原生程序、iOS App 和来源记录均在 ThoughtIntoAction 内。控制内核复用 `control/` 中的 arx-televr：原 Quest coordinator/router、映射、IK、SDK 和 MuJoCo 仍是主实现。插件解决外围装配、替换和独立验证。
 
 原 arx 已分开 VR 驱动、coordinator、arm/gripper router、IPC 桥接、目标控制器与后端。本轮插件接口沿用这些边界：设备进程与路由由 supervisor 装配，命令入口在 worker 内消费，租约由独立会话持有。源码依据、启动容量问题与修正见 [arx 组件复核](../architecture/arx-component-review.md)。
 

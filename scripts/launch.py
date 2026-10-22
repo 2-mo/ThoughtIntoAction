@@ -212,7 +212,7 @@ def home_text() -> str:
     environment = "已创建" if (PROJECT_ROOT / ".venv/bin/python").is_file() else "尚未创建 · uv sync --locked"
     workspace = "可用 · ./run.sh bench start" if shutil.which("tmux") else "未安装 tmux · 可直接运行下方命令"
     return "\n".join([
-        "QuestArmTeleop · 具身智能工作台",
+        "知行有灵 · Thought into Action · 具身智能工作台",
         "输入与设备 → 统一控制 → 采集 / 标定 / 策略",
         "",
         f"  Python 环境  {environment}",

@@ -9,7 +9,7 @@ arm_sdk_python = "outputs/build/arx-gripper/source/python"
 log_dir = "outputs/logs"
 dataset_dir = "~/work/data/quest_x5"
 checkpoint_dir = "~/work/models/pi05_base"
-installer_dir = "~/work/installers/QuestArmTeleop"
+installer_dir = "~/work/installers/ThoughtIntoAction"
 
 [robot]
 can_port = "can0"
@@ -89,7 +89,7 @@ max_sync_skew_s = 0.06
 
 [policy]
 host = "127.0.0.1"
-training_location = "H800"
+training_location = "remote"
 # This records the existing checkpoint format; no inference backend is installed.
 checkpoint_format = "lerobot"
 

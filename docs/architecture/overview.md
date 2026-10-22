@@ -88,7 +88,7 @@
 | 查看与回放 | `embodied.data.datasets`、`embodied.data.replay` | 质量报告、标注 |
 | 导出 | `embodied.data.export` | LeRobot v2.1 + `robot/*.npz` 原始样本 + `meta/quest_export.json`（action 定义、控制栈、相机、缺口） |
 | GR00T | `embodied.data.groot` | 双相机 Rot6D 16 维数据集 |
-| 训练 | `scripts/training/openpi`（H800） | checkpoint |
+| 训练 | `scripts/training/openpi`（训练服务器） | checkpoint |
 | 推理 | `embodied.policy.pi05_sft`、`pi05_zeroshot`、`groot` | 机械臂动作 |
 
 原始数据从不改写；格式变化只增加新的读取适配。RobotTick V3 是遥测协议版本，episode schema 2 表示存储及动作语义。LeRobot 关节向量导出读取运行声明的轴数、夹爪与相机，不把第七维固定解释为夹爪。OpenPI 使用同一契约适配训练样本和推理观测，保留 X5 预设；模型动作维度填充必须显式配置。这些接口验证不代表任意新硬件已有可用策略权重。

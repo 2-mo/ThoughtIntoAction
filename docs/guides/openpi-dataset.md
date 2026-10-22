@@ -62,7 +62,7 @@ policy, checkpoint, stats = load_backend("/path/to/checkpoint", adapter_spec=spe
 
 直接上传 ZIP。其内部 MCAP 已 Zstd 压缩、MP4 已 H.264 压缩，ZIP 只封装不重复压缩。包内都是实际文件，不依赖本机符号链接。包含本轮所有已停止录制条目，丢弃、失败和中断条目连同原始标记一并上传，由服务器筛选；生成后进行 ZIP CRC 校验。状态记录在 `~/work/data/quest_x5/.raw/tasks/<任务名>/package-status.json`。失败保留原始记录，临时包不会当成成功产物。
 
-服务器无需安装 QuestArmTeleop 项目。Linux 上准备好 `uv` 和 FFmpeg 共享库后：
+服务器无需安装 ThoughtIntoAction 项目。Linux 上准备好 `uv` 和 FFmpeg 共享库后：
 
 ```bash
 unzip 任务名_时间-编号.zip
@@ -147,9 +147,9 @@ OpenPI 使用标准 LeRobot 动作加载器：训练 state/action 与图像统�
 在已经按 OpenPI 官方说明配置好的 OpenPI 环境中运行（替换 OPENPI 路径）：
 
 ```bash
-python /home/r2/work/code/QuestArmTeleop/scripts/training/openpi/run.py \
+python /home/r2/work/code/ThoughtIntoAction/scripts/training/openpi/run.py \
   /path/to/openpi /home/r2/work/data/quest_x5/lerobot/cup_task norm
-python /home/r2/work/code/QuestArmTeleop/scripts/training/openpi/run.py \
+python /home/r2/work/code/ThoughtIntoAction/scripts/training/openpi/run.py \
   /path/to/openpi /home/r2/work/data/quest_x5/lerobot/cup_task train --exp-name=cup_x5
 ```
 

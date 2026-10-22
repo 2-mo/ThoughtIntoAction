@@ -2,7 +2,7 @@
 [paths]
 dataset_dir = "~/work/data/quest_x5"
 checkpoint_dir = "~/work/models/pi05_base"
-installer_dir = "~/work/installers/QuestArmTeleop"
+installer_dir = "~/work/installers/ThoughtIntoAction"
 
 [robot]
 can_port = "can0"
