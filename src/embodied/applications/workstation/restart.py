@@ -8,7 +8,7 @@ from embodied.applications.workstation import bench
 
 def _restart_interfaces():
     refreshed, preserved = [], []
-    for role in ('web', 'site', 'vr', 'camera', 'home'):
+    for role in ('web', 'site', 'vr', 'camera', 'phone', 'home'):
         found = bench.window(role)
         if found is None:
             continue

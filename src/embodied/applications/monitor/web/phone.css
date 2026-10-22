@@ -1,0 +1,16 @@
+.phone-panel { padding: 14px 16px; border: 1px solid var(--border, #30343e); border-radius: 12px; }
+.phone-panel h2 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 10px; font-size: 14px; }
+.phone-panel h2 > span:first-child { display: flex; align-items: center; gap: 7px; }
+.phone-panel svg { width: 15px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+#phone-status { font-size: 12px; color: #e6b96a; }
+.phone-panel[data-state="live"] #phone-status { color: #70d8ab; }
+.phone-panel[data-state="error"] #phone-status { color: #ff9292; }
+.phone-panel p { font-size: 12px; line-height: 1.6; margin: 8px 0; overflow-wrap: anywhere; }
+.phone-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.phone-metrics div { display: flex; flex-direction: column; gap: 4px; }
+.phone-metrics span { font-size: 11px; opacity: .7; }
+.phone-metrics b { font-size: 12px; font-variant-numeric: tabular-nums; }
+.phone-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.phone-actions button { padding: 6px 10px; cursor: pointer; }
+.phone-actions button:disabled { opacity: .45; cursor: default; }
+#phone-message[data-error="true"] { color: #ff9292; }

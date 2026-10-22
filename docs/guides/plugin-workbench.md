@@ -107,7 +107,11 @@ MoveJ 使用共享 Ruckig 轨迹。MoveL 使用所选机器人的 IK、样条连
 
 ### 手机与切换来源
 
-启动手机组合：
+日常使用 `./run.sh` 的 **8 手机** 窗口：接收器默认仅监看，手机可以晚于工作台打开。App 填该窗口显示的电脑地址和 UDP 5005，正常追踪且松开 Clutch 后按 `T` 接管当前内核，`S` / 空格释放控制权并保持。网页提供同一接收服务的状态和显式启用 / 停止按钮；刷新界面不改变控制权。接收服务独立于 robot 和面板，关闭面板后仍可从网页操作。
+
+以下独立源入口用于单独运行或协议验证，拥有自己的 UDP 端口。工作台接收服务运行时，独立源应选其他端口并同步修改 App 地址，避免争用 5005；常规使用无需另起这些命令。
+
+独立启动手机组合：
 
 ```bash
 ./run.sh workbench start --profile sim-phone --headless --record-task "手机检查"
@@ -118,7 +122,7 @@ MoveJ 使用共享 Ruckig 轨迹。MoveL 使用所选机器人的 IK、样条连
 同一设备运行切换来源：使用 `sim-manual` 启动常驻控制，另一个终端运行所需源；结束源后再启动下一源。
 
 ```bash
-./run.sh phone --run <RUN> --bind-host 0.0.0.0 --port 5005
+./run.sh phone --run <RUN> --bind-host 0.0.0.0 --port 5006
 # Ctrl+C：手机退出，机械臂保持当前反馈位置；可接着运行 motion / handeye。
 ./run.sh phone --run <RUN> --port 5006 --ghost
 ```
