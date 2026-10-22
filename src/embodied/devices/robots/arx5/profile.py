@@ -17,8 +17,10 @@ class RobotConfig:
     # Nominal capability for simulation/offline planning. Real managed motion
     # obtains its capability from the active SDK runtime configuration instead.
     joint_velocity_max: tuple[float, ...] = (5.0, 5.0, 5.5, 5.5, 5.0, 5.0)
-    kp: tuple[float, ...] = (20.0, 20.0, 20.0, 20.0, 20.0, 20.0)
-    kd: tuple[float, ...] = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
+    # ARX SDK joint_controller_6 defaults; preserve each axis's position and
+    # damping gains instead of weakening every joint to a uniform kp=20.
+    kp: tuple[float, ...] = (80.0, 70.0, 70.0, 30.0, 30.0, 20.0)
+    kd: tuple[float, ...] = (2.0, 2.0, 2.0, 1.0, 1.0, 0.7)
     torque_max: tuple[float, ...] = (30.0, 40.0, 30.0, 15.0, 10.0, 10.0)
     joint_step_limit: float = float(np.pi / 36)
     can_interface: str = "can0"

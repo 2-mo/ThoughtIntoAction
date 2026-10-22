@@ -1,8 +1,8 @@
 {
   "defaults": {
     "speed": 0,
-    "acceleration": 2.0,
-    "jerk": 10.0
+    "acceleration": 30.0,
+    "jerk": 300.0
   },
   "cartesian": {
     "tcp_speed": null,
