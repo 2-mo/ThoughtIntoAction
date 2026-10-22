@@ -14,6 +14,7 @@ import ipaddress
 import os
 from pathlib import Path
 import signal
+import shutil
 import socket
 import subprocess
 import sys
@@ -57,6 +58,24 @@ def service_command(role):
 def service_address(role):
     number = int(load_config()['viewer_service']['port']) if role == 'web' else port('site')
     return number, f'http://{service_host(role)}:{number}' + ('/apps/site/' if role == 'site' else '')
+
+
+def open_browser():
+    """Open the monitor on a local desktop; SSH clients use the displayed URL."""
+    number, url = service_address('web')
+    if not listening(number, service_host('web')):
+        return f'网页尚未就绪，查看日志或按 R 重试；地址 {url}'
+    if os.environ.get('SSH_CONNECTION') or not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
+        return f'请在浏览器打开 {url}'
+    opener = shutil.which('xdg-open')
+    if opener is None:
+        return f'请在浏览器打开 {url}'
+    try:
+        subprocess.Popen([opener, url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError as exc:
+        return f'浏览器未打开：{exc}；地址 {url}'
+    return f'已请求浏览器打开 {url}'
 
 
 def kernel_rows():
@@ -196,6 +215,14 @@ class Service:
         self.external = False
         self.attempted = False
         self._child_reserved = False
+        self.browser_message = None
+
+    def open_when_ready(self):
+        """One browser request after the monitor listens, avoiding a refused page."""
+        if self.role == 'web' and self.browser_message is None:
+            number, _ = service_address('web')
+            if listening(number, service_host('web')):
+                self.browser_message = open_browser()
 
     def exit_code(self):
         """Inspect a child without reaping it, reserving its PID until group cleanup.
@@ -250,6 +277,8 @@ class Service:
             code = self.exit_code()
             state = '本工作台服务运行中' if code is None else f'服务已退出（{code}）；修复后按 R 重试'
         rows.append(('服务', state))
+        if self.browser_message:
+            rows.append(('浏览器', self.browser_message))
         if self.log_path:
             rows.append(('日志', str(self.log_path)))
         if self.external:
@@ -325,7 +354,8 @@ def render(state, service=None):
             sections.append(Panel(Group(*(Text(line, overflow='fold') for line in logs)),
                                   title='最近日志', border_style='dim'))
     sections.append(Text('Ctrl+B → 3 返回总控 · Ctrl+B → D 离开工作台 · R ' +
-                         ('重试 / 刷新' if service is not None else '刷新'), style='dim'))
+                         ('重试 / 刷新' if service is not None else '刷新') +
+                         (' · W 打开浏览器' if service is not None and service.role == 'web' else ''), style='dim'))
     return Group(*sections)
 
 
@@ -368,6 +398,8 @@ def main(argv=None):
             refreshed = 0.
             while not stopping:
                 if time.monotonic() - refreshed >= 1:
+                    if service is not None:
+                        service.open_when_ready()
                     live.update(render(service.snapshot() if service else snapshot(args.role), service), refresh=True)
                     refreshed = time.monotonic()
                 key = read_key(.2)
@@ -376,6 +408,9 @@ def main(argv=None):
                 if key == 'r':
                     if service is not None:
                         service.start()
+                    refreshed = 0.
+                if key == 'w' and args.role == 'web' and service is not None:
+                    service.browser_message = open_browser()
                     refreshed = 0.
     finally:
         if service is not None:

@@ -13,6 +13,28 @@ from embodied.applications.workstation import bench, bench_panels as panels
 
 
 class BenchPanelTests(unittest.TestCase):
+    def test_monitor_opens_once_after_listening_and_ssh_keeps_url(self):
+        with patch.object(panels, 'service_address', return_value=(18081, 'http://127.0.0.1:18081')), \
+             patch.object(panels, 'service_host', return_value='127.0.0.1'), \
+             patch.object(panels, 'listening', return_value=False) as listening, \
+             patch.object(panels.shutil, 'which', return_value='/usr/bin/xdg-open'), \
+             patch.object(panels.subprocess, 'Popen') as spawn, \
+             patch.dict(os.environ, {'DISPLAY': ':0', 'SSH_CONNECTION': ''}):
+            service = panels.Service('web')
+            service.open_when_ready()
+            spawn.assert_not_called()
+            listening.return_value = True
+            service.open_when_ready()
+            service.open_when_ready()
+            spawn.assert_called_once()
+            self.assertEqual(spawn.call_args.args[0], ['/usr/bin/xdg-open', 'http://127.0.0.1:18081'])
+            self.assertTrue(spawn.call_args.kwargs['start_new_session'])
+            spawn.reset_mock()
+            with patch.dict(os.environ, {'SSH_CONNECTION': 'client 1 server 22'}):
+                message = panels.open_browser()
+                spawn.assert_not_called()
+                self.assertIn('http://127.0.0.1:18081', message)
+
     def test_default_web_is_the_kernel_collection_monitor(self):
         command = panels.SERVICE_COMMANDS['web']
         self.assertEqual(command[:3], ['./run.sh', 'web', 'monitor'])
