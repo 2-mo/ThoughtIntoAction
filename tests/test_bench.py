@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -30,6 +31,32 @@ def run(root, name, *, pid=999_999_999, ready=True, managed=False):
 
 
 class BenchStateTests(unittest.TestCase):
+    def test_motion_tests_bind_current_backend_run_and_wait_for_enter(self):
+        with tempfile.TemporaryDirectory(prefix='bench actions ') as root:
+            directory = run(root, 'managed', managed=True)
+            for backend in ('real', 'sim'):
+                rows = {key: (command, enter, needs) for key, _, command, enter, needs
+                        in bench.actions(directory, {'backend': backend})}
+                for key in ('b', 'x', 't'):
+                    command, enter, needs = rows[key]
+                    arguments = shlex.split(command)
+                    self.assertEqual(arguments[arguments.index('--run') + 1], str(directory))
+                    self.assertEqual(arguments[arguments.index('--backend') + 1], backend)
+                    self.assertEqual(arguments[arguments.index('--speed') + 1], '0')
+                    self.assertFalse(enter)
+                    self.assertTrue(needs)
+                self.assertIn('--degrees 10 --repeats 1', rows['b'][0])
+            (directory / 'commands.sock').unlink()
+            rows = {key: command for key, _, command, _, _ in bench.actions(directory, {'backend': 'real'})}
+            self.assertTrue(all(rows[key] is None for key in ('b', 'x', 't')))
+
+    def test_staging_a_motion_does_not_submit_it(self):
+        with patch.object(bench, 'window', return_value=('%command', 'bash')), \
+             patch.object(bench, 'tmux') as tmux:
+            bench.type_command('test-motion --run selected', enter=False)
+        self.assertNotIn(('send-keys', '-t', '%command', 'Enter'), [call.args for call in tmux.call_args_list])
+        tmux.assert_any_call('select-window', '-t', '%command')
+
     def test_missing_tmux_shows_next_steps_without_starting_any_process(self):
         with patch.object(bench.shutil, 'which', return_value=None), \
              patch.object(bench, 'current_run', return_value=None), \
@@ -160,7 +187,7 @@ class BenchTmuxTests(unittest.TestCase):
         with patch.object(bench, 'SESSION', session), \
              patch.object(bench, 'current_run', return_value=None), \
              patch.object(bench, 'panel_command', side_effect=lambda role: bench.shell(f'{role}: waiting for device')), \
-             patch.object(bench, 'dashboard_command', return_value=bench.shell('test dashboard')):
+             patch.object(bench, 'dashboard_command', return_value=bench.shell('embodied.applications.workstation.bench _dashboard')):
             bench.start(attach=False)
             self.assertEqual(names(), expected)
             until(lambda: all(bench.idle(role) for role in bench.WINDOWS))
@@ -168,6 +195,17 @@ class BenchTmuxTests(unittest.TestCase):
             bench.start(attach=False)
             self.assertEqual(names(), expected)
             self.assertEqual(panes(), original)  # reopening preserves live work
+
+            # An existing user's workbench picks up the new test menu without
+            # replacing the kernel, command shell or running web/device panels.
+            bench.tmux('set-option', '-p', '-t', original['home'][0], '@bench_ui_revision', 'old-menu')
+            bench.start(attach=False)
+            until(lambda: bench.idle('home'))
+            upgraded = panes()
+            self.assertNotEqual(upgraded['home'][1], original['home'][1])
+            for role in set(bench.WINDOWS) - {'home'}:
+                self.assertEqual(upgraded[role], original[role])
+            original = upgraded
 
             bench.tmux('kill-window', '-t', original['camera'][0])
             bench.start(attach=False)

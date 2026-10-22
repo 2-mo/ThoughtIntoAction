@@ -27,7 +27,7 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or 'embodied-' + hashlib.sha2
 WINDOWS = {'kernel': '内核', 'shell': '命令', 'home': '总控', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传'}
 WINDOW_HINT = 'Ctrl+B → 1 内核 · 2 命令 · 3 总控 · 4 网页 · 5 VR · 6 相机 · 7 宣传'
-UI_REVISION = '2'
+UI_REVISION = '3'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
 KERNELS = [  # key, label, command typed into the kernel window, real arm
@@ -289,7 +289,8 @@ def overview_text(reason=None):
 
 def actions(run, identity, episode=None, now=None):
     """[(key, label, command or None, run immediately, needs the command gateway)] for a running kernel."""
-    r = relative(run)
+    r = shlex.quote(relative(run))
+    backend = identity['backend']
     gateway = (Path(run) / 'commands.sock').exists()
     cameras = '--cameras wrist_rgb,exterior_rgb' if identity.get('backend') == 'real' else '--camera synthetic'
     stamp = (now or datetime.now()).strftime('%Y%m%d-%H%M%S')
@@ -300,7 +301,13 @@ def actions(run, identity, episode=None, now=None):
         ('k', '检查最新 episode', f'./run.sh data runtime validate {relative(episode)}' if episode else None, True, False),
         ('e', '导出 LeRobot（确认后回车）', f'./run.sh data export --source outputs/datasets/runtime --output outputs/datasets/lerobot/{stamp}', False, False),
         ('w', '打开监看与采集网页（地址与连接提示）', 'web', True, False),
-        ('m', '动作：状态（再输入 preview / movej 等）', f'./run.sh motion run --run {r} status', True, True),
+        ('m', '读取状态与设备能力', f'./run.sh examples read_state --backend {backend} --run {r}', True, True),
+        ('b', '测速：关节 1 往返 10°，保存报告（回车开始）',
+         f'./run.sh examples benchmark --backend {backend} --run {r} --joint 1 --degrees 10 --repeats 1 --speed 0', False, True),
+        ('x', 'MoveL：基座 Z +2 cm（回车开始）',
+         f'./run.sh examples movel --backend {backend} --run {r} --offset 0 0 0.02 --speed 0 --tcp-speed 0.1', False, True),
+        ('t', '连续路径：Z +2 cm → Y +2 cm（回车开始）',
+         f'./run.sh examples move_path --backend {backend} --run {r} --speed 0 --tcp-speed 0.1', False, True),
         ('h', '手眼标定 · 腕部相机（标定板在桌面）', f'./run.sh calib handeye capture wrist_rgb --auto --run {r}', False, True),
         ('j', '手眼标定 · 固定相机（标定板在夹爪）', f'./run.sh calib handeye capture exterior_rgb --auto --run {r}', False, True),
         ('g', 'π0.5 策略（填写任务后回车）', f'./run.sh policy kernel --run {r} --policy sft --prompt ""', False, True),
@@ -362,13 +369,14 @@ def start_kernel(command):
 
 
 def open_web(run=None):
+    from embodied.applications.workstation.bench_panels import open_browser
     found = window('web')
     if found is None:
         new_window('web', panel_command('web'))
     elif not found[1] or found[1] in SHELLS:
         tmux('respawn-pane', '-k', '-t', found[0], '-c', str(ROOT), panel_command('web'))
     tmux('select-window', '-t', window('web')[0])
-    return '已打开网页窗口：查看地址、启动状态与连接提示；失败时按 R 重试。'
+    return open_browser() + '；网页窗口保留服务状态与日志。'
 
 
 def stop_kernel():
@@ -395,7 +403,8 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
     menu.add_column(ratio=1)
     if found is None:
         status.add_row(Text('待机 · 没有运行中的内核', style='yellow'))
-        status.add_row(Text('下一步：选择仿真或真机配置，启动后返回这里继续。', style='dim'))
+        status.add_row(Text('真机测试按 3，仿真按 5；启动后 Ctrl+B → 3 返回总控。', style='dim'))
+        status.add_row(Text('网页已随工作台启动；内核就绪后自动连接。', style='dim'))
         for real, section in ((False, '仿真'), (True, '真机')):
             first = True
             for key, label, _, is_real in KERNELS:
@@ -409,7 +418,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
         for line in kernel_summary(run, identity):
             status.add_row(Text(line, style='green'))
         rows = actions(run, identity, episode)
-        for section, keys in (('观察', 'vo'), ('数据', 'cke'), ('控制', 'wmhjg')):
+        for section, keys in (('观察', 'wmvo'), ('测试', 'bxt'), ('数据', 'cke'), ('进阶', 'hjg')):
             first = True
             for key, label, command, _, needs in rows:
                 if key not in keys:
@@ -430,7 +439,9 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
     if show_help:
         body = Text('\n'.join([
             '直接按键，无需回车；数字键选择配置，字母键执行对应操作。',
-            '采集、导出、标定与策略命令会先填到命令窗口，检查后回车。',
+            'B 10°往返测速 · X XYZ直线 · T连续路径；运行目录和后端自动填写。',
+            '动作测试、采集、导出、标定与策略先填到命令窗口，按回车开始。',
+            '测试中在命令窗口 Ctrl+C 取消动作；Ctrl+B → 3 返回总控。',
             '/  搜索命令：输入关键词后回车；L 查看完整命令目录。',
             WINDOW_HINT,
             'VR、相机或机械臂未就绪时，窗口会继续显示状态与下一步提示。',

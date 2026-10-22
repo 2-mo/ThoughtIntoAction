@@ -1,5 +1,9 @@
 # 日常操作（真机工作台与仿真）
 
+统一入口是项目根目录的 `./run.sh`：一次打开七个 tmux 窗口与新版监看网页。总控按 `3` 启动无 Quest 真机内核，`5` 启动无输入仿真；就绪后 `Ctrl+B → 3` 回总控。`M` 读状态，`B` 10° 往返测速，`X` XYZ 直线，`T` 连续路径；测试自动填写当前运行目录，在命令窗口按回车开始。网页自动连接当前内核，`W` 打开浏览器或显示访问地址。详细步骤见[真机验收](real-arm-acceptance.md#工作台内完成本轮测试)。
+
+下文带 `scripts/shortcuts/启动工作台.sh` 的四窗口工作台属于保留的旧链路，按键与七窗口统一工作台不同。
+
 中文 [一屏架构图](../architecture/index.html)：在浏览器打开即可总览控制源、arx 核心、机械臂、相机和数据流，支持点击部件、全屏与高清海报导出。插件与命令、目录和整理建议保留在 [详细导览](../architecture/explorer.html)；离线使用与更新方法见 [导览说明](../architecture/README.md)。
 
 `arx5_test`、`reBotArm_control_py`、`robot-teleop` 已集中迁入本仓库，三个原位置无需保留。算法、设备、标定、相机、数据与操作入口见 [合并后的组件说明](consolidated-components.md)；统一入口为 `./run.sh components list`。真机日常仍走旧机械臂服务（`src/legacy/`），内核真机入口验收后切换（见 [真机验收](real-arm-acceptance.md)）。迁移前的原工作树曾归档在本机 `outputs/archives/migration/originals/`（未纳入 git）。
@@ -25,7 +29,7 @@ Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随�
 
 手机、多源控制、标定适配和新数据导出的基本链路已通过离线/仿真验证。真实 Quest、iPhone、RealSense 和 CAN 现场验收尚未进行；旧采集按键、任务页面、回放和策略执行仍保留原入口。**arx 真机启动会使能并回 Home，退出请求 SDK 阻尼。** 使用说明见 [插件工作台](plugin-workbench.md)，证据与当前边界见 [实施记录](../history/arx-runtime-implementation.md)，设计依据见 [架构方案](../history/arx-runtime-redesign.md)。
 
-## 日常启动
+## 旧链路启动
 
 环境由 uv 管理，首次安装执行下方的“安装与验证”。日常脚本直接使用项目 `.venv`，无需激活环境，也不会在启动机械臂时自动安装或更新依赖。脚本按自身位置解析路径，可以从任意工作目录调用。
 
@@ -94,7 +98,7 @@ Quest Pro 遥操 ARX X5-2025。主入口 `teleop-presets-x5`：右 Grip 跟随�
 
 `configs/project.toml` 的 `[arm_service]` 集中管理接口、SDK preview、速度/软限位和夹爪参数，`[telemetry]` 管理状态流。presets / collection profile 保留输入与采集设置。主控制端不再提供 `--backend`、`--telemetry` 或 CAN/SDK 配置转发。详见 [机械臂服务与监看](monitoring.md) 和 [插件说明](../reference/plugins.md)。
 
-默认 `./run.sh` 选择 `teleop-presets-x5`，连接已启动的真机服务，默认不启用位置控制。`--profile presets` 才加载日常快捷脚本参数。
+旧遥操命令 `./run.sh --profile presets teleop-presets-x5` 连接已启动的真机服务；不带参数的 `./run.sh` 打开上文的统一 tmux 工作台。
 
 服务参数优先级：项目默认配置、本机覆盖、命令行。控制参数优先级：控制器默认值、profile、命令行；控制端显式传入的速度覆盖服务默认速度。启动器参数放在命令之前，具体命令参数放在命令之后。
 
