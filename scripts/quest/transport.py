@@ -3,6 +3,7 @@
 import argparse
 from contextlib import closing
 import ipaddress
+import json
 import subprocess
 import time
 
@@ -23,12 +24,50 @@ def command(*args):
     return result.stdout
 
 
+def usb_devices_from_adb(output):
+    devices = []
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) < 2:
+            continue
+        serial, state = fields[:2]
+        if fields[1:3] == ['no', 'permissions']:
+            state = 'unauthorized'
+        usb = any(field.startswith('usb:') for field in fields[2:])
+        # Unauthorized USB devices may lack transport details. Keep them as
+        # candidates, but require explicit USB evidence for an authorized one.
+        pending = state in ('unauthorized', 'offline') and ':' not in serial and not serial.endswith('._tcp')
+        if usb or pending:
+            devices.append({'serial': serial, 'state': state})
+    return devices
+
+
+def usb_selection(devices):
+    authorized = [device['serial'] for device in devices if device['state'] == 'device']
+    if len(authorized) == 1:
+        return 'ready', authorized[0]
+    if len(authorized) > 1 or len(devices) > 1:
+        return 'multiple', None
+    if devices:
+        return ('unauthorized' if devices[0]['state'] == 'unauthorized' else 'offline'), None
+    return 'missing', None
+
+
+def require_usb(status, serial):
+    if status == 'ready':
+        return serial
+    messages = {
+        'missing': '未检测到已授权的 USB Quest；请检查数据线，并在头显内允许 USB 调试。',
+        'unauthorized': 'USB 设备尚未授权；请在头显内允许 USB 调试。',
+        'offline': 'USB 设备处于 ADB offline 状态；请重新连接数据线。',
+        'multiple': '检测到多个 USB 设备；请只保留一台已授权的 USB Quest。',
+    }
+    raise RuntimeError(messages[status])
+
+
 def usb_device():
-    devices = [line.split()[0] for line in command("adb", "devices", "-l").splitlines()
-               if len(line.split()) >= 2 and line.split()[1] == "device" and "usb:" in line]
-    if len(devices) != 1:
-        raise RuntimeError("需要且只能连接一台已授权的 USB Quest；请检查数据线和头显内的 USB 调试授权。")
-    return devices[0]
+    devices = usb_devices_from_adb(command('adb', 'devices', '-l'))
+    return require_usb(*usb_selection(devices))
 
 
 def xr_listening():
@@ -71,16 +110,52 @@ def peers_from_ss(output):
     return peers
 
 
-def inspect():
-    serial = usb_device()
-    reverse = command("adb", "-s", serial, "reverse", "--list")
-    configured = any(line.split()[-2:] == ["tcp:63901", "tcp:63901"] for line in reverse.splitlines())
-    peers = peers_from_ss(command("ss", "-Htn"))
+def status_snapshot():
+    """Independent read-only probes; missing USB must not hide receiver/network state."""
+    state = {'receiver_listening': False, 'usb_devices': [], 'usb_serial': None,
+             'usb_status': 'missing', 'reverse_configured': False, 'peers': [],
+             'usb_connected': False, 'error': None}
+    errors = []
+    failures = (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired)
+    try:
+        state['receiver_listening'] = xr_listening()
+    except failures as exc:
+        errors.append(f'主机接收端查询失败：{exc}')
+    try:
+        state['usb_devices'] = usb_devices_from_adb(command('adb', 'devices', '-l'))
+        state['usb_status'], state['usb_serial'] = usb_selection(state['usb_devices'])
+    except failures as exc:
+        errors.append(f'USB 设备查询失败：{exc}')
+    if state['usb_serial'] is not None:
+        try:
+            reverse = command('adb', '-s', state['usb_serial'], 'reverse', '--list')
+            state['reverse_configured'] = any(line.split()[-2:] == ['tcp:63901', 'tcp:63901']
+                                              for line in reverse.splitlines())
+        except failures as exc:
+            errors.append(f'ADB 转发查询失败：{exc}')
+    peers = []
+    try:
+        peers = peers_from_ss(command('ss', '-Htn'))
+        state['peers'] = list(map(str, peers))
+    except failures as exc:
+        errors.append(f'XR 连接查询失败：{exc}')
     local = any(peer.is_loopback for peer in peers)
     remote = any(not peer.is_loopback for peer in peers)
-    ready = configured and local and not remote
-    state = "USB 数据连接已确认" if ready else "仍有网络连接（非 USB）" if remote else "等待 Quest 通过 USB 连接"
-    return ready, state, serial, configured, peers
+    state['usb_connected'] = state['reverse_configured'] and local and not remote
+    state['error'] = '；'.join(errors) or None
+    return state
+
+
+def inspect():
+    state = status_snapshot()
+    if state['error']:
+        raise RuntimeError(state['error'])
+    serial = require_usb(state['usb_status'], state['usb_serial'])
+    peers = list(map(ipaddress.ip_address, state['peers']))
+    remote = any(not peer.is_loopback for peer in peers)
+    ready = state['usb_connected']
+    label = 'USB 数据连接已确认' if ready else '仍有网络连接（非 USB）' if remote else '等待 Quest 通过 USB 连接'
+    return ready, label, serial, state['reverse_configured'], peers
 
 
 def show(state):
@@ -99,11 +174,18 @@ def show(state):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", nargs="?", default="prepare", choices=["prepare", "wait", "status"])
+    parser.add_argument('--json', action='store_true', help='status: print independent receiver/USB/TCP state as JSON')
     args = parser.parse_args(argv)
+    if args.json:
+        if args.action != 'status':
+            parser.error('--json 仅用于 status')
+        state = status_snapshot()
+        print(json.dumps(state, ensure_ascii=False))
+        return int(state['error'] is not None)
     try:
         if args.action == "prepare":
-            serial = usb_device()
             ensure_xr_service()
+            serial = usb_device()
             # Idempotent; don't remove a working mapping and interrupt its stream.
             command("adb", "-s", serial, "reverse", "tcp:63901", "tcp:63901")
         state = inspect()
