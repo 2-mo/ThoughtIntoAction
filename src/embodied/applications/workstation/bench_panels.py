@@ -174,6 +174,27 @@ def prepare_vr(stop=None):
         return Status(f'连接准备失败：{exc}；详情：{path.relative_to(ROOT)}', 'error')
 
 
+def request_vr_wearing(enabled, stop=None):
+    """Send only the headset wear request; keep client and robot lifecycles separate."""
+    state = vr_transport_status(stop)
+    if state.get('usb_status') != 'ready':
+        reason = {'unauthorized': 'USB 未授权', 'missing': 'USB 未连接',
+                  'offline': 'USB 已离线', 'multiple': '连接了多台 USB 设备'}.get(
+                      state.get('usb_status'), state.get('error') or 'USB 状态未确认')
+        return Status(f'{reason}，未发送佩戴请求；模拟佩戴不能代替 USB 授权', 'error')
+    if not state.get('boot_completed'):
+        return Status('头显仍在开机，未发送佩戴请求', 'waiting')
+    label = '模拟佩戴' if enabled else '取消模拟佩戴'
+    try:
+        result = transport_command([str(ROOT / 'run.sh'), 'quest', 'wake', 'wear' if enabled else 'unwear'],
+                                   timeout=10, stop=stop)
+        if result.returncode:
+            return Status(label + '失败：' + (result.stderr or result.stdout or 'ADB 未确认执行成功').strip(), 'error')
+        return Status('已发送' + label + '请求；实际佩戴状态未读回', 'waiting')
+    except (OSError, subprocess.SubprocessError) as exc:
+        return Status(label + f'失败：{exc}', 'error')
+
+
 class VRConnection:
     """One background job keeps slow ADB calls out of terminal input handling."""
 
@@ -182,6 +203,9 @@ class VRConnection:
         self.stop = threading.Event()
         self.future = None
         self.preparing = False
+        self.wearing = False
+        self.pending_wear = None
+        self.wear_message = Status('未发送请求 · 实际佩戴状态未读回', 'disabled')
         self.auto_prepare = auto_prepare
         self.retry = False
         self.attempt = None
@@ -197,7 +221,11 @@ class VRConnection:
                 return self.state
             result = self.future.result()
             self.future = None
-            if self.preparing:
+            if self.wearing:
+                self.wear_message = result
+                self.wearing = False
+                self.checked_at = 0.
+            elif self.preparing:
                 self.message = result
                 self.state = {'checking': True}
                 self.checked_at = 0.
@@ -219,7 +247,12 @@ class VRConnection:
         if known and not need_prepare:
             self.attempt = None
             self.backoff = 2.
-        if self.retry or (self.auto_prepare and known and need_prepare and
+        if self.pending_wear is not None:
+            enabled, self.pending_wear = self.pending_wear, None
+            self.wearing = True
+            self.wear_message = Status('正在发送' + ('模拟佩戴' if enabled else '取消模拟佩戴') + '请求…', 'waiting')
+            self.future = self.executor.submit(request_vr_wearing, enabled, self.stop)
+        elif self.retry or (self.auto_prepare and known and need_prepare and
                           (attempt != self.attempt or time.monotonic() >= self.retry_at)):
             self.retry = False
             self.attempt = attempt
@@ -233,6 +266,9 @@ class VRConnection:
     def close(self):
         self.stop.set()
         self.executor.shutdown(wait=False, cancel_futures=True)
+
+    def set_wearing(self, enabled):
+        self.pending_wear = enabled
 
 
 def vr_rows(found, transport=None):
@@ -284,7 +320,7 @@ def vr_rows(found, transport=None):
     client_hint = ('自动连接版客户端：USB 地址 127.0.0.1，连接失败会自动重试。'
                    if state.get('client_package') == 'com.thoughtintoaction.quest' else
                    '官方旧版客户端需在头显填 127.0.0.1 并 Connect；免点击需要安装自动连接版 APK。')
-    return rows, [client_hint,
+    return rows, ['W 模拟佩戴 · U 取消模拟佩戴；需要 USB 授权，不切换机器人控制模式。', client_hint,
                   '可先开工作台再开头显；授权并开机完成后自动准备转发、打开客户端。',
                   '首次请在头显允许 USB 调试并勾选“始终允许”；按 R 重试。',
                   'TCP 已连接不等于追踪有效，也不会自动取得机械臂控制权。', *hints]
@@ -571,6 +607,7 @@ def render(state, service=None):
                                   title='最近日志', border_style='dim'))
     sections.append(Text('Ctrl+B → 1 返回总控 · Ctrl+B → D 离开工作台 · R ' +
                          ('连接 / 刷新' if title == TITLES['vr'] else '重试 / 刷新' if service is not None else '刷新') +
+                         (' · W 模拟佩戴 · U 取消模拟佩戴' if title == TITLES['vr'] else '') +
                          (' · W 打开浏览器' if service is not None and service.role == 'web' else ''), style='dim'))
     return Group(*sections)
 
@@ -624,6 +661,7 @@ def main(argv=None):
                         transport = vr.snapshot()
                         from embodied.applications.workstation import bench
                         rows, hints = vr_rows(bench.current_run(), transport)
+                        rows.append(('佩戴请求', vr.wear_message))
                         if vr.message is not None:
                             rows.append(('连接准备', vr.message))
                         state = (TITLES['vr'], rows, hints)
@@ -642,6 +680,9 @@ def main(argv=None):
                     refreshed = 0.
                 if key == 'w' and args.role == 'web' and service is not None:
                     service.browser_message = open_browser()
+                    refreshed = 0.
+                if vr is not None and key in ('w', 'u'):
+                    vr.set_wearing(key == 'w')
                     refreshed = 0.
     finally:
         if vr is not None:
