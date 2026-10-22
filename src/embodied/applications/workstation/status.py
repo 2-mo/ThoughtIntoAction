@@ -6,11 +6,11 @@ from typing import Literal
 @dataclass(frozen=True)
 class Status:
     text: str
-    level: Literal['ready', 'waiting', 'error', 'disabled']
+    level: Literal['ready', 'waiting', 'error', 'disabled', 'active']
 
     @property
     def style(self):
-        return {'ready': 'bold green', 'waiting': 'bold yellow',
+        return {'active': 'bold black on bright_cyan', 'ready': 'bold green', 'waiting': 'bold yellow',
                 'error': 'bold red', 'disabled': 'dim'}[self.level]
 
     def __str__(self):

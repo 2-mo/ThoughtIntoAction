@@ -3,6 +3,7 @@
   "control_hz": 250,
   "gripper_max_width": 0.082,
   "gripper_open_readout": -3.4,
+  "gripper_position_effort_limit_nm": 0.15,
   "can_interface": "can0",
   "park_q": [
     0.0,

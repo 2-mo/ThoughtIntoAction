@@ -228,6 +228,12 @@ class RealBackend:
         self._gripper_kp = control.default_gripper_kp
         self._gripper_kd = control.default_gripper_kd
         self._gripper_effort_max = float(robot.gripper_torque_max)
+        from .gripper import GripperPositionServo
+        position_effort_limit = _positive_limit(config.gripper_position_effort_limit_nm,
+            robot.gripper_torque_max, 'gripper_position_effort_limit_nm')
+        self._gripper_position = GripperPositionServo(open_readout=config.gripper_open_readout,
+            width=config.gripper_max_width, kp=self._gripper_kp, kd=self._gripper_kd,
+            effort_limit=position_effort_limit, speed=float(robot.gripper_vel_max), dt=control.controller_dt)
         self._last_sdk_timestamp = None
         self._received_at = float("-inf")
         self._closed = False
@@ -245,6 +251,8 @@ class RealBackend:
             "robot_config": _json_value(asdict(config)),
             "sdk_version": _json_value(sdk_version),
             "gripper_startup_turns": bool(getattr(robot, 'gripper_startup_turns', False)),
+            "gripper_position_control": {"kind": "bounded_total_motor_effort", "effort_limit_nm": position_effort_limit,
+                "effort_unit": "motor_Nm", "motor_torque_constant": GripperPositionServo.MOTOR_TORQUE_CONSTANT},
             "control_api": "Arx5JointController.set_joint_cmd; native position, velocity, extra feedforward torque",
             "gravity_api": ("native automatic gravity; packet torque excludes gravity" if self._automatic_gravity
                             else "Stanford Arx5Solver.inverse_dynamics(q,0,0); unscaled; automatic gravity disabled for staged bench"),
@@ -417,11 +425,16 @@ class RealBackend:
         if target is not None:
             gain.kp()[:] = self.config.kp
             gain.kd()[:] = self.config.kd
-        if self.controller.gripper_mode != Mode.FREE_DRIVE:
-            gain.gripper_kp = self._gripper_kp
-            gain.gripper_kd = self._gripper_kd
-        if effort is not None:
-            gain.gripper_kp = gain.gripper_kd = 0.0
+        # Native position stiffness bypasses the SDK feedforward torque clamp.
+        # Compute and bound the entire gripper PD effort before sending; motor
+        # gains stay zero, so an obstructed jaw cannot keep increasing force.
+        gain.gripper_kp = gain.gripper_kd = 0.0
+        if effort is not None or self.controller.gripper_mode == Mode.FREE_DRIVE:
+            self._gripper_position.reset()
+            gripper_torque = 0.0 if effort is None else -float(np.copysign(effort, self.config.gripper_open_readout))
+        else:
+            gripper_torque = self._gripper_position.update(self.controller.gripper_target,
+                state.gripper_width, state.gripper_velocity)
         packet = self._sdk.JointState(6)
         packet.pos()[:] = state.q if target is None else target
         packet.vel()[:] = self.controller.dq_target
@@ -448,8 +461,7 @@ class RealBackend:
             else self.controller.gripper_target
         )
         packet.gripper_vel = 0.0
-        packet.gripper_torque = (0.0 if effort is None else
-                                 -float(np.copysign(effort, self.config.gripper_open_readout)))
+        packet.gripper_torque = gripper_torque
         packet.timestamp = 0.0  # With zero preview, replace the current waypoint.
         sent = {
             "command_time_s": _json_value(float(now)),
@@ -461,6 +473,9 @@ class RealBackend:
             "gripper_target": float(packet.gripper_pos),
             "gripper_applied_kp": float(gain.gripper_kp),
             "gripper_applied_kd": float(gain.gripper_kd),
+            "gripper_effort_limit_nm": self._gripper_position.limit if effort is None else effort,
+            "gripper_effort_limited": self._gripper_position.limited,
+            "gripper_requested_torque_nm": gripper_torque,
             "user_feedforward_torque": extra_torque.tolist(),
             "dynamics_feedforward_torque": dynamic_torque.tolist(),
             "sdk_gravity_torque": None if gravity is None else gravity.tolist(),

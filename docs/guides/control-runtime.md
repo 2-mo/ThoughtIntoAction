@@ -88,6 +88,10 @@ outputs/envs/control/bin/python scripts/setup/build_gripper_sdk.py \
 ## 配置与模型
 
 - `configs/robots/arx5/robot.json` 选择 `profile`，设置关节范围、Home、控制频率、CAN 和模型路径。关节单位为 rad，夹爪宽度为 m。
+
+ARX 夹爪位置控制的总力矩上限集中在 `gripper_position_effort_limit_nm`，默认 `0.15`，沿用旧限力闭合示例。位置只表示期望开度：遇到物体时允许停在实际接触宽度，不通过增大位置误差强行到位。适配层计算并限制整个 PD 输出，电机端夹爪 Kp/Kd 为零，避免原生位置刚度绕过 SDK 的前馈力矩限制；关节控制不变。SDK 的 `gripper_torque_max` 仍保留为硬件保护阈值，不拿它充当日常夹持力。
+
+该上限单位是 SDK 电流估算的**电机 N·m**，不是标定过的指尖牛顿力。`runtime_parameters.gripper_position_control` 记录实际策略与上限，遥操位置目标都经过该策略；显式 `grasp(effort=...)` 仍使用已有力控路径和能力检查。SDK 过流保护不会由输入恢复请求解除。修改配置/适配器后需重启 robot 才生效，退出会进入阻尼。
 - `configs/robots/arx5/tool.json` 定义 TCP 和额外负载。模型加载器检查工具与生成模型的一致性。
 - `configs/control/motion.json` 是统一内核运动参数的唯一配置入口，含关节速度/加速度/jerk、可选 TCP 约束和到位条件；参见 [字段与生效规则](motion-settings.md)。运行时的实际速度能力由所选驱动报告；`speed=0` 使用逐轴能力，`speed_scale` 对每轴按比例缩放。
 - `configs/inputs/quest.json` 定义 SDK 路径、基座旋转、Grip 阈值和位置比例。内置原生 Quest 路由目前要求 250 Hz 机器人配置。

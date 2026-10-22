@@ -616,7 +616,10 @@ def render(state, service=None):
         table.add_row(Text(label), status_text(value))
     states = [value for _, value in rows if isinstance(value, Status)]
     primary = next((value for value in states if value.level == 'error'), states[0] if states else None)
-    sections = [Panel(table, title=title, border_style=primary.style if primary else '#b7a1e8'),
+    active = any(value.level == 'active' for value in states)
+    body = Group(Text('  手机遥操已开启 · S / 空格停止  ', style='bold black on bright_cyan'), table) if active else table
+    sections = [Panel(body, title=title, border_style=('red' if primary and primary.level == 'error' else
+                    'bright_cyan' if active else primary.style if primary else '#b7a1e8')),
                 Panel(Group(*(Text(line) for line in hints)), title='下一步', border_style='dim')]
     if service is not None:
         logs = service.logs()

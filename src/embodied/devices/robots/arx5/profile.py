@@ -33,6 +33,7 @@ class RobotConfig:
     model_plugin: str = "arx5"
     viewer_plugin: str = "arx5"
     gripper_velocity_max_m_s: float = 0.04
+    gripper_position_effort_limit_nm: float = 0.15
 
     @property
     def model_id(self):
@@ -64,4 +65,6 @@ def load_profile(values, directory):
         raise ValueError("ARX X5 requires six arm joints")
     if not math.isfinite(profile.gripper_open_readout) or profile.gripper_open_readout == 0:
         raise ValueError("ARX gripper_open_readout must be finite and nonzero")
+    if not math.isfinite(profile.gripper_position_effort_limit_nm) or profile.gripper_position_effort_limit_nm <= 0:
+        raise ValueError("ARX gripper_position_effort_limit_nm must be finite and positive")
     return profile

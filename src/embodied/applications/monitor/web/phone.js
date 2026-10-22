@@ -10,9 +10,12 @@ const message = (text, error = false) => {
 function render(value) {
   state = value;
   const fresh = value.connected === true;
+  panel.dataset.control = value.enabled ? value.active ? 'active' : 'enabled' : 'idle';
+  byId('phone-control-banner').hidden = !value.enabled;
+  byId('phone-control-banner').textContent = value.active ? '● 手机遥操已开启 · 正在跟随' : '● 手机遥操已开启 · 松手保持';
   panel.dataset.state = value.estop || (value.error && value.available) ? 'error' : fresh
     ? value.tracking === 'normal' ? 'live' : value.tracking === 'limited' ? 'warning' : 'error' : 'offline';
-  put('status', !value.available ? '接收服务未启动' : !fresh ? '等待手机连接' : value.active ? '遥操中' : '已连接');
+  put('status', !value.available ? '接收服务未启动' : !fresh ? '等待手机连接' : value.enabled ? '已接管' : '仅监看');
   put('endpoint', value.addresses?.length ? 'App 服务器 ' + value.addresses.map(host => `${host}:${value.port}`).join(' / ') : '手机与电脑使用可互通的网络 · UDP 5005');
   put('tracking', fresh ? ({normal: '正常', limited: '受限', unavailable: '无追踪'}[value.tracking] || '—') : '—');
   put('fps', fresh && Number.isFinite(value.fps) ? `${value.fps.toFixed(1)} Hz` : '—');
@@ -29,7 +32,11 @@ function render(value) {
   else if (value.estop) { message('手机停止已锁存；松开 Clutch 后在手机点恢复。', true); serviceMessage = true; }
   else if (fresh && value.tracking !== 'normal') { message('追踪受限：请保持相机画面清晰，观察有纹理的环境。'); serviceMessage = true; }
   else if (value.target_limited) { message('目标跟随误差较大，超出部分已丢弃；可反向移动或松开重新定位。'); serviceMessage = true; }
-  else if (serviceMessage) { message(value.enabled ? '已启用手机遥操。按住跟随，上下滑动夹爪，松手保持。' : '仅监看；可在手机、终端或本页开始遥操。'); serviceMessage = false; }
+  else if (serviceMessage || byId('phone-message').dataset.error !== 'true') {
+    message(value.enabled ? '按住跟随，上滑开夹爪、下滑闭夹爪；松手保持。' : '仅监看；可在手机、终端或本页开始遥操。');
+    serviceMessage = false;
+  }
+  window.dispatchEvent(new CustomEvent('phone-preview', {detail: value}));
 }
 async function poll() {
   try {

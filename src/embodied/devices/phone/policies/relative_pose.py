@@ -39,6 +39,7 @@ class RelativePosePolicy:
         self._position_correction = Vector3(0, 0, 0)
         self._rotation_correction = IDENTITY_QUATERNION
         self.limited = False
+        self.mapped_orientation = None
         self.position_lead_m = self.rotation_lead_rad = 0.
 
     def reset(self, input_state: TeleopInput, robot_state: RobotState) -> None:
@@ -48,6 +49,7 @@ class RelativePosePolicy:
         self._position_correction = Vector3(0, 0, 0)
         self._rotation_correction = IDENTITY_QUATERNION
         self.limited = False
+        self.mapped_orientation = None
         self.position_lead_m = self.rotation_lead_rad = 0.
 
     def update(
@@ -81,6 +83,7 @@ class RelativePosePolicy:
         # Bound tracking error, not speed. Discard unreachable displacement from
         # the reference so reversing the hand responds immediately after saturation.
         raw = target_pose
+        self.mapped_orientation = raw.orientation
         position = raw.position + self._position_correction
         orientation = quaternion_multiply(self._rotation_correction, raw.orientation)
         delta = position - robot_state.tcp_pose.position

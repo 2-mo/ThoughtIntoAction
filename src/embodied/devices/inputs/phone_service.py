@@ -206,6 +206,11 @@ class PhoneService:
                 'clutch': value.clutch_active if fresh and value else False,
                 'gripper': value.gripper if fresh and value else None,
                 'position': list(value.pose.position.as_tuple()) if fresh and value else None,
+                'orientation_preview': ({'frame': 'base_tcp',
+                    'input_quaternion': list(controller.policy.mapped_orientation.as_tuple()),
+                    'target_quaternion': controller.last_target['pose'][3:]}
+                    if fresh and controller.active and controller.last_target
+                    and controller.policy.mapped_orientation is not None else None),
                 'estop': controller.estop, 'mapping': controller.mapping_name,
                 'position_scale': controller.mapping.position_scale,
                 'rotation_scale': controller.mapping.rotation_scale,
