@@ -32,7 +32,7 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传'
-UI_REVISION = '10'
+UI_REVISION = '11'
 ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
@@ -143,6 +143,48 @@ def activity(role):
             if found else '')
 
 
+def ensure_robot_controls():
+    """Keep the kernel's PTY/process ancestry intact; add a zoomed control pane.
+
+    Shutdown/restart still address the original `kernel` pane. Never respawn,
+    signal or reparent that pane merely to change its user interface.
+    """
+    kernel = window('kernel')
+    if kernel is None:
+        return None
+    existing = window('robot-controls')
+    command = panel_command('kernel')
+    if existing:
+        pane, running = existing
+        revision = tmux('display-message', '-p', '-t', pane, '#{@bench_ui_revision}').stdout.strip()
+        if not running:
+            tmux('respawn-pane', '-t', pane, '-c', str(ROOT), command)
+        elif revision != UI_REVISION:
+            refresh_panel(pane, command)
+    else:
+        pane = tmux('split-window', '-d', '-v', '-P', '-F', '#{pane_id}', '-t', kernel[0],
+                    '-c', str(ROOT), command).stdout.strip()
+        tmux('set-option', '-p', '-t', pane, '@bench_role', 'robot-controls')
+        logs = ROOT / 'outputs/logs/bench'
+        logs.mkdir(parents=True, exist_ok=True)
+        path = logs / f'robot-pane-{kernel[0].lstrip("%")}.log'
+        path.write_text(tmux('capture-pane', '-p', '-t', kernel[0], '-S', '-2000').stdout)
+        tmux('pipe-pane', '-o', '-t', kernel[0], 'cat >> ' + shlex.quote(str(path)))
+    tmux('set-option', '-p', '-t', pane, '@bench_ui_revision', UI_REVISION)
+    return pane
+
+
+def focus_robot_controls(pane):
+    """Zoom only the explicitly tagged UI pane; never send keys to the engine."""
+    if not pane or (found := window('robot-controls')) is None or found[0] != pane:
+        return False
+    if tmux('display-message', '-p', '-t', pane, '#{window_zoomed_flag}').stdout.strip() == '1':
+        tmux('resize-pane', '-Z', '-t', pane)
+    tmux('select-pane', '-t', pane)
+    tmux('resize-pane', '-Z', '-t', pane)
+    return True
+
+
 def descendant_pid(pid, ancestor):
     """Linux process ancestry, without signalling or attaching to a device."""
     seen = set()
@@ -248,6 +290,8 @@ def start(attach=True):
         else:
             new_window(role, command, first=not running)
             running = True
+    if owned_run() or activity('kernel') == 'kernel':
+        ensure_robot_controls()
     if not prepare_robot_start(attach):
         tmux('select-window', '-t', window('home')[0])
     if attach:
@@ -448,6 +492,13 @@ exec {panel_command("kernel")}'''
     tmux('set-option', '-p', '-t', target[0], '@bench_activity', 'kernel')
     tmux('set-option', '-p', '-t', target[0], '@bench_last_exit', '')
     tmux('set-option', '-p', '-t', target[0], '@bench_kernel_command', command)
+    ensure_robot_controls()
+    # Keep the initial motor-enable confirmation visible. The UI takes focus
+    # only after the supervisor publishes a ready runtime.
+    if tmux('display-message', '-p', '-t', target[0], '#{window_zoomed_flag}').stdout.strip() == '1':
+        tmux('resize-pane', '-Z', '-t', target[0])
+    tmux('select-pane', '-t', target[0])
+    tmux('resize-pane', '-Z', '-t', target[0])
     tmux('respawn-pane', '-k', '-t', target[0], '-c', str(ROOT), 'bash -c ' + shlex.quote(script))
     tmux('select-window', '-t', target[0])
     return 'robot 窗口正在启动；按提示确认，就绪后 Ctrl+B 1 回总控。'

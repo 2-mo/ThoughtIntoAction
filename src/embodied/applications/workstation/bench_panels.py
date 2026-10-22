@@ -4,7 +4,8 @@
     python -m embodied.applications.workstation.bench_panels web --serve
 
 Interactive --serve starts web/site children, ensures the independent camera
-service, or prepares the Quest USB transport. No panel connects the arm.
+service, or prepares the Quest USB transport. Robot keys attach to an existing
+kernel; no panel opens a hardware driver or enables motors.
 Noninteractive invocations stay read-only.
 """
 from __future__ import annotations
@@ -94,7 +95,10 @@ def kernel_rows():
         rows = [('robot', mode + '控制运行中'), ('运行目录', bench.relative(run))]
         rows.extend(('反馈' if i == 0 else '', line)
                     for i, line in enumerate(bench.kernel_summary(run, identity)[1:]))
-        hints = ['当前内核保留运行；控制操作在总控窗口选择。']
+        hints = ['P  预抓取位       H  回零位       空格 / S  停止本面板动作并保持',
+                 '按键直接执行；运动中不排队。速度使用后端每轴上限，实际峰值由路径及加速度 / jerk 决定。',
+                 'Ctrl+B z 展开原始日志；再次按下恢复面板。',
+                 '内核日志：' + bench.relative(run / 'backend.log')]
         if mode == '仿真':
             hints.append('当前反馈来自仿真，不能据此判断真机是否通电。')
         return rows, hints
@@ -608,6 +612,7 @@ def render(state, service=None):
     sections.append(Text('Ctrl+B → 1 返回总控 · Ctrl+B → D 离开工作台 · R ' +
                          ('连接 / 刷新' if title == TITLES['vr'] else '重试 / 刷新' if service is not None else '刷新') +
                          (' · W 模拟佩戴 · U 取消模拟佩戴' if title == TITLES['vr'] else '') +
+                         (' · P 预抓取 · H 回零 · 空格停止' if title == TITLES['kernel'] else '') +
                          (' · W 打开浏览器' if service is not None and service.role == 'web' else ''), style='dim'))
     return Group(*sections)
 
@@ -642,6 +647,9 @@ def main(argv=None):
     service = Service(args.role) if args.serve and args.role in (*SERVICE_COMMANDS, 'camera') else None
     stopping = False
     vr = VRConnection(auto_prepare=args.serve) if args.role == 'vr' else None
+    from embodied.applications.workstation.robot_panel import RobotControls
+    robot = RobotControls() if args.role == 'kernel' else None
+    focused_run = None
 
     def stop_requested(*_):
         nonlocal stopping
@@ -654,7 +662,7 @@ def main(argv=None):
         with terminal_keys(), Live(console=Console(), screen=True, auto_refresh=False) as live:
             refreshed = 0.
             while not stopping:
-                if time.monotonic() - refreshed >= 1:
+                if time.monotonic() - refreshed >= (.1 if robot is not None else 1):
                     if service is not None:
                         service.open_when_ready()
                     if vr is not None:
@@ -667,9 +675,18 @@ def main(argv=None):
                         state = (TITLES['vr'], rows, hints)
                     else:
                         state = service.snapshot() if service else snapshot(args.role)
+                    if robot is not None:
+                        from embodied.applications.workstation import bench
+                        found = bench.current_run()
+                        state[1].extend(robot.rows(found))
+                        if found and found[0] != focused_run:
+                            if bench.focus_robot_controls(os.environ.get('TMUX_PANE')):
+                                focused_run = found[0]
+                        elif found is None:
+                            focused_run = None
                     live.update(render(state, service), refresh=True)
                     refreshed = time.monotonic()
-                key = read_key(.2)
+                key = read_key(.05 if robot is not None else .2)
                 if key in ('eof', '\x03', '\x04'):
                     break
                 if key == 'r':
@@ -684,7 +701,13 @@ def main(argv=None):
                 if vr is not None and key in ('w', 'u'):
                     vr.set_wearing(key == 'w')
                     refreshed = 0.
+                if robot is not None and key in ('p', 'h', ' ', 's'):
+                    from embodied.applications.workstation import bench
+                    robot.press(key, bench.current_run())
+                    refreshed = 0.
     finally:
+        if robot is not None:
+            robot.close()
         if vr is not None:
             vr.close()
         if service is not None:
