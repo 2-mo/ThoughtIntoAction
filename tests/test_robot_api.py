@@ -45,6 +45,43 @@ class RobotApiTests(unittest.TestCase):
         self.session_factory = self.enterContext(
             patch.object(robot_api, 'ControlSession', return_value=self.session))
 
+    def test_tcp_path_and_grasp_use_the_existing_session(self):
+        self.client.describe.return_value['robot']['gripper'] = {
+            'present': True, 'grasp': True, 'effort_max': 1., 'effort_unit': 'N'}
+        self.session.command.return_value = {'operation_id': 'grasp-id'}
+        self.session.wait.return_value = {'status': 'completed', 'result': {
+            'confirmed': False, 'stop_reason': 'minimum_width', 'actual_width_m': 0.}}
+        with Robot.connect('/fake/run') as arm:
+            arm.plan_movel(xyz=[.3, 0., .27], tcp_speed=.1, angular_speed=.5)
+            self.assertEqual(self.client.preview.call_args.kwargs['tcp_speed'], .1)
+            arm.move_path([[.3, 0., .27], [.3, .02, .27]], blend_radius=.005, tcp_speed=.05)
+            self.assertEqual(self.client.preview.call_args.args[0], 'move_path')
+            self.assertEqual(len(self.client.preview.call_args.kwargs['waypoints'][0]), 7)
+            self.assertFalse(arm.gripper.grasp(effort=.2)['confirmed'])
+        self.session.command.assert_any_call('grasp', effort=.2, minimum_width=0., timeout=5., contact_time=.2)
+
+    def test_no_gripper_rejects_before_acquiring(self):
+        self.client.describe.return_value['robot'].update(gripper_max_width=0., gripper={'present': False})
+        with Robot.connect('/fake/run') as arm:
+            with self.assertRaises(ValueError):
+                arm.gripper.move(0.)
+            with self.assertRaises(ValueError):
+                arm.gripper.grasp(effort=.1)
+        self.session_factory.assert_not_called()
+
+    def test_simulation_config_is_forwarded_only_when_creating(self):
+        with tempfile.TemporaryDirectory() as folder:
+            run = Path(folder)
+            (run / 'observer.sock').touch()
+            context = MagicMock()
+            context.__enter__.return_value = run
+            with patch('embodied.applications.workstation.control.sim_kernel', return_value=context) as start:
+                with Robot.sim(config='configs/robots/reference7/robot.json'):
+                    pass
+                self.assertEqual(start.call_args.kwargs['config'], 'configs/robots/reference7/robot.json')
+        with self.assertRaises(ValueError):
+            Robot.sim(run='/existing', config='other.json')
+
     def test_reading_and_planning_do_not_acquire_and_vectors_are_copies(self):
         with Robot.connect('/fake/run') as arm:
             self.assertEqual(arm.state, self.state)

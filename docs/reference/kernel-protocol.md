@@ -38,7 +38,7 @@ Result: `protocol`, `runtime_id`, `model_id`, `robot`, `workspace`, `motion_limi
 
 Latest measured state, owner and operations; clients treat feedback older than 150 ms as stale.
 
-Result: `runtime_id`, `model_id`, `epoch`, `owner`, `last_revocation`, `lease_remaining_s`, `stopped`, `phase`, `q`, `dq`, `pose`, `gripper_width`, `feedback_monotonic_ns`, `operations`, `ingresses`
+Result: `runtime_id`, `model_id`, `epoch`, `owner`, `last_revocation`, `lease_remaining_s`, `stopped`, `phase`, `q`, `dq`, `pose`, `gripper_width`, `gripper_velocity`, `gripper_effort`, `gripper_contact`, `feedback_monotonic_ns`, `operations`, `ingresses`
 
 ### `acquire`
 
@@ -95,13 +95,21 @@ Result: `status`, `physical_stopped`
 
 ### `preview`
 
-Plan without moving: joint path and times, TCP path (<=160 poses), checked against limits, derivative bounds and the table plane. MoveJ, home and jog use the shared Ruckig trajectory; MoveL preserves its Cartesian path while scaling time to satisfy the same joint bounds. trajectory describes the evaluator; limits includes requested speed/acceleration/jerk and effective joint_velocity_rad_s; metrics reports duration, peak derivatives, limiting_factors and derivative_evaluation. These fields are included in plan_id. Acceleration and jerk are planning parameters, not hardware ratings. Valid for 30 s and only for the same owner and model.
+Plan without moving: joint path and times, TCP path (<=160 poses), checked against limits, derivative bounds and the table plane. MoveJ, home and jog use the shared Ruckig trajectory; MoveL preserves its Cartesian path while scaling time to satisfy joint and optional TCP bounds. MovePath uses one blended quintic trajectory with no intermediate settling; its coefficients are hashed in trajectory. TCP limits use explicit m/s, m/s^2, m/s^3 and rad/s, rad/s^2, rad/s^3 units; limits.tcp and sampled FK peak metrics are part of plan_id. trajectory describes the evaluator; limits includes requested speed/acceleration/jerk and effective joint_velocity_rad_s; metrics reports duration, peak derivatives, limiting_factors and derivative_evaluation. These fields are included in plan_id. Acceleration and jerk are planning parameters, not hardware ratings. Valid for 30 s and only for the same owner and model.
 
 | Field | Type | | Meaning |
 | --- | --- | --- | --- |
-| `kind` | str | optional | movej, movel, home or jog |
+| `kind` | str | optional | movej, movel, move_path, home or jog |
 | `q` | q | optional | movej / jog goal |
 | `pose` | pose | optional | movel goal (unit quaternion) |
+| `waypoints` | poses | optional | move_path: 1..64 base-frame TCP targets; start is current pose |
+| `blend_radius` | float | optional | move_path internal corner radius in metres; default .01 |
+| `tcp_speed` | float | optional | positive TCP linear speed cap in m/s |
+| `tcp_acceleration` | float | optional | positive TCP linear acceleration cap in m/s^2 |
+| `tcp_jerk` | float | optional | positive TCP linear jerk cap in m/s^3 |
+| `angular_speed` | float | optional | positive TCP angular speed cap in rad/s |
+| `angular_acceleration` | float | optional | positive TCP angular acceleration cap in rad/s^2 |
+| `angular_jerk` | float | optional | positive TCP angular jerk cap in rad/s^3 |
 | `speed` | float | optional | finite nonnegative joint speed cap, rad/s (default 0.15); 0 uses backend per-joint velocity capabilities, positive values use min(speed, capability) on each joint before speed_scale |
 | `speed_scale` | float | optional | finite multiplier in (0, 1] on each resolved joint velocity cap; default 1 |
 | `acceleration` | float | optional | finite positive planned joint acceleration, rad/s^2 (default 2) |
@@ -169,6 +177,19 @@ Hold the arm and stream a gripper target.
 | `gripper_width` | float | optional | gripper target, 0..gripper_max_width |
 
 Result: `status`
+
+### `grasp` (lease)
+
+Capability-dependent contact grasp. The arm holds while closing effort ramps. Poll operations: result reports stop_reason (contact, minimum_width, timeout), confirmed, actual_width_m, actual_effort and effort_unit. Completed means the bounded operation ended; only confirmed=true indicates contact. Contact retains closing effort through subsequent arm moves; gripper position/cancel/release clears it. ARX motor_Nm is SDK current-estimated motor torque, not calibrated fingertip force. Detection requires a 0.3 s cosine effort ramp, at least 0.5 mm closing travel, width above minimum_width + 1 mm, absolute measured velocity <=2 mm/s and absolute measured effort >=20% of requested effort throughout contact_time. Feedback must be finite, fresh (<100 ms) and progress without gaps >100 ms. Simulation additionally requires actual contacts on both jaws against external bodies.
+
+| Field | Type | | Meaning |
+| --- | --- | --- | --- |
+| `effort` | float | required | positive closing effort in describe.robot.gripper.effort_unit |
+| `minimum_width` | float | optional | minimum closing width in metres; default 0 |
+| `timeout` | float | optional | bounded operation duration in seconds, <=60; default 5 |
+| `contact_time` | float | optional | sustained contact evidence duration in seconds; default .2 |
+
+Result: `operation_id`, `status`
 
 ### `simulation-snapshot`
 

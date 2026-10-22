@@ -48,7 +48,7 @@ class SampledMotion:
         return max(
             velocity_ratio,
             math.sqrt(acceleration_ratio),
-            math.cbrt(jerk_ratio),
+            jerk_ratio ** (1.0 / 3.0),
         )
 
 

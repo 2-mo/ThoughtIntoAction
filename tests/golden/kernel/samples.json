@@ -112,7 +112,8 @@
         "gripper",
         "simulation-snapshot",
         "simulation-restore",
-        "simulation-reset"
+        "simulation-reset",
+        "grasp"
       ]
     }
   },
@@ -160,7 +161,10 @@
       "gripper_width": 0.08199999954732637,
       "feedback_monotonic_ns": 1591082466016807,
       "operations": [],
-      "ingresses": {}
+      "ingresses": {},
+      "gripper_velocity": null,
+      "gripper_effort": null,
+      "gripper_contact": null
     }
   },
   "acquire": {
@@ -668,6 +672,22 @@
     "result": {
       "status": "applied",
       "epoch": 2
+    }
+  },
+  "grasp": {
+    "request": {
+      "version": 1,
+      "runtime_id": "<runtime_id>",
+      "action": "grasp",
+      "sent_monotonic_ns": 1591082510500042,
+      "token": "<token>",
+      "epoch": 1,
+      "sequence": 3,
+      "effort": 0.1
+    },
+    "result": {
+      "operation_id": "8d0f39038b91e9414dddb0f028a77ea0b685b87f936390dcc58480adf5b7cae8",
+      "status": "running"
     }
   }
 }

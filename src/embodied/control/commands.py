@@ -142,10 +142,12 @@ class SettlingWindow:
 
 
 class CommandEngine:
-    def __init__(self, runtime_id, config, model_id, ingress_channels=(), motion_limits=None):
+    def __init__(self, runtime_id, config, model_id, ingress_channels=(), motion_limits=None, capabilities=None):
         from embodied.control.motion_limits import MotionLimits
         self.runtime_id, self.config, self.model_id = runtime_id, config, model_id
         self.motion_limits = motion_limits if motion_limits is not None else MotionLimits.load(config)
+        self.gripper_capabilities = (capabilities or {}).get('gripper', {'present': config.gripper_max_width > 0})
+        self.gripper_hold_effort = None
         self.owner = None
         self.ingress_channels = frozenset(ingress_channels)
         self.ingress_paused = False
@@ -165,6 +167,7 @@ class CommandEngine:
         self.settling = SettlingWindow(self.motion_limits.settling)
 
     def clear(self, reason='released', *, preserve_completed=False):
+        self.gripper_hold_effort = None
         self.settling.clear()
         if not preserve_completed or self.operation is not None:
             self.completed_target = None
@@ -240,6 +243,7 @@ class CommandEngine:
             self.clear(preserve_completed=True)
             return {'status': 'applied'}
         if action in ('hold', 'cancel'):
+            self.gripper_hold_effort = None
             self.settling.clear()
             if self.operation:
                 self.operation['status'] = 'cancelled'
@@ -251,6 +255,21 @@ class CommandEngine:
             return {'status': 'applied', 'physical_stopped': False}
         if self.owner['ingress'] != 'rpc':
             raise ValueError('This lease consumes an installed ingress; release it before RPC motion')
+        if action == 'grasp':
+            if self.operation:
+                raise ValueError('Finish or cancel the active operation before grasping')
+            from embodied.control.grasp import Grasp
+            grasp = Grasp(request, state, self.gripper_capabilities, now)
+            key = uuid.uuid4().hex
+            self.operation = {'operation_id': key, 'status': 'running', 'started': now,
+                              'kind': 'grasp', 'plan': grasp}
+            self.operations[key] = self.operation
+            while len(self.operations) > 64:
+                self.operations.popitem(last=False)
+            self.command = self.completed_target = None
+            self.gripper_hold_effort = None
+            self.phase = 'grasp'
+            return {'operation_id': key, 'status': 'running'}
         if action == 'execute':
             plan = request['_plan']  # Added by the bounded gateway, never trusted from a client.
             expected_epoch = plan['epoch'] if plan['owner_present'] else plan['epoch'] + 1
@@ -286,6 +305,7 @@ class CommandEngine:
         if type(source_sequence) is not int or not -1 <= source_sequence < 2**63:
             raise ValueError('Invalid source sequence')
         if action == 'free-drive':
+            self.gripper_hold_effort = None
             # Optional gripper_width keeps the gripper position-controlled while the arm is free (teaching).
             width = request.get('gripper_width')
             if width is not None and (isinstance(width, bool) or not isinstance(width, (int, float))
@@ -294,6 +314,10 @@ class CommandEngine:
             self.command = (ControlCommand(Mode.FREE_DRIVE, gripper_mode=Mode.FREE_DRIVE) if width is None else
                             ControlCommand(Mode.FREE_DRIVE, gripper_mode=Mode.COMMAND_FOLLOWING, gripper_target=float(width)))
         elif action in ('joint', 'cartesian', 'gripper'):
+            if action == 'gripper':
+                if not self.gripper_capabilities.get('present'):
+                    raise ValueError('The connected robot has no gripper')
+                self.gripper_hold_effort = None
             q = None
             pose = None
             if action == 'joint':
@@ -328,7 +352,24 @@ class CommandEngine:
             self.clear(candidate.fault)
             candidate = None
         command = None
-        if self.owner and self.operation:
+        if self.owner and self.operation and self.operation['kind'] == 'grasp':
+            op, grasp = self.operation, self.operation['plan']
+            try:
+                effort = grasp.update(state, now)
+                command = ControlCommand(Mode.COMMAND_FOLLOWING, joint_target=grasp.arm_q.copy(),
+                    gripper_target=state.gripper_width, gripper_effort=effort, hold=True)
+                if grasp.result is not None:
+                    op.update(status='completed', result=grasp.result)
+                    self.operation = None
+                    self.gripper_hold_effort = grasp.effort if grasp.result['confirmed'] else None
+                    command.gripper_effort = self.gripper_hold_effort
+                    self.completed_target = (grasp.arm_q.copy(), state.gripper_width, None, False)
+            except (ValueError, RuntimeError) as exc:
+                op.update(status='failed', reason=str(exc))
+                self.operation = self.completed_target = None
+                self.gripper_hold_effort = None
+                self.reset_reference = True
+        elif self.owner and self.operation:
             op, plan = self.operation, self.operation['plan']
             elapsed = now - op['started']
             trajectory = plan.get('_trajectory')
@@ -375,6 +416,8 @@ class CommandEngine:
         if command is None or self.reset_reference:
             self.phase = 'hold'
             command = ControlCommand(Mode.COMMAND_FOLLOWING, hold=True, gripper_target=state.gripper_width)
+        if self.gripper_hold_effort is not None:
+            command.gripper_effort = self.gripper_hold_effort
         if self.reset_reference:
             command.reset_reference = True
             self.reset_reference = False
@@ -386,7 +429,9 @@ class CommandEngine:
                 'last_revocation': self.last_revocation,
                 'lease_remaining_s': max(0, self.expires-now) if self.owner else 0., 'stopped': self.stopped, 'phase': self.phase,
                 'q': state.q.tolist(), 'dq': state.dq.tolist(), 'pose': state.pose.tolist(),
-                'gripper_width': state.gripper_width, 'feedback_monotonic_ns': int(state.received_at * 1e9),
+                'gripper_width': state.gripper_width, 'gripper_velocity': state.gripper_velocity,
+                'gripper_effort': state.gripper_effort, 'gripper_contact': state.gripper_contact,
+                'feedback_monotonic_ns': int(state.received_at * 1e9),
                 'operations': [{k: v for k, v in op.items() if k != 'plan'} for op in self.operations.values()]}
 
 
@@ -404,7 +449,13 @@ class MotionPlanner:
     def plan(self, request, snapshot, now):
         start = finite_vector(snapshot['q'], len(self.config.park_q), 'start joint position')
         kind = request.get('kind', 'movej')
+        from embodied.motion.cartesian_execution import tcp_limits, plan_path, apply_tcp_limits
+        requested_tcp = tcp_limits(request)
+        if requested_tcp and kind not in ('movel', 'move_path'):
+            raise ValueError('TCP limits apply only to movel and move_path')
         limits = self.motion_limits.resolve(request)
+        if kind in ('movel', 'move_path'):
+            limits['tcp'] = requested_tcp
         velocity_limit = np.asarray(limits['joint_velocity_rad_s'])
         acceleration_limit, jerk_limit = limits['acceleration'], limits['jerk']
         minimum_duration = 1. / self.config.control_hz
@@ -427,9 +478,16 @@ class MotionPlanner:
                     raise ValueError('MoveL has an unreachable/discontinuous IK segment')
                 path.append(seed.copy())
             qs = np.asarray(path)
+        elif kind == 'move_path':
+            trajectory, times, qs, velocity, acceleration, jerk = plan_path(
+                self.model, start, request, limits, self.config.control_hz)
+            duration = trajectory.duration
         else:
             raise ValueError('Unsupported motion primitive')
-        if kind != 'movel':
+        if kind == 'move_path':
+            limiting_factors = []
+            derivative_evaluation = 'quintic_analytic'
+        elif kind != 'movel':
             if np.any(goal < self.model.lower) or np.any(goal > self.model.upper):
                 raise ValueError('Target exceeds model limits')
             if np.max(np.abs(goal - start)) < 1e-9:
@@ -489,6 +547,14 @@ class MotionPlanner:
             limiting_factors = [name for name, value in timing.items()
                                if math.isclose(float(value), float(max(timing.values())), rel_tol=1e-9)]
             derivative_evaluation = 'sampled_analytic'
+        tcp = {}
+        if kind in ('movel', 'move_path'):
+            trajectory, times, qs, velocity, acceleration, jerk, tcp, tcp_limited = apply_tcp_limits(
+                self.model, trajectory, times, qs, velocity, acceleration, jerk,
+                requested_tcp, limits, self.config.control_hz)
+            duration = float(times[-1])
+            if tcp_limited:
+                limiting_factors = tcp_limited
         if times[-1] > 60:
             raise ValueError('Plan exceeds 60 s; split the move or increase speed')
         if np.any(qs < self.model.lower) or np.any(qs > self.model.upper):
@@ -505,7 +571,7 @@ class MotionPlanner:
         metrics = {'duration_s': float(duration), 'peak_velocity_rad_s': float(peaks[0]),
                    'peak_acceleration_rad_s2': float(peaks[1]), 'peak_jerk_rad_s3': float(peaks[2]),
                    'limiting_factors': limiting_factors,
-                   'derivative_evaluation': derivative_evaluation}
+                   'derivative_evaluation': derivative_evaluation, **tcp}
         description = trajectory.describe()
         description['limits'] = limits
         identity = {'kind': kind, 'epoch': snapshot['epoch'], 'owner_present': snapshot['owner'] is not None, 'model_id': self.model_id,

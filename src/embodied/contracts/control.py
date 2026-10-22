@@ -36,6 +36,9 @@ class RobotState:
     mode: Mode = Mode.DISABLED
     fault: str = ""
     gripper_mode: Mode | None = None
+    gripper_velocity: float | None = None
+    gripper_effort: float | None = None
+    gripper_contact: bool | None = None
 
 
 @dataclass
@@ -52,3 +55,4 @@ class ControlCommand:
     reset_reference: bool = False
     joint_velocity_target: np.ndarray | None = None
     planned: bool = False
+    gripper_effort: float | None = None  # Positive closing magnitude; units declared by the driver.
