@@ -1,18 +1,18 @@
 import threading
 import time
 
-from embodied.phone.core.capabilities import InputCapabilities
-from embodied.phone.core.models import (
+from embodied.devices.phone.core.capabilities import InputCapabilities
+from embodied.devices.phone.core.models import (
     Pose,
     Quaternion,
     TeleopInput,
     TrackingQuality,
     Vector3,
 )
-from embodied.phone.inputs.mock import MockInputSource
-from embodied.phone.runtime.latest_value import LatestValue
-from embodied.phone.runtime.metrics import RuntimeMetrics
-from embodied.phone.runtime.receiver import InputReceiver
+from embodied.devices.phone.inputs.mock import MockInputSource
+from embodied.devices.phone.runtime.latest_value import LatestValue
+from embodied.devices.phone.runtime.metrics import RuntimeMetrics
+from embodied.devices.phone.runtime.receiver import InputReceiver
 
 
 class BlockingInputSource:

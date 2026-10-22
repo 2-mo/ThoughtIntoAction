@@ -17,8 +17,9 @@ class EntryPointTests(unittest.TestCase):
                                 (["--help"], False), ([], True)):
             with self.subTest(arguments=arguments, wake_failure=fail), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
-                shortcut = root / "启动遥操.sh"
-                shutil.copy2(ROOT / shortcut.name, shortcut)
+                shortcut = root / "scripts/shortcuts/启动遥操.sh"
+                shortcut.parent.mkdir(parents=True)
+                shutil.copy2(ROOT / shortcut.relative_to(root), shortcut)
                 runner = root / "run.sh"
                 runner.write_text('''#!/usr/bin/env python3
 import json, os, sys
@@ -60,7 +61,7 @@ if sys.argv[1:3] == ["quest-wake", "start"] and os.environ["TEST_WAKE_FAIL"] == 
         from legacy.quest_teleop.xr_visualizer.cli import HTML_PATH
         self.assertTrue(HTML_PATH.is_file())
         self.assertIn(str(ROOT / "src"), str(HTML_PATH))
-        for script in ("启动遥操.sh", "scripts/viewer/monitor.sh", "启动机械臂服务.sh"):
+        for script in ("scripts/shortcuts/启动遥操.sh", "scripts/viewer/monitor.sh", "scripts/shortcuts/启动机械臂服务.sh"):
             with self.subTest(script=script):
                 result = subprocess.run([str(ROOT / script), "--help"], cwd="/tmp",
                                         capture_output=True, text=True, timeout=30)

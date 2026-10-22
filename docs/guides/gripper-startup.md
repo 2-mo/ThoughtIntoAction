@@ -46,4 +46,4 @@ cd ../../../..
 ./run.sh control build-sdk --headers /path/to/usr/include
 ```
 
-构建从仓库内 `control/vendor/arx5-sdk/source.tar` 解包固定源码，验证来源哈希，并使用同一份跨圈补丁。产物位于 `control/build/arx-gripper/source/python/`；不会覆盖根目录的旧 SDK 产物。`control start --backend real` 验证补丁版本后才启动 arx；原 `control/start_real.sh` 仍是上游基线入口，不包含本机启动器的补丁检查。日常使用根目录 `./run.sh control ...`。本轮已完成编译、数学回归和假 SDK 检查，未完成真机开度验收。
+构建从仓库内 `src/embodied/devices/robots/arx5/vendor/arx5-sdk/source.tar` 解包固定源码，验证来源哈希，并使用同一份跨圈补丁。产物位于 `outputs/build/control/arx-gripper/source/python/`；不会覆盖根目录的旧 SDK 产物。`control start --backend real` 验证补丁版本后才启动 arx；原 `scripts/control/start_real.sh` 仍是上游基线入口，不包含本机启动器的补丁检查。日常使用根目录 `./run.sh control ...`。本轮已完成编译、数学回归和假 SDK 检查，未完成真机开度验收。

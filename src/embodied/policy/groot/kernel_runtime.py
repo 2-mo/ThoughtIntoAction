@@ -17,7 +17,7 @@ import numpy as np
 
 from legacy.arx5_control.cartesian import quaternion_xyzw_to_rpy
 from legacy.arx5_control.teleoperation import GripperState, load_teleoperation_config
-from embodied.core.arx5_paths import CONFIG_ROOT
+from embodied.devices.robots.arx5.paths import CONFIG_ROOT
 from embodied.policy.groot.checkpoint import STATE_KEYS, VIDEO_KEYS
 from embodied.policy.groot.runtime import (
     ACTION_PERIOD_NS, EXECUTION_HZ, REPLAN_STEPS, TRAINING_OPEN_GRIPPER_WIDTH_M, ActionRejected, ActionTarget,

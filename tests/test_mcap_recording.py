@@ -8,7 +8,7 @@ from embodied.data.episode.recording import EpisodeWriter
 from embodied.data.datasets import load_episode
 from embodied.data.replay import RecordedEpisode, WebReplay
 from embodied.data.export.lerobot import load_episode as load_training
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from unittest.mock import patch, MagicMock
 from types import SimpleNamespace
 
@@ -37,7 +37,7 @@ class McapRecordingTests(unittest.TestCase):
         gripper_keys = ('gripper_sdk_cmd_pos', 'gripper_sdk_cmd_vel',
                         'gripper_sdk_cmd_torque', 'gripper_kp', 'gripper_kd')
         with tempfile.TemporaryDirectory() as folder:
-            writer = EpisodeWriter(folder, {'robot': RobotModel(eef='eef_link').metadata(),
+            writer = EpisodeWriter(folder, {'robot': X5PinocchioModel(eef='eef_link').metadata(),
                 'camera': {'width':64, 'height':48, 'fps':30}}, 'MCAP 测试', rgb_video=True)
             start = writer.manifest['started_monotonic_ns']
             for i in range(3):

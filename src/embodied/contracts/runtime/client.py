@@ -24,6 +24,33 @@ def read_message(sock):
     return json.loads(exact(length))
 
 
+def validate_tick_joints(message, expected_count=None):
+    """Validate V3 logical dimensions independently of its padded native ABI."""
+    if message.get("version") != 3:
+        return expected_count
+    count = message.get("joint_count")
+    if type(count) is not int or not 1 <= count <= 15:
+        raise ValueError("Invalid runtime joint_count (expected 1..15)")
+    if expected_count is not None and count != expected_count:
+        raise ValueError("Runtime joint_count changed")
+    groups = {"feedback": ("q", "dq"), "command": ("q", "dq", "kp", "kd", "feedforward"),
+              "sdk_output": ("q", "dq", "torque")}
+    for name, fields in groups.items():
+        group = message.get(name)
+        if group is None:
+            continue
+        if not isinstance(group, dict):
+            raise ValueError(f"Invalid runtime {name}")
+        for field in fields:
+            values = group.get(field)
+            if not isinstance(values, list) or len(values) != count:
+                raise ValueError(f"Runtime {name}.{field} requires {count} joints")
+    goal = (message.get("target") or {}).get("joint_goal")
+    if goal is not None and (not isinstance(goal, list) or len(goal) != count):
+        raise ValueError(f"Runtime target.joint_goal requires {count} joints")
+    return count
+
+
 class RuntimeReader:
     def __init__(self, directory, mode="latest", timeout=3.):
         if mode not in ("latest", "full"):
@@ -48,6 +75,10 @@ class RuntimeReader:
             if (self.descriptor.get("boot_id") != expected.get("boot_id")
                     or expected.get("boot_id") != Path('/proc/sys/kernel/random/boot_id').read_text().strip()):
                 raise ValueError("Runtime belongs to a different host boot")
+            self.tick_version = self.descriptor.get("layout", {}).get("version")
+            self.joint_count = self.descriptor.get("joint_count")
+            if self.tick_version == 3 and (type(self.joint_count) is not int or not 1 <= self.joint_count <= 15):
+                raise ValueError("V3 runtime descriptor requires joint_count (1..15)")
             self.gaps = self.descriptor["observer_gaps"]
             self.dropped = None
         except BaseException:
@@ -58,9 +89,12 @@ class RuntimeReader:
         if self.terminal:
             raise EOFError("Runtime terminal already received")
         message = read_message(self.sock)
-        if (not isinstance(message, dict) or message.get("type") != "tick" or message.get("version") not in (1, 2)
+        if (not isinstance(message, dict) or message.get("type") != "tick" or message.get("version") not in (1, 2, 3)
                 or message.get("runtime_id") != self.runtime_id):
             raise ValueError("Runtime protocol or identity changed")
+        if self.tick_version is not None and message["version"] != self.tick_version:
+            raise ValueError("Runtime tick version changed")
+        self.joint_count = validate_tick_joints(message, self.joint_count)
         sequence = message["sequence"]
         if type(sequence) is not int or sequence < 0:
             raise ValueError("Invalid runtime sequence")

@@ -6,7 +6,7 @@ import threading
 import time
 from unittest.mock import Mock
 
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.project import load_config
 from legacy.robot_control.backends.factories import simulated
 from legacy.robot_control.service import ArmService, serve
@@ -18,7 +18,7 @@ class ServiceFixture:
         self.path = Path(self.folder.name) / "arm.sock"
         self.config = Path(self.folder.name) / "config.toml"
         self.config.write_text(f'[arm_service]\nsocket="{self.path}"\n')
-        self.robot = RobotModel()
+        self.robot = X5PinocchioModel()
         settings = {key: value for key, value in load_config()["arm_service"].items()
                     if key not in {"backend", "socket"}}
         self.arm = simulated(settings={**settings, "dynamics_urdf_path": str(self.robot.urdf)},

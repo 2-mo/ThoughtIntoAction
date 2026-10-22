@@ -7,9 +7,9 @@ import unittest
 
 import numpy as np
 
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.telemetry import LocalPublisher, StateSubscriber
-from embodied.monitor.scene import Scene
+from embodied.applications.monitor.scene import Scene
 
 
 class TelemetryTests(unittest.TestCase):
@@ -17,7 +17,7 @@ class TelemetryTests(unittest.TestCase):
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
             self.address = f'tcp://127.0.0.1:{sock.getsockname()[1]}'
-        self.robot = RobotModel()
+        self.robot = X5PinocchioModel()
         self.q = np.array([0., 1.5, 1.45, -1.52, 0., 0.])
 
     def publisher(self, kind='virtual'):

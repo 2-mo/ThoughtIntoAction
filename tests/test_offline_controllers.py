@@ -16,13 +16,13 @@ import arx5_interface as arx5
 import numpy as np
 from legacy.robot_control.backends.simulated import SimulatedX5
 from legacy.robot_control.hardware import OfficialX5HardwareAdapter
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from legacy.quest_teleop import cli
 from legacy.quest_teleop import controller as x5_controller
 from legacy.quest_teleop import presets as preset_logic
 from legacy.quest_teleop.base_controller import DEFAULT_X5_MANIPULATOR_CONFIG, X5TeleopBase
 import tyro
-from embodied.core.project import X5_2025_URDF
+from embodied.devices.robots.arx5.paths import X5_2025_URDF
 
 
 class FakeXR:
@@ -82,7 +82,7 @@ class OfflineControllerTests(unittest.TestCase):
             self.assertEqual(controller._session_control["position_frame"], "aligned_horizontal")
             self.assertEqual(controller._session_control["controller_to_tool_rotation"],
                              [[0., -1., 0.], [-1., 0., 0.], [0., 0., -1.]])
-            grasp = RobotModel().fk(preset_logic.DEFAULT_GRASP_READY_JOINTS)
+            grasp = X5PinocchioModel().fk(preset_logic.DEFAULT_GRASP_READY_JOINTS)
             controller.ref_ee_quat["right_arm"] = tf.quaternion_from_matrix(grasp)
             controller._process_xr_pose([0, 0, 0, 0, 0, 0, 1], "right_arm")
             basis = controller._rotation_alignment["right_arm"]
@@ -694,7 +694,7 @@ class OfflineControllerTests(unittest.TestCase):
     def test_x5_bridge_preserves_feedback_grip_gate_and_trigger_commands(self):
         controller = object.__new__(x5_controller.X5TeleopController)
         arm = Mock()
-        model = RobotModel()
+        model = X5PinocchioModel()
         arm.robot_config.joint_pos_min = model.lower
         arm.robot_config.joint_pos_max = model.upper
         arm.get_joint_positions.return_value = np.array([.1, .2, .3, .4, .5, .6, .04])

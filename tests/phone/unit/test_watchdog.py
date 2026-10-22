@@ -1,6 +1,6 @@
 import pytest
 
-from embodied.phone.runtime.watchdog import Watchdog, WatchdogConfig, WatchdogStage
+from embodied.devices.phone.runtime.watchdog import Watchdog, WatchdogConfig, WatchdogStage
 
 
 def test_watchdog_progresses_through_ordered_stages() -> None:

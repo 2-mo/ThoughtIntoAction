@@ -7,7 +7,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[4]
 import numpy as np
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.data.export.lerobot import load_episode
 from embodied.data.export.multirate import camera_rows
 from embodied.policy.pi05_zeroshot.x5_mapping import SCHEMA, action_chunks
@@ -21,7 +21,7 @@ def main():
     args = p.parse_args()
     if args.horizon < 1 or args.output.exists():
         p.error('Use a positive horizon and a new output file')
-    robot = RobotModel()
+    robot = X5PinocchioModel()
     included, rejected, state_arrays, delta_arrays = [], [], [], []
     for path in sorted(args.source.glob('*/episode.json')):
         meta = json.loads(path.read_text())

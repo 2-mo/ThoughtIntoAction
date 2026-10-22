@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from embodied.phone.transports.udp import (
+from embodied.devices.phone.transports.udp import (
     UdpTransport,
     UdpTransportConfig,
     UdpTransportStateError,

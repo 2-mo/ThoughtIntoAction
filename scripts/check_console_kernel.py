@@ -17,11 +17,11 @@ import numpy as np
 import uvicorn
 from websockets.sync.client import connect
 
-from embodied import calibration
-from embodied.console.app import create_app
-from embodied.console.core.settings import BackendSettings
+from embodied.applications import calibration
+from embodied.applications.console.app import create_app
+from embodied.applications.console.core.settings import BackendSettings
 from embodied.contracts.runtime.control import ControlClient
-from embodied.workstation.control import sim_kernel
+from embodied.applications.workstation.control import sim_kernel
 
 
 class Page:

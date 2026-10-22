@@ -14,7 +14,7 @@ MOTION_KEYS = (
 
 def collection_motion(path=None):
     """Reuse the launcher's numeric defaults, never source/execute shell code."""
-    path = Path(path) if path else ROOT/'启动遥操.sh'
+    path = Path(path) if path else ROOT/'scripts/shortcuts/启动遥操.sh'
     source = path.read_text()
     values = {}
     for key in ('max_joint_speed_rad_s', *MOTION_KEYS):

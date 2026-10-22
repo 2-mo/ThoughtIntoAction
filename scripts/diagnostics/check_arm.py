@@ -8,7 +8,7 @@ import time
 import numpy as np
 
 from legacy.robot_control.client import ArmClient
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.project import load_config, resolve_path
 
 
@@ -21,7 +21,7 @@ def main():
     args = parser.parse_args()
     if args.samples <= 0 or not math.isfinite(args.interval) or args.interval < 0:
         parser.error("Samples must be positive and interval finite/nonnegative")
-    robot = RobotModel(resolve_path(load_config()["robot"]["urdf"]))
+    robot = X5PinocchioModel(resolve_path(load_config()["robot"]["urdf"]))
     client = ArmClient(robot, path=args.service_socket, hardware=not args.virtual)
     try:
         for index in range(args.samples):

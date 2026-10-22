@@ -10,7 +10,7 @@ import time
 
 import numpy as np
 from embodied.policy.pi05_zeroshot.real import ROOT, capture, checked_state, stop_and_hold
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.policy.pi05_zeroshot.worker_client import source_environment
 from embodied.policy.pi05_zeroshot.x5_mapping import X5Mapping
 
@@ -75,7 +75,7 @@ def execute_step(arm, prediction, output):
     excess = prediction.get('state_quantile_excess', float('inf'))
     if not np.isfinite(excess) or not 0 <= excess <= .1:
         raise ValueError('当前状态超出统计分位范围过多，先检查统计覆盖再执行')
-    tcp = RobotModel(arm.robot.urdf, 'eef_link')
+    tcp = X5PinocchioModel(arm.robot.urdf, 'eef_link')
     target, plan = step_target(arm.robot, tcp, state, prediction)
     result = {'status': 'planned', 'plan': plan, 'target_rad': target.tolist(),
               'start_rad': state['actual_pos'], 'gripper_held_m': float(state['gripper_actual_pos']),

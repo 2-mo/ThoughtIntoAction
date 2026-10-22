@@ -9,12 +9,12 @@ from unittest.mock import patch
 import cv2
 import numpy as np
 
-from embodied import calibration
-from embodied.calibration.arm import Refused
-from embodied.calibration.plan import MAX_CONSECUTIVE_MISSES, kernel_model, make_plan, run_plan, validate_plan
-from embodied.calibration.session import Session, pose_matrix
-from embodied.calibration.solver import solve
-from embodied.calibration.target import MarkerDetector, marker_svg, normalize_pixels, square_pose, target_spec
+from embodied.applications import calibration
+from embodied.applications.calibration.arm import Refused
+from embodied.applications.calibration.plan import MAX_CONSECUTIVE_MISSES, kernel_model, make_plan, run_plan, validate_plan
+from embodied.applications.calibration.session import Session, pose_matrix
+from embodied.applications.calibration.solver import solve
+from embodied.applications.calibration.target import MarkerDetector, marker_svg, normalize_pixels, square_pose, target_spec
 from embodied.core.transforms import from_rt, inverse, pose_error, transform
 
 
@@ -281,7 +281,7 @@ class ResultTests(unittest.TestCase):
             calibration.save("wrist_rgb", {"status": "validated", "mount": "wrist", "T_eef_camera": np.eye(4).tolist(),
                                            "camera": {"serial": "7"}, "fit": {"translation_rms_m": .001}, "samples": [1] * 99},
                              root=directory)
-            with patch("embodied.calibration.RESULTS", Path(directory)):
+            with patch("embodied.applications.calibration.RESULTS", Path(directory)):
                 recorded = {"wrist_rgb": hand_eye("wrist_rgb", {"serial": "7"}),
                             "exterior_rgb": hand_eye("exterior_rgb", {"serial": "8"}),
                             "synthetic": hand_eye("synthetic", {})}
@@ -307,22 +307,22 @@ class ResultTests(unittest.TestCase):
 
 class CliTests(unittest.TestCase):
     def test_marker_and_status_need_no_arm_or_camera_drivers(self):
-        from embodied.calibration.cli import main
+        from embodied.applications.calibration.cli import main
         original = builtins.__import__
         def guarded(name, *args, **kwargs):
-            if name.startswith(("arx5_interface", "pyrealsense2", "xrobotoolkit", "embodied.sensors.client")):
+            if name.startswith(("arx5_interface", "pyrealsense2", "xrobotoolkit", "embodied.devices.sensors.client")):
                 raise AssertionError(f"Offline command imported {name}")
             return original(name, *args, **kwargs)
         config = {"cameras": {"wrist_rgb": {"serial": "1"}, "exterior_rgb": {"serial": "2"}}, "hand_eye": {"marker_size_m": .08}}
         with tempfile.TemporaryDirectory() as folder, patch("builtins.__import__", side_effect=guarded), \
-                patch("embodied.calibration.cli.config", return_value=config), \
-                patch("embodied.calibration.RESULTS", Path(folder)):
+                patch("embodied.applications.calibration.cli.config", return_value=config), \
+                patch("embodied.applications.calibration.RESULTS", Path(folder)):
             main(["marker", "--output", str(Path(folder) / "marker.svg")])
             self.assertEqual(json.loads((Path(folder) / "marker.json").read_text())["black_square_size_m"], .08)
             main(["status"])
 
     def test_solve_saves_a_validated_session(self):
-        from embodied.calibration.cli import main
+        from embodied.applications.calibration.cli import main
         rows, x, _ = synthetic("fixed")
         with tempfile.TemporaryDirectory() as folder:
             session = Path(folder) / "session"
@@ -330,7 +330,7 @@ class CliTests(unittest.TestCase):
             (session / "session.json").write_text(json.dumps({
                 "kind": "hand_eye_samples", "camera_id": "exterior_rgb", "mount": "fixed", "samples": rows,
                 "robot": {}, "camera": {"serial": "2"}, "target": target_spec(.1)}))
-            with patch("embodied.calibration.RESULTS", Path(folder) / "results"):
+            with patch("embodied.applications.calibration.RESULTS", Path(folder) / "results"):
                 main(["solve", str(session), "--save"])
                 saved = calibration.load("exterior_rgb", "2", root=Path(folder) / "results")
             np.testing.assert_allclose(saved["T_base_camera"], x, atol=1e-8)

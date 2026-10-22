@@ -40,7 +40,7 @@
     "marker_length_m": 0.1
   },
   "collection": {
-    "output_root": "calibrations/hand-eye/eye-to-hand",
+    "output_root": "outputs/calibrations/hand-eye/eye-to-hand",
     "frames_per_burst": 20,
     "bursts_per_pose": 3,
     "burst_interval_s": 0.25,

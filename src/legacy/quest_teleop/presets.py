@@ -1,6 +1,6 @@
 """Quest A/B preset state machine over the project's X5 controller."""
 
-from embodied.inputs.gestures import Press, StickAction
+from embodied.devices.inputs.gestures import Press, StickAction
 
 from legacy.quest_teleop.collection import EpisodeActions
 

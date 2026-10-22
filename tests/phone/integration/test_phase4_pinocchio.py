@@ -6,9 +6,9 @@ import pytest
 
 pytest.importorskip("pinocchio")
 
-from embodied.phone.kinematics.config import load_model_config
-from embodied.phone.kinematics.pinocchio import PinocchioKinematics
-from embodied.phone.tools.phase4_kinematics_check import write_kinematics_check
+from embodied.devices.phone.kinematics.config import load_model_config
+from embodied.devices.phone.kinematics.pinocchio import PinocchioKinematics
+from embodied.devices.phone.tools.phase4_kinematics_check import write_kinematics_check
 
 
 def test_x5_pinocchio_model_runs_fk_and_seeded_ik(tmp_path: Path) -> None:

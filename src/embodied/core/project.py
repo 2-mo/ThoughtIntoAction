@@ -5,11 +5,8 @@ from __future__ import annotations
 from copy import deepcopy
 import os
 from pathlib import Path
-import tomllib
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-X5_2025_URDF = PROJECT_ROOT / "assets/robots/x5/X5_2025_hybrid.urdf"
-X5_PYTHON_ROOT = PROJECT_ROOT / "third_party/X5/py/arx_x5_python"
 LOG_DIR = Path(os.environ.get("QUEST_TELEOP_LOG_DIR", str(PROJECT_ROOT / "outputs/logs"))).expanduser()
 
 
@@ -29,6 +26,10 @@ def resolve_path(value: str) -> Path:
 
 
 def load_config(local_path: str | None = None) -> dict:
+    # Path-only imports are also used by Python 3.10 control processes.
+    # Application TOML configuration is loaded only in its Python 3.12 environment.
+    import tomllib
+
     with (PROJECT_ROOT / "configs/project.toml").open("rb") as stream:
         config = tomllib.load(stream)
     selected = local_path or os.environ.get("QUEST_TELEOP_CONFIG")

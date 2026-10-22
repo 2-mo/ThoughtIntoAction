@@ -303,7 +303,7 @@ observer 为监看提供 latest-only 状态，为 collection 提供保序、带�
 | `robot_simulation/scene.py`、`web/` | 改订阅数据来源，保留 UI；生成模型经统一资产适配供网页读取 |
 | `handeye_calibration/` | 保留现有包和 marker/manual/plan/auto/solve 全流程；阶段五替换 CalibrationArm 与相机装配，迁移计划执行、静止采样及退出行为 |
 | `quest_teleop/frame_calibration.py` | 保留方向测量算法与历史配置读取；新链路需要方向对齐时适配原生输入与配置，避免重复执行坐标变换 |
-| `src/embodied/policy/pi05_sft/`、`integrations/openpi/` | 保留现有本地工作；先审查设备执行依赖，阶段五迁移在线执行端，训练环境不并入 control |
+| `src/embodied/policy/pi05_sft/`、`scripts/training/openpi/` | 保留现有本地工作；先审查设备执行依赖，阶段五迁移在线执行端，训练环境不并入 control |
 | `src/embodied/policy/pi05_zeroshot/` 及其与微调推理的交叉导入 | 实验入口保留；共享观测、策略动作和操作能力逐项迁入正式模块，不再以实验目录作为生产依赖 |
 | `robot_core/collection_motion.py`、`camera_control.py` | 分别移除反向解析启动脚本、查询遥操内部会话的最终依赖；由明确配置和通用相机使用租约替代，旧兼容保留到迁移完成 |
 

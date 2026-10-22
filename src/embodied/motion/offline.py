@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 
 import numpy as np
@@ -27,6 +27,26 @@ class RuckigJointTrajectory:
     positions: np.ndarray
     velocities: np.ndarray
     accelerations: np.ndarray
+    _trajectory: object | None = field(default=None, repr=False, compare=False)
+
+    def at_time(self, elapsed: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Evaluate the original Ruckig curve, preserving q/dq/ddq together.
+
+        Sampled blended paths have no native Ruckig evaluator. Their existing
+        samples API remains available; do not invent a q-only interpolation.
+        """
+        if not math.isfinite(elapsed):
+            raise ValueError("trajectory time must be finite")
+        if self._trajectory is None:
+            raise ValueError("This sampled trajectory has no native Ruckig evaluator")
+        position, velocity, acceleration = self._trajectory.at_time(
+            min(max(float(elapsed), 0.0), self.duration_s)
+        )
+        if elapsed >= self.duration_s:
+            velocity = np.zeros(len(position))
+            acceleration = np.zeros(len(position))
+        return tuple(np.asarray(value, dtype=np.float64) for value in
+                     (position, velocity, acceleration))
 
     def samples(self, start_timestamp: float) -> list[TrajectorySample]:
         if not math.isfinite(start_timestamp):
@@ -169,6 +189,7 @@ def plan_ruckig_joint_trajectory(
         positions=np.asarray(positions, dtype=np.float64),
         velocities=np.asarray(velocities, dtype=np.float64),
         accelerations=np.asarray(accelerations, dtype=np.float64),
+        _trajectory=trajectory,
     )
 
 

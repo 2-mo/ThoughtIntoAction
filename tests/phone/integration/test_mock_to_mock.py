@@ -1,10 +1,10 @@
 import time
 from collections.abc import Callable
 
-from embodied.phone.controllers.cartesian_position import CartesianPositionController
-from embodied.phone.core.capabilities import InputCapabilities
-from embodied.phone.core.mapping import PoseMapping
-from embodied.phone.core.models import (
+from embodied.devices.phone.controllers.cartesian_position import CartesianPositionController
+from embodied.devices.phone.core.capabilities import InputCapabilities
+from embodied.devices.phone.core.mapping import PoseMapping
+from embodied.devices.phone.core.models import (
     ControlMode,
     Pose,
     Quaternion,
@@ -12,18 +12,18 @@ from embodied.phone.core.models import (
     TrackingQuality,
     Vector3,
 )
-from embodied.phone.core.pipeline import TeleopPipeline
-from embodied.phone.core.safety import TargetSafetyLimits
-from embodied.phone.inputs.mock import MockInputSource
-from embodied.phone.policies.no_compliance import NoCompliancePolicy
-from embodied.phone.policies.relative_pose import RelativePosePolicy
-from embodied.phone.robots.mock import MockRobotBackend
-from embodied.phone.runtime.application import TeleopApplication
-from embodied.phone.runtime.latest_value import LatestValue
-from embodied.phone.runtime.metrics import MetricsWorker, RuntimeMetrics
-from embodied.phone.runtime.receiver import InputReceiver
-from embodied.phone.runtime.servo_loop import ServoLoop, ServoLoopConfig
-from embodied.phone.runtime.watchdog import Watchdog, WatchdogConfig
+from embodied.devices.phone.core.pipeline import TeleopPipeline
+from embodied.devices.phone.core.safety import TargetSafetyLimits
+from embodied.devices.phone.inputs.mock import MockInputSource
+from embodied.devices.phone.policies.no_compliance import NoCompliancePolicy
+from embodied.devices.phone.policies.relative_pose import RelativePosePolicy
+from embodied.devices.phone.robots.mock import MockRobotBackend
+from embodied.devices.phone.runtime.application import TeleopApplication
+from embodied.devices.phone.runtime.latest_value import LatestValue
+from embodied.devices.phone.runtime.metrics import MetricsWorker, RuntimeMetrics
+from embodied.devices.phone.runtime.receiver import InputReceiver
+from embodied.devices.phone.runtime.servo_loop import ServoLoop, ServoLoopConfig
+from embodied.devices.phone.runtime.watchdog import Watchdog, WatchdogConfig
 
 CAPABILITIES = InputCapabilities(
     pose_6dof=True,

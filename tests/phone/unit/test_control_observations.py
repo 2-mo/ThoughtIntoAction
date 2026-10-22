@@ -1,11 +1,11 @@
-from embodied.phone.core.models import (
+from embodied.devices.phone.core.models import (
     Pose,
     Quaternion,
     TeleopInput,
     TrackingQuality,
     Vector3,
 )
-from embodied.phone.tools.control_observations import ControlObservations
+from embodied.devices.phone.tools.control_observations import ControlObservations
 
 
 def sample(

@@ -23,9 +23,52 @@ sys.meta_path.insert(0, ForbiddenImport())
 
 
 class PackageBoundaryTests(unittest.TestCase):
+    def test_robot_api_and_pose_math_without_hardware_or_input_sdks(self):
+        self.probe(
+            {'legacy', 'embodied.control', 'arx5_interface', 'pyrealsense2', 'xrobotoolkit_python',
+             'embodied.devices', 'pinocchio', 'mujoco', 'ruckig'},
+            '''
+            from embodied import Robot
+            from embodied.motion.contracts import Pose
+            assert Pose.from_rotvec([0, 0, 0], [0, 0, 0]).orientation_xyzw.tolist() == [0, 0, 0, 1]
+            robot = Robot.connect('/not-started')
+            assert robot.run.name == 'not-started'
+            ''',
+        )
+
+    def test_project_paths_are_device_free_and_do_not_import_toml_parsers(self):
+        self.probe(
+            {"tomllib", "tomli", "embodied.core.dependencies", "embodied.devices",
+             "legacy", "arx5_interface", "pinocchio", "mujoco"},
+            '''
+            from embodied.core.project import PROJECT_ROOT, LOG_DIR, resolve_path
+            assert resolve_path("outputs") == PROJECT_ROOT / "outputs"
+            assert LOG_DIR.is_absolute()
+            ''',
+        )
+
+    def test_device_paths_do_not_load_a_sdk_or_dependency_manifest(self):
+        self.probe(
+            {"tomllib", "tomli", "embodied.core.dependencies", "arx5_interface", "pinocchio", "mujoco"},
+            '''
+            from embodied.devices.robots.arx5.paths import X5_2025_URDF
+            assert X5_2025_URDF.is_file()
+            ''',
+        )
+
+    def test_control_configuration_import_has_no_device_or_toml_dependency(self):
+        self.probe(
+            {"tomllib", "tomli", "embodied.devices", "embodied.applications", "legacy", "arx5_interface"},
+            '''
+            from embodied.control.settings import Settings, load_settings
+            from embodied.contracts.paths import CONTROL_CONFIG
+            assert CONTROL_CONFIG.is_dir()
+            ''',
+        )
+
     def test_collection_and_storage_without_control_or_quest(self):
         self.probe(
-            {'legacy.quest_teleop', 'legacy.robot_control', 'arx5_vr', 'iceoryx2', 'arx5_interface',
+            {'legacy.quest_teleop', 'legacy.robot_control', 'embodied.control', 'iceoryx2', 'arx5_interface',
              'xrobotoolkit_python', 'pyrealsense2'},
             '''
             from embodied.data.episode.recording import EpisodeWriter
@@ -38,8 +81,7 @@ class PackageBoundaryTests(unittest.TestCase):
         )
 
     def probe(self, forbidden, source):
-        env = {**os.environ, "PYTHONPATH": os.pathsep.join(map(str, (
-            ROOT / "src", ROOT / "third_party/XRoboToolkit-Teleop-Sample-Python")))}
+        env = {**os.environ, "PYTHONPATH": str(ROOT / "src")}
         result = subprocess.run(
             [sys.executable, "-B", "-c",
              f"forbidden = {forbidden!r}\n" + GUARD + textwrap.dedent(source)],
@@ -49,20 +91,20 @@ class PackageBoundaryTests(unittest.TestCase):
 
     def test_offline_calibration_and_simulation_without_quest_or_device_sdks(self):
         self.probe(
-            {"legacy.quest_teleop", "myTeleop", "project_paths", "xrobotoolkit_teleop",
+            {"legacy.quest_teleop", "myTeleop", "project_paths", "xrobotoolkit_teleop", "embodied.devices.inputs.quest", "xrobotoolkit_sdk",
              "xrobotoolkit_python", "arx_r5_python", "arx5_interface", "pyrealsense2"},
             '''
             import json
             from pathlib import Path
             import tempfile
 
-            from embodied.core.model import RobotModel
-            from embodied.sensors.realsense import RealSenseCamera
+            from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
+            from embodied.devices.sensors.realsense import RealSenseCamera
             from legacy.robot_control.motion import move_and_settle
-            from embodied.calibration.arm import CalibrationArm
-            from embodied.calibration.session import Session
-            from embodied.calibration.plan import kernel_model, make_plan
-            from embodied.calibration.cli import main as handeye
+            from embodied.applications.calibration.arm import CalibrationArm
+            from embodied.applications.calibration.session import Session
+            from embodied.applications.calibration.plan import kernel_model, make_plan
+            from embodied.applications.calibration.cli import main as handeye
             from legacy.robot_control.cli import main as simulation
             from unittest.mock import patch
 
@@ -82,15 +124,15 @@ class PackageBoundaryTests(unittest.TestCase):
     def test_monitor_never_imports_a_controller_or_device_sdk(self):
         self.probe(
             {"legacy.quest_teleop", "legacy.robot_control", "arx5_interface", "xrobotoolkit_python",
-             "xrobotoolkit_teleop", "pyrealsense2"},
+             "xrobotoolkit_teleop", "embodied.devices.inputs.quest", "xrobotoolkit_sdk", "pyrealsense2"},
             '''
             from unittest.mock import patch
-            from embodied.monitor.cli import main
-            with patch("embodied.monitor.cli.StateSubscriber.receive", side_effect=KeyboardInterrupt):
+            from embodied.applications.monitor.cli import main
+            with patch("embodied.applications.monitor.cli.StateSubscriber.receive", side_effect=KeyboardInterrupt):
                 main(["--mode", "real", "--port", "0"])
             # The MuJoCo workbench modules load without starting a runtime.
-            from embodied.monitor.arx_preview import Simulation
-            from embodied.monitor.session import SimulationSession
+            from embodied.applications.monitor.arx_preview import Simulation
+            from embodied.applications.monitor.session import SimulationSession
             ''',
         )
 
@@ -107,9 +149,9 @@ class PackageBoundaryTests(unittest.TestCase):
             ''',
         )
 
-    def test_shared_x5_backend_imports_without_quest_or_r5(self):
+    def test_x5_device_backend_imports_without_quest_or_r5(self):
         self.probe(
-            {"legacy.quest_teleop", "myTeleop", "project_paths", "xrobotoolkit_teleop",
+            {"legacy.quest_teleop", "myTeleop", "project_paths", "xrobotoolkit_teleop", "embodied.devices.inputs.quest", "xrobotoolkit_sdk",
              "xrobotoolkit_python", "arx_r5_python"},
             '''
             from unittest.mock import patch

@@ -2,6 +2,7 @@
 
 from contextlib import ExitStack
 from pathlib import Path
+import json
 import tempfile
 import os
 from arm_service_fixture import ServiceFixture
@@ -12,8 +13,8 @@ from unittest.mock import patch, Mock
 
 import numpy as np
 
-from embodied.core.model import RobotModel
-from embodied.core.plugins import Registry
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
+from embodied.contracts.registry import Registry
 from legacy.robot_control.backends import factories
 from legacy.quest_teleop import cli
 from legacy.quest_teleop.inputs import IdleInput
@@ -42,10 +43,10 @@ class PluginTests(unittest.TestCase):
         self.addCleanup(self.resources.close)
         root = Path(self.resources.enter_context(tempfile.TemporaryDirectory()))
         (root / "configs").mkdir()
-        content = (ROOT / "configs/plugins.toml").read_text()
-        content += '\n[input.probe]\nfactory="test_plugins:ProbeInput"\nsimulation_only=true\n'
-        (root / "configs/plugins.toml").write_text(content)
-        self.resources.enter_context(patch("embodied.core.plugins.PROJECT_ROOT", root))
+        content = json.loads((ROOT / "configs/plugins.json").read_text())
+        content['input']['probe'] = {'factory': 'test_plugins:ProbeInput', 'simulation_only': True}
+        (root / "configs/plugins.json").write_text(json.dumps(content))
+        self.resources.enter_context(patch("embodied.contracts.registry.PROJECT_ROOT", root))
         ProbeInput.instances = []
         ProbeInput.fail = False
         self.service = ServiceFixture()
@@ -54,7 +55,7 @@ class PluginTests(unittest.TestCase):
 
     def test_hardware_rejected_before_factory_import(self):
         registry = Registry()
-        with patch("embodied.core.plugins.importlib.import_module") as load:
+        with patch("embodied.contracts.registry.importlib.import_module") as load:
             with self.assertRaisesRegex(ValueError, "cannot load hardware"):
                 registry.load("arm", "stanford", allow_hardware=False)
             with self.assertRaisesRegex(ValueError, "Unknown viewer"):
@@ -151,7 +152,7 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(controller._session.publish.call_args.args[0]["source"], "another_pose_source")
 
     def test_simulated_backend_bounds_targets_and_returns_detached_feedback(self):
-        robot = RobotModel()
+        robot = X5PinocchioModel()
         arm = factories.simulated(settings={"dynamics_urdf_path": str(robot.urdf), "gripper_width": .082,
             "control_rate_hz": 50, "max_joint_speed_rad_s": .2, "joint_soft_limit_margin_rad": .05})
         old = arm.get_joint_positions()
@@ -170,7 +171,7 @@ class PluginTests(unittest.TestCase):
             arm.set_joint_positions(old[:6])
 
     def test_web_plugin_releases_its_server(self):
-        scene = Registry().create("viewer", "web", robot=RobotModel())
+        scene = Registry().create("viewer", "web", robot=X5PinocchioModel())
         try:
             scene.update(np.zeros(6), np.zeros(6))
             self.assertTrue(scene._thread.is_alive())

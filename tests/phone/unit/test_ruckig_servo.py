@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from embodied.phone.controllers.ruckig_servo import (
+from embodied.devices.phone.controllers.ruckig_servo import (
     JointServoLimits,
     JointServoState,
     RuckigJointServo,

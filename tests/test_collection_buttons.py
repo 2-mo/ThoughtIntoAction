@@ -2,7 +2,7 @@
 import threading
 import unittest
 from unittest.mock import Mock
-from embodied.inputs.gestures import Press, StickAction
+from embodied.devices.inputs.gestures import Press, StickAction
 from legacy.quest_teleop.collection import EpisodeActions
 from legacy.quest_teleop.runtime.session import TeleopSession
 

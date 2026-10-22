@@ -7,7 +7,7 @@
 ## 运行前
 
 - 关闭网页/视觉服务，避免 D455 或 `can0` 被其他进程占用。
-- 确认 `calibrations/hand-eye/eye-to-hand/enabled.json` 是当前 D455 的已验证标定。
+- 确认 `outputs/calibrations/hand-eye/eye-to-hand/enabled.json` 是当前 D455 的已验证标定。
 - 让方块完整出现在桌面区域内，桌面高度与 `config.json` 一致。
 - 真机执行前，手动把 TCP 放在桌面上方至少 80 mm 的无障碍位置。
 - 清空整个运动包络，准备物理急停。异常阻尼会释放持续夹持力，需考虑物体掉落。

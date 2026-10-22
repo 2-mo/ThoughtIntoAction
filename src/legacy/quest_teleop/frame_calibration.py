@@ -148,7 +148,7 @@ def main(argv=None):
         print("只重启电脑端且 Quest 未重启／重定位时，可输入 cr 复用；否则重新 c。")
         return
     if status.get("rotation_frame") != "calibrated":
-        raise RuntimeError("请使用更新后的启动遥操.sh（--rotation-frame calibrated），再输入 c")
+        raise RuntimeError("请使用更新后的 scripts/shortcuts/启动遥操.sh（--rotation-frame calibrated），再输入 c")
     session_id = status["session_id"]
     print("方向标定：机械臂保持待机，只移动右手柄，勿按手柄按键。")
     print("基座 +X：机械臂零位时夹爪伸出的方向；+Y：沿 +X 看过去的左侧；+Z：竖直向上。")

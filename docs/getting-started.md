@@ -7,7 +7,7 @@
 ```bash
 ./run.sh setup deps        # 获取 dependencies.lock.toml 锁定的源码依赖
 uv sync --locked           # 平台环境：Python 3.12，安装到 .venv/
-./run.sh kernel setup      # 控制内核环境：Python 3.10，安装到 control/.venv/
+./run.sh kernel setup      # 控制内核环境：Python 3.10，安装到 outputs/envs/control/
 ./run.sh check all         # 离线检查，不连接任何设备
 ```
 
@@ -44,6 +44,14 @@ uv sync --locked           # 平台环境：Python 3.12，安装到 .venv/
 | P Q Z | 端口；离开；关闭工作台 | 同左 |
 
 需要输入任务名或较长的操作（采集、导出、标定、策略）只把命令输入命令窗口，确认后回车；其余直接执行。网页、动作、标定、策略需要带命令网关的内核（2、3、5）。
+
+没有 tmux 时，`./run.sh` 显示常用任务和环境提示，也可以直接运行分组命令。总控按 `?` 查看操作帮助。查找命令无需进入工作台：
+
+```bash
+./run.sh help data             # 只看数据功能
+./run.sh search 标定           # 搜索中文说明和命令名
+./run.sh help                  # 完整命令目录
+```
 
 ## 3. 第一次仿真（18081 网页工作台）
 
@@ -87,7 +95,7 @@ uv sync --locked           # 平台环境：Python 3.12，安装到 .venv/
 
 ```text
 遥操采集 ──▶ episode（MCAP + 视频）──▶ LeRobot v2.1 ──▶ H800 训练 ──▶ checkpoint ──▶ 机械臂执行
- sim / real      data review            data export        integrations/openpi    policy pi05-sft
+ sim / real      data review            data export        scripts/training/openpi    policy pi05-sft
 ```
 
 ```bash
@@ -100,6 +108,7 @@ uv sync --locked           # 平台环境：Python 3.12，安装到 .venv/
 
 ## 6. 接下来
 
-- 全部命令：`./run.sh`
+- 全部命令：`./run.sh help`；按关键词查找：`./run.sh search <关键词>`
+- 宣传与演示：`./run.sh web site`，用浏览器打开终端打印的地址
 - 架构：[架构概览](architecture/overview.md)
-- 推进计划：[todo/](../todo/README.md)
+- 推进计划：[docs/plans/](plans/README.md)

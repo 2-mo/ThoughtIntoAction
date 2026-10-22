@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 from typing import Any, Iterable
 
-from embodied.core.arx5_paths import CALIBRATIONS_ROOT
+from embodied.devices.robots.arx5.paths import CALIBRATIONS_ROOT
 
 
 DEFAULT_COLLECTION_HOME_PATH = CALIBRATIONS_ROOT / "collection" / "home.json"

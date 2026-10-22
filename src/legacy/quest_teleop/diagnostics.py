@@ -19,7 +19,7 @@ def run_command(argv):
 
 def diagnose(config):
     from embodied.core.project import resolve_path
-    from embodied.core.model import RobotModel
+    from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
     from embodied.core.session_protocol import request
     checks = {}
     for package in ("arx5-interface", "numpy", "pin", "placo", "meshcat", "pyrealsense2", "opencv-python"):
@@ -28,7 +28,7 @@ def diagnose(config):
         except importlib.metadata.PackageNotFoundError:
             checks[package] = {"ok": False, "detail": "not installed"}
     try:
-        model = RobotModel(resolve_path(config["robot"]["urdf"]))
+        model = X5PinocchioModel(resolve_path(config["robot"]["urdf"]))
         checks["robot_model"] = {"ok": True, "detail": model.metadata()}
     except (ValueError, OSError) as exc:
         checks["robot_model"] = {"ok": False, "detail": str(exc)}

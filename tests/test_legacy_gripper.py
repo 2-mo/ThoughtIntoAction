@@ -4,7 +4,7 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-from embodied.monitor.connections import LegacyGripperFeedback
+from embodied.applications.monitor.connections import LegacyGripperFeedback
 
 
 class LegacyGripperTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class LegacyGripperTests(unittest.TestCase):
         self.socket = MagicMock()
         self.socket.__enter__.return_value = self.socket
         self.socket.recvmsg.side_effect = lambda *_: (json.dumps({'ok': True, 'result': self.info}).encode(), [], 0, None)
-        self.patch = patch('embodied.monitor.connections.socket.socket', return_value=self.socket)
+        self.patch = patch('embodied.applications.monitor.connections.socket.socket', return_value=self.socket)
         self.factory = self.patch.start()
         self.addCleanup(self.patch.stop)
 

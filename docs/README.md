@@ -1,10 +1,13 @@
 # 文档
 
+使用与开发说明在本目录；对外介绍见 [宣传站](../apps/site/README.md)（`./run.sh web site` 预览）；后续工程工作集中在 [计划](plans/README.md)。
+
 | 先读 | |
 | --- | --- |
 | [入门](getting-started.md) | 安装、第一次仿真、第一次真机、数据到策略的完整流程 |
 | [架构概览](architecture/overview.md) | 分层、进程、数据流与安全边界 |
 | [命令](reference/commands.md) | `./run.sh <功能> <命令>` 与全部命令 |
+| [推进计划](plans/README.md) | 平台重构阶段、待办与冗余清单 |
 
 ## 指南
 

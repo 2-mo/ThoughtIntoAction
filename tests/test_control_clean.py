@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-from embodied.workstation.control import stale_runs
+from embodied.applications.workstation.control import stale_runs
 
 BOOT = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
 

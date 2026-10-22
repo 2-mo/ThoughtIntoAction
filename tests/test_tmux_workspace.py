@@ -176,7 +176,7 @@ details.main(sys.argv[1])
              patch.object(workspace, "quest_wait_reason", side_effect=["等待 Quest", None]), \
              patch.object(workspace, "execute") as execute:
             workspace.run_pane("teleop")
-            execute.assert_called_once_with("启动遥操.sh")
+            execute.assert_called_once_with("scripts/shortcuts/启动遥操.sh")
 
     def test_quest_boot_and_authorization_states(self):
         def output(text):

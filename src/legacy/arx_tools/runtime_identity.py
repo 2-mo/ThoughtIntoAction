@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import os
 import subprocess
 
-from embodied.core.arx5_paths import PROJECT_ROOT
+from embodied.devices.robots.arx5.paths import PROJECT_ROOT
 
 
 def _source_revision() -> str:

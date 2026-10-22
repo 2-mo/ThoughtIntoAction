@@ -29,6 +29,7 @@ fps = 30
 # Raw calibration sessions live in outputs/calibration; episode recording is separate.
 
 [camera_service]
+default_camera_id = "wrist_rgb"
 socket = "outputs/runtime/camera.sock"
 
 [runtime]
@@ -100,7 +101,7 @@ camera = true
 # The monitor port is [viewer_service].port and the legacy telemetry port is [telemetry].endpoint.
 [ports]
 console = 8000            # apps/console 网页与后端（web console）
-console_backend = 8766    # 控制台后端单独运行（python -m embodied.console）
+console_backend = 8766    # 控制台后端单独运行（python -m embodied.applications.console）
 vision = 8765             # 手势识别 WebSocket
 camera_webrtc = 8767      # 相机 WebRTC 信令
 collection_camera = 8768  # 采集相机信令

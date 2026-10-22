@@ -9,7 +9,7 @@ from typing import Literal
 import tyro
 
 from embodied.core.project import LOG_DIR
-from embodied.core.project import X5_2025_URDF
+from embodied.devices.robots.arx5.paths import X5_2025_URDF
 from legacy.quest_teleop.base_controller import DEFAULT_X5_MANIPULATOR_CONFIG
 from legacy.quest_teleop.controller import X5TeleopController
 from legacy.quest_teleop.presets import DEFAULT_HOME_JOINTS, DEFAULT_GRASP_READY_JOINTS, PresetSingleX5Controller

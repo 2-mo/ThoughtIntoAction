@@ -15,7 +15,8 @@ while (($#)); do
 done
 cat <<'TEXT'
 真机 · arx 内核（待验收）
-  - 启动会使能电机并回 Home（control/config/robot.json 的 park_q，默认全零）；先扶好机械臂。
+  - 启动会使能电机；先扶好机械臂。原生 Quest 会回 Home（park_q，默认全零）并打开夹爪。
+  - managed 模式初始保持，随后按输入来源的命令动作；real-manual 默认无来源，保持启动姿态与夹爪宽度。
   - Ctrl+C 退出进入 SDK 阻尼，不回 Home；退出前先支撑机械臂。
   - Quest 右手：A 按住至少 150 ms 后松开切换模式，A+B 回 Home，Grip 跟随，Trigger 夹爪。
   - 旧机械臂服务仍占用 CAN 时内核拒绝启动：先执行 ./run.sh real shutdown。

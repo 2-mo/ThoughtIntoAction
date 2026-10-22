@@ -28,9 +28,9 @@ sudo udevadm settle --timeout=10
 echo 'RGB / IMU 权限规则已安装；重新打开相机服务（录制时拒绝重启）。'
 PYTHONPATH="$CAMERA_PROJECT_DIR/src" "$CAMERA_PROJECT_DIR/.venv/bin/python" -u -B - <<'PY'
 import time
-from embodied.sensors.client import ensure_service, socket_path
+from embodied.devices.sensors.client import ensure_service, socket_path
 from embodied.core.session_protocol import request
-from embodied.sensors.lifecycle import stop_service
+from embodied.devices.sensors.lifecycle import stop_service
 
 stop_service()
 ensure_service()

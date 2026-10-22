@@ -1,13 +1,13 @@
 import pytest
 
-from embodied.phone.core.models import (
+from embodied.devices.phone.core.models import (
     ControlMode,
     Pose,
     Quaternion,
     RobotCommand,
     Vector3,
 )
-from embodied.phone.robots.mock import (
+from embodied.devices.phone.robots.mock import (
     MockRobotBackend,
     MockRobotConfig,
     RobotConnectionError,

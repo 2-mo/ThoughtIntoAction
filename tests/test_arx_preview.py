@@ -4,9 +4,9 @@ import unittest
 from unittest.mock import Mock, patch
 from urllib.request import ProxyHandler, Request, build_opener
 
-from embodied.core.model import RobotModel
-from embodied.monitor.arx_preview import Simulation, preview_packet
-from embodied.monitor.scene import Scene
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
+from embodied.applications.monitor.arx_preview import Simulation, preview_packet
+from embodied.applications.monitor.scene import Scene
 
 
 class ArxPreviewTests(unittest.TestCase):
@@ -33,7 +33,7 @@ class ArxPreviewTests(unittest.TestCase):
 
     def test_simulation_commands_never_reach_physical_session(self):
         simulation = Simulation()
-        scene = Scene(RobotModel(), simulation=simulation)
+        scene = Scene(X5PinocchioModel(), simulation=simulation)
         self.addCleanup(scene.close)
         http = build_opener(ProxyHandler({}))
         with patch('embodied.core.session_protocol.request') as physical_request:

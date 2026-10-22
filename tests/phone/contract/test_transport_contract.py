@@ -1,6 +1,6 @@
 import pytest
 
-from embodied.phone.transports.mock import MockTransport, TransportStateError
+from embodied.devices.phone.transports.mock import MockTransport, TransportStateError
 
 
 def test_mock_transport_is_latest_only() -> None:

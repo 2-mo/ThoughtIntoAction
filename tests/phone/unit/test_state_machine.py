@@ -1,4 +1,4 @@
-from embodied.phone.core.state_machine import (
+from embodied.devices.phone.core.state_machine import (
     TeleopEvent,
     TeleopState,
     TeleopStateMachine,

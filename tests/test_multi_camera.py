@@ -1,6 +1,7 @@
 """Named feeds preserve recording identity and isolate device/lifecycle failures."""
 import base64
 from pathlib import Path
+import sys
 import tempfile
 import threading
 import time
@@ -8,11 +9,11 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 import numpy as np
-from embodied.sensors.client import SharedCamera
-from embodied.sensors.service import CameraService
+from embodied.devices.sensors.client import SharedCamera
+from embodied.devices.sensors.service import CameraService
 from embodied.core.local_server import LocalServer
 from embodied.core.session_protocol import request
-from embodied.sensors.realsense import configure_rgb, RGB_OPTIONS
+from embodied.devices.sensors.realsense import configure_rgb, RGB_OPTIONS
 
 
 def options(serial, model="D435i"):
@@ -20,12 +21,44 @@ def options(serial, model="D435i"):
 
 
 class MultiCameraTests(unittest.TestCase):
+    def test_synthetic_driver_works_without_realsense_and_unknown_driver_is_rejected(self):
+        from embodied.devices.sensors.synthetic import SyntheticCamera
+
+        stop = threading.Event()
+        read = SyntheticCamera.read
+
+        def one_frame(camera):
+            frame = read(camera)
+            stop.set()
+            return frame
+
+        with patch.dict(sys.modules, {"pyrealsense2": None}), \
+             patch.object(stop, "wait", side_effect=lambda _: stop.set()), \
+             patch("embodied.devices.sensors.service.DeviceLease", side_effect=AssertionError("synthetic owns no hardware")), \
+             patch("embodied.devices.sensors.factories.realsense", side_effect=AssertionError("wrong driver")), \
+             patch.object(SyntheticCamera, "read", one_frame):
+            service = CameraService({"wrist_rgb": {"driver": "synthetic", "width": 3, "height": 2}})
+            feed = service.feeds["wrist_rgb"]
+            feed.capture(feed.options, stop)
+        self.assertIsNone(feed.error)
+        self.assertEqual(feed.metadata["model"], "synthetic")
+        self.assertEqual(feed.frame["image"].shape, (2, 3, 3))
+        self.assertEqual(feed.frame["stream_id"], feed.metadata["stream_id"])
+        self.assertIsNotNone(feed.preview)
+        with self.assertRaisesRegex(ValueError, "wrist_rgb.driver.*Unknown camera_device plugin 'missing'.*realsense, synthetic"):
+            CameraService({"wrist_rgb": {"driver": "missing"}})
+
     def test_shared_rgb_profile_override_validation_and_write_order(self):
         service = CameraService({"wrist_rgb": options("wrist"),
             "exterior_rgb": {**options("exterior"), "color": {"gain": 60}}},
             color_options={"gain": 64, "white_balance": 4600})
         self.assertEqual(service.feeds["wrist_rgb"].options["color"], {"gain": 64, "white_balance": 4600})
         self.assertEqual(service.feeds["exterior_rgb"].options["color"], {"gain": 60, "white_balance": 4600})
+        with patch("embodied.devices.sensors.realsense.RealSenseCamera") as camera:
+            wrist = service.feeds["wrist_rgb"]
+            wrist.registry.create("camera_device", "realsense", options=wrist.options)
+            camera.assert_called_once_with("wrist", 3, 2, 30, expected_model="D435i",
+                                           color_options={"gain": 64, "white_balance": 4600})
         values = dict.fromkeys(RGB_OPTIONS, 0.)
         values.update(enable_auto_white_balance=1., enable_auto_exposure=1.)
         writes = []
@@ -64,7 +97,7 @@ class MultiCameraTests(unittest.TestCase):
             path = Path(folder) / "camera.sock"
             server = LocalServer(path, service.dispatch)
             self.addCleanup(server.close)
-            with patch("embodied.sensors.client.socket_path", return_value=path):
+            with patch("embodied.devices.sensors.client.socket_path", return_value=path):
                 with SharedCamera("wrist", 3, 2) as wrist, SharedCamera("exterior", 3, 2, camera_id="exterior_rgb") as exterior:
                     np.testing.assert_array_equal(wrist.read()["image"], np.zeros((2, 3, 3), dtype=np.uint8))
                     np.testing.assert_array_equal(exterior.read()["image"], np.ones((2, 3, 3), dtype=np.uint8))
@@ -90,7 +123,7 @@ class MultiCameraTests(unittest.TestCase):
         for key, feed in service.feeds.items():
             feed.capture = capture(key)
         self.addCleanup(service.close)
-        with patch("embodied.sensors.control.check_legacy_session"), patch("embodied.sensors.control.recording_guard"):
+        with patch("embodied.devices.sensors.control.check_legacy_session"), patch("embodied.devices.sensors.control.recording_guard"):
             service.start()
             for event in started.values():
                 self.assertTrue(event.wait(1))
@@ -113,7 +146,7 @@ class MultiCameraTests(unittest.TestCase):
         def missing(*args, **kwargs):
             stop.set()
             raise RuntimeError("Device disconnected")
-        with patch("embodied.sensors.service.RealSenseCamera", side_effect=missing), patch("embodied.sensors.service.DeviceLease"):
+        with patch("embodied.devices.sensors.factories.realsense", side_effect=missing), patch("embodied.devices.sensors.service.DeviceLease"):
             failed.capture(failed.options, stop)
         data = service.dispatch({"command": "monitor"})
         self.assertIn("Device disconnected", data["cameras"]["exterior_rgb"]["camera"]["error"])
@@ -130,8 +163,8 @@ class MultiCameraTests(unittest.TestCase):
                 CameraService({"wrist_rgb": {**options("wrist"), **change}})
 
     def test_control_forwards_explicit_camera_id(self):
-        from embodied.sensors.control import set_enabled
-        with patch("embodied.sensors.control.ensure_service"), patch("embodied.sensors.control.request") as call:
+        from embodied.devices.sensors.control import set_enabled
+        with patch("embodied.devices.sensors.control.ensure_service"), patch("embodied.devices.sensors.control.request") as call:
             set_enabled(False, "exterior_rgb")
             self.assertEqual(call.call_args.kwargs["camera_id"], "exterior_rgb")
             self.assertFalse(call.call_args.kwargs["enabled"])

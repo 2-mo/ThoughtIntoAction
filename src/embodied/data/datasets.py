@@ -7,7 +7,7 @@ import time
 
 import numpy as np
 
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.storage import save_json
 from embodied.data.episode.video import media_path, read_frame
 from embodied.data.episode.cameras import camera_metadata
@@ -48,7 +48,7 @@ def validate_episode(path, *, settings=None, robot=None, check_images=True):
     from embodied.core.project import load_config, resolve_path
     config = load_config()
     settings = settings or config["recording"]
-    robot = robot or RobotModel(resolve_path(config["robot"]["urdf"]))
+    robot = robot or X5PinocchioModel(resolve_path(config["robot"]["urdf"]))
     errors, warnings = [], []
     report = {"valid": False, "training_eligible": False, "errors": errors, "warnings": warnings}
     try:
@@ -199,7 +199,7 @@ def replay(path, *, speed=1., headless=False, telemetry="local"):
     if not states or not frames:
         raise ValueError("No robot/RGB samples to replay")
     from embodied.core.project import load_config, resolve_path
-    robot = RobotModel(resolve_path(load_config()["robot"]["urdf"]))
+    robot = X5PinocchioModel(resolve_path(load_config()["robot"]["urdf"]))
     if meta["robot"] != robot.metadata():
         raise ValueError("Replay model mismatch")
     st = np.array([s["host_monotonic_ns"] for s in states], dtype=np.int64)
@@ -213,7 +213,7 @@ def replay(path, *, speed=1., headless=False, telemetry="local"):
                           "robot": meta["robot"], "hardware_opened": False}, indent=2))
         return
     import cv2
-    from embodied.core.plugins import Registry
+    from embodied.contracts.registry import Registry
     actual = [robot.fk(s["actual_pos"])[:3, 3] for s in states]
     commands = [robot.fk(s["submission"]["pos"])[:3, 3] for s in states if s["submission"] is not None]
     sink = Registry().create("telemetry", telemetry, robot=robot, source={

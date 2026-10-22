@@ -354,77 +354,77 @@
     "reason": "Relocate module/config/asset references into the single repository.",
     "sha256": "ea078f124478bd33bdb938c5c0c55fa917b3ac5b7dede157eb65f48a244788fe"
   },
-  "examples/rebot/0x01damiao_test.py": {
+  "docs/examples/rebot/0x01damiao_test.py": {
     "import_sha256": "32dc4346d8596fc7ff1ecf6598d0ed6b2634b22e05bf293674efed8f39b95782",
     "reason": "Relocate module/config/asset references into the single repository.",
     "sha256": "22146db689eb451d28b074987ed84fa91cc2ff3d1a7364c6fc10916e8a0ef905"
   },
-  "examples/rebot/0x01rs06_test.py": {
+  "docs/examples/rebot/0x01rs06_test.py": {
     "import_sha256": "6ef4a7894036b74d747f5bb633c8b1973481ffcfd5d6b036e042313b1c2503ac",
     "reason": "Relocate module/config/asset references into the single repository.",
     "sha256": "07ef57775b0c67331470c8fc924f371c770d349212c3eb95c5ba701e791dd9c7"
   },
-  "examples/rebot/10_gravity_compensation_lock.py": {
+  "docs/examples/rebot/10_gravity_compensation_lock.py": {
     "import_sha256": "9ac140d4b80bf89ebe0294e9be5744479b9f0d901f101536f35ac4ec9f2148aa",
     "reason": "Use local imports; scale integral by dt while preserving original 500 Hz gain.",
     "sha256": "d9a06fb4b7441645c3dfa59605e0340bd10c450456165f7b06e869e66e2600eb"
   },
-  "examples/rebot/2_zero_and_read.py": {
+  "docs/examples/rebot/2_zero_and_read.py": {
     "import_sha256": "3518b948fb450d278c87f2fe2196e7e18adb5317c0d42cec90b7081d0793b5ac",
     "reason": "Relocate module/config/asset references into the single repository.",
     "sha256": "e092f9c5c863eb5d7bb742cd161889e6a289b5992c4f353df2f479290df2914b"
   },
-  "examples/rebot/3_mit_control.py": {
+  "docs/examples/rebot/3_mit_control.py": {
     "import_sha256": "22b8e2e9dd4e7b883e5846fce7dbda199c9d4ef7a9425afe9acbde3eec5c52d3",
     "reason": "Relocate module/config/asset references into the single repository.",
     "sha256": "e7484091df97b1227eb0c6d0bdd6d76cab5416afaa3181c7f963b8cb7deb342e"
   },
-  "examples/rebot/4_pos_vel_control.py": {
+  "docs/examples/rebot/4_pos_vel_control.py": {
     "import_sha256": "575ad5cbc1ed456dd391aa104a7f2f8549ff3788a2d3bc844e2c35ddf824154a",
     "reason": "Relocate module/config/asset references into the single repository.",
     "sha256": "6d38f9c9b15974a39f1505f97e9811f3d9acaee9f0e17eb54700b5e1867d71a5"
   },
-  "examples/rebot/5_fk_test.py": {
+  "docs/examples/rebot/5_fk_test.py": {
     "import_sha256": "705adbbd727266dbd97e86c6f9b5cc87a9f5ba7371e925ef1349356b8b2f9b4d",
     "reason": "Relocate module/config/asset references into the single repository. Import Path for the relocated source bootstrap.",
     "sha256": "a5223d47cf85e1f132e5b6c1886e6874823acd4bb0aee5acf1b6b70050b9b2c2"
   },
-  "examples/rebot/6_ik_test.py": {
+  "docs/examples/rebot/6_ik_test.py": {
     "import_sha256": "b14aa99908f7bc270088598c931b9d8637866ebc837662fb622b9b1139805b9a",
     "reason": "Relocate module/config/asset references into the single repository. Import Path for the relocated source bootstrap.",
     "sha256": "58e81bfbd66b169765008f822a1b687311c228384eb8d6891391311b03036e26"
   },
-  "examples/rebot/7_arm_ik_control.py": {
+  "docs/examples/rebot/7_arm_ik_control.py": {
     "import_sha256": "f70dbcc0cf52e42ff94df0effb543c4aa53c1097fd8d618c9e56bdd29b2de835",
     "reason": "Relocate module/config/asset references into the single repository.",
     "sha256": "d8d7bb9a88c78c8d743b6a28876bf4c23f849074d3613470d0717c0ceef145b1"
   },
-  "examples/rebot/8_arm_traj_control.py": {
+  "docs/examples/rebot/8_arm_traj_control.py": {
     "import_sha256": "1407e5bd10046399c5c2df6374622db0a7d8e849ecbd4826ee94a2a2c7454ca8",
     "reason": "Relocate module/config/asset references into the single repository.",
     "sha256": "2a57016a76772abcb57e5d3203b0a8ec4da480d7e0e07664b89ccec7c59c25bd"
   },
-  "examples/rebot/9_gravity_compensation.py": {
+  "docs/examples/rebot/9_gravity_compensation.py": {
     "import_sha256": "38c71229c4f88486af81e165d816a0981d82ea63b2cc163e63242735f1051ff3",
     "reason": "Relocate module/config/asset references into the single repository.",
     "sha256": "b2a52ab3e6c28e28177da823ab7758ee6d218fe19ef809bacc9eda5faede934c"
   },
-  "examples/rebot/sim/fk_sim.py": {
+  "docs/examples/rebot/sim/fk_sim.py": {
     "import_sha256": "95098b87e503bbf67f9b3ad9f96dfeaab0443ff22f53ba1fd79da5eece90493c",
     "reason": "Relocate module/config/asset references into the single repository. Resolve the colocated visualizer for direct script and package execution.",
     "sha256": "58b8acf741216a574fc51c50099fecf195fdb2208587b97054ecc64e9af9ad49"
   },
-  "examples/rebot/sim/ik_sim.py": {
+  "docs/examples/rebot/sim/ik_sim.py": {
     "import_sha256": "056e70dfac79de9b4de5753ef2b2e01687afb483abd457d4a894fd64ea59ff0f",
     "reason": "Relocate module/config/asset references into the single repository. Resolve the colocated visualizer for direct script and package execution.",
     "sha256": "fcb8c498cb3a0f3ca133d84dec98ffeaca795c47b2191c71e1f2cd405f81210b"
   },
-  "examples/rebot/sim/traj_sim.py": {
+  "docs/examples/rebot/sim/traj_sim.py": {
     "import_sha256": "b9bf87d13b1a95dc5caa4d5deb6519eef94ed555290550a395a304361520c454",
     "reason": "Relocate module/config/asset references into the single repository. Resolve the colocated visualizer for direct script and package execution.",
     "sha256": "d2b6deefb1d9b5e4309835505184cec10d496d07bb1f96f7fcf56414a75aebe4"
   },
-  "examples/rebot/sim/visualizer.py": {
+  "docs/examples/rebot/sim/visualizer.py": {
     "import_sha256": "9a715e3127a6bb2f906ae3e46a381d649ba6bcd37c2ee3e02933a361fa6ce606",
     "reason": "Use local models; provide MeshCat PointsGeometry with 3xN trajectory positions. Update visualizer import example to the consolidated location.",
     "sha256": "e1134c205c790a6d840b1541c92d1f9f6e2ef36064fd2d8155913351a046d792"

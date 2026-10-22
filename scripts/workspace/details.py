@@ -11,7 +11,7 @@ from rich.table import Table
 from rich.text import Text
 
 from embodied.core.terminal_keys import terminal_keys, read_key
-from embodied.monitor.control import status as viewer_status
+from embodied.applications.monitor.control import status as viewer_status
 
 
 def render(role, info, mode, message):

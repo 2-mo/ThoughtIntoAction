@@ -223,28 +223,20 @@ __marimo__/
 !/third_party/phone_input/
 !/third_party/migration/
 
-# Preserved originals are recovery snapshots, never an import or build source.
-/archives/
-/calibrations/
 **/node_modules/
 **/.venv*/
 **/test-results/
 
-# Machine configuration, generated output and locally installed dependencies.
+# Machine configuration and local data: outputs includes datasets, calibrations,
+# recovery archives, generated output and locally installed dependencies.
 /configs/local.toml
 /outputs/
 /runtime/
 
 # Vendored browser modules are runtime assets, not generated project build output.
-!/src/embodied/monitor/web/vendor/three/build/
-!/src/embodied/monitor/web/vendor/three/build/*.js
-
-# Recorded raw episodes and generated training datasets.
-/datasets/
+!/src/embodied/applications/monitor/web/vendor/three/build/
+!/src/embodied/applications/monitor/web/vendor/three/build/*.js
 
 # Local design references: third-party video screenshots (watermarked), not redistributable.
-# The intended look is described in todo/07-ui.md (U-05).
-/参考图像/
-
-# The project website is source, not an mkdocs build (the template above ignores /site).
-!/site/
+# The intended look is described in docs/plans/07-ui.md (U-05).
+/assets/references/

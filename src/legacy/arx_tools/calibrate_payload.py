@@ -23,7 +23,7 @@ from legacy.arx5_control.payload_profiles import (
     save_payload_profile,
     select_payload_profile,
 )
-from embodied.core.arx5_paths import CALIBRATIONS_ROOT
+from embodied.devices.robots.arx5.paths import CALIBRATIONS_ROOT
 
 
 CALIBRATION_ROOT = CALIBRATIONS_ROOT / "payload"

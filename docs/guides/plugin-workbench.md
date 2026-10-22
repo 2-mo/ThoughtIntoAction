@@ -43,11 +43,11 @@ flowchart LR
 | `source` | `cli`、`quest`、`phone.arkit` | Python 3.12；`factory(directory, **options).run()`；CLI 待机不占控制权；Quest 是 `NativeSession` 租约管理，手机拥有 UDP 输入并显式续租 |
 | `input` | 新 `arkit` 及旧输入 | 原始报文、session、序号、追踪状态；`start/latest/stop` |
 | `mapping` | `phone_tool`、`phone_base` | 原相对位姿算法；活动映射在抓取参考时锁定 |
-| `planner` | `arx.basic` | Python 3.10；`factory(config, model_id).plan(request, snapshot, now)`，独立的可变 IK 数据 |
+| `planner` | `motion.default` | Python 3.10；`factory(config, model_id).plan(request, snapshot, now)`，独立的可变 IK 数据 |
 | `camera` | `realsense`、`synthetic` | Python 3.12；上下文生命周期、`metadata/read()`；RealSense 沿用独立共享相机服务 |
 | `exporter` | `schema1`、`schema2` | 独立 LeRobot 环境；`prepare/save_sidecar`，数据只能选择 schema，不能指定 Python 工厂 |
 
-注册表在 `configs/plugins.toml` 和 `control/config/components.json`。共享实现为 L0 契约包 `src/embodied/contracts/`；旧 `embodied.core.plugins` 保留兼容模块身份。`api_version=1` 和 `runtime=workstation/control` 在加载前检查，列举、校验 profile 不导入硬件 SDK。控制端只读 JSON，避免向 Python 3.10 引入 Python 3.12 的依赖。
+注册表统一在 `configs/plugins.json`，加载器为 `embodied.contracts.registry`。接口、设备锁和客户端共用 `src/embodied/contracts/`；调用者已迁到新位置。`api_version=1` 和 `runtime=workstation/control` 在加载前检查，列举、校验 profile 不导入硬件 SDK。控制端只读 JSON，避免向 Python 3.10 引入 Python 3.12 的依赖。
 
 当前机器人协议明确是六轴 X5 + 米制夹爪，替换驱动须满足同源 X5 模型契约。其他轴数/机械臂需要新协议版本及对应模型运行时；注册名称不代表已经支持其他硬件。控制权、有效期、反馈检查保留在公共执行边界，各输入插件不能绕过它们。
 
@@ -87,7 +87,7 @@ flowchart LR
 
 该 demo 从 managed 保持模式出发，复用原示例位姿并调整一次模式切换按键；普通 unmanaged demo 完全保留。
 
-启动输出本次 `control/run/<目录>`。后续命令用它替换 `<RUN>`，不要连接历史运行。
+启动输出本次 `outputs/runtime/control/<目录>`。后续命令用它替换 `<RUN>`，不要连接历史运行。
 
 ```bash
 ./run.sh workbench status --run <RUN>
@@ -146,9 +146,9 @@ Unix 命令 socket 权限为 0600，与只读 observer 分离。每次接管生�
 ```bash
 ./run.sh collect --run <RUN> --camera synthetic --task "仿真示教" --duration 10
 ./run.sh collect --run <RUN> --camera wrist --task "真实示教"
-./run.sh runtime-data validate datasets/runtime/<episode>
-./run.sh runtime-data alignment datasets/runtime/<episode>
-bash scripts/datasets/convert.sh --source datasets/runtime/<episode> --output datasets/lerobot/<new-name>
+./run.sh runtime-data validate outputs/datasets/runtime/<episode>
+./run.sh runtime-data alignment outputs/datasets/runtime/<episode>
+bash scripts/datasets/convert.sh --source outputs/datasets/runtime/<episode> --output outputs/datasets/lerobot/<new-name>
 ```
 
 `--camera-options` 接受 JSON 构造参数；profile 可用 `camera_options`。真实共享相机沿用 `configs/project.toml`/本机配置和已有相机服务启用流程。无相机时是诊断 trace，不作为带 RGB 的训练 episode。
@@ -185,7 +185,7 @@ schema 2 保存原始 RobotTickV2、独立反馈/命令时间、owner/source/ope
 ```bash
 ./run.sh test
 ./run.sh control check --simulation
-control/.venv/bin/python -B control/scripts/check_native_components.py --output outputs/native-faults-new
+outputs/envs/control/bin/python -B scripts/control/check_native_components.py --output outputs/native-faults-new
 PYTHONPATH=src OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python -B scripts/check_workbench.py \
   --calibration --output outputs/check-workbench-new
 ```

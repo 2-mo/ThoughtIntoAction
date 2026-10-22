@@ -21,7 +21,7 @@ SOURCE_ROOT = PROJECT_ROOT / "src"
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
-from embodied.core.arx5_paths import OUTPUTS_ROOT, PROJECT_ROOT as PATHS_PROJECT_ROOT  # noqa: E402
+from embodied.devices.robots.arx5.paths import OUTPUTS_ROOT, PROJECT_ROOT as PATHS_PROJECT_ROOT  # noqa: E402
 from embodied.policy.groot.cameras import CAMERA_IDS, DualRgbCamera, SharedRgbCameras, default_camera_specs  # noqa: E402
 from embodied.policy.groot.checkpoint import (  # noqa: E402
     ACTION_HORIZON,
@@ -39,7 +39,9 @@ from embodied.policy.groot.runtime import (  # noqa: E402
 
 
 TRAINING_ROOT = OUTPUTS_ROOT / "groot-training"
-GROOT_ROOT = PATHS_PROJECT_ROOT / "third_party" / "Isaac-GR00T"
+from embodied.core.dependencies import dependency_python, dependency_root
+
+GROOT_ROOT = dependency_root("groot")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -62,7 +64,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="加载模型并执行一次合成观测推理，不打开相机或 CAN",
     )
-    parser.add_argument("--run", type=Path, help="经 arx 内核执行（control/run/<RUN>）；不直接打开 CAN")
+    parser.add_argument("--run", type=Path, help="经 arx 内核执行（outputs/runtime/control/<RUN>）；不直接打开 CAN")
     parser.add_argument("--task", help="与 --run 一起使用的任务描述")
     parser.add_argument("--seconds", type=float, default=60.0, help="与 --run 一起使用的运行时长，秒")
     options = parser.parse_args(argv)
@@ -242,8 +244,8 @@ def run(argv: list[str] | None = None) -> int:
     print(f"模型视觉输入：{', '.join(checkpoint.video_keys)}")
     print(f"模型状态/动作：{', '.join(checkpoint.state_keys)}")
     print(f"相机：{camera_names}")
-    if not (GROOT_ROOT / ".venv" / "bin" / "python").is_file():
-        raise PolicyError(f"GR00T 环境不存在：{GROOT_ROOT / '.venv'}")
+    if not dependency_python("groot").is_file():
+        raise PolicyError(f"GR00T 环境不存在：{dependency_python('groot').parent.parent}；运行 ./run.sh components setup groot")
     if options.check:
         print("检查通过；未加载模型、相机或 CAN。")
         return 0

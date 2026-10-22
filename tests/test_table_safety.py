@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from embodied.core.safety import TablePlane
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from legacy.robot_control.online_motion import OnlineMotion, DEFAULTS
 
 
@@ -16,7 +16,7 @@ class TableSafetyTests(unittest.TestCase):
             with self.assertRaises(ValueError): TablePlane(z, margin)
 
     def test_all_profiles_reject_below_table_without_mutating_previous_plan(self):
-        robot = RobotModel(eef='eef_link')
+        robot = X5PinocchioModel(eef='eef_link')
         planner = OnlineMotion([0]*6, [0]*6, [3]*6, 3,
             {**DEFAULTS, 'joint_soft_limit_margin_rad': .05}, .02, robot.lower, robot.upper)
         before = planner.snapshot()

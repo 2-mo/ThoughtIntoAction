@@ -18,7 +18,7 @@ from legacy.quest_teleop.base_controller import (
     X5TeleopBase,
     DEFAULT_X5_MANIPULATOR_CONFIG,
 )
-from xrobotoolkit_teleop.utils.geometry import apply_delta_pose
+from embodied.devices.inputs.quest._vendor.utils.geometry import apply_delta_pose
 
 from legacy.quest_teleop.legacy.telemetry import TelemetryCSVLogger, add_vector
 

@@ -1,6 +1,6 @@
 {
   "interface": "can0",
-  "calibration_path": "calibrations/hand-eye/eye-to-hand/enabled.json",
+  "calibration_path": "outputs/calibrations/hand-eye/eye-to-hand/enabled.json",
   "cube_edge_mm": 30.0,
   "camera": {
     "serial": "239222300444",

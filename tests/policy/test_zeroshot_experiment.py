@@ -9,7 +9,7 @@ from unittest.mock import patch
 import numpy as np
 from arm_service_fixture import ServiceFixture
 from legacy.robot_control.client import ArmClient
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.presets import DEFAULT_GRASP_READY_JOINTS
 from embodied.policy.pi05_zeroshot.real import MOTION, move_pregrasp
 from embodied.policy.pi05_zeroshot.experiment import require_fresh, step_target, execute_step
@@ -22,8 +22,8 @@ class ExperimentTests(unittest.TestCase):
                 'state_clipped_dimensions': [], 'state_quantile_excess': 0.}
 
     def test_joint_and_cartesian_bounds(self):
-        robot = RobotModel()
-        tcp = RobotModel(eef='eef_link')
+        robot = X5PinocchioModel()
+        tcp = X5PinocchioModel(eef='eef_link')
         q = list(DEFAULT_GRASP_READY_JOINTS)
         target, plan = step_target(robot, tcp, {'actual_pos': q}, self.prediction(q))
         self.assertLessEqual(np.max(np.abs(target-q)), .020000001)

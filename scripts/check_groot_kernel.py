@@ -12,7 +12,7 @@ from embodied.contracts.runtime.control import ControlSession
 from embodied.policy.groot.cameras import RgbFrame, SynchronizedFrames
 from embodied.policy.groot.checkpoint import ACTION_HORIZON
 from embodied.policy.groot.kernel_runtime import kernel_snapshot, run
-from embodied.workstation.control import sim_kernel
+from embodied.applications.workstation.control import sim_kernel
 
 
 class StandInCameras:

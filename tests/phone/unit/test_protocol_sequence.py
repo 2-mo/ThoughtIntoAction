@@ -1,6 +1,6 @@
 import pytest
 
-from embodied.phone.protocol.sequence import (
+from embodied.devices.phone.protocol.sequence import (
     SequenceError,
     SequenceErrorCode,
     SequenceTracker,

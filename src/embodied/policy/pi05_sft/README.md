@@ -39,7 +39,7 @@ bash src/embodied/policy/pi05_sft/pregrasp.sh
 
 分别等价于 `scripts/inference/stop_pi05.sh` 和 `scripts/arm/home.sh`。独立停止程序已经识别本目录的 `run.py`、`worker.py`，不依赖模型加载或 GPU 响应，不结束机械臂服务。
 
-`预抓取.sh` 同样先退出策略进程，再到共用预抓取位并逐步张开夹爪至约 78 mm，最后保持。回零保持当前夹爪开度。两个定位入口复用采集的 ArmClient → 服务 Ruckig → 硬件控制链，并直接读取 `启动遥操.sh` 中的数字运动参数（不执行遥操脚本、不连接头显）。当前回零速度上限为前段 2.0、后段 0.75 rad/s，预抓取为 2.0 rad/s，预览时间 0.05 s，关闭目标超前裁剪；桌面保护和关节边界由服务继续执行。Ctrl+C 停止并保持。这里的独立定位参数不改变模型执行速度。
+`预抓取.sh` 同样先退出策略进程，再到共用预抓取位并逐步张开夹爪至约 78 mm，最后保持。回零保持当前夹爪开度。两个定位入口复用采集的 ArmClient → 服务 Ruckig → 硬件控制链，并直接读取 `scripts/shortcuts/启动遥操.sh` 中的数字运动参数（不执行遥操脚本、不连接头显）。当前回零速度上限为前段 2.0、后段 0.75 rad/s，预抓取为 2.0 rad/s，预览时间 0.05 s，关闭目标超前裁剪；桌面保护和关节边界由服务继续执行。Ctrl+C 停止并保持。这里的独立定位参数不改变模型执行速度。
 
 ## 与训练一致的推理路径
 
@@ -47,7 +47,7 @@ bash src/embodied/policy/pi05_sft/pregrasp.sh
 - `metadata.pt` 采用限制性读取器，只接收基础配置和一个忽略的训练 filter 占位符，不导入 checkpoint 指定的任意 Python 类；不加载 `optimizer.pt`。
 - 使用 OpenPI `PI0Pytorch` 和 `safetensors.load_model(..., strict=True)`，严格检查权重，保留 tied-weight 关系；不允许失败后返回随机模型。
 - 使用 checkpoint 自带的 `assets/local/x5_blue_cube_to_white/norm_stats.json`；启动时快照统计并校验 worker 使用的哈希相同，不生成或替换成 zero-shot 的实验统计。
-- 用户已确认训练沿用了本项目 `integrations/openpi/x5_policy.py` 适配器，因此直接复用它：单腕 RGB → `left_wrist_0_rgb`，缺失相机显式 mask；6 个关节增量相对观测状态，夹爪是绝对米。
+- 用户已确认训练沿用了本项目 `scripts/training/openpi/x5_policy.py` 适配器，因此直接复用它：单腕 RGB → `left_wrist_0_rgb`，缺失相机显式 mask；6 个关节增量相对观测状态，夹爪是绝对米。
 - 输入顺序与训练一致：X5 适配 → delta 变换（推理无 actions 时为空操作）→ quantile 归一化 → 图像 resize/pad → **7 维状态进入 tokenizer** → 状态补到 32 维。
 - 输出由 OpenPI 做反归一化、6 关节增量恢复为绝对目标，最后取 7 维。没有套用旧 LeRobot 基座的动作解码。
 
@@ -99,8 +99,8 @@ bash src/embodied/policy/pi05_sft/run_jax.sh --checkpoint ~/work/checkpoints/blu
 
 ### 预抓取失败与停止状态
 
-模型入口的预抓取现在也读取 `启动遥操.sh` 的采集运动参数，与 `预抓取.sh` 一致；模型执行仍使用其独立限速。启动记录 `pregrasp_motion.json`。服务存在时，在加载模型前先检查控制权，`stopping` 或其他控制者占用会直接退出，状态快照保存在 `service_before.json`。控制失败时尽量保存 `service_error.json`。
+模型入口的预抓取现在也读取 `scripts/shortcuts/启动遥操.sh` 的采集运动参数，与 `预抓取.sh` 一致；模型执行仍使用其独立限速。启动记录 `pregrasp_motion.json`。服务存在时，在加载模型前先检查控制权，`stopping` 或其他控制者占用会直接退出，状态快照保存在 `service_before.json`。控制失败时尽量保存 `service_error.json`。
 
-`实际关节与服务规划偏差超过 0.15 rad` 是硬件跟踪偏差，不是 JAX 推理超时。如果停止轨迹已完成但实际位置仍与停止目标差距较大，服务会保持 `stopping`，此时不能宣称已经保持或释放。不要直接重跑推理；先检查是否受阻及硬件反馈。需要重启服务时，应先支撑机械臂，避免关闭控制后失去支撑；退出原机械臂服务，再运行 `bash 启动机械臂服务.sh`。软件配置修正不能证明硬件跟踪问题已消失。
+`实际关节与服务规划偏差超过 0.15 rad` 是硬件跟踪偏差，不是 JAX 推理超时。如果停止轨迹已完成但实际位置仍与停止目标差距较大，服务会保持 `stopping`，此时不能宣称已经保持或释放。不要直接重跑推理；先检查是否受阻及硬件反馈。需要重启服务时，应先支撑机械臂，避免关闭控制后失去支撑；退出原机械臂服务，再运行 `bash scripts/shortcuts/启动机械臂服务.sh`。软件配置修正不能证明硬件跟踪问题已消失。
 
 `停止.sh` 现在支持异常 `stopping` 恢复：仅针对已失联的 PI05 控制会话，在规划刹车完成、最近 0.5 秒反馈速度低于 0.03 rad/s 且位置变化低于 0.01 rad 时，将保持目标设为实际位置并释放原控制权，全程不切换到 damping。保留原偏差的终端报告。该功能需要新版机械臂服务；旧进程必须重启一次才能使用，脚本遇到旧版会明确报错，不会伪报已停止。仍在运动、其他控制者或不新鲜的反馈均不能用此路径恢复。

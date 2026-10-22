@@ -23,8 +23,8 @@ class DashboardTests(unittest.TestCase):
              patch.object(w, 'stop_pane', side_effect=lambda role: events.append(role)), \
              patch.object(w, 'teleop_running', return_value=False), \
              patch.object(w, 'arm_info', return_value=None), \
-             patch('embodied.monitor.control.command', side_effect=lambda action: events.append('viewer-service')), \
-             patch('embodied.sensors.lifecycle.stop_service', side_effect=lambda: events.append('camera-service')):
+             patch('embodied.applications.monitor.control.command', side_effect=lambda action: events.append('viewer-service')), \
+             patch('embodied.devices.sensors.lifecycle.stop_service', side_effect=lambda: events.append('camera-service')):
             w.shutdown_services()
         self.assertEqual(events, ['teleop', 'arm', 'web', 'viewer-service', 'camera-service'])
 

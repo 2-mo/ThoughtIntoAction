@@ -37,9 +37,7 @@ class TrainingExportTests(unittest.TestCase):
 
 class X5PolicyTests(unittest.TestCase):
     def test_exterior_image_is_used_in_base_camera_slot(self):
-        import sys
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'integrations'/'openpi'))
-        from x5_policy import X5Inputs
+        from embodied.policy.openpi.x5 import X5Inputs
         data = X5Inputs()({'wrist_image':np.zeros((48,64,3),np.uint8), 'state':np.zeros(7),
                           'exterior_image':np.ones((3,48,64),np.float32), 'exterior_valid':np.array([True])})
         self.assertTrue(data['image_mask']['base_0_rgb'])
@@ -47,9 +45,7 @@ class X5PolicyTests(unittest.TestCase):
         self.assertFalse(data['image_mask']['right_wrist_0_rgb'])
 
     def test_wrist_only_mask_and_seven_dimensional_outputs(self):
-        import sys
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'integrations'/'openpi'))
-        from x5_policy import X5Inputs, X5Outputs
+        from embodied.policy.openpi.x5 import X5Inputs, X5Outputs
         data = X5Inputs()({'wrist_image': np.ones((3,48,64), dtype=np.float32),
                            'state': np.zeros(7), 'actions': np.ones((25,7)), 'prompt': 'pick cup'})
         self.assertEqual(data['image']['left_wrist_0_rgb'].shape, (48,64,3))

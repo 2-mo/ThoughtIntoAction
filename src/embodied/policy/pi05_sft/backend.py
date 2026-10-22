@@ -4,7 +4,7 @@ os.environ.setdefault('JAX_PLATFORMS', 'cpu')
 import sys
 from pathlib import Path
 from embodied.policy.pi05_sft.checkpoint import ROOT, OPENPI, inspect_checkpoint
-sys.path[:0] = [str(OPENPI/'src'), str(OPENPI/'packages/openpi-client/src'), str(ROOT/'integrations/openpi')]
+# OpenPI is installed in the selected policy environment by setup.sh/setup_jax.sh.
 
 
 def load_backend(checkpoint):
@@ -17,7 +17,7 @@ def load_backend(checkpoint):
     from openpi import transforms as t
     from openpi.shared.normalize import load as load_stats
     from openpi.models.tokenizer import PaligemmaTokenizer
-    from x5_policy import X5Inputs, X5Outputs
+    from embodied.policy.openpi.x5 import X5Inputs, X5Outputs
     spec = inspect_checkpoint(checkpoint)
     torch.set_num_threads(8)
     (torch.ones(1, device='cuda')+1).cpu()

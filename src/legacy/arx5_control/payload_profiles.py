@@ -10,7 +10,7 @@ import re
 import time
 from typing import Any
 
-from embodied.core.arx5_paths import CALIBRATIONS_ROOT
+from embodied.devices.robots.arx5.paths import CALIBRATIONS_ROOT
 
 
 DEFAULT_PAYLOAD_ROOT = CALIBRATIONS_ROOT / "payload"

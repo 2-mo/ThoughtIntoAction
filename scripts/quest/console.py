@@ -300,7 +300,7 @@ class Console:
 
 if __name__ == "__main__":
     if any(arg in ("-h", "--help") for arg in sys.argv[1:]):
-        print("Usage: quest-console TELEOP_ARGUMENTS; daily entry: ./启动遥操.sh")
+        print("Usage: quest-console TELEOP_ARGUMENTS; daily entry: ./scripts/shortcuts/启动遥操.sh")
         raise SystemExit(0)
     def terminate(signum, frame):
         raise KeyboardInterrupt

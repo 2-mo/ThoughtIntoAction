@@ -3,8 +3,8 @@ set -Eeuo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/project_env.sh"
 ROOT_DIR="$ARX5_PROJECT_ROOT"
-CONTROL_PYTHON="$ROOT_DIR/environments/arx_motion/.venv/bin/python"
-WEB_PYTHON="$ROOT_DIR/environments/arx_motion/.venv-web/bin/python"
+CONTROL_PYTHON="$ROOT_DIR/configs/environments/arx_motion/.venv/bin/python"
+WEB_PYTHON="$ROOT_DIR/configs/environments/arx_motion/.venv-web/bin/python"
 CERT_DIR="$ROOT_DIR/runtime/https"
 TOKEN_FILE="$ROOT_DIR/runtime/web-pairing-token"
 PID_FILE="$ROOT_DIR/runtime/web-lan.pid"
@@ -158,20 +158,20 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 setsid python3 -B -m legacy.arx_tools.web_service_supervisor --name 控制 -- \
-  "$CONTROL_PYTHON" -B -m embodied.console \
+  "$CONTROL_PYTHON" -B -m embodied.applications.console \
   --host "$BIND_IP" --port 8000 --cert "$CERT" --key "$KEY" \
   --origin "$ORIGIN" --token "$PAIRING_TOKEN" \
   --frontend-directory "$FRONTEND_DIST" --ca "$CA_CERT" --auto-connect-arm \
   --camera-url "ws://127.0.0.1:8768/api/v1/cameras/collection" &
 CONTROL_PID=$!
 setsid python3 -B -m legacy.arx_tools.web_service_supervisor --name 视觉 -- \
-  "$WEB_PYTHON" -B -m embodied.console.features.vision.service \
+  "$WEB_PYTHON" -B -m embodied.applications.console.features.vision.service \
   --host "$BIND_IP" --cert "$CERT" --key "$KEY" \
   --origin "$ORIGIN" --token "$PAIRING_TOKEN" &
 VISION_PID=$!
 setsid python3 -B -m legacy.arx_tools.web_service_supervisor --name 相机 -- \
   "$ARX5_SCRIPTS_DIR/camera_webrtc_supervisor.sh" \
-  "$WEB_PYTHON" -B -m embodied.console.features.camera.service \
+  "$WEB_PYTHON" -B -m embodied.applications.console.features.camera.service \
   --host "$BIND_IP" --cert "$CERT" --key "$KEY" \
   --origin "$ORIGIN" --token "$PAIRING_TOKEN" &
 CAMERA_PID=$!

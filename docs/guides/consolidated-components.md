@@ -1,6 +1,6 @@
 # 三个仓库合并后的使用与维护
 
-`arx5_test`、`reBotArm_control_py`、`robot-teleop` 已从原位置移入 QuestArmTeleop。日常只维护本仓库；可用源码按功能位于 `src/`，前端位于 `apps/console/`，iOS 工程仍在 `apps/ios/`。原项目完整工作树曾归档在本机 `archives/migration/originals/`（未纳入 git），不参与导入、启动、构建或测试。
+`arx5_test`、`reBotArm_control_py`、`robot-teleop` 已从原位置移入 QuestArmTeleop。日常只维护本仓库；可用源码按功能位于 `src/`，前端位于 `apps/console/`，iOS 工程仍在 `apps/ios/`。原项目完整工作树曾归档在本机 `outputs/archives/migration/originals/`（未纳入 git），不参与导入、启动、构建或测试。
 
 默认 Quest 遥操继续使用 `control/` 中的 arx 原生 VR、coordinator/router、控制器、设备后端与现有工作台。合并没有替换它的默认控制算法。
 
@@ -8,19 +8,19 @@
 
 | 功能 | 唯一维护位置 | 入口/插件 |
 | --- | --- | --- |
-| 原生 Quest、手机接管、基础动作 | `control/`、`src/embodied/inputs/`、`src/embodied/operations/` | `workbench`、`phone`、`motion`，用法见 [工作台](plugin-workbench.md) |
-| Ruckig、圆弧/混合路径、碰撞、运动学 | `src/embodied/motion/`、`src/embodied/phone/controllers/`、`src/embodied/phone/kinematics/` | `trajectory`、`path`、`collision`、`servo_algorithm`、`kinematics` 库插件 |
-| B601 DM/RS、分组电机与夹爪 | `src/embodied/robots/rebot/actuator/`、`configs/rebot/`、`assets/robots/rebot/` | `device.rebot_dm/rebot_rs`；`components run rebot.*` |
-| B601 运动学、动力学、SE(3)/CLIK | `src/embodied/robots/rebot/{kinematics,dynamics,trajectory}/` | `kinematic_analysis.rebot`、`dynamics.pinocchio`、`path.se3_geodesic`、`trajectory.clik` |
-| B601 末端操作、拖动与自动保持、MeshCat | `src/embodied/robots/rebot/controllers/`、`examples/rebot/` | `rebot.endpose/trajectory/gravity/stationary_hold`、`viewer.rebot_*` |
-| 浏览器手势、运动编辑、Ghost、任务页面 | `apps/console/`、`src/embodied/console/features/` | `ui.build`、`ui.preview`、`ui.backend`、`ui.console` |
-| D405/D455 RGB-D、WebRTC、相机诊断 | `src/embodied/console/features/camera/`、`src/legacy/arx_tools/` | `camera.rgbd`、`diagnostic.d405` |
-| 手眼标定（经内核） | `src/embodied/calibration/` | `./run.sh calib handeye`；旧 D405/D455 采集器在 `src/legacy/hand_eye/`（随 K-10 删除） |
+| 原生 Quest、手机接管、基础动作 | `control/`、`src/embodied/devices/inputs/`、`src/embodied/applications/operations/` | `workbench`、`phone`、`motion`，用法见 [工作台](plugin-workbench.md) |
+| Ruckig、圆弧/混合路径、碰撞、运动学 | `src/embodied/motion/`、`src/embodied/devices/phone/controllers/`、`src/embodied/devices/phone/kinematics/` | `trajectory`、`path`、`collision`、`servo_algorithm`、`kinematics` 库插件 |
+| B601 DM/RS、分组电机与夹爪 | `src/embodied/devices/robots/rebot/actuator/`、`configs/rebot/`、`assets/robots/rebot/` | `device.rebot_dm/rebot_rs`；`components run rebot.*` |
+| B601 运动学、动力学、SE(3)/CLIK | `src/embodied/devices/robots/rebot/{kinematics,dynamics,trajectory}/` | `kinematic_analysis.rebot`、`dynamics.pinocchio`、`path.se3_geodesic`、`trajectory.clik` |
+| B601 末端操作、拖动与自动保持、MeshCat | `src/embodied/devices/robots/rebot/controllers/`、`docs/examples/rebot/` | `rebot.endpose/trajectory/gravity/stationary_hold`、`viewer.rebot_*` |
+| 浏览器手势、运动编辑、Ghost、任务页面 | `apps/console/`、`src/embodied/applications/console/features/` | `ui.build`、`ui.preview`、`ui.backend`、`ui.console` |
+| D405/D455 RGB-D、WebRTC、相机诊断 | `src/embodied/applications/console/features/camera/`、`src/legacy/arx_tools/` | `camera.rgbd`、`diagnostic.d405` |
+| 手眼标定（经内核） | `src/embodied/applications/calibration/` | `./run.sh calib handeye`；旧 D405/D455 采集器在 `src/legacy/hand_eye/`（随 K-10 删除） |
 | 夹爪、负载标定 | `src/legacy/arx_tools/` | `calibration.gripper/payload` |
-| 方块感知、抓取/旋转/堆叠 | `src/legacy/arx_tools/rgb_cube_detector.py`、`src/experiments/`、`src/embodied/console/features/cube/` | `perception.rgb_cube`、`task_planner.*`、`task.cube` |
+| 方块感知、抓取/旋转/堆叠 | `src/legacy/arx_tools/rgb_cube_detector.py`、`src/experiments/`、`src/embodied/applications/console/features/cube/` | `perception.rgb_cube`、`task_planner.*`、`task.cube` |
 | 双相机采集、审核、GR00T 导出 | `src/embodied/data/groot/` | `collection.groot`、`episode_store.groot`、`dataset_export.groot_v21` |
 | GR00T 权重检查、异步推理及动作分块 | `src/embodied/policy/groot/`、`third_party/Isaac-GR00T/` | `policy.groot`、`policy_actions.groot`、`checkpoint.groot` |
-| 手机 mock/replay、握手、诊断、回放检查 | `src/embodied/phone/`、`configs/phone/`、`assets/phone/` | `input.mock/replay`、`test_robot.mock`、`diagnostic.*`、`phone.tools` |
+| 手机 mock/replay、握手、诊断、回放检查 | `src/embodied/devices/phone/`、`configs/phone/`、`assets/phone/` | `input.mock/replay`、`test_robot.mock`、`diagnostic.*`、`phone.tools` |
 
 ### 一处选择和运行
 
@@ -65,7 +65,7 @@ planner = Registry().create("trajectory", "ruckig", runtime="analysis")
 ./run.sh components setup groot-tensorrt  # 可选部署加速；基础导出/模型工具不需要
 ```
 
-前三个参考项目的原始锁文件在 `environments/`。GPU 模型权重仍按明确的资源路径选择，不随启动下载；共享的数据和权重根目录仍为现有 `~/work/data/arx5` 与 `~/work/pre_weights`，不依赖已移走的三个源码目录。浏览器模型/纹理已进入 `assets/arx_motion/`，B601 网格已进入 `assets/robots/rebot/`。历史标定记录保存在 `calibrations/arx_motion/`，旧 session/标定板路径已重定位，原始字节仍保存在恢复归档中。
+前三个参考项目的原始锁文件在 `configs/environments/`。GPU 模型权重仍按明确的资源路径选择，不随启动下载；共享的数据和权重根目录仍为现有 `~/work/data/arx5` 与 `~/work/pre_weights`，不依赖已移走的三个源码目录。浏览器模型/纹理已进入 `assets/arx_motion/`，B601 网格已进入 `assets/robots/rebot/`。历史标定记录保存在 `outputs/calibrations/arx_motion/`，旧 session/标定板路径已重定位，原始字节仍保存在恢复归档中。
 
 GR00T 导出使用独立的双相机/Rot6D/16 维数据定义，关节 action 来自下一帧测量状态；现有 schema 2 的 sent-action 导出不变。两类数据不能仅改 schema 名称混装。
 

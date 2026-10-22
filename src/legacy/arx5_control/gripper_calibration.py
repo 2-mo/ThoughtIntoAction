@@ -8,7 +8,7 @@ from pathlib import Path
 import time
 from typing import Any
 
-from embodied.core.arx5_paths import CALIBRATIONS_ROOT
+from embodied.devices.robots.arx5.paths import CALIBRATIONS_ROOT
 
 
 DEFAULT_GRIPPER_OPEN_READOUT = -3.4

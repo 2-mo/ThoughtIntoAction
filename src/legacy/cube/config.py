@@ -8,7 +8,7 @@ import math
 from pathlib import Path
 from typing import Any
 
-from embodied.core.arx5_paths import PROJECT_ROOT
+from embodied.devices.robots.arx5.paths import PROJECT_ROOT
 
 
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("config.json")

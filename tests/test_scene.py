@@ -11,15 +11,15 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.transforms import from_rt
-from embodied.core.plugins import Registry
-from embodied.monitor.scene import Scene, WEB_ROOT
+from embodied.contracts.registry import Registry
+from embodied.applications.monitor.scene import Scene, WEB_ROOT
 
 
 class SceneTests(unittest.TestCase):
     def setUp(self):
-        self.robot = RobotModel()
+        self.robot = X5PinocchioModel()
         self.scene = Scene(self.robot)
         self.addCleanup(self.scene.close)
         self.q = np.array([0., 1.5, 1.45, -1.52, 0., 0.])
@@ -80,7 +80,7 @@ class SceneTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'variant.urdf'
             tree.write(path)
-            robot = RobotModel(path, eef='link4')
+            robot = X5PinocchioModel(path, eef='link4')
             scene = Scene(robot)
             try:
                 expected_eef = robot.fk(self.q)

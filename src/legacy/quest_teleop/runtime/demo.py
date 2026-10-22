@@ -36,13 +36,13 @@ class SyntheticCamera:
 
 def run_demo(seconds=0):
     from embodied.core.project import load_config, resolve_path
-    from embodied.core.model import RobotModel
+    from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
     if not np.isfinite(seconds) or seconds < 0:
         raise ValueError("Demo seconds must be finite and non-negative")
     config = copy.deepcopy(load_config())
     config["paths"]["dataset_dir"] = "outputs/demo-episodes"
     config["cameras"]["wrist_rgb"].update(enabled=True, serial="SYNTHETIC", hand_eye_calibrated=False)
-    model = RobotModel(resolve_path(config["robot"]["urdf"]))
+    model = X5PinocchioModel(resolve_path(config["robot"]["urdf"]))
     control = {"mode": "simulation", "backend": "synthetic", "actuate": False,
                "gripper_width_m": .082, "control_rate_hz": 50}
     session = TeleopSession(config, model.metadata(), control, camera_factory=SyntheticCamera)

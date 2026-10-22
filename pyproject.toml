@@ -61,11 +61,11 @@ constraint-dependencies = [
 ]
 
 [tool.uv.sources]
-xrobotoolkit-sdk = { path = "third_party/XRoboToolkit-Teleop-Sample-Python/dependencies/XRoboToolkit-PC-Service-Pybind" }
+xrobotoolkit-sdk = { git = "https://github.com/XR-Robotics/XRoboToolkit-PC-Service-Pybind.git", rev = "c64ccf6acd577a333e03b66fafe8efeeceb511b1" }
 
-# run.sh loads our src/ and the audited upstream Quest / IK / visualization modules
-# directly from this checkout. Their source revisions are in dependencies.lock.toml.
-# The upstream multi-robot Python distribution is not installed.
+# Quest adapter support is maintained under src/embodied/devices/inputs/quest/_vendor.
+# The native binding is a pinned package; install its companion library with
+# ./run.sh rebuild-xr-sdk. third_party contains read-only references only.
 
 [tool.uv.extra-build-dependencies]
 xrobotoolkit-sdk = ["setuptools==83.0.0", "wheel==0.47.0", "pybind11[global]==3.1.0", "cmake==3.31.10"]

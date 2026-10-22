@@ -1,0 +1,56 @@
+{
+  "url": "https://github.com/XR-Robotics/XRoboToolkit-Teleop-Sample-Python",
+  "commit": "79e5cb8a56e3455515ce1b476e993c764ec58739",
+  "license": "MIT",
+  "scope": "Only the dependency closure of legacy Quest/X5 input, IK, logging and optional camera adapters; no upstream robot controllers, assets or dependency checkouts.",
+  "local_changes": [
+    "Package imports use embodied.devices.inputs.quest._vendor; no control behaviour changes."
+  ],
+  "files": [
+    {
+      "path": "common/base_teleop_controller.py",
+      "upstream_sha256": "f08c95da359a21256ac4f0b0edcfe0d135e97f96eb2fdfdc2125082faabab6a8",
+      "sha256": "b4f1fb6304850321769ae913fd8d7f163827fc389fd313e708d3b43b384cbf5f"
+    },
+    {
+      "path": "common/base_hardware_teleop_controller.py",
+      "upstream_sha256": "afa1bef4b8e7d3a810f1713a5c47e519becf82f3f69b0ae5e77e952b5e628e19",
+      "sha256": "de3c331cdf98258ccdca5f21369f094d36dff898a501c94ef11d1f99fce1e3f2"
+    },
+    {
+      "path": "common/xr_client.py",
+      "upstream_sha256": "be2ff4c55b6082113e741a6a2b7b5f57a84a34af2237c5b3fee5aaad63c2e3d9",
+      "sha256": "be2ff4c55b6082113e741a6a2b7b5f57a84a34af2237c5b3fee5aaad63c2e3d9"
+    },
+    {
+      "path": "common/data_logger.py",
+      "upstream_sha256": "b9a6398abdf33a2f215ac910fc0421e28ecdcc5ca1ffac7aa0af7b87b14a1b2e",
+      "sha256": "b9a6398abdf33a2f215ac910fc0421e28ecdcc5ca1ffac7aa0af7b87b14a1b2e"
+    },
+    {
+      "path": "utils/geometry.py",
+      "upstream_sha256": "083f79f51a51c87deab084abb8ca1a8df3ab66430a76b2e737b8783ef20a1fbb",
+      "sha256": "083f79f51a51c87deab084abb8ca1a8df3ab66430a76b2e737b8783ef20a1fbb"
+    },
+    {
+      "path": "utils/parallel_gripper_utils.py",
+      "upstream_sha256": "22d63ab03449574c5964c5c5367d2c7e015ba9f2699c27ad11811038c5d66f8f",
+      "sha256": "22d63ab03449574c5964c5c5367d2c7e015ba9f2699c27ad11811038c5d66f8f"
+    },
+    {
+      "path": "utils/image_utils.py",
+      "upstream_sha256": "0b9833bdfe2bd155bf5a4a9b2b2d0f7570bc0efe94a9d9b251cc176fa28a266f",
+      "sha256": "0b9833bdfe2bd155bf5a4a9b2b2d0f7570bc0efe94a9d9b251cc176fa28a266f"
+    },
+    {
+      "path": "hardware/interface/base_camera.py",
+      "upstream_sha256": "b3e2a541b7d22cfc9bb72526c7540ea5e96e364d4152946ea8627e781b646738",
+      "sha256": "b3e2a541b7d22cfc9bb72526c7540ea5e96e364d4152946ea8627e781b646738"
+    },
+    {
+      "path": "hardware/interface/realsense.py",
+      "upstream_sha256": "edc72093c1d8e7ee38c84064fd5731da86b11b0f9c9c2214d95c48f553a1a67a",
+      "sha256": "edc72093c1d8e7ee38c84064fd5731da86b11b0f9c9c2214d95c48f553a1a67a"
+    }
+  ]
+}

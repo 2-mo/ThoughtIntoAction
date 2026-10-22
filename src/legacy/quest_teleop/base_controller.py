@@ -13,10 +13,10 @@ from typing import Dict
 import numpy as np
 import meshcat.transformations as tf
 
-from xrobotoolkit_teleop.common.base_hardware_teleop_controller import HardwareTeleopController
-from xrobotoolkit_teleop.utils.geometry import R_HEADSET_TO_WORLD, apply_delta_pose
-from embodied.core.plugins import Registry
-from embodied.core.model import RobotModel
+from embodied.devices.inputs.quest._vendor.common.base_hardware_teleop_controller import HardwareTeleopController
+from embodied.devices.inputs.quest._vendor.utils.geometry import R_HEADSET_TO_WORLD, apply_delta_pose
+from embodied.contracts.registry import Registry
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.loop_rate import LoopRate
 from embodied.core.safety import TablePlane
 from legacy.quest_teleop.frames import (operator_yaw_rotation, tool_rotation_delta,
@@ -135,11 +135,11 @@ class X5TeleopBase(HardwareTeleopController):
         telemetry_factory = registry.load("telemetry", telemetry)
         try:
             if enable_log_data:
-                from xrobotoolkit_teleop.common.data_logger import DataLogger
+                from embodied.devices.inputs.quest._vendor.common.data_logger import DataLogger
                 self.data_logger = DataLogger(log_dir=log_dir)
             backend = getattr(self, "_backend_name", "stanford")
             if not getattr(self, "_service_mode", False):
-                self.telemetry = telemetry_factory(robot=RobotModel(robot_urdf_path), source={
+                self.telemetry = telemetry_factory(robot=X5PinocchioModel(robot_urdf_path), source={
                     "kind": "hardware" if registry.spec("arm", backend).hardware else "virtual",
                     "backend": backend, "input": input_plugin, "controller": type(self).__name__,
                 })
@@ -325,7 +325,7 @@ class X5TeleopBase(HardwareTeleopController):
 
     def _initialize_camera(self):
         if self.enable_camera:
-            from xrobotoolkit_teleop.hardware.interface.realsense import RealSenseCameraInterface
+            from embodied.devices.inputs.quest._vendor.hardware.interface.realsense import RealSenseCameraInterface
             print("Initializing camera...")
             try:
                 self.camera_interface = RealSenseCameraInterface(

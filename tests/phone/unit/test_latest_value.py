@@ -1,4 +1,4 @@
-from embodied.phone.runtime.latest_value import LatestValue
+from embodied.devices.phone.runtime.latest_value import LatestValue
 
 
 class FakeClock:

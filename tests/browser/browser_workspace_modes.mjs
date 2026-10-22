@@ -45,7 +45,7 @@ try {
   const before = await page.evaluate(() => fetch('/api/model').then(r=>r.json()));
   const gap = await page.evaluate(() => document.querySelector('.display-panel').getBoundingClientRect().top - document.querySelector('.orientation-panel').getBoundingClientRect().bottom);
   assert.ok(gap > 150, `Leave natural space in Quest card: ${gap}`);
-  const firstStatus = JSON.parse((await exec('.venv/bin/python', ['-c', 'import json;from embodied.monitor.control import status;print(json.dumps(status()))'], {env})).stdout);
+  const firstStatus = JSON.parse((await exec('.venv/bin/python', ['-c', 'import json;from embodied.applications.monitor.control import status;print(json.dumps(status()))'], {env})).stdout);
   await select('simulation');
   await page.waitForFunction(() => document.body.dataset.simulation === 'true' && document.body.dataset.monitorReady === 'true');
   await until(async () => (await fetch('/api/simulation').then(r=>r.json())).state === 'running', 25000);
@@ -90,7 +90,7 @@ try {
   await page.waitForFunction(() => document.body.dataset.simulation === 'true');
   const restored = await page.evaluate(() => fetch('/api/simulation').then(r=>r.json()));
   assert.equal(restored.runtime_id, runtime.runtime_id, 'Retain the MuJoCo runtime across selection');
-  const finalStatus = JSON.parse((await exec('.venv/bin/python', ['-c', 'import json;from embodied.monitor.control import status;print(json.dumps(status()))'], {env})).stdout);
+  const finalStatus = JSON.parse((await exec('.venv/bin/python', ['-c', 'import json;from embodied.applications.monitor.control import status;print(json.dumps(status()))'], {env})).stdout);
   assert.equal(firstStatus.pid, finalStatus.pid, 'Viewer process must survive selection');
   assert.ok(switchedMs < 2000, `Switch must not park/restart: ${switchedMs}`);
   assert.deepEqual(errors, []);

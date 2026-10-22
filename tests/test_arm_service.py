@@ -111,9 +111,9 @@ class ArmServiceTests(unittest.TestCase):
             ArmClient(self.fixture.robot, path=self.fixture.path, hardware=True)
         with patch.object(self.fixture.robot, "metadata", return_value={"wrong": True}):
             # A separate model avoids changing the server's own metadata.
-            from embodied.core.model import RobotModel
+            from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
             with self.assertRaisesRegex(ValueError, "model/frame"):
-                ArmClient(RobotModel(), path=self.fixture.path, hardware=False)
+                ArmClient(X5PinocchioModel(), path=self.fixture.path, hardware=False)
         self.assertIsNone(self.fixture.service.owner)
 
     def test_only_one_owner_and_observers_do_not_release_it(self):

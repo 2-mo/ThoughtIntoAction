@@ -12,7 +12,7 @@ import sys
 
 from legacy.arx5_control import ArmController, ControllerMode
 from legacy.arx5_control.gripper_calibration import load_gripper_open_readout
-from embodied.core.arx5_paths import OUTPUTS_ROOT
+from embodied.devices.robots.arx5.paths import OUTPUTS_ROOT
 
 from legacy.cube.config import DEFAULT_CONFIG_PATH, load_config, validate_config
 from legacy.cube.perception import capture_cube_observation, capture_cube_scene_observation

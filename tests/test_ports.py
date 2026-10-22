@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 
-from embodied.workstation import ports
+from embodied.applications.workstation import ports
 
 CONFIG = {"ports": {"console": 8000, "phone_udp": 5005, "vision": 8765}, "viewer_service": {"port": 18081},
           "telemetry": {"endpoint": "tcp://127.0.0.1:5567"}, "camera_service": {"socket": "outputs/runtime/camera.sock"}}
@@ -17,7 +17,7 @@ class PortTests(unittest.TestCase):
 
     def test_owner_classification(self):
         table = self.table({("tcp", 18081): [11], ("tcp", 8000): [12], ("udp", 5005): [13]},
-                           {11: f"python -m embodied.monitor.cli", 12: "nginx: worker", 13: f"{ports.PROJECT_ROOT}/.venv/bin/python -m embodied.inputs.phone"})
+                           {11: f"python -m embodied.applications.monitor.cli", 12: "nginx: worker", 13: f"{ports.PROJECT_ROOT}/.venv/bin/python -m embodied.devices.inputs.phone"})
         self.assertEqual(table["monitor"]["state"], "本项目")
         self.assertEqual(table["console"]["state"], "其他程序")
         self.assertEqual(table["phone_udp"]["state"], "本项目")

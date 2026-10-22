@@ -1,4 +1,4 @@
-"""Non-blocking episode operations; button debouncing lives in embodied.inputs.gestures."""
+"""Non-blocking episode operations; button debouncing lives in embodied.devices.inputs.gestures."""
 import threading
 import time
 

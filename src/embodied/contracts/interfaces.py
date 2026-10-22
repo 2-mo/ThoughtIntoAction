@@ -1,12 +1,48 @@
 """Small structural interfaces; implementations own their SDK and lifecycle."""
-from typing import Protocol, Any
+from typing import Protocol, Any, Callable, Mapping
+from .control import ControlCommand, RobotState
+
+
+class RobotProfile(Protocol):
+    """Resolved deployment facts; device loaders validate model-specific fields."""
+    name: str
+    control_hz: float
+    park_q: tuple[float, ...]
+    joint_min: tuple[float, ...]
+    joint_max: tuple[float, ...]
+    joint_velocity_max: tuple[float, ...]
+    torque_max: tuple[float, ...]
+    kp: tuple[float, ...]
+    kd: tuple[float, ...]
+    joint_step_limit: float
+    gripper_max_width: float
+    gripper_velocity_max_m_s: float
+    simulation_plugin: str
+    hardware_plugin: str
+    model_plugin: str
+    viewer_plugin: str
+
+    @property
+    def model_id(self) -> str: ...
 
 
 class RobotBackend(Protocol):
-    def read_state(self, now: float) -> Any: ...
-    def step(self, command: Any, now: float, **options) -> None: ...
+    """One process owns feedback, commands and the device connection."""
+    def read_state(self, now: float) -> RobotState: ...
+    def step(self, command: ControlCommand, now: float, **options) -> None: ...
     def telemetry(self) -> dict: ...
     def close(self) -> None: ...
+
+
+class RobotDriver(Protocol):
+    """Preparation and SDK-specific lifecycle stay outside the common worker."""
+    def preflight(self, config: RobotProfile) -> dict: ...
+    def resources(self, config: RobotProfile) -> tuple[str, ...]: ...
+    def open(self, config: RobotProfile, **options) -> RobotBackend: ...
+    def capabilities(self, config: RobotProfile, parameters: dict | None) -> dict: ...
+    def snapshot(self, config: RobotProfile) -> dict: ...
+    def shutdown(self, config: RobotProfile, backend: RobotBackend, *, initial,
+                 publish: Callable, step: Callable, check: Callable) -> dict: ...
 
 
 class PoseSource(Protocol):

@@ -8,8 +8,8 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from embodied.phone.protocol.golden import GOLDEN_PACKETS, golden_manifest
-from embodied.phone.protocol.packet import encode_packet
+from embodied.devices.phone.protocol.golden import GOLDEN_PACKETS, golden_manifest
+from embodied.devices.phone.protocol.packet import encode_packet
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY_ROOT / "tests" / "golden"

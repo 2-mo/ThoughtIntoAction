@@ -6729,7 +6729,7 @@
     {
       "repository": "arx5_test",
       "source": "pyproject.toml",
-      "destination": "environments/arx_motion/pyproject.toml",
+      "destination": "configs/environments/arx_motion/pyproject.toml",
       "source_sha256": "cfaab568a260e7f68f669249af48ac081bfdb5428d8c4eac34c45cb88f969a22",
       "import_sha256": "cfaab568a260e7f68f669249af48ac081bfdb5428d8c4eac34c45cb88f969a22",
       "executable": false,
@@ -8376,7 +8376,7 @@
     {
       "repository": "arx5_test",
       "source": "uv.lock",
-      "destination": "environments/arx_motion/uv.lock",
+      "destination": "configs/environments/arx_motion/uv.lock",
       "source_sha256": "4a85b3ef1af4560043826244598dd1d86408d3b47a45a9ee9b17fc741b495bd8",
       "import_sha256": "4a85b3ef1af4560043826244598dd1d86408d3b47a45a9ee9b17fc741b495bd8",
       "executable": false,
@@ -8601,7 +8601,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/0x01damiao_test.py",
-      "destination": "examples/rebot/0x01damiao_test.py",
+      "destination": "docs/examples/rebot/0x01damiao_test.py",
       "source_sha256": "32dc4346d8596fc7ff1ecf6598d0ed6b2634b22e05bf293674efed8f39b95782",
       "import_sha256": "32dc4346d8596fc7ff1ecf6598d0ed6b2634b22e05bf293674efed8f39b95782",
       "executable": false,
@@ -8610,7 +8610,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/0x01rs06_test.py",
-      "destination": "examples/rebot/0x01rs06_test.py",
+      "destination": "docs/examples/rebot/0x01rs06_test.py",
       "source_sha256": "6ef4a7894036b74d747f5bb633c8b1973481ffcfd5d6b036e042313b1c2503ac",
       "import_sha256": "6ef4a7894036b74d747f5bb633c8b1973481ffcfd5d6b036e042313b1c2503ac",
       "executable": false,
@@ -8619,7 +8619,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/10_gravity_compensation_lock.py",
-      "destination": "examples/rebot/10_gravity_compensation_lock.py",
+      "destination": "docs/examples/rebot/10_gravity_compensation_lock.py",
       "source_sha256": "9ac140d4b80bf89ebe0294e9be5744479b9f0d901f101536f35ac4ec9f2148aa",
       "import_sha256": "9ac140d4b80bf89ebe0294e9be5744479b9f0d901f101536f35ac4ec9f2148aa",
       "executable": false,
@@ -8628,7 +8628,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/2_zero_and_read.py",
-      "destination": "examples/rebot/2_zero_and_read.py",
+      "destination": "docs/examples/rebot/2_zero_and_read.py",
       "source_sha256": "3518b948fb450d278c87f2fe2196e7e18adb5317c0d42cec90b7081d0793b5ac",
       "import_sha256": "3518b948fb450d278c87f2fe2196e7e18adb5317c0d42cec90b7081d0793b5ac",
       "executable": true,
@@ -8637,7 +8637,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/3_mit_control.py",
-      "destination": "examples/rebot/3_mit_control.py",
+      "destination": "docs/examples/rebot/3_mit_control.py",
       "source_sha256": "22b8e2e9dd4e7b883e5846fce7dbda199c9d4ef7a9425afe9acbde3eec5c52d3",
       "import_sha256": "22b8e2e9dd4e7b883e5846fce7dbda199c9d4ef7a9425afe9acbde3eec5c52d3",
       "executable": false,
@@ -8646,7 +8646,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/4_pos_vel_control.py",
-      "destination": "examples/rebot/4_pos_vel_control.py",
+      "destination": "docs/examples/rebot/4_pos_vel_control.py",
       "source_sha256": "575ad5cbc1ed456dd391aa104a7f2f8549ff3788a2d3bc844e2c35ddf824154a",
       "import_sha256": "575ad5cbc1ed456dd391aa104a7f2f8549ff3788a2d3bc844e2c35ddf824154a",
       "executable": false,
@@ -8655,7 +8655,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/5_fk_test.py",
-      "destination": "examples/rebot/5_fk_test.py",
+      "destination": "docs/examples/rebot/5_fk_test.py",
       "source_sha256": "705adbbd727266dbd97e86c6f9b5cc87a9f5ba7371e925ef1349356b8b2f9b4d",
       "import_sha256": "705adbbd727266dbd97e86c6f9b5cc87a9f5ba7371e925ef1349356b8b2f9b4d",
       "executable": false,
@@ -8664,7 +8664,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/6_ik_test.py",
-      "destination": "examples/rebot/6_ik_test.py",
+      "destination": "docs/examples/rebot/6_ik_test.py",
       "source_sha256": "b14aa99908f7bc270088598c931b9d8637866ebc837662fb622b9b1139805b9a",
       "import_sha256": "b14aa99908f7bc270088598c931b9d8637866ebc837662fb622b9b1139805b9a",
       "executable": false,
@@ -8673,7 +8673,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/7_arm_ik_control.py",
-      "destination": "examples/rebot/7_arm_ik_control.py",
+      "destination": "docs/examples/rebot/7_arm_ik_control.py",
       "source_sha256": "f70dbcc0cf52e42ff94df0effb543c4aa53c1097fd8d618c9e56bdd29b2de835",
       "import_sha256": "f70dbcc0cf52e42ff94df0effb543c4aa53c1097fd8d618c9e56bdd29b2de835",
       "executable": false,
@@ -8682,7 +8682,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/8_arm_traj_control.py",
-      "destination": "examples/rebot/8_arm_traj_control.py",
+      "destination": "docs/examples/rebot/8_arm_traj_control.py",
       "source_sha256": "1407e5bd10046399c5c2df6374622db0a7d8e849ecbd4826ee94a2a2c7454ca8",
       "import_sha256": "1407e5bd10046399c5c2df6374622db0a7d8e849ecbd4826ee94a2a2c7454ca8",
       "executable": false,
@@ -8691,7 +8691,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/9_gravity_compensation.py",
-      "destination": "examples/rebot/9_gravity_compensation.py",
+      "destination": "docs/examples/rebot/9_gravity_compensation.py",
       "source_sha256": "38c71229c4f88486af81e165d816a0981d82ea63b2cc163e63242735f1051ff3",
       "import_sha256": "38c71229c4f88486af81e165d816a0981d82ea63b2cc163e63242735f1051ff3",
       "executable": false,
@@ -8700,7 +8700,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/sim/__init__.py",
-      "destination": "examples/rebot/sim/__init__.py",
+      "destination": "docs/examples/rebot/sim/__init__.py",
       "source_sha256": "e6fcc0a27866006ab268528b65ae95489cf55c82d30f3d13be4a32fa80319f67",
       "import_sha256": "e6fcc0a27866006ab268528b65ae95489cf55c82d30f3d13be4a32fa80319f67",
       "executable": false,
@@ -8709,7 +8709,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/sim/fk_sim.py",
-      "destination": "examples/rebot/sim/fk_sim.py",
+      "destination": "docs/examples/rebot/sim/fk_sim.py",
       "source_sha256": "95098b87e503bbf67f9b3ad9f96dfeaab0443ff22f53ba1fd79da5eece90493c",
       "import_sha256": "95098b87e503bbf67f9b3ad9f96dfeaab0443ff22f53ba1fd79da5eece90493c",
       "executable": false,
@@ -8718,7 +8718,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/sim/ik_sim.py",
-      "destination": "examples/rebot/sim/ik_sim.py",
+      "destination": "docs/examples/rebot/sim/ik_sim.py",
       "source_sha256": "056e70dfac79de9b4de5753ef2b2e01687afb483abd457d4a894fd64ea59ff0f",
       "import_sha256": "056e70dfac79de9b4de5753ef2b2e01687afb483abd457d4a894fd64ea59ff0f",
       "executable": false,
@@ -8727,7 +8727,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/sim/traj_sim.py",
-      "destination": "examples/rebot/sim/traj_sim.py",
+      "destination": "docs/examples/rebot/sim/traj_sim.py",
       "source_sha256": "b9bf87d13b1a95dc5caa4d5deb6519eef94ed555290550a395a304361520c454",
       "import_sha256": "b9bf87d13b1a95dc5caa4d5deb6519eef94ed555290550a395a304361520c454",
       "executable": false,
@@ -8736,7 +8736,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "example/sim/visualizer.py",
-      "destination": "examples/rebot/sim/visualizer.py",
+      "destination": "docs/examples/rebot/sim/visualizer.py",
       "source_sha256": "9a715e3127a6bb2f906ae3e46a381d649ba6bcd37c2ee3e02933a361fa6ce606",
       "import_sha256": "9a715e3127a6bb2f906ae3e46a381d649ba6bcd37c2ee3e02933a361fa6ce606",
       "executable": false,
@@ -8745,7 +8745,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "pyproject.toml",
-      "destination": "environments/rebot/pyproject.toml",
+      "destination": "configs/environments/rebot/pyproject.toml",
       "source_sha256": "264a706bb474219c53504b939340d346b74cd25abe9140a0ea7bd0c9f09903c8",
       "import_sha256": "264a706bb474219c53504b939340d346b74cd25abe9140a0ea7bd0c9f09903c8",
       "executable": false,
@@ -9321,7 +9321,7 @@
     {
       "repository": "reBotArm_control_py",
       "source": "uv.lock",
-      "destination": "environments/rebot/uv.lock",
+      "destination": "configs/environments/rebot/uv.lock",
       "source_sha256": "79cd2b832a3240ef0b1549efef03f5cbe34236298662470f48a529e87c6540d4",
       "import_sha256": "79cd2b832a3240ef0b1549efef03f5cbe34236298662470f48a529e87c6540d4",
       "executable": false,
@@ -10302,7 +10302,7 @@
     {
       "repository": "robot-teleop",
       "source": "pyproject.toml",
-      "destination": "environments/phone/pyproject.toml",
+      "destination": "configs/environments/phone/pyproject.toml",
       "source_sha256": "d2464e25bb109b4df371d7c07ceacc6b9c6f454d95bf73de2b3a2e2e2a2b284a",
       "import_sha256": "d2464e25bb109b4df371d7c07ceacc6b9c6f454d95bf73de2b3a2e2e2a2b284a",
       "executable": false,
@@ -11688,7 +11688,7 @@
     {
       "repository": "robot-teleop",
       "source": "uv.lock",
-      "destination": "environments/phone/uv.lock",
+      "destination": "configs/environments/phone/uv.lock",
       "source_sha256": "6d1f6b037c38518180d067d29cc3ea6248ed61081c4462cfb110486d9901580e",
       "import_sha256": "6d1f6b037c38518180d067d29cc3ea6248ed61081c4462cfb110486d9901580e",
       "executable": false,

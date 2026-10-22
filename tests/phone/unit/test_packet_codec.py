@@ -4,15 +4,15 @@ from dataclasses import replace
 
 import pytest
 
-from embodied.phone.core.capabilities import InputCapabilities
-from embodied.phone.core.models import (
+from embodied.devices.phone.core.capabilities import InputCapabilities
+from embodied.devices.phone.core.models import (
     Pose,
     Quaternion,
     TrackingQuality,
     Vector3,
 )
-from embodied.phone.protocol.flags import PacketFlags
-from embodied.phone.protocol.packet import (
+from embodied.devices.phone.protocol.flags import PacketFlags
+from embodied.devices.phone.protocol.packet import (
     EStopResetAckPacket,
     EStopResetRequestPacket,
     PacketDecodeError,
@@ -27,7 +27,7 @@ from embodied.phone.protocol.packet import (
     decode_packet,
     encode_packet,
 )
-from embodied.phone.protocol.version import (
+from embodied.devices.phone.protocol.version import (
     ESTOP_RESET_PACKET_SIZE,
     HEADER_STRUCT,
     PING_PACKET_SIZE,

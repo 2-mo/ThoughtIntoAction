@@ -8,9 +8,9 @@ import sys
 import time
 from embodied.policy.pi05_sft.checkpoint import ROOT,DEFAULT_CHECKPOINT,inspect_checkpoint,DEFAULT_JAX_CHECKPOINT,inspect_jax_checkpoint
 import numpy as np
-from embodied.core.model import RobotModel
+from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
 from embodied.core.project import load_config,resolve_path
-from embodied.sensors.client import SharedCamera
+from embodied.devices.sensors.client import SharedCamera
 from embodied.core.collection_motion import collection_motion
 from legacy.robot_control.client import ArmClient
 from embodied.policy.pi05_zeroshot.real import move_pregrasp,stop_and_hold
@@ -58,7 +58,7 @@ def main():
         print(f'警告：模型训练相机为 {spec["cameras"]}，推理只打开腕部相机；外部图像为全零（mask=False），继续运行。',flush=True)
     # Detect an unreleased controller before spending time loading/compiling the model.
     if resolve_path(load_config()['arm_service']['socket']).exists():
-        probe=ArmClient(RobotModel(resolve_path(load_config()['robot']['urdf'])),hardware=True,actuate=False)
+        probe=ArmClient(X5PinocchioModel(resolve_path(load_config()['robot']['urdf'])),hardware=True,actuate=False)
         try:
             state=probe.snapshot()
             (output/'service_before.json').write_text(json.dumps(probe.info,ensure_ascii=False,indent=2)+'\n')
@@ -72,7 +72,7 @@ def main():
                         startup_timeout=600 if args.backend == 'jax' else 180)
     arm=None
     try:
-        arm=connect(RobotModel(resolve_path(load_config()['robot']['urdf'])),output)
+        arm=connect(X5PinocchioModel(resolve_path(load_config()['robot']['urdf'])),output)
         arm.input_name='pi05-sft'
         arm.speed,arm.motion=collection_motion()
         (output/'pregrasp_motion.json').write_text(json.dumps(

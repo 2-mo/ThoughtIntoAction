@@ -6,7 +6,7 @@ import unittest
 import numpy as np
 
 from legacy.arx5_control import ControllerMode
-from embodied.console.kernel.control import ControlKernel
+from embodied.applications.console.kernel.control import ControlKernel
 from legacy.cube.stack import execute_cube_stack
 from legacy.cube.planner import Action
 

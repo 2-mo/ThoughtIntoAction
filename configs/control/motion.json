@@ -1,0 +1,14 @@
+{
+  "defaults": {
+    "speed": 0.15,
+    "acceleration": 2.0,
+    "jerk": 10.0
+  },
+  "settling": {
+    "position_tolerance_rad": 0.0035,
+    "velocity_tolerance_rad_s": 0.02,
+    "duration_s": 0.25,
+    "timeout_s": 6.0,
+    "max_sample_gap_s": 0.1
+  }
+}

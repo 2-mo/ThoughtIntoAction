@@ -428,30 +428,25 @@ def _dataset_metadata(
 
 
 def find_groot_root(start: Path | str) -> Path | None:
-    from embodied.core.arx5_paths import PROJECT_ROOT
-    local = PROJECT_ROOT / "third_party" / "Isaac-GR00T"
-    if (local / "gr00t" / "data" / "stats.py").is_file():
-        return local
-    start_path = Path(start).resolve()
-    candidates = [start_path, *start_path.parents]
-    for parent in candidates:
-        candidate = parent / "Isaac-GR00T"
-        if (candidate / "gr00t" / "data" / "stats.py").is_file():
-            return candidate
-        if (
-            parent.name == "Isaac-GR00T"
-            and (parent / "gr00t" / "data" / "stats.py").is_file()
-        ):
-            return parent
-    return None
+    """Resolve the explicit installed environment, without scanning sibling projects."""
+    from embodied.core.dependencies import dependency_python, dependency_root
+    return dependency_root("groot") if dependency_python("groot").is_file() else None
+
+
+def _groot_python(root: Path) -> Path:
+    from embodied.core.dependencies import dependency_python, dependency_root, reject_reference_path
+    root = reject_reference_path(root)
+    python = (dependency_python("groot") if root == dependency_root("groot")
+              else root / ".venv/bin/python")
+    if not python.is_file():
+        raise RuntimeError(f"GR00T environment missing: {python}; run ./run.sh components setup groot")
+    return python
 
 
 def _groot_environment(root: Path) -> dict[str, str]:
     environment = os.environ.copy()
-    existing = environment.get("PYTHONPATH")
-    environment["PYTHONPATH"] = (
-        str(root) if not existing else f"{root}{os.pathsep}{existing}"
-    )
+    environment.pop("PYTHONPATH", None)
+    environment.pop("PYTHONHOME", None)
     return environment
 
 
@@ -461,14 +456,14 @@ def run_groot_stats(
     groot_root: Path | str,
 ) -> None:
     root = Path(groot_root).resolve()
-    python = root / ".venv" / "bin" / "python"
+    python = _groot_python(root)
     if not python.is_file():
         raise RuntimeError(f"Isaac-GR00T Python environment not found: {python}")
     config_path = Path(__file__).with_name("modality_config.py").resolve()
     subprocess.run(
         [
             str(python),
-            str(root / "gr00t" / "data" / "stats.py"),
+            "-m", "gr00t.data.stats",
             "--dataset-path",
             str(Path(dataset_path).resolve()),
             "--embodiment-tag",
@@ -476,7 +471,7 @@ def run_groot_stats(
             "--modality-config-path",
             str(config_path),
         ],
-        cwd=root,
+        cwd=Path(dataset_path).resolve(),
         env=_groot_environment(root),
         check=True,
     )
@@ -488,7 +483,7 @@ def validate_with_groot(
     groot_root: Path | str,
 ) -> None:
     root = Path(groot_root).resolve()
-    python = root / ".venv" / "bin" / "python"
+    python = _groot_python(root)
     config_path = Path(__file__).with_name("modality_config.py").resolve()
     script = """
 import importlib.util
@@ -522,7 +517,7 @@ print(f"GR00T loader accepted {len(loader)} episodes; first usable episode has {
             str(Path(dataset_path).resolve()),
             str(config_path),
         ],
-        cwd=root,
+        cwd=Path(dataset_path).resolve(),
         env=_groot_environment(root),
         check=True,
     )

@@ -22,13 +22,13 @@ from legacy.arx5_control.gripper_calibration import (
     load_gripper_calibration,
     load_gripper_open_readout,
 )
-from embodied.core.arx5_paths import PROJECT_ROOT
+from embodied.devices.robots.arx5.paths import PROJECT_ROOT
 from legacy.cube.stack import (
     CubeStackPlan,
     execute_cube_stack,
     plan_cube_stack,
 )
-from embodied.console.kernel.control import WEB_MOTION_SAFETY
+from embodied.applications.console.kernel.control import WEB_MOTION_SAFETY
 from legacy.cube.config import load_config as load_cube_config
 from legacy.cube.perception import (
     CubeObservation,
@@ -84,7 +84,7 @@ def _wait_for_port(process: subprocess.Popen[bytes], timeout_s: float = 15.0) ->
 
 
 def _start_camera_service(log_path: Path) -> tuple[subprocess.Popen[bytes], Any]:
-    web_python = PROJECT_ROOT / "environments" / "arx_motion" / ".venv-web" / "bin" / "python"
+    web_python = PROJECT_ROOT / "configs" / "environments" / "arx_motion" / ".venv-web" / "bin" / "python"
     if not web_python.is_file():
         raise RuntimeError(f"视觉环境不存在：{web_python}")
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -96,7 +96,7 @@ def _start_camera_service(log_path: Path) -> tuple[subprocess.Popen[bytes], Any]
             str(web_python),
             "-B",
             "-m",
-            "embodied.console.features.camera.service",
+            "embodied.applications.console.features.camera.service",
         ],
         cwd=PROJECT_ROOT,
         env=environment,

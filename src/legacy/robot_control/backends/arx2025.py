@@ -6,11 +6,11 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from embodied.core.project import X5_PYTHON_ROOT
+from embodied.devices.robots.arx5.paths import official_sdk_python_root
 from legacy.robot_control.trajectory import bounded_joint_target
 
 
-ARX_X5_PYTHON_ROOT = X5_PYTHON_ROOT
+ARX_X5_PYTHON_ROOT = official_sdk_python_root()
 ARX_X5_2025_URDF = (
     ARX_X5_PYTHON_ROOT / "bimanual" / "script" / "x5_2025.urdf"
 )

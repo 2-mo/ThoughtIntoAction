@@ -7,11 +7,11 @@ import time
 import unittest
 from unittest.mock import patch
 
-from embodied.inputs.phone import PhoneController
-from embodied.phone.protocol.golden import GOLDEN_POSE
-from embodied.phone.protocol.packet import encode_packet
-from embodied.phone.core.models import Pose, Vector3, Quaternion, TrackingQuality
-from embodied.workstation.workbench import profile
+from embodied.devices.inputs.phone import PhoneController
+from embodied.devices.phone.protocol.golden import GOLDEN_POSE
+from embodied.devices.phone.protocol.packet import encode_packet
+from embodied.devices.phone.core.models import Pose, Vector3, Quaternion, TrackingQuality
+from embodied.applications.workstation.workbench import profile
 
 
 class FakeSession:
@@ -30,7 +30,7 @@ class FakeSession:
 
 class PhoneTests(unittest.TestCase):
     def setUp(self):
-        with patch('embodied.inputs.phone.ControlSession', FakeSession):
+        with patch('embodied.devices.inputs.phone.ControlSession', FakeSession):
             self.phone = PhoneController('unused', port=0)
         self.phone.start()
         self.addCleanup(self.phone.stop)
@@ -111,7 +111,7 @@ class CompositionTests(unittest.TestCase):
         registry = Registry()
         for key in ('vr', 'routing', 'ingress'):
             registry.entries.pop(key)
-        with patch('embodied.workstation.workbench.Registry', return_value=registry):
+        with patch('embodied.applications.workstation.workbench.Registry', return_value=registry):
             for source in ('cli','phone.arkit'):
                 config,_ = self.configured({'version':1,'robot':'arx.sim','source':source})
                 self.assertNotIn('native',config)
@@ -122,7 +122,7 @@ class CompositionTests(unittest.TestCase):
         registry.entries['source']['operator_b'] = registry.entries['source']['quest']
         config={'version':1,'robot':'arx.sim','source':'operator_b',
                 'native':{'device':'arx.demo','routing':'arx.native','ingress':'arx.native','channel':'xr_demo'}}
-        with patch('embodied.workstation.workbench.Registry', return_value=registry):
+        with patch('embodied.applications.workstation.workbench.Registry', return_value=registry):
             self.assertEqual(self.configured(config)[0]['source_options']['ingress'],'xr_demo')
             with self.assertRaisesRegex(ValueError,'explicit native'):
                 self.configured({k:v for k,v in config.items() if k!='native'})

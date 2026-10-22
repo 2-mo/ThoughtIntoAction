@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from embodied.workstation.control import ROOT, control_environment, verify_sources
+from embodied.applications.workstation.control import ROOT, control_environment, verify_sources
 
 
 class ControlEntryTests(unittest.TestCase):
@@ -22,7 +22,7 @@ class ControlEntryTests(unittest.TestCase):
         source = ('from embodied.contracts.device_lease import DeviceLease; '
                   'DeviceLease(' + repr(device) + ')')
         env = {**os.environ, 'PYTHONPATH': str(ROOT / 'src')}  # the control interpreter loads the same L0 lease
-        python = str(ROOT / 'control/.venv/bin/python')
+        python = str(ROOT / 'outputs/envs/control/bin/python')
         if not Path(python).is_file():
             self.skipTest('Control environment not installed')
         blocked = subprocess.run([python, '-B', '-c', source], env=env, capture_output=True, text=True)
@@ -35,28 +35,38 @@ class ControlEntryTests(unittest.TestCase):
     def test_source_import_is_accounted_for(self):
         self.assertEqual(verify_sources()["status"], "verified")
 
-    def test_provenance_detects_edits_and_external_links(self):
+    def test_provenance_checks_distribution_assets_without_freezing_platform_code(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = root / "model.py"
-            source.write_text("original")
-            digest = hashlib.sha256(source.read_bytes()).hexdigest()
-            (root / "UPSTREAM_FILES.json").write_text(json.dumps({"model.py": {"sha256": digest, "executable": False}}))
-            (root / "LOCAL_PATCHES.json").write_text("{}")
-            self.assertEqual(verify_sources(root)["files"], 1)
-            source.write_text("changed")
-            with self.assertRaisesRegex(ValueError, "Unrecorded change"):
-                verify_sources(root)
-            source.unlink()
-            source.symlink_to("/etc/hosts")
-            with self.assertRaisesRegex(ValueError, "linked source"):
-                verify_sources(root)
+            vendor = root / "src/embodied/devices/robots/arx5/vendor/arx5-sdk"
+            native = root / "src/embodied/devices/inputs/quest/native"
+            vendor.mkdir(parents=True)
+            (native / 'bin').mkdir(parents=True)
+            (vendor / 'source.tar').write_bytes(b'sdk archive')
+            (vendor / 'gripper_turns.h').write_bytes(b'patch')
+            (native / 'bin/router').write_bytes(b'native binary')
+            digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+            (vendor / 'PROVENANCE.json').write_text(json.dumps({
+                'archive_sha256': digest(vendor / 'source.tar'),
+                'gripper_turns_sha256': digest(vendor / 'gripper_turns.h'),
+            }))
+            (native / 'SHA256SUMS').write_text(f"{digest(native / 'bin/router')}  bin/router\n")
+            with patch('embodied.applications.workstation.control.ROOT', root), \
+                    patch('embodied.applications.workstation.control.SDK_VENDOR', vendor):
+                self.assertEqual(verify_sources()['files'], 3)
+                (root / 'src/platform.py').write_text('maintained local source')
+                self.assertEqual(verify_sources()['status'], 'verified')
+                (vendor / 'source.tar').write_bytes(b'changed archive')
+                with self.assertRaisesRegex(ValueError, 'SDK asset checksum mismatch'):
+                    verify_sources()
 
     def test_control_removes_foreign_environment_paths(self):
         names = ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "LD_LIBRARY_PATH", "UV_PROJECT_ENVIRONMENT")
         with patch.dict(os.environ, dict.fromkeys(names, "/foreign/python312")):
             env = control_environment()
-        self.assertFalse(set(names) & env.keys())
+        self.assertFalse((set(names) - {'PYTHONPATH', 'UV_PROJECT_ENVIRONMENT'}) & env.keys())
+        self.assertEqual(env['PYTHONPATH'], str(ROOT / 'src'))
+        self.assertEqual(env['UV_PROJECT_ENVIRONMENT'], str(ROOT / 'outputs/envs/control'))
         self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
 
     def test_verify_works_without_legacy_environment_or_sdk(self):
@@ -67,9 +77,9 @@ class ControlEntryTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["status"], "verified")
 
     def test_demo_never_accepts_a_real_backend(self):
-        from embodied.workstation.control import command_for
+        from embodied.applications.workstation.control import command_for
         from argparse import Namespace
-        with patch("embodied.workstation.control.Path.is_file", return_value=True):
+        with patch("embodied.applications.workstation.control.Path.is_file", return_value=True):
             with self.assertRaisesRegex(ValueError, "simulation only"):
                 command_for(Namespace(command="start", backend="real", input="demo"))
 

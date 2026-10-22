@@ -3,8 +3,8 @@ set -Eeuo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/project_env.sh"
 ROOT_DIR="$ARX5_PROJECT_ROOT"
-CONTROL_PYTHON="$ROOT_DIR/environments/arx_motion/.venv/bin/python"
-WEB_PYTHON="$ROOT_DIR/environments/arx_motion/.venv-web/bin/python"
+CONTROL_PYTHON="$ROOT_DIR/configs/environments/arx_motion/.venv/bin/python"
+WEB_PYTHON="$ROOT_DIR/configs/environments/arx_motion/.venv-web/bin/python"
 
 source "$ARX5_SCRIPTS_DIR/web_service_lifecycle.sh"
 source "$ARX5_SCRIPTS_DIR/frontend_runtime.sh"
@@ -44,16 +44,16 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 setsid python3 -B -m legacy.arx_tools.web_service_supervisor --name 控制 -- \
-  "$CONTROL_PYTHON" -B -m embodied.console \
+  "$CONTROL_PYTHON" -B -m embodied.applications.console \
   --port "$("$CONTROL_PYTHON" -B -c "from embodied.core.project import port; print(port('console'))")" --frontend-directory "$FRONTEND_DIST" --auto-connect-arm \
   --camera-url "ws://127.0.0.1:8768/api/v1/cameras/collection" &
 CONTROL_PID=$!
 setsid python3 -B -m legacy.arx_tools.web_service_supervisor --name 视觉 -- \
-  "$WEB_PYTHON" -B -m embodied.console.features.vision.service &
+  "$WEB_PYTHON" -B -m embodied.applications.console.features.vision.service &
 VISION_PID=$!
 setsid python3 -B -m legacy.arx_tools.web_service_supervisor --name 相机 -- \
   "$ARX5_SCRIPTS_DIR/camera_webrtc_supervisor.sh" \
-  "$WEB_PYTHON" -B -m embodied.console.features.camera.service &
+  "$WEB_PYTHON" -B -m embodied.applications.console.features.camera.service &
 CAMERA_PID=$!
 sleep 0.3
 if ! kill -0 "$CONTROL_PID" >/dev/null 2>&1; then

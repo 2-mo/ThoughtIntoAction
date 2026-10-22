@@ -10,7 +10,7 @@ import time
 
 from embodied.contracts.protocol import ACTIONS, OPERATION, STATUS_OWNER, VERSION, validate_request
 from embodied.contracts.rpc import request
-from embodied.workstation.control import sim_kernel
+from embodied.applications.workstation.control import sim_kernel
 
 GOLDEN = Path(__file__).resolve().parents[1] / 'tests/golden/kernel/samples.json'
 

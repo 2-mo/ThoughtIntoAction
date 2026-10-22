@@ -49,11 +49,11 @@ Ctrl+C、实体急停或内核故障都会让机械臂停在原地保持，不�
 ```
 
 - 会话（原始图像、每帧机器人状态、`session.json`、`result.json`）在 `outputs/calibration/hand_eye/<相机>/<时间>/`。
-- 当前结果在 `calibrations/hand_eye/<相机>.json`，上一个保留为 `<相机>.previous.json`。
+- 当前结果在 `outputs/calibrations/hand_eye/<相机>.json`，上一个保留为 `<相机>.previous.json`。
 - 求解：`relative_svd`、Shah、Li 三种方法在拟合样本上做鲁棒拟合（最多剔除 20%），选内点最多、残差最小者；留一法检查安装变换稳定性；留出验证样本从不参与拟合。质量门为 8 mm / 2°，`validated` 需要留一稳定且留出验证通过。
 - 未通过验证的结果不会自动保存；检查后可用 `solve <会话> --save --force` 采用（`status` 会标注）。
 - 结果绑定相机序列号：换相机后旧结果不再被使用。
-- `embodied.calibration.load(<相机>)` 返回可用结果；网页控制台据此在三维场景中显示相机。
+- `embodied.applications.calibration.load(<相机>)` 返回可用结果；网页控制台据此在三维场景中显示相机。
 
 ## 4. 验证
 

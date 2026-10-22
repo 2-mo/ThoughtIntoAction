@@ -2,12 +2,12 @@ import math
 
 import pytest
 
-from embodied.phone.core.capabilities import InputCapabilities
-from embodied.phone.core.frames import (
+from embodied.devices.phone.core.capabilities import InputCapabilities
+from embodied.devices.phone.core.frames import (
     quaternion_angular_distance,
     quaternion_from_axis_angle,
 )
-from embodied.phone.core.models import (
+from embodied.devices.phone.core.models import (
     ControlMode,
     Pose,
     Quaternion,
@@ -17,7 +17,7 @@ from embodied.phone.core.models import (
     TrackingQuality,
     Vector3,
 )
-from embodied.phone.core.safety import (
+from embodied.devices.phone.core.safety import (
     InputSafetyLimits,
     InputSafetyValidator,
     SafetyViolation,

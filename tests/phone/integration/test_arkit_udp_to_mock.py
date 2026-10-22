@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from embodied.phone.config import load_profile
-from embodied.phone.core.models import Pose, Quaternion, TrackingQuality, Vector3
-from embodied.phone.core.state_machine import TeleopState
-from embodied.phone.protocol.packet import (
+from embodied.devices.phone.config import load_profile
+from embodied.devices.phone.core.models import Pose, Quaternion, TrackingQuality, Vector3
+from embodied.devices.phone.core.state_machine import TeleopState
+from embodied.devices.phone.protocol.packet import (
     EStopResetAckPacket,
     EStopResetRequestPacket,
     Packet,
@@ -22,8 +22,8 @@ from embodied.phone.protocol.packet import (
     decode_packet,
     encode_packet,
 )
-from embodied.phone.registry import create_application
-from embodied.phone.transports.udp import UdpTransport
+from embodied.devices.phone.registry import create_application
+from embodied.devices.phone.transports.udp import UdpTransport
 
 ROOT = Path(__file__).parents[3]
 
