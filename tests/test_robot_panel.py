@@ -26,6 +26,7 @@ class RobotPanelTests(unittest.TestCase):
         client = self.enterContext(patch.object(robot_panel, 'ControlClient'))
         client.return_value.status.return_value = self.state
         client.return_value.describe.return_value = {'motion_limits': MotionLimits.load().describe()}
+        self.client = client.return_value
         self.controls = robot_panel.RobotControls()
         self.addCleanup(self.controls.close)
 
@@ -34,6 +35,39 @@ class RobotPanelTests(unittest.TestCase):
         self.controls.press('r', self.found)
         self.connect.assert_not_called()
         self.robot.movej.assert_not_called()
+
+    def test_restart_socket_error_clears_on_feedback_recovery_without_erasing_action_result(self):
+        self.controls.message = robot_panel.Status('动作未通过：未满足到位条件', 'error')
+        self.client.status.side_effect = FileNotFoundError(2, 'No such file or directory')
+        rows = dict(self.controls.rows(self.found))
+        self.assertIn('No such file', str(rows['反馈查询']))
+        self.assertIn('动作未通过', str(rows['操作结果']))
+        self.client.status.side_effect = None
+        rows = dict(self.controls.rows(self.found))
+        self.assertNotIn('反馈查询', rows)
+        self.assertIn('速度 rad/s', rows)
+        self.assertIn('动作未通过', str(rows['操作结果']))
+        self.connect.assert_not_called()
+
+    def test_interrupted_motion_remains_unconfirmed_after_feedback_recovers(self):
+        self.controls.press('p', self.found)
+        self.client.status.side_effect = FileNotFoundError(2, 'No such file or directory')
+        self.robot.cancel.side_effect = RuntimeError('old socket gone')
+        rows = dict(self.controls.rows(self.found))
+        self.assertIn('结束控制未确认', str(rows['反馈查询']))
+        self.assertIn('未确认到位', str(rows['操作结果']))
+        self.robot.close.assert_called_once()
+        self.client.status.side_effect = None
+        rows = dict(self.controls.rows(self.found))
+        self.assertNotIn('反馈查询', rows)
+        self.assertIn('未确认到位', str(rows['操作结果']))
+
+    def test_new_runtime_does_not_show_old_parameters_when_description_is_unavailable(self):
+        self.controls.rows(self.found)
+        self.client.describe.side_effect = FileNotFoundError(2, 'No such file or directory')
+        rows = dict(self.controls.rows((Path('/test/new-runtime'), self.found[1])))
+        self.assertIn('反馈查询', rows)
+        self.assertNotIn('生效参数', rows)
 
     def test_p_and_h_use_known_targets_and_kernel_defaults_without_extra_caps(self):
         for key, target in [('p', list(DEFAULT_GRASP_READY_JOINTS)), ('h', [.1] * 6)]:
