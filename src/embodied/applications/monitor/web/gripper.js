@@ -10,9 +10,9 @@ const NEGATIVE = [[542, 1166], [5926, 6782], [47206, 47454], [48198, 48446],
 // Distance between the two original inner fingertip surfaces, in mesh metres.
 const REFERENCE_WIDTH = 2 * 0.030142907053232193;
 
-export async function splitGripperGeometry(source, geometry, scale) {
-  const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', source))]
-    .map(value => value.toString(16).padStart(2, '0')).join('');
+export function splitGripperGeometry(digest, geometry, scale) {
+  // The scene server hashes the returned mesh bytes. Plain HTTP on a LAN does
+  // not expose WebCrypto, so mesh identification must not require it here.
   // A different URDF/mesh must never inherit this model's component assignment.
   if (digest !== SOURCE_SHA256 || !Number.isFinite(scale[1]) || scale[1] === 0) return null;
   const groups = [[], [], []];

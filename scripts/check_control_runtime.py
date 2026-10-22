@@ -51,6 +51,7 @@ def main():
                     raise RuntimeError('Xvfb did not select a display')
                 env['DISPLAY'] = ':' + display.stdout.readline().strip()
                 env.pop('WAYLAND_DISPLAY', None)
+                env.pop('SSH_CONNECTION', None)
             command = [str(ROOT / 'run.sh'), 'control', 'start', '--backend', 'sim',
                        '--input', 'demo', '--duration', '12', '--record-tuning']
             if not args.viewer:
@@ -69,7 +70,7 @@ def main():
                 viewer = until(lambda: child(runtime.pid, '_viewer'))
                 time.sleep(.7)
                 os.kill(viewer, signal.SIGTERM)
-                until(lambda: 'Component viewer exited' in (output / 'runtime.log').read_text())
+                until(lambda: '桌面视图已退出' in (output / 'runtime.log').read_text())
                 assert runtime.poll() is None, 'Viewer exit stopped control'
             base = [str(ROOT / 'run.sh'), 'collect', '--run', str(directory), '--task', 'simulation acceptance']
             successful = subprocess.run(base + ['--duration', '1', '--output', str(output / 'complete')],
@@ -89,7 +90,7 @@ def main():
                     os.kill(until(lambda: child(runtime.pid, 'embodied.control.observer')), signal.SIGTERM)
                 assert interrupted.wait(timeout=25) == (0 if args.keep_observer else 1), 'Wrong collector exit status'
             if not args.keep_observer:
-                until(lambda: 'Component observer exited' in (output / 'runtime.log').read_text())
+                until(lambda: '监看反馈服务已退出' in (output / 'runtime.log').read_text())
                 assert runtime.poll() is None, 'Observer exit stopped control'
             assert runtime.wait(timeout=25) == 0, (output / 'runtime.log').read_text()
             failed = json.loads(next((output / 'interrupted').glob('*/episode.json')).read_text())

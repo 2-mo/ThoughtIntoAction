@@ -66,6 +66,31 @@ def native_components(registry, device, routing, settings, backend):
     return driver, registry.load('routing', routing, runtime='control')
 
 
+def print_ready(device_plugin, routing_plugin, gripper_max_width):
+    """Describe the selected input, including native plugins used by managed profiles."""
+    if device_plugin == 'arx.quest':
+        print('robot · 已就绪，等待 Quest 控制器输入。', flush=True)
+        trigger = '夹爪' if gripper_max_width > 0 else '未启用（无夹爪）'
+        print(f'右手柄：长按 A 150 ms 切换模式 · Grip 跟随 · Trigger {trigger} · A+B 回 Home。', flush=True)
+        if routing_plugin == 'arx.workbench':
+            print('左手柄：数据采集。', flush=True)
+    elif device_plugin == 'arx.demo':
+        print('robot · 仿真演示已就绪，约 4.5 秒后开始自动运动。', flush=True)
+    elif device_plugin:
+        print(f'robot · 已就绪，输入插件：{device_plugin}。', flush=True)
+    else:
+        print('robot · 已就绪，等待网页或命令控制。', flush=True)
+
+
+def component_exit_message(name, code):
+    if name == 'viewer':
+        state = '正常关闭' if code == 0 else '异常退出'
+        return f'桌面视图已退出（{state}，退出码 {code}）；robot 仍在运行。详情：日志目录中的 viewer.log。'
+    if name == 'observer':
+        return f'监看反馈服务已退出（退出码 {code}）；监看反馈已中断，robot 仍在运行。详情：日志目录中的 observer.log。'
+    return f'输入组件 {name} 已退出（退出码 {code}）；相关输入将退出控制。详情：日志目录中的 {name}.log。'
+
+
 def run(args):
     validate_run(args.backend, args.input, args.headless, getattr(args, "managed", False))
     record_tuning = args.record_tuning
@@ -77,7 +102,7 @@ def run(args):
         driver = registry.create('robot', selected_robot, runtime='control')
         checks = driver.preflight(settings.robot)
         if not checks['ready']:
-            raise ValueError(f'Robot preflight failed: {checks}')
+            raise ValueError(f'robot 启动检查未通过：{checks}')
         record_tuning = True
     native_device = native_routing = None
     device_plugin = args.input_plugin
@@ -125,17 +150,15 @@ def run(args):
     failure = None
     dependency_health = None
     retired = set()
-    print(f"{args.backend.upper()} | {settings.robot.name} | {settings.robot.control_hz} Hz | input={args.input}")
-    print(f"Runtime logs: {directory}", flush=True)
+    mode = '真机' if args.backend == 'real' else '仿真'
+    print(f'robot · 正在启动{mode} · {settings.robot.name} · {settings.robot.control_hz} Hz', flush=True)
+    print(f'日志目录：{directory}', flush=True)
     if args.backend == 'real':
-        stop_action = 'SDK damping'
         if args.managed:
-            print('Real managed startup enables motors and initially holds the measured pose and gripper width; '
-                  'connected inputs may then command motion.', flush=True)
+            behavior = '使能电机，先保持当前位置和夹爪，随后接受所选输入控制'
         else:
-            print(f'Real native Quest startup enables motors and moves to Home {list(settings.robot.park_q)} rad '
-                  'with the gripper open; A+B returns Home and opens the gripper.', flush=True)
-        print(f'Ctrl+C requests {stop_action} without a home move; support the arm before exit.', flush=True)
+            behavior = '使能电机，回 Home 并打开夹爪'
+        print(f'真机行为：{behavior}。Ctrl+C 退出后进入阻尼，退出前请支撑机械臂。', flush=True)
     try:
         if telemetry:
             children.start("observer", [sys.executable, '-m', 'embodied.control.observer',
@@ -143,7 +166,7 @@ def run(args):
             deadline = time.monotonic() + 10
             while not (directory / 'observer.ready').exists():
                 if children.failed() or time.monotonic() > deadline:
-                    raise RuntimeError('Observer startup failed; see observer.log')
+                    raise RuntimeError('监看反馈服务启动失败；详情见日志目录中的 observer.log')
                 if stopped:
                     return 130
                 time.sleep(.025)
@@ -166,7 +189,8 @@ def run(args):
                         detail = f': {cause}'
                 except (OSError, ValueError):
                     pass
-                raise RuntimeError(f"Backend startup failed ({failure}){detail}; see {directory / 'backend.log'}")
+                reason = f'{failure[0]} 退出，退出码 {failure[1]}' if failure else '等待反馈超时'
+                raise RuntimeError(f'robot 启动失败（{reason}）{detail}；详情见日志目录中的 backend.log')
             if stopped:
                 return 130
             time.sleep(.025)
@@ -182,15 +206,7 @@ def run(args):
         if not args.headless:
             children.start("viewer", common + ["_viewer", "--prefix", prefix] + config_flag, cwd=ROOT)
         (directory / 'runtime.ready').write_text('ready\n')
-        trigger = 'gripper' if settings.robot.gripper_max_width > 0 else 'unused (no tool)'
-        if args.routing_plugin == 'arx.workbench':
-            print(f'Workbench: right controller as upstream (A: hold 150 ms to change mode | Grip: clutch | Trigger: {trigger} | A+B: Home); left controller: collection.')
-        else:
-            print(f"A: hold 150 ms to change mode | Grip: clutch | Trigger: {trigger} | A+B: Home")
-        if args.input == "demo":
-            print("Demo: automatic input starts following after about 4.5 s; never used on real hardware.")
-        elif args.input == "vr":
-            print("Waiting for XRoboToolkit right-controller frames. Start the headset application and PC Service.")
+        print_ready(device_plugin, args.routing_plugin, settings.robot.gripper_max_width)
         started = time.monotonic()
         while not stopped and (args.duration <= 0 or time.monotonic() - started < args.duration):
             if dependency_health:
@@ -203,12 +219,11 @@ def run(args):
                     if report.get("managed_stop") and not report.get("error"):
                         break
                 if failure[0] in ('viewer', 'observer') or failure[0] in native_commands:
-                    message = 'dependent ingress will withdraw control' if failure[0] in native_commands else 'control continues'
-                    print(f'Component {failure[0]} exited ({failure[1]}); {message}.', flush=True)
+                    print(component_exit_message(*failure), flush=True)
                     retired.add(failure[0])
                     failure = None
                     continue
-                raise RuntimeError(f"Process {failure[0]} exited ({failure[1]}); see {directory / (failure[0] + '.log')}")
+                raise RuntimeError(f'控制进程 {failure[0]} 已退出（退出码 {failure[1]}）；详情见日志目录中的 {failure[0]}.log')
             time.sleep(.05)
     finally:
         active_error = sys.exc_info()[0] is not None
@@ -225,12 +240,13 @@ def run(args):
                 destination = Path(args.report)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_text(json.dumps(report, indent=2))
-            print(f"Measured {report['achieved_hz']:.2f} Hz; {report['ticks']} ticks; "
-                  f"pose commands {report['pose_commands']}; report: {report_path}")
+            print(f"运行结束 · 实测 {report['achieved_hz']:.2f} Hz · {report['ticks']} 个控制周期 · "
+                  f"{report['pose_commands']} 次位姿指令；报告：日志目录中的 report.json", flush=True)
             if report.get('tuning_recording'):
                 recording = report['tuning_recording']
-                print(f"Tuning records: {recording['written']}/{recording['submitted']}; "
-                      f"dropped={recording['dropped']}; complete={recording['complete']}; {recording['path']}")
+                complete = '完整' if recording['complete'] else '不完整'
+                print(f"控制诊断记录 · 已写入 {recording['written']}/{recording['submitted']} · "
+                      f"丢弃 {recording['dropped']} · {complete}；文件：{Path(recording['path']).name}", flush=True)
         if not active_error and (directory / "backend.ready").exists():
             validate_completion(children.processes["backend"].returncode, report)
     return 0

@@ -94,7 +94,7 @@ def start(config, robot, args):
                 break
             time.sleep(.05)
         if directory is None:
-            raise RuntimeError('Control runtime did not become ready')
+            raise RuntimeError('robot 未启动成功，请查看上方错误和日志目录')
         (directory/'workbench.json').write_text(json.dumps(config, indent=2)+'\n')
         options = config.get('source_options', config.get('phone', {}))
         source = subprocess.Popen([str(PROJECT_ROOT/'run.sh'), 'component-source', '--run', str(directory),
@@ -106,20 +106,21 @@ def start(config, robot, args):
                 deadline = time.monotonic()+5
                 while time.monotonic() < deadline:
                     if source.poll() is not None:
-                        raise RuntimeError('Source failed before acquiring control')
+                        raise RuntimeError('输入服务在取得控制权前退出')
                     if ControlClient(directory).status()['owner']:
                         break
                     time.sleep(.05)
                 else:
-                    raise RuntimeError('Source did not acquire control')
+                    raise RuntimeError('输入服务未能取得控制权')
             recorder = subprocess.Popen([str(PROJECT_ROOT/'run.sh'), 'collect', '--run', str(directory),
                 '--camera', config.get('camera', 'none'), '--camera-options', json.dumps(config.get('camera_options', {})),
                 '--task', args.record_task], cwd=PROJECT_ROOT)
             children.insert(0, recorder)
-        print(f'Workbench ready: {directory}', flush=True)
+        if args.record_task:
+            print(f'采集 · 正在启动，任务：{args.record_task}', flush=True)
         while runtime.poll() is None:
             if source and source.poll() is not None:
-                print(f'Source exited ({source.returncode}); worker deadlines enter hold.', flush=True)
+                print(f'输入服务已退出（退出码 {source.returncode}）；控制指令超时后机械臂进入保持。', flush=True)
                 source = None
             time.sleep(.1)
         return runtime.returncode

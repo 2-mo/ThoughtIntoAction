@@ -1,9 +1,9 @@
 // Telemetry must work without WebGL, including empty and stale states.
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import {chromium} from '../../.cache/viewer-validation/node_modules/playwright/index.mjs';
+import {readFile, mkdir} from 'node:fs/promises';
+import {chromium} from '../../apps/console/node_modules/playwright/index.mjs';
 const root = new URL('../../src/embodied/applications/monitor/web/', import.meta.url);
-const browser = await chromium.launch({headless:true, args:['--no-sandbox']});
+const browser = await chromium.launch({headless:true, env:{...process.env, DISPLAY:'', LD_LIBRARY_PATH:''}, args:['--no-sandbox']});
 try {
   const page = await browser.newPage({viewport:{width:1920,height:1080}});
   const errors = [];
@@ -18,10 +18,37 @@ renderHand('left', null); renderHand('right', null);`});
   await page.evaluate(() => {
     window.fixture = {stream:{status:'waiting'}, actual:null};
     window.fetch = async url => ({ok:true, json:async () => url.includes('model') ?
-      {velocity_limits:[3,3,3,3,3,3],torque_limits:[30,40,30,15,10,10,1.5],joint_limits:{lower:[-3,-1,-2,-3,-2,-3],upper:[3,3,2,1,2,3]}} : structuredClone(window.fixture)});
+      {robot:{joint_names:['J1','J2','J3','J4','J5','J6']},velocity_limits:[3,3,3,3,3,3],torque_limits:[30,40,30,15,10,10,1.5],joint_limits:{lower:[-3,-1,-2,-3,-2,-3],upper:[3,3,2,1,2,3]}} : structuredClone(window.fixture)});
   });
   const shared = 'data:text/javascript;base64,' + Buffer.from(await readFile(new URL('display-state.js', root), 'utf8')).toString('base64');
-  await page.addScriptTag({type:'module', content:(await readFile(new URL('telemetry.js', root), 'utf8')).replace('./display-state.js', shared)});
+  await page.addScriptTag({type:'module', content:(await readFile(new URL('telemetry.js', root), 'utf8')).replace('./display-state.js', shared) +
+    '\nwindow.telemetryTest = {withVelocityTrend, sampleTime, clearHistory, history: () => history};'});
+  await page.waitForFunction(() => window.telemetryTest);
+  const filtering = await page.evaluate(() => {
+    const {withVelocityTrend, sampleTime, clearHistory} = telemetryTest;
+    const raw = [], trend = [];
+    let previous;
+    for (let i=0; i<40; i++) {
+      const sample = {time:i*40, velocity:[i%2 ? .02 : -.02]};
+      raw.push(sample.velocity[0]); previous=withVelocityTrend(sample, previous);
+      if (i>10) trend.push(previous.trend_velocity[0]);
+    }
+    for (let i=40; i<90; i++) previous=withVelocityTrend({time:i*40,velocity:[2]},previous);
+    const steady=previous.trend_velocity[0];
+    const gap=withVelocityTrend({time:5000,velocity:[-.5]},previous).trend_velocity[0];
+    const missing=withVelocityTrend({time:5040,velocity:[null]},previous).trend_velocity[0];
+    clearHistory();
+    const first=sampleTime({sample_monotonic_ns:1e9,age_s:.02},100);
+    const later=sampleTime({sample_monotonic_ns:1.04e9,age_s:.02},250);
+    clearHistory();
+    return {raw, peak:Math.max(...trend.map(Math.abs)), steady, gap, missing, dt:later-first};
+  });
+  assert.ok(filtering.peak < .01, '120 ms trend must reduce alternating feedback noise');
+  assert.ok(Math.abs(filtering.steady-2) < 1e-6, 'Steady motion must retain its full speed');
+  assert.deepEqual(filtering.raw.slice(0,4), [-.02,.02,-.02,.02]);
+  assert.equal(filtering.gap, -.5, 'A feedback gap must reset the trend');
+  assert.equal(filtering.missing, null, 'Missing feedback must not become zero');
+  assert.equal(filtering.dt, 40, 'Sample time must not inherit request timing jitter');
   await page.waitForFunction(() => document.querySelectorAll('.torque-row').length === 7);
   assert.equal(await page.locator('#joints .position-row').count(), 6);
   assert.equal(await page.locator('details.diagnostics-panel').count(), 0);
@@ -60,6 +87,17 @@ renderHand('left', null); renderHand('right', null);`});
   await page.evaluate(() => {window.fixture.stream.sequence++; window.fixture.actual_torque[0] = 2;});
   await page.waitForFunction(() => document.querySelector('.torque-line').getAttribute('d').includes('L'));
   await page.waitForFunction(() => document.querySelector('.velocity-line.actual').getAttribute('d').includes('L'));
+  const scrolling = await page.evaluate(async () => {
+    const line=document.querySelector('.velocity-line.actual');
+    const samples=telemetryTest.history().length, frames=[];
+    for (let i=0; i<4; i++) {
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      frames.push(line.getAttribute('d'));
+    }
+    return {frames, sameSamples:samples===telemetryTest.history().length};
+  });
+  assert.equal(scrolling.sameSamples, true);
+  assert.equal(new Set(scrolling.frames).size, 4, 'The time axis must move every frame without new samples');
   const lastY = d => Number([...d.matchAll(/[ML][-\d.]+ ([-\d.]+)/g)].at(-1)[1]);
   const fullScaleY = lastY(await page.locator('.torque-line').first().getAttribute('d'));
   await page.selectOption('#torque-zoom', '10');
@@ -76,6 +114,7 @@ renderHand('left', null); renderHand('right', null);`});
   });
   await page.waitForFunction(() => document.querySelector('.torque-row b').textContent === '8.00');
   assert.equal(await page.locator('#velocities .position-values b').first().textContent(), '57.3');
+  assert.match(await page.locator('#velocities .position-row').first().getAttribute('title'), /原始峰值：57\.3/);
   assert.equal(await page.locator('#velocities .chart-clipped').first().isVisible(), true);
   assert.equal(await page.locator('#torques .chart-clipped').first().isVisible(), true);
   await page.selectOption('#velocity-zoom', '1');
@@ -108,6 +147,7 @@ renderHand('left', null); renderHand('right', null);`});
       })).some(Boolean) || sections.some(s => s.scrollHeight > s.clientHeight+1);
     });
     if (overlap) console.log(await page.evaluate(() => [...document.querySelectorAll('.telemetry-group > section')].map(s => ({name:s.className,height:s.clientHeight,scroll:s.scrollHeight,top:s.getBoundingClientRect().top,bottom:s.getBoundingClientRect().bottom})))) ;
+    await mkdir(new URL('../../outputs/logs/',import.meta.url), {recursive:true});
     await page.screenshot({path:new URL(`../../outputs/logs/telemetry-layout-${width}.png`,import.meta.url).pathname});
     assert.equal(overlap, false, `Telemetry content overlaps at ${width}x${height}`);
     assert.equal(await page.locator('.input-panel').evaluate(e => e.scrollHeight > e.clientHeight + 1), false, 'Upper-right controls must remain visible');
@@ -131,11 +171,12 @@ renderHand('left', null); renderHand('right', null);`});
   await page.evaluate(() => {clearInterval(window.traceFeed);});
   await page.evaluate(() => {window.fixture.stream.status='stale';});
   await page.waitForFunction(() => document.querySelector('.torque-row b').textContent === '—');
+  assert.equal(await page.evaluate(() => telemetryTest.history().length), 0, 'Stale feedback clears trend history');
   assert.equal(await page.locator('#motor-feedback b').first().textContent(), '—');
   await page.evaluate(() => {window.fixture={stream:{status:'waiting'},actual:null};});
   await page.waitForFunction(() => document.querySelector('#gripper').dataset.state === 'waiting');
   assert.equal(await page.locator('.gripper-placeholder').isVisible(), true);
   assert.equal(await page.locator('.torque-line').first().getAttribute('d'), '');
   assert.deepEqual(errors, []);
-  console.log('PASS: telemetry, fixed-axis zoom, unclipped values, stale feedback and 1920×1080 layout.');
+  console.log('PASS: 120 ms trend, raw values and peaks, continuous scrolling, fixed-axis zoom, stale feedback and 1920×1080 layout.');
 } finally {await browser.close();}

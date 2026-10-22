@@ -13,6 +13,69 @@ from embodied.applications.workstation.control import ROOT, control_environment,
 
 
 class ControlEntryTests(unittest.TestCase):
+    def test_remote_start_uses_web_view_without_a_desktop_dependency(self):
+        import io
+        from embodied.applications.workstation import control
+        for environment, explicit, expected in [
+                ({'SSH_CONNECTION': 'remote 123 local 22', 'DISPLAY': 'localhost:10.0'}, False, True),
+                ({}, False, True),
+                ({'DISPLAY': ':0'}, False, False),
+                ({'DISPLAY': ':0'}, True, True)]:
+            with self.subTest(environment=environment, explicit=explicit), \
+                 patch.dict(os.environ, environment, clear=True), \
+                 patch.object(control.sys, 'platform', 'linux'), \
+                 patch.object(control, 'verify_sources', return_value={}), \
+                 patch('sys.stdout', new_callable=io.StringIO) as output:
+                self.assertEqual(control.main(['--print-command', 'start', '--backend', 'sim',
+                                               '--input', 'idle', *(['--headless'] if explicit else [])]), 0)
+                command = json.loads(output.getvalue())['argv']
+                self.assertEqual('--headless' in command, expected)
+
+    def test_real_bootstrap_hands_over_before_loading_numeric_plugins(self):
+        script = '''
+import json, sys
+from pathlib import Path
+from unittest.mock import patch
+from embodied.applications.workstation import control
+arguments = ['start', '--backend', 'real', '--input', 'idle', '--managed']
+def handover(python, command, env):
+    assert 'numpy' not in sys.modules
+    assert command == [str(control.CONTROL_PYTHON), '-B', '-m',
+                       'embodied.applications.workstation.control', *arguments]
+    assert env['PYTHONPATH'] == str(control.ROOT / 'src')
+    raise SystemExit(0)
+with patch.object(control, 'CONTROL_PYTHON', Path('/control-env/bin/python')), \\
+     patch.object(control, 'command_for', return_value=['/control-env/bin/python']), \\
+     patch.object(control, 'verify_sources', return_value={}), \\
+     patch.object(control, 'hardware_environment', side_effect=AssertionError('plugin imported in bootstrap')), \\
+     patch.object(control.os, 'execvpe', side_effect=handover):
+    control.main(arguments)
+'''
+        result = subprocess.run(['/usr/bin/python3', '-S', '-c', script],
+                                env={**os.environ, 'PYTHONPATH': str(ROOT / 'src')},
+                                text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_control_interpreter_prepares_plugin_environment_before_final_exec(self):
+        from embodied.applications.workstation import control
+        class Executed(Exception):
+            pass
+        config = str((Path.cwd() / 'custom-robot.json').resolve())
+        final_command = ['/control-env/bin/python', '-B', '-m', 'embodied.control', 'run']
+        prepared = {'LD_LIBRARY_PATH': '/driver/libs', 'PYTHONPATH': '/driver/python'}
+        with patch.object(control, 'CONTROL_PYTHON', Path('/control-env/bin/python')), \
+             patch.object(control.sys, 'prefix', '/control-env'), \
+             patch.object(control, 'verify_sources', return_value={}), \
+             patch.object(control, 'command_for', return_value=final_command), \
+             patch.object(control, 'hardware_environment', return_value=prepared) as prepare, \
+             patch.object(control.os, 'chdir'), \
+             patch.object(control.os, 'execvpe', side_effect=Executed) as execute:
+            with self.assertRaises(Executed):
+                control.main(['start', '--backend', 'real', '--managed', '--input', 'idle',
+                              '--robot-plugin', 'selected.hardware', '--config', 'custom-robot.json'])
+        self.assertEqual(prepare.call_args.kwargs, {'robot_plugin': 'selected.hardware', 'config': config})
+        execute.assert_called_once_with(final_command[0], final_command, prepared)
+
     def test_legacy_and_arx_lease_exclude_each_other_across_processes(self):
         from embodied.contracts.device_lease import DeviceLease
         import uuid
