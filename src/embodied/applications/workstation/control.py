@@ -143,7 +143,10 @@ def command_for(args):
                 cmd.extend(['--' + key.replace('_', '-'), getattr(args, key)])
         if getattr(args, "planner_plugin", None):
             cmd.extend(["--planner-plugin", args.planner_plugin])
-        if args.headless:
+        # The web monitor supplies 3D feedback over SSH. A forwarded DISPLAY
+        # may outlive its SSH session in tmux and cannot gate robot startup.
+        if args.headless or (sys.platform.startswith('linux') and
+                             (os.environ.get('SSH_CONNECTION') or not os.environ.get('DISPLAY'))):
             cmd.append("--headless")
         if args.record_tuning:
             cmd.append("--record-tuning")

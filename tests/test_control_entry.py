@@ -13,6 +13,24 @@ from embodied.applications.workstation.control import ROOT, control_environment,
 
 
 class ControlEntryTests(unittest.TestCase):
+    def test_remote_start_uses_web_view_without_a_desktop_dependency(self):
+        import io
+        from embodied.applications.workstation import control
+        for environment, explicit, expected in [
+                ({'SSH_CONNECTION': 'remote 123 local 22', 'DISPLAY': 'localhost:10.0'}, False, True),
+                ({}, False, True),
+                ({'DISPLAY': ':0'}, False, False),
+                ({'DISPLAY': ':0'}, True, True)]:
+            with self.subTest(environment=environment, explicit=explicit), \
+                 patch.dict(os.environ, environment, clear=True), \
+                 patch.object(control.sys, 'platform', 'linux'), \
+                 patch.object(control, 'verify_sources', return_value={}), \
+                 patch('sys.stdout', new_callable=io.StringIO) as output:
+                self.assertEqual(control.main(['--print-command', 'start', '--backend', 'sim',
+                                               '--input', 'idle', *(['--headless'] if explicit else [])]), 0)
+                command = json.loads(output.getvalue())['argv']
+                self.assertEqual('--headless' in command, expected)
+
     def test_real_bootstrap_hands_over_before_loading_numeric_plugins(self):
         script = '''
 import json, sys

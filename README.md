@@ -46,7 +46,7 @@ uv sync --locked           # 平台环境（Python 3.12）
 
 新版监看页提供“实测速度 · 质量”和“任务 / 技能复核”：查看反馈速度、周期、采集心跳、帧计数和错误，自动更新任务阶段。模型与相机来自当前运行描述，可显示七轴无夹爪模型。采集数据按机器人关节与夹爪契约保存，可选择外部相机作为参考；程序任务保留 scripted 来源并生成待复核标注，见[采集与复核](docs/guides/recording.md)。
 
-通过 SSH 打开工作台时，监看页自动绑定 SSH 连接使用的服务器地址，**以窗口 4 显示的链接为准**；客户端的 `127.0.0.1` 不指向远程机器。也可在 `configs/local.toml` 的 `[viewer_service]` 中指定 `host`，或手动启动时使用 `--host <服务器 IPv4>`。
+通过 SSH 打开工作台时，监看页自动绑定 SSH 连接使用的服务器地址，**以窗口 4 显示的链接为准**；客户端的 `127.0.0.1` 不指向远程机器。SSH 或无桌面环境下，内核使用 `--headless`，网页提供三维反馈，不依赖 tmux 中可能失效的 X11 显示连接；桌面 MuJoCo 视图可在有效的桌面会话中用 `./run.sh kernel viewer --run <RUN>` 单独附加。也可在 `configs/local.toml` 的 `[viewer_service]` 中指定 `host`，或手动启动时使用 `--host <服务器 IPv4>`。
 
 `./run.sh help`（或 `-h`、`--help`）显示精简任务导航；`./run.sh help data` 或 `./run.sh data --help` 只看一组，`./run.sh search <关键词>` 搜索中文说明和命令名，`./run.sh help --all` 展开完整目录。帮助在终端使用 Rich 排版，输出到管道或未安装 Rich 时自动使用纯文本。
 
