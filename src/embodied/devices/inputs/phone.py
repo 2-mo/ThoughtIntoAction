@@ -327,16 +327,10 @@ class PhoneController:
             self.client.close()
 
     def run(self, duration=0):
-        self.start()
-        print(f'Phone UDP: {self.transport.local_address}; release clutch before activating; ghost={self.ghost}', flush=True)
-        deadline = time.monotonic() + duration if duration else float('inf')
-        try:
-            while time.monotonic() < deadline:
-                result = self.latest()
-                if self.ghost and result:
-                    print(json.dumps(result), flush=True)
-        finally:
-            self.stop()
+        # Standalone source profiles need the same align / stop channel as the
+        # workbench receiver, rather than a pose-only loop with no way to align.
+        from .phone_service import PhoneService, LATCH
+        PhoneService(self, latch_path=LATCH).run_forever(duration=duration)
 
 
 def main(argv=None):
