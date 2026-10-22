@@ -27,6 +27,6 @@ const Page = defineComponent({
 });
 
 document.title = collectionPage
-  ? "ARX5 · GR00T 数据采集"
-  : "ARX5 机械臂控制台";
+  ? "知行有灵 · Thought into Action · GR00T 数据采集"
+  : "知行有灵 · Thought into Action · 控制台";
 createApp(Page).mount("#app");
