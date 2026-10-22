@@ -15,6 +15,14 @@
 
 首次连接新电脑时，Quest 的 USB 调试信任仍需在头显内确认，可勾选“始终允许此计算机”。ADB 尚未授权时，电脑不能代为批准这一步，详见 [Android ADB 文档](https://developer.android.com/tools/adb#Enabling)。
 
+## 模拟佩戴
+
+总控窗口按 **F** 模拟佩戴、**U** 取消；VR 窗口（`Ctrl+B → 5`）按 **W** 模拟佩戴、**U** 取消。操作在后台执行，结果显示在“佩戴请求”一行。未授权时保留入口并明确报错，不发送设备命令。
+
+这两个按键只发送头显佩戴广播，不启动或切换客户端、机器人或遥操。模拟佩戴会唤醒屏幕；取消模拟佩戴恢复摘下状态，由头显自身决定息屏。广播执行成功只表示请求已发送，不能证明系统已应用佩戴状态或追踪已恢复。
+
+命令行对应 `./run.sh quest wake wear` / `./run.sh quest wake unwear`；原 `./run.sh quest wake` 仍保留唤醒并启动官方客户端的行为。模拟佩戴依赖已授权的 ADB，不能修复授权弹窗缺失。
+
 ## 准备与构建
 
 仓库只保存小型补丁和构建脚本。完整官方源码缓存位于 `outputs/dependencies/quest-client.git`，应用补丁后的 Unity 工程位于 `outputs/build/quest-client/source`，没有 `third_party` 运行时依赖。

@@ -32,7 +32,7 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传'
-UI_REVISION = '9'
+UI_REVISION = '10'
 ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
@@ -474,7 +474,7 @@ def stop_kernel():
 
 # Dashboard
 
-def dashboard_view(found, episode, message, failed=False, show_help=False, show_restart=False, *, vr_transport=None):
+def dashboard_view(found, episode, message, failed=False, show_help=False, show_restart=False, *, vr_transport=None, vr_wearing=None):
     """Build the screen separately from input, using literal text for all state."""
     from rich.console import Group
     from rich.panel import Panel
@@ -526,6 +526,10 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
     vr, _ = vr_rows(found, vr_transport)
     label, value = vr[0]
     status.add_row('◉', Text(label), status_text(value))
+    if vr_wearing is not None:
+        status.add_row('◉', '佩戴请求', status_text(vr_wearing))
+    menu.add_row('VR', 'F', Text('模拟佩戴（仅头显，需要 USB 授权）'))
+    menu.add_row('', 'U', Text('取消模拟佩戴（仅头显）'))
     _, cameras, _ = snapshot('camera')
     for label, value in cameras:
         if isinstance(value, Status):
@@ -557,6 +561,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
             '/  搜索命令：输入关键词后回车；L 查看完整命令目录。',
             WINDOW_HINT,
             'VR、相机或机械臂未就绪时，窗口会继续显示状态与下一步提示。',
+            'F 模拟佩戴 · U 取消模拟佩戴；窗口 5 的对应快捷键为 W / U。',
             'R 打开重启菜单：1 工作台界面 · 2 robot · 3 共享相机。',
             'Q 离开但保持运行；S 连按两次停止内核；Z 关闭空闲工作台。',
             '禁用项会说明原因；? 关闭帮助。',
@@ -590,7 +595,7 @@ def dashboard():
 
     def view():
         return dashboard_view(current_run(), latest_episode(), message, failed, show_help, show_restart,
-                              vr_transport=vr.snapshot())
+                              vr_transport=vr.snapshot(), vr_wearing=vr.wear_message)
 
     def operate(key):
         nonlocal pending_stop, show_help, show_restart
@@ -624,6 +629,9 @@ def dashboard():
             return type_command('./run.sh check ports')
         if key == 'w':
             return open_web()
+        if key in ('f', 'u'):
+            vr.set_wearing(key == 'f')
+            return '正在处理佩戴请求；结果见设备状态中的“佩戴请求”。'
         if found is None:
             for item_key, _, command, _ in KERNELS:
                 if key == item_key:
