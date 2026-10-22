@@ -265,6 +265,7 @@ class BenchStateTests(unittest.TestCase):
 
     def test_robot_failure_keeps_original_logs_until_acknowledged(self):
         with patch.object(bench, 'current_run', return_value=None), \
+             patch.object(bench, 'ensure_robot_controls'), \
              patch.object(bench, 'window', return_value=('%test', 'python')), \
              patch.object(bench, 'activity', return_value='waiting'), \
              patch.object(bench, 'panel_command', return_value="printf 'panel-entered\\n'"), \
@@ -295,6 +296,7 @@ class BenchStateTests(unittest.TestCase):
 
     def test_kernel_selection_replaces_only_the_waiting_panel(self):
         with patch.object(bench, 'current_run', return_value=None), \
+             patch.object(bench, 'ensure_robot_controls'), \
              patch.object(bench, 'window', return_value=('%test', 'python')), \
              patch.object(bench, 'activity', return_value='waiting'), \
              patch.object(bench, 'panel_command', return_value='test-waiting-panel'), \
