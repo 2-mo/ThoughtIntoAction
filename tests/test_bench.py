@@ -31,6 +31,21 @@ def run(root, name, *, pid=999_999_999, ready=True, managed=False):
 
 
 class BenchStateTests(unittest.TestCase):
+    def test_panel_reload_waits_for_cleanup_and_never_force_kills(self):
+        done = subprocess.CompletedProcess([], 0, stdout='1\n')
+        with patch.object(bench, 'tmux', return_value=done) as tmux:
+            bench.refresh_panel('%web', 'new-web-panel')
+        self.assertEqual(tmux.call_args_list[0].args, ('send-keys', '-t', '%web', 'C-c'))
+        tmux.assert_any_call('respawn-pane', '-t', '%web', '-c', str(bench.ROOT), 'new-web-panel')
+        self.assertTrue(all('-k' not in call.args for call in tmux.call_args_list))
+
+        still_running = subprocess.CompletedProcess([], 0, stdout='0\n')
+        with patch.object(bench, 'tmux', return_value=still_running) as tmux, \
+             patch.object(bench.time, 'monotonic', side_effect=[0., 9.]):
+            with self.assertRaisesRegex(RuntimeError, '保留原进程'):
+                bench.refresh_panel('%web', 'new-web-panel')
+        self.assertFalse(any(call.args[0] == 'respawn-pane' for call in tmux.call_args_list))
+
     def test_motion_tests_bind_current_backend_run_and_wait_for_enter(self):
         with tempfile.TemporaryDirectory(prefix='bench actions ') as root:
             directory = run(root, 'managed', managed=True)
@@ -121,6 +136,7 @@ class BenchStateTests(unittest.TestCase):
         active = (ROOT / 'outputs/runtime/control/test-only', {'supervisor_pid': 1234, 'backend': 'real'})
         pane_info = subprocess.CompletedProcess([], 0, stdout='%kernel|222\n%command|333\n')
         with patch.object(bench, 'exists', return_value=True), \
+             patch.object(bench, 'check_session_owner'), \
              patch.object(bench, 'owned_run', return_value=None), \
              patch.object(bench, 'current_run', return_value=active), \
              patch.object(bench, 'descendant_pid', side_effect=lambda pid, ancestor: ancestor == 333), \
@@ -162,10 +178,22 @@ def actions(directory, identity, episode, now):
 
 @unittest.skipUnless(shutil.which('tmux'), 'tmux not installed')
 class BenchTmuxTests(unittest.TestCase):
+    def test_session_name_collision_preserves_the_other_session(self):
+        session = f'bench-collision-{os.getpid()}-{time.monotonic_ns()}'
+        bench.tmux('new-session', '-d', '-s', session, 'sleep 60')
+        self.addCleanup(subprocess.run, ['tmux', 'kill-session', '-t', session], capture_output=True)
+        original = bench.tmux('list-panes', '-t', session, '-F', '#{pane_id}|#{pane_pid}').stdout
+        with patch.object(bench, 'SESSION', session):
+            with self.assertRaisesRegex(RuntimeError, '已被其他工作区使用'):
+                bench.prepare_session()
+            with self.assertRaisesRegex(RuntimeError, '已被其他工作区使用'):
+                bench.stop()
+        self.assertEqual(bench.tmux('list-panes', '-t', session, '-F', '#{pane_id}|#{pane_pid}').stdout, original)
+
     def test_all_windows_reopen_repair_and_close_without_touching_external_kernel(self):
         session = f'bench-test-{os.getpid()}-{time.monotonic_ns()}'
         self.addCleanup(subprocess.run, ['tmux', 'kill-session', '-t', session], capture_output=True)
-        expected = ['1:内核', '2:命令', '3:总控', '4:网页', '5:VR', '6:相机', '7:宣传']
+        expected = ['1:总控', '2:命令', '3:内核', '4:网页', '5:VR', '6:相机', '7:宣传']
 
         def names():
             return bench.tmux('list-windows', '-t', session, '-F', '#{window_index}:#{window_name}').stdout.split()
@@ -186,7 +214,8 @@ class BenchTmuxTests(unittest.TestCase):
         # robot is being controlled by another terminal on the same machine.
         with patch.object(bench, 'SESSION', session), \
              patch.object(bench, 'current_run', return_value=None), \
-             patch.object(bench, 'panel_command', side_effect=lambda role: bench.shell(f'{role}: waiting for device')), \
+             patch.object(bench, 'panel_command', side_effect=lambda role: bench.shell(
+                 f'embodied.applications.workstation.bench_panels {role}: waiting for device')), \
              patch.object(bench, 'dashboard_command', return_value=bench.shell('embodied.applications.workstation.bench _dashboard')):
             bench.start(attach=False)
             self.assertEqual(names(), expected)
@@ -195,6 +224,27 @@ class BenchTmuxTests(unittest.TestCase):
             bench.start(attach=False)
             self.assertEqual(names(), expected)
             self.assertEqual(panes(), original)  # reopening preserves live work
+
+            # Migrate an attached-era layout (kernel first) and its old hashed
+            # name in place. Only the dashboard must reload its session env.
+            legacy = session + '-legacy'
+            self.addCleanup(subprocess.run, ['tmux', 'kill-session', '-t', legacy], capture_output=True)
+            bench.tmux('swap-window', '-s', original['home'][0], '-t', original['kernel'][0])
+            bench.tmux('set-option', '-p', '-t', original['kernel'][0], '@bench_activity', 'kernel')
+            bench.tmux('set-option', '-p', '-t', original['kernel'][0], '@bench_ui_revision', 'busy-old-kernel')
+            bench.tmux('rename-session', '-t', session, legacy)
+            with patch.object(bench, 'DEFAULT_SESSION', session), patch.object(bench, 'LEGACY_SESSION', legacy):
+                bench.start(attach=False)
+            until(lambda: bench.idle('home'))
+            self.assertEqual(names(), expected)
+            self.assertNotEqual(panes()['home'][1], original['home'][1])
+            for role in set(bench.WINDOWS) - {'home'}:
+                self.assertEqual(panes()[role], original[role])
+            self.assertEqual(bench.activity('kernel'), 'kernel')
+            self.assertEqual(bench.tmux('display-message', '-p', '-t', original['kernel'][0], '#{@bench_ui_revision}').stdout.strip(),
+                             'busy-old-kernel')
+            bench.tmux('set-option', '-p', '-t', original['kernel'][0], '@bench_activity', 'waiting')
+            original = panes()
 
             # An existing user's workbench picks up the new test menu without
             # replacing the kernel, command shell or running web/device panels.

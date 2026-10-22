@@ -121,6 +121,7 @@ class Scene:
 
             def respond(self, body):
                 path = urlsplit(self.path).path
+                status = 200
                 if path == '/api/simulation':
                     content = json.dumps(owner.simulation.status() if owner.simulation else {}).encode()
                     mime = 'application/json'
@@ -199,15 +200,20 @@ class Scene:
                         payload = owner._manifest if path == "/api/model" else owner.snapshot()
                     content = json.dumps(payload, allow_nan=False).encode()
                     mime = "application/json"
-                elif path in owner._files:
-                    file = owner._files[path]
-                    content = file.read_bytes()
-                    mime = mimetypes.guess_type(file.name)[0] or "application/octet-stream"
+                elif (file := owner._files.get(path)) is not None:
+                    try:
+                        content = file.read_bytes()
+                        mime = mimetypes.guess_type(file.name)[0] or "application/octet-stream"
+                    except OSError as exc:
+                        status = 404 if isinstance(exc, FileNotFoundError) else 503
+                        content = json.dumps({'error': '模型或页面资源不可用；检查资源文件，更新后请重启网页监看服务。',
+                                              'resource': path, 'detail': str(exc)}, ensure_ascii=False).encode()
+                        mime = 'application/json; charset=utf-8'
                 else:
                     self.send_error(404)
                     return
                 try:
-                    self.send_response(200)
+                    self.send_response(status)
                     self.send_header("Content-Type", mime)
                     self.send_header("Content-Length", str(len(content)))
                     # Reloads must never show an old viewer or a cached robot state.

@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
+from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -143,3 +144,45 @@ class SceneTests(unittest.TestCase):
             Registry().load('viewer', 'meshcat')
         with self.assertRaisesRegex(RuntimeError, 'closed'):
             self.scene.update(self.q)
+
+    def test_arx_runtime_snapshot_resolves_all_meshes_from_its_declared_urdf(self):
+        from embodied.applications.monitor.model import RuntimeModel
+        from embodied.contracts.paths import PROJECT_ROOT
+        from embodied.control.settings import load_settings
+        from embodied.devices.robots.arx5.plugin import model_snapshot
+
+        config = load_settings().robot
+        parameters = model_snapshot(config)
+        parameters['effective_robot_config'] = {'gripper_max_width': config.gripper_max_width}
+        robot = RuntimeModel({'joint_count': config.joint_count, 'parameters': parameters})
+        self.assertEqual(robot.urdf, PROJECT_ROOT / 'assets/robots/x5/runtime/x5_2025.urdf')
+        self.scene.set_model(robot)
+        manifest = json.loads(self.read('api/model'))
+        self.assertEqual(manifest['data_contract']['joint_names'], robot.names)
+        self.assertEqual(len(manifest['meshes']), 7)
+        for spec in manifest['meshes']:
+            resource = self.scene._files[spec['url']]
+            self.assertEqual(resource.parent, robot.urdf.parent / 'meshes')
+            self.assertEqual(self.read(spec['url'].lstrip('/')), resource.read_bytes())
+
+    def test_removed_mesh_returns_explicit_error_without_breaking_http(self):
+        mesh_url = self.scene._manifest['meshes'][-1]['url']
+        with tempfile.TemporaryDirectory() as folder:
+            # A loaded scene can outlive an asset relocation during an update.
+            self.scene._files[mesh_url] = Path(folder) / 'removed.STL'
+            with patch.object(self.scene._server, 'handle_error') as handle_error:
+                for method in ('GET', 'HEAD'):
+                    request = Request(self.scene.url.rstrip('/') + mesh_url, method=method)
+                    with self.assertRaises(HTTPError) as error:
+                        self.http.open(request, timeout=2)
+                    self.assertEqual(error.exception.code, 404)
+                    self.assertEqual(error.exception.headers['Cache-Control'], 'no-store')
+                    content = error.exception.read()
+                    if method == 'GET':
+                        payload = json.loads(content)
+                        self.assertEqual(payload['resource'], mesh_url)
+                        self.assertIn('重启网页', payload['error'])
+                    else:
+                        self.assertEqual(content, b'')
+                handle_error.assert_not_called()
+                self.assertIn('robot', json.loads(self.read('api/model')))

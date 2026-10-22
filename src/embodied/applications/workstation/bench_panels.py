@@ -353,7 +353,7 @@ def render(state, service=None):
         if logs:
             sections.append(Panel(Group(*(Text(line, overflow='fold') for line in logs)),
                                   title='最近日志', border_style='dim'))
-    sections.append(Text('Ctrl+B → 3 返回总控 · Ctrl+B → D 离开工作台 · R ' +
+    sections.append(Text('Ctrl+B → 1 返回总控 · Ctrl+B → D 离开工作台 · R ' +
                          ('重试 / 刷新' if service is not None else '刷新') +
                          (' · W 打开浏览器' if service is not None and service.role == 'web' else ''), style='dim'))
     return Group(*sections)
