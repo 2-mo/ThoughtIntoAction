@@ -66,25 +66,24 @@ class BenchPanelTests(unittest.TestCase):
             camera.update(enabled=True, error='device disconnected')
             self.assertEqual(dict(panels.camera_rows()[0])['wrist_rgb'].level, 'error')
 
-    def test_camera_usb_detection_distinguishes_wrong_serial_from_waiting_for_frames(self):
+    def test_camera_usb_serial_is_not_compared_with_sdk_configuration(self):
         with tempfile.TemporaryDirectory() as directory:
             usb = Path(directory)
-            (usb / 'serial').write_text('connected')
+            (usb / 'serial').write_text('usb-descriptor-serial')
             (usb / 'product').write_text('Intel RealSense D435i')
-            options = {'enabled': True, 'serial': 'configured'}
+            options = {'enabled': True, 'serial': 'different-sdk-serial'}
             config = {'camera_service': {'socket': str(usb / 'missing.sock')}, 'cameras': {'wrist_rgb': options}}
             with patch.object(panels, 'load_config', return_value=config), \
                  patch.object(panels, 'resolve_path', side_effect=Path), \
-                 patch.object(Path, 'glob', return_value=[usb / 'serial']):
+                 patch.object(Path, 'glob', return_value=[usb / 'product']):
                 rows = dict(panels.camera_rows()[0])
                 self.assertEqual(rows['共享服务'].level, 'waiting')
-                self.assertEqual(rows['wrist_rgb'].level, 'error')
-                self.assertIn('未匹配', str(rows['wrist_rgb']))
-                self.assertIn('connected', rows['USB 识别'])
-                options['serial'] = 'connected'
-                row = dict(panels.camera_rows()[0])['wrist_rgb']
-                self.assertEqual(row.level, 'waiting')
-                self.assertIn('USB 设备可见', str(row))
+                self.assertEqual(rows['wrist_rgb'].level, 'waiting')
+                self.assertIn('RealSense USB 可见', str(rows['wrist_rgb']))
+                self.assertIn('等待相机服务确认', str(rows['wrist_rgb']))
+                self.assertNotIn('未匹配', str(rows))
+                self.assertNotIn('usb-descriptor-serial', str(rows))
+                self.assertIn('Intel RealSense D435i', rows['USB 识别'])
 
     def test_noninteractive_camera_serve_never_ensures_service(self):
         with patch.object(panels.sys.stdin, 'isatty', return_value=False), \

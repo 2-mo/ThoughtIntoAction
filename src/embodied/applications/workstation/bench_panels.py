@@ -167,15 +167,12 @@ def camera_rows():
             rows.append(('共享服务', Status(f'尚未就绪：{exc}', 'error')))
     else:
         rows.append(('共享服务', Status('等待启动', 'waiting')))
-    serials = set()
-    detected = {}
-    for path in Path('/sys/bus/usb/devices').glob('*/serial'):
+    detected = []
+    for path in Path('/sys/bus/usb/devices').glob('*/product'):
         try:
-            serial = path.read_text().strip()
-            serials.add(serial)
-            product = path.with_name('product').read_text().strip()
+            product = path.read_text().strip()
             if 'realsense' in product.lower():
-                detected[serial] = product
+                detected.append(product)
         except OSError:
             pass
     for name, options in config.get('cameras', {}).items():
@@ -193,20 +190,18 @@ def camera_rows():
             stale = valid_age and age >= .5
             detail = f'画面已过期 · 帧龄 {age:.2f} s' if stale else '等待相机服务提供有效帧'
             level = 'error' if stale else 'waiting'
-        elif serial and serial in serials:
-            detail, level = 'USB 设备可见；等待相机服务提供帧', 'waiting'
         elif serial and detected:
-            detail, level = f'配置的序列号 {serial} 未匹配已连接相机', 'error'
+            detail, level = 'RealSense USB 可见；等待相机服务确认', 'waiting'
         elif serial:
             detail, level = '等待 USB 相机连接', 'waiting'
         else:
             detail, level = '未指定序列号；检查相机配置', 'error'
         rows.append((options.get('label', name), Status(f'{detail} · {name}', level)))
     if detected:
-        rows.append(('USB 识别', '；'.join(f'{model} · SN {serial}' for serial, model in detected.items())))
+        rows.append(('USB 识别', '；'.join(detected)))
     return rows, ['工作台会启动共享相机服务；按 R 重试，设备断线后服务自动重连。',
                   '关闭或刷新本窗口不会停止共享服务，也不会中断采集。',
-                  '检测到其他 RealSense 不代表配置中的相机已连接；序列号在 configs/local.toml 配置。',
+                  '每台相机由共享服务按 SDK 序列号确认；USB 序列号不用于匹配配置。',
                   '独立启动共享服务：./run.sh camera service']
 
 
