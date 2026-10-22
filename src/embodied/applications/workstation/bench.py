@@ -2,6 +2,7 @@
 
     ./run.sh            open it (./run.sh help shows task navigation)
     ./run.sh help --all list every command
+    ./run.sh bench restart --target interfaces reload web services and terminal panels
     ./run.sh bench stop stop the kernel and web console it started, and close it
 
 Windows: 1 总控, 2 命令, 3 robot, 4 网页, 5 VR, 6 相机, 7 宣传.
@@ -30,7 +31,7 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传'
-UI_REVISION = '6'
+UI_REVISION = '7'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
 KERNELS = [  # key, label, command typed into the kernel window, real arm
@@ -40,6 +41,11 @@ KERNELS = [  # key, label, command typed into the kernel window, real arm
     ('4', '仿真 · Quest', './run.sh quest-transport prepare && ./run.sh kernel profiles start --profile sim-quest', False),
     ('5', '仿真 · 无输入（网页 / 动作 / 策略）', './run.sh kernel profiles start --profile sim-manual', False),
 ]
+RESTART_TARGETS = {
+    '1': ('interfaces', '🖥', '工作台界面', '重启网页、宣传站与状态页；robot、共享相机保持运行'),
+    '2': ('robot', '🦾', 'robot', '沿用本次启动配置；真机退出会进入阻尼，执行前确认'),
+    '3': ('camera', '📷', '共享相机', '重启服务并读取配置；录制中不能重启'),
+}
 
 
 # tmux
@@ -410,6 +416,7 @@ def start_kernel(command):
     script = f'trap ":" INT; {command}; result=$?; echo "内核已退出（状态 $result）。"; exec {panel_command("kernel")}'
     tmux('set-option', '-p', '-t', target[0], '@bench_activity', 'kernel')
     tmux('respawn-pane', '-k', '-t', target[0], '-c', str(ROOT), 'bash -c ' + shlex.quote(script))
+    tmux('set-option', '-p', '-t', target[0], '@bench_kernel_command', command)
     tmux('select-window', '-t', target[0])
     return 'robot 窗口正在启动；按提示确认，就绪后 Ctrl+B 1 回总控。'
 
@@ -435,7 +442,7 @@ def stop_kernel():
 
 # Dashboard
 
-def dashboard_view(found, episode, message, failed=False, show_help=False):
+def dashboard_view(found, episode, message, failed=False, show_help=False, show_restart=False):
     """Build the screen separately from input, using literal text for all state."""
     from rich.console import Group
     from rich.panel import Panel
@@ -443,7 +450,11 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
     from rich.text import Text
     from embodied.applications.workstation.bench_panels import snapshot, vr_rows
 
-    status = Table.grid(padding=(0, 1), expand=True)
+    status = Table(box=None, padding=(0, 1), expand=True, header_style='dim')
+    status.add_column('', width=3, no_wrap=True)
+    status.add_column('设备', width=12, no_wrap=True, style='bold')
+    status.add_column('状态', ratio=1)
+    details = []
     menu = Table.grid(padding=(0, 1), expand=True)
     menu.add_column(style='dim', width=6)
     menu.add_column(style='bold color(215)', width=2)
@@ -452,9 +463,9 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
         _, robot_rows, _ = snapshot('kernel')
         for label, value in robot_rows:
             if isinstance(value, Status):
-                status.add_row(Text.assemble('robot · ' if label == '内核' else f'{label} · ', status_text(value)))
-        status.add_row(Text('真机测试按 3，仿真按 5；启动后 Ctrl+B → 1 返回总控。', style='dim'))
-        status.add_row(Text('网页已随工作台启动；内核就绪后自动连接。', style='dim'))
+                is_robot = label != 'USB-CAN'
+                status.add_row('🦾' if is_robot else '🔌', Text('robot' if is_robot else label), status_text(value))
+        details.append(Text('真机测试按 3，仿真按 5；网页会自动连接就绪的 robot。', style='dim'))
         for real, section in ((False, '仿真'), (True, '真机')):
             first = True
             for key, label, _, is_real in KERNELS:
@@ -465,8 +476,9 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
         menu.add_row('网页', 'W', Text('查看监看与采集网页（无需先启动内核）'))
     else:
         run, identity = found
-        for line in kernel_summary(run, identity):
-            status.add_row(status_text(line))
+        summary = kernel_summary(run, identity)
+        status.add_row('🦾', 'robot', status_text(summary[1]))
+        details.extend(Text(str(line), style='dim') for line in (summary[0], *summary[2:]))
         rows = actions(run, identity, episode)
         for section, keys in (('观察', 'wmvo'), ('测试', 'bxt'), ('数据', 'cke'), ('进阶', 'hjg')):
             first = True
@@ -481,19 +493,30 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
         menu.add_row('停止', 'S', Text('连按两次停止内核；真机进入阻尼，请先扶住', style='yellow'))
     vr, _ = vr_rows(found)
     label, value = vr[0]
-    status.add_row(Text.assemble(f'{label} · ', status_text(value)))
+    status.add_row('🥽', Text(label), status_text(value))
     _, cameras, _ = snapshot('camera')
     for label, value in cameras:
         if isinstance(value, Status):
-            status.add_row(Text.assemble(f'{label} · ', status_text(value)))
+            service = label == '共享服务'
+            status.add_row('▦' if service else '📷', Text('相机服务' if service else label), status_text(value))
     try:
         from embodied.core.project import load_config
         from embodied.applications.workstation.ports import summary
         text, problem = summary(load_config())
-        status.add_row(Text('端口：' + text, style='red' if problem else 'dim'))
+        details.append(Text('端口：' + text, style='red' if problem else 'dim'))
     except (OSError, ValueError, KeyError):
         pass
-    if show_help:
+    menu.add_row('管理', 'R', Text('↻ 重启：工作台界面 / robot / 共享相机'))
+    if show_restart:
+        body = Table.grid(padding=(0, 2), expand=True)
+        body.add_column(style='bold color(215)', width=2)
+        body.add_column(width=3)
+        body.add_column(style='bold', width=12)
+        body.add_column(ratio=1)
+        for key, (_, icon, label, description) in RESTART_TARGETS.items():
+            body.add_row(key, icon, label, Text(description))
+        body.add_row('R', '↩', '返回', 'Esc 也可返回；未选择时不会重启任何服务')
+    elif show_help:
         body = Text('\n'.join([
             '直接按键，无需回车；数字键选择配置，字母键执行对应操作。',
             'B 10°往返测速 · X XYZ直线 · T连续路径；运行目录和后端自动填写。',
@@ -502,15 +525,16 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
             '/  搜索命令：输入关键词后回车；L 查看完整命令目录。',
             WINDOW_HINT,
             'VR、相机或机械臂未就绪时，窗口会继续显示状态与下一步提示。',
+            'R 打开重启菜单：1 工作台界面 · 2 robot · 3 共享相机。',
             'Q 离开但保持运行；S 连按两次停止内核；Z 关闭空闲工作台。',
             '禁用项会说明原因；? 关闭帮助。',
         ]))
     else:
         body = menu
-    hints = Text('? 帮助   / 搜索   L 命令目录   P 端口   Q 离开   Z 关闭', style='dim')
+    hints = Text('R ↻ 重启   ? 帮助   / 搜索   L 命令目录   P 端口   Q 离开   Z 关闭', style='dim')
     return Group(
-        Panel(status, title='知行有灵 · Thought into Action · 工作台', border_style='#b7a1e8'),
-        Panel(body, title='操作帮助' if show_help else '选择下一步', border_style='dim'),
+        Panel(Group(status, Text(''), *details), title='知行有灵 · Thought into Action · 工作台', border_style='#b7a1e8'),
+        Panel(body, title='↻ 选择重启范围' if show_restart else '操作帮助' if show_help else '选择下一步', border_style='dim'),
         Text(('操作未完成 · ' if failed else '') + message, style='red' if failed else '#63c5f8'),
         hints,
         Text(WINDOW_HINT, style='dim'),
@@ -528,12 +552,23 @@ def dashboard():
     from rich.live import Live
 
     message, failed, pending_stop, show_help = '直接按键开始；? 查看操作帮助。', False, 0., False
+    show_restart = False
 
     def view():
-        return dashboard_view(current_run(), latest_episode(), message, failed, show_help)
+        return dashboard_view(current_run(), latest_episode(), message, failed, show_help, show_restart)
 
     def operate(key):
-        nonlocal pending_stop, show_help
+        nonlocal pending_stop, show_help, show_restart
+        if key == 'r':
+            show_restart = not show_restart
+            return '选择重启范围：1 界面 · 2 robot · 3 相机；R 或 Esc 返回。' if show_restart else '已返回操作列表。'
+        if show_restart:
+            if key not in RESTART_TARGETS:
+                return '请选择 1 / 2 / 3，或按 R 返回。'
+            target = RESTART_TARGETS[key][0]
+            result = type_command(f'./run.sh bench restart --target {target}')
+            show_restart = False
+            return result
         if key == '?':
             show_help = not show_help
             return '再次按 ? 返回操作列表。' if show_help else '直接按键，无需回车。'
@@ -591,12 +626,15 @@ def dashboard():
                 if key == '\x1b':  # arrow / function keys are not actions
                     while select.select([sys.stdin], [], [], .05)[0]:
                         os.read(sys.stdin.fileno(), 1024)
+                    if show_restart:
+                        show_restart = False
+                        message, failed, shown = '已取消重启选择。', False, 0.
                     continue
                 if key in '\r\n ':
                     continue
                 try:
                     message, failed = operate(key), False
-                except (OSError, ValueError, RuntimeError) as exc:
+                except (OSError, ValueError, RuntimeError, EOFError) as exc:
                     message, failed = str(exc), True
                 shown = 0.
     finally:
@@ -605,13 +643,27 @@ def dashboard():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('action', nargs='?', default='start', choices=('start', 'stop', 'status', '_dashboard'))
+    parser.add_argument('action', nargs='?', default='start', choices=('start', 'stop', 'restart', 'status', '_dashboard'))
     parser.add_argument('--detach', action='store_true', help='start: create without attaching')
+    parser.add_argument('--target', choices=('interfaces', 'robot', 'camera'), default='interfaces',
+                        help='restart: interfaces (web/UI), robot (original launch configuration), or camera (shared service)')
     args = parser.parse_args(argv)
     if args.action == '_dashboard':
         dashboard()
     elif args.action == 'stop':
         stop()
+    elif args.action == 'restart':
+        from embodied.applications.workstation.restart import restart
+        confirmed = False
+        if args.target == 'robot':
+            found = owned_run()
+            if found and found[1].get('backend') == 'real':
+                print('真机重启会短暂进入 SDK 阻尼。' + ('原生 Quest 模式重新启动会回 Home。' if not found[1].get('managed') else ''))
+                if not sys.stdin.isatty() or input('已支撑好机械臂，开始重启？[y/N] ').strip().lower() != 'y':
+                    print('未重启 robot。')
+                    return 0
+            confirmed = True
+        print(restart(args.target, robot_confirmed=confirmed))
     elif args.action == 'status':
         found = current_run()
         print(f'工作台：{"运行中" if exists() else "未运行"}（tmux 会话 {SESSION}）')
@@ -624,5 +676,5 @@ def main(argv=None):
 if __name__ == '__main__':
     try:
         raise SystemExit(main())
-    except (OSError, ValueError, RuntimeError) as exc:
+    except (OSError, ValueError, RuntimeError, EOFError) as exc:
         raise SystemExit(f'工作台：{exc}')
