@@ -96,6 +96,7 @@ def kernel_rows():
         rows.extend(('反馈' if i == 0 else '', line)
                     for i, line in enumerate(bench.kernel_summary(run, identity)[1:]))
         hints = ['P  预抓取位       H  回零位       空格 / S  停止本面板动作并保持',
+                 'D  真机阻尼（扶住机械臂，再按 D 确认；退出内核）',
                  '按键直接执行；运动中不排队。速度使用后端每轴上限，实际峰值由路径及加速度 / jerk 决定。',
                  'Ctrl+B z 展开原始日志；再次按下恢复面板。',
                  '内核日志：' + bench.relative(run / 'backend.log')]
@@ -612,7 +613,7 @@ def render(state, service=None):
     sections.append(Text('Ctrl+B → 1 返回总控 · Ctrl+B → D 离开工作台 · R ' +
                          ('连接 / 刷新' if title == TITLES['vr'] else '重试 / 刷新' if service is not None else '刷新') +
                          (' · W 模拟佩戴 · U 取消模拟佩戴' if title == TITLES['vr'] else '') +
-                         (' · P 预抓取 · H 回零 · 空格停止' if title == TITLES['kernel'] else '') +
+                         (' · P 预抓取 · H 回零 · 空格停止 · D 阻尼' if title == TITLES['kernel'] else '') +
                          (' · W 打开浏览器' if service is not None and service.role == 'web' else ''), style='dim'))
     return Group(*sections)
 
@@ -701,7 +702,7 @@ def main(argv=None):
                 if vr is not None and key in ('w', 'u'):
                     vr.set_wearing(key == 'w')
                     refreshed = 0.
-                if robot is not None and key in ('p', 'h', ' ', 's'):
+                if robot is not None and key is not None:
                     from embodied.applications.workstation import bench
                     robot.press(key, bench.current_run())
                     refreshed = 0.

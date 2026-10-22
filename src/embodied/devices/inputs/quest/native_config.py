@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 
 from embodied.control.ipc.services import validate_prefix
+from embodied.control.motion_limits import DEFAULT_PATH, validate_native_router
 
 
 def _toml(data: dict, section: str = "") -> str:
@@ -35,6 +36,7 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
     Native coordinator and routers retain the original input/control policy.
     """
     validate_prefix(prefix)
+    motion = validate_native_router(json.loads(DEFAULT_PATH.read_text())['native_router'])
     if not math.isfinite(gripper_width) or gripper_width < 0:
         raise ValueError("gripper_width must be nonnegative and finite")
     if not math.isfinite(base_yaw_deg):
@@ -73,7 +75,7 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
                      grip_threshold=grip_threshold, gate_topic=gate, health_topic=arm_health),
                 dict(route_id="gripper", input_kind="trigger", controller_input_topic=inp,
                      trigger_max_width_m=float(gripper_width), parallel_topic=parallel, health_topic=grip_health)])
-    common = dict(leader_channel_id="xr.right_controller", ruckig_smoothing_enabled=False,
+    common = dict(leader_channel_id="xr.right_controller", ruckig_smoothing_enabled=motion['smoothing_enabled'],
                   control_rate_hz=250.0, control_group_id=group,
                   relative_hold_timeout_ms=30, relative_fault_timeout_ms=100)
     arm = dict(common, process_id=f"{prefix}.arm", follower_channel_id="robot.arm",
@@ -84,8 +86,7 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
                mapping="cartesian", cartesian_relative=True, cartesian_orientation_frame="base",
                cartesian_position_scales=list(position_scale), leader_gate_topic=gate,
                follower_motion_limits=dict(cartesian=dict(
-                   max_linear_velocity=1.0, max_linear_acceleration=10.0, max_linear_jerk=100.0,
-                   max_angular_velocity=2.0, max_angular_acceleration=20.0, max_angular_jerk=200.0,
+                   **motion['cartesian'],
                    max_linear_tracking_error=.05, max_angular_tracking_error=.1)))
     gripper = dict(common, process_id=f"{prefix}.gripper", follower_channel_id="robot.gripper",
                    leader_state_kind="parallel_position", leader_state_topic=parallel,
@@ -93,7 +94,7 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
                    follower_state_kind="parallel_position", follower_state_topic=f"{robot_root}/gripper/states/parallel_position",
                    follower_mode_info_topic=f"{robot_root}/gripper/info/mode", route_health_topic=grip_health,
                    mapping="parallel", group_permit_topic=permit, group_permit_timeout_ms=100,
-                   follower_motion_limits=dict(max_velocity=[.5], max_acceleration=[5.0], max_jerk=[50.0], max_tracking_error=[.02]),
+                   follower_motion_limits=dict({key: [value] for key, value in motion['gripper'].items()}, max_tracking_error=[.02]),
                    command_defaults=dict(parallel_mit_kp=[1.0], parallel_mit_kd=[0.0]))
     configs = dict(xrobot=xrobot, coordinator=coordinator, arm=arm, gripper=gripper)
     if gripper_width == 0:

@@ -30,7 +30,7 @@ def main(argv=None):
     if not args.headless and not sys.stdin.isatty():
         parser.error("可视化示例需要交互终端；无人值守使用 --headless")
     try:
-        with Robot.sim(viewer=not args.headless, speed=.5) as robot:
+        with Robot.sim(viewer=not args.headless) as robot:
             print(f"MuJoCo 仿真 · {robot.run}", flush=True)
             if not args.headless:
                 print("窗口仅显示反馈；按终端 Ctrl+C 结束本次仿真。", flush=True)

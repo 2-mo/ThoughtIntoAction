@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from mcap.reader import make_reader
-from legacy.robot_control.motor_feedback import decode_feedback, MotorFeedback
+from embodied.devices.robots.arx5.motor_feedback import decode_feedback, MotorFeedback
 from embodied.data.episode.mcap_io import RecordWriter
 
 TYPES = {1:'EC_A4310', 2:'EC_A4310', 4:'EC_A4310', 5:'DM_J4310', 6:'DM_J4310', 7:'DM_J4310', 8:'DM_J4310'}
@@ -30,7 +30,7 @@ class MotorFeedbackTests(unittest.TestCase):
         self.assertIsNone(decode_feedback(1,bytes(7),TYPES))
 
     def test_missing_and_stale_data_never_becomes_zero_or_valid(self):
-        with patch('legacy.robot_control.motor_feedback.socket.socket', side_effect=OSError('offline')):
+        with patch('embodied.devices.robots.arx5.motor_feedback.socket.socket', side_effect=OSError('offline')):
             observer=MotorFeedback('offline',[1,2,4,5,6,7],list(TYPES.values())[:6],8,'DM_J4310')
         self.addCleanup(observer.close)
         self.assertTrue(all(not m['valid'] and m['current_a'] is None for m in observer.snapshot()['motors']))
@@ -38,7 +38,7 @@ class MotorFeedbackTests(unittest.TestCase):
         observer.error=None
         observer.latest[1]={**decode_feedback(1,bytes.fromhex('207faf7ff8057482'),TYPES),'host_received_monotonic_ns':now}
         self.assertTrue(observer.snapshot()['motors'][0]['valid'])
-        with patch('legacy.robot_control.motor_feedback.time.monotonic_ns',return_value=now+300_000_000):
+        with patch('embodied.devices.robots.arx5.motor_feedback.time.monotonic_ns',return_value=now+300_000_000):
             snapshot=observer.snapshot()
         self.assertEqual(snapshot['motors'][0]['feedback_status'],'stale')
         self.assertIsNone(snapshot['motors'][0]['current_a'])

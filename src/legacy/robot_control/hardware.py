@@ -151,7 +151,7 @@ class OfficialX5HardwareAdapter:
             self.close()
             raise
 
-        from legacy.robot_control.motor_feedback import MotorFeedback
+        from embodied.devices.robots.arx5.motor_feedback import MotorFeedback
         self._motor_feedback = MotorFeedback(can_port, self.robot_config.motor_id,
             [t.name for t in self.robot_config.motor_type], self.robot_config.gripper_motor_id,
             self.robot_config.gripper_motor_type.name)

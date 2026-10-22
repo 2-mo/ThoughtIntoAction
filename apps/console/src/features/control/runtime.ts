@@ -146,7 +146,7 @@ const MOTION_STATE_UI_INTERVAL_MS = 100;
 
 export function getMotionSpeedIndex() {
   const value = Number(ui.motionSpeed?.value);
-  if (!Number.isFinite(value)) return MOTION_SPEED_TIERS.indexOf(10);
+  if (!Number.isFinite(value)) return MOTION_SPEED_TIERS.length - 1;
   return Math.max(0, Math.min(
     MOTION_SPEED_TIERS.length - 1,
     Math.round(value),
@@ -154,7 +154,7 @@ export function getMotionSpeedIndex() {
 }
 
 export function getMotionSpeedPercent() {
-  return MOTION_SPEED_TIERS[getMotionSpeedIndex()] ?? 10;
+  return MOTION_SPEED_TIERS[getMotionSpeedIndex()] ?? 100;
 }
 
 export function getMotionSpeedProgress() {

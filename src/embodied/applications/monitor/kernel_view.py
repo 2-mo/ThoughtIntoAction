@@ -36,6 +36,19 @@ def discover_run(directory=None):
     return None
 
 
+def open_diagnostics(descriptor):
+    """Optional receive-only driver observer; never construct a control backend."""
+    if descriptor.get('backend') != 'real':
+        return None
+    plugin = (descriptor.get('plugins') or {}).get('robot')
+    if plugin is None:
+        return None
+    from embodied.contracts.registry import Registry
+    factory = Registry().load('robot', plugin, runtime='control')
+    observe = getattr(factory, 'open_diagnostics', None)
+    return observe(descriptor) if observe is not None else None
+
+
 def kernel_packet(robot, tick, identity, robot_config=None, data_contract=None):
     """Keep measured feedback, submitted targets and SDK output distinct."""
     feedback = tick['feedback']
@@ -135,12 +148,16 @@ def collection_snapshot(identity, roots):
 class KernelMonitor:
     """A latest-only observer whose lifetime is independent from the robot."""
 
-    def __init__(self, directory=None, *, reader_factory=RuntimeReader, finder=discover_run, episode_roots=None, model_factory=RuntimeModel):
+    def __init__(self, directory=None, *, reader_factory=RuntimeReader, finder=discover_run, episode_roots=None, model_factory=RuntimeModel,
+                 diagnostics_factory=open_diagnostics):
         self.pinned = directory
         self.reader_factory, self.finder = reader_factory, finder
         self.roots = episode_roots if episode_roots is not None else [PROJECT_ROOT / 'outputs/datasets/runtime',
             resolve_path(load_config()['paths']['dataset_dir']) / 'mujoco']
         self.reader = self.directory = self.identity = self.latest = None
+        self.diagnostics_factory = diagnostics_factory
+        self.diagnostics = None
+        self.diagnostics_error = None
         self.robot_config = {}
         self.data_contract = None
         self.model_factory = model_factory
@@ -155,6 +172,10 @@ class KernelMonitor:
         self.collection = collection_snapshot(None, [])
 
     def _disconnect(self):
+        if self.diagnostics is not None:
+            self.diagnostics.close()
+            self.diagnostics = None
+        self.diagnostics_error = None
         if self.reader is not None:
             self.reader.close()
             self.reader = None
@@ -187,6 +208,11 @@ class KernelMonitor:
                 self.reader = self.reader_factory(self.directory, 'latest', timeout=.5)
                 self.robot_config = self.reader.descriptor.get('parameters', {}).get('effective_robot_config', {})
                 self.data_contract = runtime_contract(self.reader.descriptor)
+                try:
+                    self.diagnostics = self.diagnostics_factory(self.reader.descriptor)
+                except (OSError, ValueError, KeyError, TypeError) as exc:
+                    # Diagnostics failure must not interrupt kinematic telemetry.
+                    self.diagnostics_error = str(exc)
                 if self.scene and self.model_runtime_id != self.identity['runtime_id']:
                     self.scene.set_model(self.model_factory(self.reader.descriptor))
                     self.model_runtime_id = self.identity['runtime_id']
@@ -195,7 +221,12 @@ class KernelMonitor:
                 raise EOFError(tick.get('error') or '内核已退出；等待下一次运行')
             if tick.get('feedback'):
                 if self.scene and time.monotonic() >= self.display_at:
-                    self.scene.accept(kernel_packet(self.scene.robot, tick, self.identity, self.robot_config, self.data_contract))
+                    packet = kernel_packet(self.scene.robot, tick, self.identity, self.robot_config, self.data_contract)
+                    if self.diagnostics is not None:
+                        packet['motor_diagnostics'] = self.diagnostics.snapshot()
+                    elif self.diagnostics_error:
+                        packet['motor_diagnostics'] = {'motors': [], 'error': self.diagnostics_error}
+                    self.scene.accept(packet)
                     self.display_at = time.monotonic() + 1 / 30
                 with self.lock:
                     self.latest, self.error = tick, None

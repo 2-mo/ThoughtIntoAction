@@ -90,17 +90,11 @@ class SettlingWindow:
     measured position span by the same velocity budget. No gain or motion limit
     is changed. Missing/invalid samples cannot establish a settled interval.
     """
-    duration = .25
-    position_limit = .0035
-    velocity_limit = .02
-    max_gap = .1
-
-    def __init__(self, settings=None):
-        settings = settings or {}
-        self.duration = settings.get('duration_s', self.duration)
-        self.position_limit = settings.get('position_tolerance_rad', self.position_limit)
-        self.velocity_limit = settings.get('velocity_tolerance_rad_s', self.velocity_limit)
-        self.max_gap = settings.get('max_sample_gap_s', self.max_gap)
+    def __init__(self, settings):
+        self.duration = settings['duration_s']
+        self.position_limit = settings['position_tolerance_rad']
+        self.velocity_limit = settings['velocity_tolerance_rad_s']
+        self.max_gap = settings['max_sample_gap_s']
         self.samples = deque()
 
     def clear(self):
@@ -384,6 +378,14 @@ class CommandEngine:
                 elif elapsed > plan['times'][-1] + self.motion_limits.settling['timeout_s']:
                     op['status'] = 'failed'
                     op['reason'] = 'Robot did not settle'
+                    errors = np.abs(state.q - q)
+                    op['settling'] = {
+                        'joint_error_rad': errors.tolist(), 'worst_joint': int(np.argmax(errors)) + 1,
+                        'max_joint_error_rad': float(np.max(errors)),
+                        'position_tolerance_rad': self.settling.position_limit,
+                        'trajectory_duration_s': float(plan['times'][-1]),
+                        'settling_elapsed_s': elapsed - float(plan['times'][-1]),
+                    }
                     self.operation = None
                     self.completed_target = None
                     self.reset_reference = True
@@ -394,6 +396,7 @@ class CommandEngine:
         elif (self.owner and candidate is not None and not self.ingress_paused
               and candidate.epoch == self.epoch and now < candidate.expires_at):
             command = candidate.command
+            command.joint_step_limit = self.motion_limits.step_limits()
             self.source_sequence = candidate.sequence
             self.phase = candidate.phase
         elif self.completed_target is not None:
@@ -440,12 +443,14 @@ class MotionPlanner:
     def plan(self, request, snapshot, now):
         start = finite_vector(snapshot['q'], len(self.config.park_q), 'start joint position')
         kind = request.get('kind', 'movej')
-        from embodied.motion.cartesian_execution import tcp_limits, plan_path, apply_tcp_limits
+        from embodied.motion.cartesian_execution import plan_path, apply_tcp_limits
+        from embodied.motion.validation import tcp_limits
         requested_tcp = tcp_limits(request)
         if requested_tcp and kind not in ('movel', 'move_path'):
             raise ValueError('TCP limits apply only to movel and move_path')
         limits = self.motion_limits.resolve(request)
         if kind in ('movel', 'move_path'):
+            requested_tcp = self.motion_limits.resolve_cartesian(request)
             limits['tcp'] = requested_tcp
         velocity_limit = np.asarray(limits['joint_velocity_rad_s'])
         acceleration_limit, jerk_limit = limits['acceleration'], limits['jerk']

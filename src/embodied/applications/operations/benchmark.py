@@ -162,7 +162,7 @@ def compare_reports(current, baseline):
             'baseline_runtime': baseline['runtime'], 'current_runtime': current['runtime']}
 
 
-def benchmark(robot, *, joint=0, delta_rad=math.radians(10), repeats=1, speed=0., output='outputs/benchmarks'):
+def benchmark(robot, *, joint=0, delta_rad=math.radians(10), repeats=1, speed=None, output='outputs/benchmarks'):
     """Execute explicit out-and-back MoveJ pairs and retain the exact raw ticks.
 
     The caller owns Robot's lifecycle. Existing limits and completion rules apply;

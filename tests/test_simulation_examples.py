@@ -15,6 +15,12 @@ from examples.simulation import control as simulation
 
 
 class SimulationExamplesTests(unittest.TestCase):
+    def test_examples_do_not_override_kernel_motion_defaults(self):
+        for name in ('movej', 'movel', 'move_path', 'teach_return'):
+            args = vars(common._parser(name, 'fixture').parse_args([]))
+            for key in ('speed', 'acceleration', 'jerk', 'tcp_speed', 'angular_speed'):
+                self.assertIsNone(args.get(key))
+
     def test_viewer_changes_only_display_while_kernel_remains_simulation_idle(self):
         for viewer in (False, True):
             with self.subTest(viewer=viewer), tempfile.TemporaryDirectory() as folder:
@@ -26,7 +32,7 @@ class SimulationExamplesTests(unittest.TestCase):
                     directory.mkdir(parents=True)
                     (directory / 'runtime.json').write_text(json.dumps({'supervisor_pid': pid}))
                     (directory / 'runtime.ready').touch()
-                with patch.object(control, 'CONTROL', root), \
+                with patch.object(control, 'CONTROL_RUNS', root / 'run'), \
                      patch.object(control.subprocess, 'Popen', return_value=runtime) as start, \
                      patch.object(control.time, 'sleep'), \
                      patch.dict(os.environ, {'DISPLAY': ':99'}):
@@ -90,7 +96,7 @@ class SimulationExamplesTests(unittest.TestCase):
              patch('builtins.input', side_effect=AssertionError('unexpected prompt')), \
              redirect_stdout(io.StringIO()):
             self.assertEqual(simulation.main(['--headless']), 0)
-        robot.sim.assert_called_once_with(viewer=False, speed=.5)
+        robot.sim.assert_called_once_with(viewer=False)
         robot.real.assert_not_called()
         run.assert_called_once()
         robot.sim.return_value.__exit__.assert_called_once()

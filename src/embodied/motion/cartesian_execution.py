@@ -8,24 +8,13 @@ from scipy.spatial.transform import Rotation
 from embodied.motion.geometry import CartesianWaypoint, build_cartesian_path
 from embodied.motion.profiles import smoothstep9_fraction, smoothstep9_derivatives
 from embodied.motion.cartesian_time import plan_scalar_progress
-from embodied.motion.validation import finite_vector
+from embodied.motion.validation import finite_vector, TCP_UNITS
 
-TCP_UNITS = {'tcp_speed': 'm/s', 'tcp_acceleration': 'm/s^2', 'tcp_jerk': 'm/s^3',
-             'angular_speed': 'rad/s', 'angular_acceleration': 'rad/s^2', 'angular_jerk': 'rad/s^3'}
 METRICS = {'tcp_speed': 'peak_tcp_speed_m_s', 'tcp_acceleration': 'peak_tcp_acceleration_m_s2',
            'tcp_jerk': 'peak_tcp_jerk_m_s3', 'angular_speed': 'peak_angular_speed_rad_s',
            'angular_acceleration': 'peak_angular_acceleration_rad_s2', 'angular_jerk': 'peak_angular_jerk_rad_s3'}
 
 
-def tcp_limits(request):
-    result = {}
-    for name in TCP_UNITS:
-        if name in request:
-            value = request[name]
-            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
-                raise ValueError(f'{name} must be finite and positive ({TCP_UNITS[name]})')
-            result[name] = float(value)
-    return result
 
 
 class CartesianSplineTrajectory:

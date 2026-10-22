@@ -134,16 +134,16 @@
                 <button type="button" data-mode="hand"><i class="fa-solid fa-hand" aria-hidden="true"></i>Hand</button>
               </div>
 
-              <div id="motionSpeedControl" class="motion-speed" title="100% 对应硬件速度上限；其余档位按比例缩放">
+              <div id="motionSpeedControl" class="motion-speed" title="100% 使用内核 motion.json 的生效速度；其余档位按比例缩放">
                 <i class="motion-speed-icon fa-solid fa-gauge-high" aria-hidden="true"></i>
                 <span class="motion-speed-selector">
                   <span class="motion-speed-ticks" aria-hidden="true">
                     <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
                   </span>
-                  <input id="motionSpeed" type="range" min="0" max="9" step="1" value="5"
+                  <input id="motionSpeed" type="range" min="0" max="9" step="1" value="9"
                          aria-label="机械臂速度百分比" />
                 </span>
-                <output id="motionSpeedValue" for="motionSpeed">10%</output>
+                <output id="motionSpeedValue" for="motionSpeed">100%</output>
               </div>
 
               <div id="xyzControlPane" class="robot-control-pane xyz-control-pane">

@@ -15,7 +15,7 @@
 ```python
 from embodied import Robot
 
-with Robot.sim(viewer=True, speed=.5) as robot:
+with Robot.sim(viewer=True) as robot:
     q = robot.q
     q[0] += .1
     robot.movej(q)
@@ -128,7 +128,7 @@ examples/
 ## 常用动作怎么写
 
 ```python
-with Robot.sim(speed=.5) as robot:
+with Robot.sim() as robot:
     start = robot.teach()
     robot.jog(joint=0, delta=.1)
     robot.return_to(start)
@@ -175,8 +175,8 @@ Python 关节编号从 0 开始；示例命令行的 `--joint 1` 表示第一个
 `offset` 用 m，`frame="base"` 沿基座轴移动，`frame="tool"` 沿当前工具轴移动。
 
 `speed` / `acceleration` / `jerk` 是关节约束，单位为 rad/s、rad/s²、rad/s³；
-**MoveL 的 speed 当前也不是末端 m/s**。运动示例默认使用 `.5 / 2 / 10`。
-`speed=0` 使用后端每轴上限；离线轨迹没有后端，速度必须为正数。
+**MoveL 的 speed 当前也不是末端 m/s**。运动示例不覆盖内核的默认参数；统一在 [`configs/control/motion.json`](../../configs/control/motion.json) 中设置。
+`speed=0` 使用后端每轴上限；离线轨迹使用同一配置和机器人模型的名义能力，不读取硬件。
 
 MoveL 和 `move_path` 的末端约束使用 `tcp_speed/tcp_acceleration/tcp_jerk`（m/s、m/s²、m/s³）；
 旋转约束使用 `angular_speed/angular_acceleration/angular_jerk`（rad/s、rad/s²、rad/s³）。

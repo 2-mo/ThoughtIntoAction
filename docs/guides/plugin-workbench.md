@@ -103,7 +103,7 @@ flowchart LR
 
 `movej --q ...`、`movel --pose x y z qx qy qz qw` 直接完成预览、提交、等待。`preview` 不获取控制权；计划有效期 30 秒，执行核验模型、owner epoch、起点与速度。已有文件不会被覆盖。操作返回 ID，可从 `status` 查询 running/completed/cancelled/failed；Ctrl+C 取消当前操作并释放控制权。
 
-MoveJ 复用 arx5_test 的九次 smoothstep。MoveL 使用 arx IK、样条连接关节路径、时间拉伸及离散速度/加速度/jerk 检查；奇异点附近可能明显变慢或拒绝。默认速度 0.15 rad/s，允许 0.01–0.5 rad/s，加速度 0.5 rad/s²、jerk 2 rad/s³，单计划最长 60 秒。当前不提供碰撞检测；预览明确返回 `collision_check=none`。
+MoveJ 使用共享 Ruckig 轨迹。MoveL 使用所选机器人的 IK、样条连接关节路径、时间拉伸及离散速度/加速度/jerk 检查；奇异点附近可能明显变慢或拒绝。速度、加速度、jerk、TCP 约束与到位条件统一在 [`configs/control/motion.json`](../../configs/control/motion.json)，含义见 [运动参数](motion-settings.md)。单计划最长 60 秒。当前不提供碰撞检测；预览明确返回 `collision_check=none`。
 
 ### 手机与切换来源
 

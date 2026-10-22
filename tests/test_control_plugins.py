@@ -54,6 +54,8 @@ class ControlPluginTests(unittest.TestCase):
             return {'policy': 'test-hold'}
         driver = SimpleNamespace(preflight=lambda config: {'ready': True},
             resources=lambda config: ('offline-test',), open=lambda *a, **kw: backend,
+            capabilities=lambda config, parameters: {'joint_velocity_limits_rad_s': [1.] * len(config.park_q),
+                                                     'source': {'kind': 'test'}},
             shutdown=shutdown)
         registry = SimpleNamespace(spec=lambda *a, **kw: SimpleNamespace(hardware=False),
                                    create=lambda *a, **kw: driver)

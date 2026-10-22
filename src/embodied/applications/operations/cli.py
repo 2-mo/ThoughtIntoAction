@@ -10,9 +10,9 @@ from .robot import Robot
 
 
 def add_motion_options(parser):
-    parser.add_argument('--speed', type=float, help='joint speed cap, rad/s; 0 uses backend per-joint limits (default: 0.15)')
-    parser.add_argument('--acceleration', type=float, help='planned joint acceleration, rad/s² (kernel default: 2)')
-    parser.add_argument('--jerk', type=float, help='planned joint jerk, rad/s³ (kernel default: 10)')
+    parser.add_argument('--speed', type=float, help='joint speed cap, rad/s; 0 uses backend per-joint limits (omitted: runtime motion.json)')
+    parser.add_argument('--acceleration', type=float, help='planned joint acceleration, rad/s² (omitted: runtime motion.json)')
+    parser.add_argument('--jerk', type=float, help='planned joint jerk, rad/s³ (omitted: runtime motion.json)')
 
 
 def main(argv=None):

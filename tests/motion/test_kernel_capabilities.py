@@ -32,15 +32,15 @@ class ConsoleCapabilities(unittest.IsolatedAsyncioTestCase):
             with self.subTest(percent=percent):
                 await self.console.joint_motion([0.] * 7, {'speed_percent': percent})
                 self.console.session.preview.assert_called_with('movej', q=[0.] * 7,
-                                                                 speed=0, speed_scale=percent / 100)
+                                                                 speed_scale=percent / 100)
         await self.console.preview_park({'speed_percent': 75})
-        self.console.session.preview.assert_called_with('movej', q=[0.] * 7, speed=0, speed_scale=.75)
+        self.console.session.preview.assert_called_with('movej', q=[0.] * 7, speed_scale=.75)
 
     async def test_movel_uses_the_same_kernel_velocity_scale(self):
         await self.console.preview_xyz({'x_mm': 0, 'y_mm': 0, 'z_mm': 10, 'speed_percent': 50})
         args, kwargs = self.console.session.preview.call_args
         self.assertEqual(args, ('movel',))
-        self.assertEqual(kwargs['speed'], 0)
+        self.assertNotIn('speed', kwargs)
         self.assertEqual(kwargs['speed_scale'], .5)
 
     async def test_joint_selection_uses_model_dimensions(self):

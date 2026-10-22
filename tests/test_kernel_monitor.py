@@ -6,7 +6,7 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from embodied.applications.monitor.kernel_view import KernelMonitor, collection_snapshot, kernel_packet
+from embodied.applications.monitor.kernel_view import KernelMonitor, collection_snapshot, kernel_packet, open_diagnostics
 
 
 def tick(runtime_id='one'):
@@ -19,6 +19,52 @@ def tick(runtime_id='one'):
 
 
 class KernelMonitorTests(unittest.TestCase):
+    def test_motor_diagnostics_reaches_web_and_closes_with_runtime(self):
+        identity = {'backend': 'real', 'runtime_id': 'one', 'boot_id': 'this-boot', 'input': 'idle'}
+        reader, diagnostics, scene = Mock(), Mock(), Mock()
+        reader.descriptor = {**identity, 'joint_count': 6, 'parameters': {
+            'effective_robot_config': {'gripper_max_width': .082}}}
+        reader.read.return_value = tick()
+        diagnostics.snapshot.return_value = {'source': 'socketcan_rx', 'motors': [{'motor_id': 1, 'current_a': .12}]}
+        monitor = KernelMonitor(reader_factory=Mock(return_value=reader),
+            finder=Mock(return_value=(Path('/fake/one'), identity)), episode_roots=[],
+            model_factory=Mock(return_value=scene.robot), diagnostics_factory=Mock(return_value=diagnostics))
+        monitor.scene = scene
+        monitor.step()
+        packet = scene.accept.call_args.args[0]
+        self.assertEqual(packet['motor_diagnostics'], diagnostics.snapshot.return_value)
+        self.assertIsNone(packet['actual_torque'])  # SDK command torque is never measured torque.
+        monitor.close()
+        diagnostics.close.assert_called_once()
+        reader.close.assert_called_once()
+
+    def test_diagnostics_errors_do_not_drop_joint_feedback(self):
+        identity = {'backend': 'real', 'runtime_id': 'one', 'boot_id': 'this-boot', 'input': 'idle'}
+        reader, scene = Mock(), Mock()
+        reader.descriptor = {**identity, 'joint_count': 6, 'parameters': {}}
+        reader.read.return_value = tick()
+        monitor = KernelMonitor(reader_factory=Mock(return_value=reader),
+            finder=Mock(return_value=(Path('/fake/one'), identity)), episode_roots=[],
+            model_factory=Mock(return_value=scene.robot), diagnostics_factory=Mock(side_effect=OSError('no CAN')))
+        monitor.scene = scene
+        monitor.step()
+        self.assertEqual(scene.accept.call_args.args[0]['motor_diagnostics']['error'], 'no CAN')
+        self.assertEqual(monitor.latest, reader.read.return_value)
+        monitor.close()
+
+    def test_simulation_never_opens_can_and_arx_uses_recorded_motor_mapping(self):
+        from embodied.devices.robots.arx5.plugin import Hardware
+        with patch('embodied.contracts.registry.Registry.load') as load:
+            self.assertIsNone(open_diagnostics({'backend': 'sim', 'plugins': {'robot': 'arx.sim'}}))
+            load.assert_not_called()
+        descriptor = {'parameters': {'effective_robot_config': {'can_interface': 'fixture-can'}},
+            'backend_parameters': {'sdk_runtime': {'robot': {'motor_id': [4, 5],
+                'motor_type': ['MotorType.EC_A4310', 'MotorType.DM_J4310'],
+                'gripper_motor_id': 8, 'gripper_motor_type': 'MotorType.DM_J4310'}}}}
+        with patch('embodied.devices.robots.arx5.motor_feedback.MotorFeedback') as observer:
+            Hardware.open_diagnostics(descriptor)
+        observer.assert_called_once_with('fixture-can', [4, 5], ['EC_A4310', 'DM_J4310'], 8, 'DM_J4310')
+
     def test_packet_preserves_physical_feedback_and_separates_sdk_output(self):
         robot = Mock()
         robot.metadata.return_value = {'eef_frame': 'tcp_link'}

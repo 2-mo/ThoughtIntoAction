@@ -1,8 +1,32 @@
 {
   "defaults": {
-    "speed": 0.15,
+    "speed": 0,
     "acceleration": 2.0,
     "jerk": 10.0
+  },
+  "cartesian": {
+    "tcp_speed": null,
+    "tcp_acceleration": null,
+    "tcp_jerk": null,
+    "angular_speed": null,
+    "angular_acceleration": null,
+    "angular_jerk": null
+  },
+  "native_router": {
+    "smoothing_enabled": false,
+    "cartesian": {
+      "max_linear_velocity": 1.0,
+      "max_linear_acceleration": 10.0,
+      "max_linear_jerk": 100.0,
+      "max_angular_velocity": 2.0,
+      "max_angular_acceleration": 20.0,
+      "max_angular_jerk": 200.0
+    },
+    "gripper": {
+      "max_velocity": 0.5,
+      "max_acceleration": 5.0,
+      "max_jerk": 50.0
+    }
   },
   "settling": {
     "position_tolerance_rad": 0.0035,
