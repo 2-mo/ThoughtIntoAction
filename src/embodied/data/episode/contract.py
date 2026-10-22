@@ -56,9 +56,6 @@ def runtime_contract(descriptor):
         width = profile.get('gripper_max_width', descriptor.get('gripper_max_width'))
         if width is None and legacy:
             width = .082
-        # Existing six-axis descriptors predate the explicit gripper contract.
-        if width is None and count == 6:
-            width = .082
         contract = validate_contract({'schema': SCHEMA, 'representation': 'absolute_joint_position',
             'joint_names': names or [f'joint{i + 1}' for i in range(count)], 'joint_unit': 'rad',
             'gripper': {'name': 'gripper_m', 'unit': 'm', 'range': [0., width]},

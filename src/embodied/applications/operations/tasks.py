@@ -88,7 +88,10 @@ class Task:
     def __enter__(self):
         if self._data["status"] != "pending":
             raise RuntimeError("Task contexts cannot be reused")
-        self.robot._connected()
+        identity = self.robot._connected().identity
+        if any(not isinstance(identity.get(key), str) or not identity[key] for key in ('runtime_id', 'boot_id')):
+            raise ValueError('Task events require the connected runtime and host boot identity')
+        self._data.update(runtime_id=identity['runtime_id'], boot_id=identity['boot_id'])
         self.directory = Path(self.robot.run) / "tasks" / self._data["task_id"]
         self.directory.mkdir(parents=True, exist_ok=False)
         self._data.update(status="running", started_unix_ns=time.time_ns(),
@@ -119,6 +122,7 @@ class Task:
     def _event(self, index, phase, status, started, *, result=None, error=None, notify=True):
         now = time.monotonic_ns()
         event = {"schema_version": 1, "task_id": self._data["task_id"],
+                 "runtime_id": self._data["runtime_id"], "boot_id": self._data["boot_id"],
                  "task_name": self._data["task_name"], "phase_index": index, "phase": phase,
                  "status": status, "time_unix_ns": time.time_ns(), "host_monotonic_ns": now,
                  "elapsed_s": (now - started) / 1e9,

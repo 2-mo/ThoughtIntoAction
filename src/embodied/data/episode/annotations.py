@@ -37,6 +37,7 @@ def _source(episode):
     # Outcome/review history is editable metadata, not a new recording identity.
     identity = {key: metadata.get(key) for key in ('id', 'schema', 'schema_version', 'kind', 'task',
         'started_monotonic_ns', 'data_contract', 'camera', 'cameras', 'anchor_camera', 'action_definition')}
+    identity['runtime'] = {key: (metadata.get('runtime') or {}).get(key) for key in ('runtime_id', 'boot_id')}
     source = {'id': metadata['id'], 'manifest_sha256': _digest(episode / 'episode.json'),
               'records_sha256': _digest(episode / 'episode.mcap'),
               'identity_sha256': hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()}
@@ -164,6 +165,9 @@ def annotate_task_events(episode, events_path, *, annotator, confidence, camera_
     from embodied.data.episode.mcap_io import read_camera_records
     episode, events_path = Path(episode), Path(events_path)
     metadata, _ = _source(episode)
+    runtime = metadata.get('runtime') or {}
+    if any(not isinstance(runtime.get(key), str) or not runtime[key] for key in ('runtime_id', 'boot_id')):
+        raise ValueError('Task event alignment requires the recorded runtime and host boot identity')
     camera_id = camera_id or anchor_camera(metadata)
     if camera_id not in camera_metadata(metadata):
         raise ValueError('Task annotation camera is not recorded')
@@ -180,6 +184,8 @@ def annotate_task_events(episode, events_path, *, annotator, confidence, camera_
     for event in events:
         if not isinstance(event, dict) or event.get('schema_version') != 1:
             raise ValueError('Expected task event schema_version=1')
+        if any(event.get(key) != runtime[key] for key in ('runtime_id', 'boot_id')):
+            raise ValueError('Task events belong to a different runtime or host boot')
         key = (_text(event.get('task_id'), 'task_id'), event.get('phase_index'))
         phase, stamp = _text(event.get('phase'), 'phase'), event.get('host_monotonic_ns')
         if type(key[1]) is not int or key[1] < 0 or type(stamp) is not int or stamp <= 0 or stamp < previous_stamp:

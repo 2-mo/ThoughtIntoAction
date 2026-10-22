@@ -31,6 +31,7 @@ class FakeRobot:
     def __init__(self, run):
         self.run = Path(run)
         self.backend = "sim"
+        self.identity = {"runtime_id": "test", "boot_id": "test-boot"}
         self.pose = [.3, 0., .25, 0., 0., 0., 1.]
         self.calls = []
         self.operations = {}
@@ -101,6 +102,8 @@ class TaskPrimitiveTests(unittest.TestCase):
         self.assertEqual(saved, task.result)
         recorded = [json.loads(line) for line in (task.directory / "events.jsonl").read_text().splitlines()]
         self.assertEqual(recorded, events)
+        self.assertTrue(all(event['runtime_id'] == 'test' and event['boot_id'] == 'test-boot'
+                            for event in recorded))
         self.assertEqual(len(recorded), 2 * len(phases))
         self.assertEqual([e["phase_index"] for e in recorded], [i for i in range(len(phases)) for _ in (0, 1)])
         self.assertEqual([e["host_monotonic_ns"] for e in recorded],

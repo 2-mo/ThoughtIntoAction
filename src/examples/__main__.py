@@ -14,6 +14,7 @@ EXAMPLES = {
     "approach_retreat": ("tasks.approach_retreat", "任务阶段：接近、退离，自动保存时间轴"),
     "pick_place": ("tasks.pick_place", "二次观测与抓放模板；默认仿真空抓失败后停止"),
     "record": ("data.record", "robot.record：采集一段无相机诊断数据"),
+    "annotate": ("data.annotate", "用任务事件生成技能区间标注，在网页复核"),
     "offline_trajectory": ("planning.offline_trajectory", "离线生成关节轨迹，查看 q / dq / ddq"),
     "cartesian_blend": ("planning.cartesian_blend", "离线生成带圆角的笛卡尔几何路径（不是已实现的 MoveP）"),
 }

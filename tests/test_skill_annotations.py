@@ -64,6 +64,7 @@ def test_explicit_task_events_keep_failed_attempt_evidence_and_source_digest(tmp
     events = []
     for index, (phase, status, first, last) in enumerate([('grasp', 'completed', 0, 1), ('verify_grasp', 'failed', 2, 3)]):
         shared = {'schema_version': 1, 'task_id': 'task-one', 'phase_index': index,
+                  'runtime_id': 'test', 'boot_id': 'test-boot',
                   'phase': phase, 'operation_id': 'op-one'}
         events.extend([{**shared, 'status': 'started', 'host_monotonic_ns': stamps[first]},
                        {**shared, 'status': status, 'host_monotonic_ns': stamps[last],
@@ -76,6 +77,10 @@ def test_explicit_task_events_keep_failed_attempt_evidence_and_source_digest(tmp
     assert result['segments'][1]['phase'] == 'verify_grasp'
     assert any('status:failed' in item for item in result['segments'][1]['evidence'])
     assert len(result['source_events']['sha256']) == 64
+    for identity in ({'runtime_id': 'another-run'}, {'boot_id': 'another-boot'}):
+        source.write_text('\n'.join(json.dumps({**event, **identity}) for event in events))
+        with pytest.raises(ValueError, match='different runtime or host boot'):
+            annotate_task_events(episode, source, annotator='operator', confidence=.9)
     source.write_text(json.dumps(events[0]))
     with pytest.raises(ValueError, match='Unclosed task phases'):
         annotate_task_events(episode, source, annotator='operator', confidence=.9)

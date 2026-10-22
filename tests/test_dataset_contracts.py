@@ -16,7 +16,7 @@ from test_runtime_collection import tick
 
 def record_episode(root, *, count=7, gripper=True):
     names = [f'axis_{i}' for i in range(count)]
-    descriptor = {'runtime_id': 'test', 'joint_count': count, 'layout': {'version': 3}, 'backend': 'sim',
+    descriptor = {'runtime_id': 'test', 'boot_id': 'test-boot', 'joint_count': count, 'layout': {'version': 3}, 'backend': 'sim',
                   'parameters': {'model': {'manifest': {'sha256': 'example'}, 'joint_names': names},
                                  'effective_robot_config': {'park_q': [0.] * count,
                                                             'gripper_max_width': .12, 'name': 'example-arm'}}}
@@ -86,6 +86,11 @@ def test_declared_vectors_reject_wrong_dimensions_and_action_semantics(tmp_path)
         prepare_camera_episode(path)
     with pytest.raises(ValueError, match='Unsupported robot vector contract'):
         runtime_contract({'data_contract': {'schema': 'embodied.joint_vectors/1', 'representation': 'cartesian_delta'}})
+
+
+def test_six_axes_alone_do_not_imply_arx_gripper_calibration():
+    contract = runtime_contract({'joint_count': 6, 'layout': {'version': 3}})
+    assert contract['gripper']['range'] == [0., None]
 
 
 def test_original_schema_two_without_contract_remains_readable(tmp_path):
