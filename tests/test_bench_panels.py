@@ -13,6 +13,52 @@ from embodied.applications.workstation import bench, bench_panels as panels
 
 
 class BenchPanelTests(unittest.TestCase):
+    def test_vr_color_requires_valid_tracking_and_distinguishes_errors(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch('embodied.contracts.runtime.control.ControlClient') as client:
+            run = Path(directory)
+            self.assertEqual(panels.vr_rows(None)[0][0][1].level, 'waiting')
+            self.assertEqual(panels.vr_rows((run, {'input': 'none'}))[0][0][1].level, 'disabled')
+            found = (run, {'input': 'quest'})
+            self.assertEqual(panels.vr_rows(found)[0][0][1].level, 'waiting')
+            client.assert_not_called()
+            (run / 'commands.sock').touch()
+            for ingress, expected in [(None, 'waiting'), ({'ready': False}, 'waiting'),
+                                      ({'ready': True, 'armed': True, 'permit': True}, 'ready')]:
+                client.return_value.status.return_value = {'ingresses': {'native': ingress}}
+                self.assertEqual(panels.vr_rows(found)[0][0][1].level, expected)
+            client.return_value.status.side_effect = RuntimeError('Runtime feedback is stale')
+            state = panels.vr_rows(found)[0][0][1]
+            self.assertEqual(state.level, 'error')
+            self.assertIn('Runtime feedback is stale', str(state))
+
+    def test_arm_fault_is_red_in_both_the_dashboard_and_device_panel(self):
+        from rich.console import Console
+        from rich.color import Color
+
+        with tempfile.TemporaryDirectory() as directory, \
+             patch('embodied.contracts.runtime.control.ControlClient') as client, \
+             patch('embodied.applications.workstation.ports.summary', return_value=('测试端口', False)):
+            run = Path(directory)
+            found = (run, {'backend': 'sim', 'input': 'none'})
+            self.assertEqual(bench.kernel_summary(*found)[1].level, 'waiting')
+            (run / 'commands.sock').touch()
+            client.return_value.status.return_value = {'owner': None, 'q': [0] * 6,
+                'phase': 'hold', 'stopped': False, 'gripper_width': .04}
+            self.assertEqual(bench.kernel_summary(*found)[1].level, 'ready')
+            self.assertIn('仿真反馈', str(bench.kernel_summary(*found)[1]))
+            client.return_value.status.return_value['stopped'] = True
+            self.assertEqual(bench.kernel_summary(*found)[1].level, 'waiting')
+            client.return_value.status.side_effect = RuntimeError('feedback stale [green]')
+            with patch.object(bench, 'current_run', return_value=found):
+                views = [bench.dashboard_view(found, None, ''), panels.render(panels.snapshot('kernel'))]
+            console = Console(width=140, force_terminal=True, color_system='standard')
+            for view in views:
+                fragments = [s for s in console.render(view) if '状态读取失败' in s.text]
+                self.assertTrue(fragments)
+                self.assertTrue(all(s.style.color == Color.parse('red') for s in fragments))
+                self.assertTrue(any('[green]' in s.text for s in fragments))
+
     def test_monitor_opens_once_after_listening_and_ssh_keeps_url(self):
         with patch.object(panels, 'service_address', return_value=(18081, 'http://127.0.0.1:18081')), \
              patch.object(panels, 'service_host', return_value='127.0.0.1'), \
@@ -86,6 +132,9 @@ class BenchPanelTests(unittest.TestCase):
         self.assertNotIn('legacy-can', dict(states['kernel'][1])['配置'])
         self.assertIn('USB', str(states['vr'][2]))
         self.assertIn('等待 USB 相机连接', str(states['camera'][1]))
+        for role in ('kernel', 'vr'):
+            self.assertEqual(states[role][1][0][1].level, 'waiting')
+        self.assertEqual(dict(states['kernel'][1])['USB-CAN'].level, 'waiting')
 
     def test_missing_robot_interface_reports_configuration_without_guessing(self):
         with patch.object(bench, 'current_run', return_value=None), \
