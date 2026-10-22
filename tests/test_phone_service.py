@@ -64,6 +64,33 @@ class PhoneServiceTests(unittest.TestCase):
         self.assertIsNone(self.service.snapshot()['phone_pose'])
         self.assertIsNone(self.send(tracking_quality=TrackingQuality.LIMITED)['phone_pose'])
 
+    def test_standalone_source_exposes_alignment_channel_and_closes_its_lease(self):
+        client = self.enable_fake_robot(align=False)
+        with tempfile.TemporaryDirectory() as folder, \
+             patch.object(phone_service, 'SOCKET', Path(folder)/'phone.sock'), \
+             patch.object(phone_service, 'LATCH', Path(folder)/'stop.json'), \
+             patch.object(self.controller, 'start'):  # setUp already bound its isolated UDP port
+            worker = threading.Thread(target=self.controller.run, kwargs={'duration': .25})
+            worker.start()
+            try:
+                deadline = time.monotonic() + 1
+                while not phone_service.SOCKET.exists() and time.monotonic() < deadline:
+                    time.sleep(.005)
+                self.sock.sendto(encode_packet(replace(GOLDEN_POSE, session_id=1, sequence=2,
+                    client_time_ns=time.monotonic_ns(), clutch_active=False, recenter_requested=False)),
+                    self.controller.transport.local_address)
+                while self.controller.input_count < 2 and time.monotonic() < deadline:
+                    time.sleep(.005)
+                state = request(phone_service.SOCKET, 'align', runtime_id='test')
+                self.assertTrue(state['aligned'])
+                self.assertEqual(state['runtime_id'], 'test')
+                self.assertTrue(all(call.args[0] == 'source-metadata' for call in client.command.call_args_list))
+            finally:
+                worker.join(timeout=2)
+            self.assertFalse(worker.is_alive())
+            self.assertFalse(phone_service.SOCKET.exists())
+            client.close.assert_called_once()
+
     def test_one_press_alignment_is_immediate_and_survives_clutch_and_preset(self):
         client = self.enable_fake_robot()
         self.send()

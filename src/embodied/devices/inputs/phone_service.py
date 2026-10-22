@@ -79,7 +79,7 @@ class PhoneService:
         self.lock = threading.RLock()
         self.samples = deque(maxlen=1000)
         self.error = None
-        self.run = None
+        self.run = controller.client.identity['runtime_id'] if not controller.ghost else None
         self.addresses = addresses()
         self.closed = threading.Event()
         self.server = None
@@ -290,12 +290,14 @@ class PhoneService:
             while self.messages:
                 self.phone_message(self.messages.popleft())
 
-    def run_forever(self):
+    def run_forever(self, duration=0):
         self.controller.start()
         try:
             self.server = LocalServer(SOCKET, self.dispatch)
-            print(f'Phone receiver ready: UDP {port("phone_udp")} · observation only', flush=True)
-            while not self.closed.is_set():
+            mode = 'observation only' if self.controller.ghost else 'phone lease active'
+            print(f'Phone receiver ready: UDP {self.controller.transport.local_address[1]} · {mode}', flush=True)
+            deadline = time.monotonic() + duration if duration else float('inf')
+            while not self.closed.is_set() and time.monotonic() < deadline:
                 self.step()
                 # Yield the lock to monitor / stop requests even without UDP input.
                 self.closed.wait(.001)
