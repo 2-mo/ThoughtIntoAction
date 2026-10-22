@@ -218,10 +218,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 # External checkouts are pinned in dependencies.lock.toml.
-/third_party/*
-!/third_party/README.md
-!/third_party/phone_input/
-!/third_party/migration/
+/third_party/
 
 **/node_modules/
 **/.venv*/

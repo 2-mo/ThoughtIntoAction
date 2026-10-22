@@ -78,7 +78,10 @@ class SimulationStateTests(unittest.TestCase):
         gateway = object.__new__(Gateway)
         gateway.simulation = self.backend
         gateway.engine = CommandEngine('run', self.config, self.config.model_id)
-        state = self.backend.read_state(time.monotonic())
+        now = time.monotonic()
+        for stamp in np.linspace(now - .26, now, 66):
+            state = self.backend.read_state(float(stamp))
+            gateway.engine.next(state, float(stamp))
         self.lease = gateway.engine.request({'version': 1, 'runtime_id': 'run',
             'action': 'acquire', 'source': 'test'}, state, time.monotonic())
         return gateway, state

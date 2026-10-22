@@ -21,7 +21,7 @@ def main():
                 'apps', 'docs', 'scripts', 'assets', 'configs', 'configs/environments')
     for parent in (ROOT, *(ROOT / name for name in sections)):
         for path in sorted(parent.iterdir()):
-            if path.is_dir() and not path.name.startswith(('.', '__')):
+            if path.is_dir() and not path.name.startswith(('.', '__')) and path != ROOT / 'third_party':
                 directories.append(path.relative_to(ROOT).as_posix() + '/')
     data = {
         'plugins': plugins,

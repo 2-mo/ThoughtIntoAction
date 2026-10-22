@@ -336,16 +336,82 @@ class SettlingTests(unittest.TestCase):
                     self.assertFalse(window.update(stamp + index * .004, np.zeros(6), np.zeros(6), np.zeros(6)))
 
 
+class StandstillTests(unittest.TestCase):
+    def setUp(self):
+        self.config = load_settings().robot
+        self.engine = CommandEngine('run', self.config, 'model')
+        self.state = RobotState(np.asarray(self.config.park_q), np.zeros(6),
+                                np.array([0, 0, 0, 0, 0, 0, 1.]), .04, 1.)
+
+    def acquire(self, now=1.):
+        return self.engine.request({'version': 1, 'runtime_id': 'run', 'action': 'acquire',
+                                    'source': 'test'}, self.state, now)
+
+    def test_quantized_velocity_spike_does_not_reject_acquire_or_execute(self):
+        for index, stamp in enumerate(np.linspace(.74, 1., 66)):
+            self.state.received_at = float(stamp)
+            self.state.dq[:] = .0769 if index % 11 == 0 or index == 65 else -.033
+            self.engine.next(self.state, float(stamp))
+        self.assertGreater(np.max(np.abs(self.state.dq)), .05)
+        lease = self.acquire()
+        plan = MotionPlanner(self.config, 'model').plan({'q': self.state.q.tolist()},
+            self.engine.status(self.state, 1.), 1.)
+        result = self.engine.request({'version': 1, 'runtime_id': 'run', 'action': 'execute',
+            'token': lease['token'], 'epoch': lease['epoch'], 'sequence': 1, '_plan': plan}, self.state, 1.)
+        self.assertEqual(result['status'], 'running')
+
+    def test_real_drift_and_alternating_velocity_cannot_pass_as_standstill(self):
+        for kind in ('drift', 'oscillation'):
+            with self.subTest(kind=kind):
+                self.setUp()
+                initial = self.state.q.copy()
+                for index, stamp in enumerate(np.linspace(.74, 1., 66)):
+                    self.state.received_at = float(stamp)
+                    if kind == 'drift':
+                        self.state.q = initial + np.array([0, .008 * index / 65, 0, 0, 0, 0])
+                    else:
+                        self.state.dq[:] = .08 * (-1)**index
+                    self.engine.next(self.state, float(stamp))
+                with self.assertRaisesRegex(ValueError, 'not settled'):
+                    self.acquire()
+
+    def test_missing_stale_duplicate_and_invalid_feedback_fail_closed(self):
+        with self.assertRaisesRegex(ValueError, 'not settled'):
+            self.acquire()
+        for kind in ('gap', 'duplicate', 'regressed', 'invalid'):
+            with self.subTest(kind=kind):
+                self.setUp()
+                for stamp in np.linspace(.74, 1., 66):
+                    self.state.received_at = float(stamp)
+                    self.engine.next(self.state, float(stamp))
+                if kind == 'gap':
+                    self.state.received_at = 1.2
+                elif kind == 'regressed':
+                    self.state.received_at = .99
+                elif kind == 'invalid':
+                    self.state.dq[0] = float('nan')
+                with self.assertRaisesRegex(ValueError, 'not settled'):
+                    self.acquire(now=1.2 if kind in ('gap', 'duplicate') else 1.)
+
+
 class CommandsTests(unittest.TestCase):
     def setUp(self):
         self.config = load_settings().robot
         self.engine = CommandEngine('run', self.config, 'model')
         self.now, self.sequence = 10., 0
         self.state = RobotState(np.asarray(self.config.park_q), np.zeros(6), np.array([0,0,0,0,0,0,1.]), .04, self.now)
+        for stamp in np.linspace(self.now - .26, self.now, 66):
+            self.state.received_at = float(stamp)
+            self.engine.next(self.state, float(stamp))
         self.lease = self.request('acquire', source='cli')
-        self.engine.next(self.state, self.now)
+        self.tick()
+
+    def tick(self, candidates=None):
+        self.state.received_at = self.now
+        return self.engine.next(self.state, self.now, candidates)
 
     def request(self, action, **fields):
+        self.state.received_at = self.now
         self.sequence += 1
         lease = getattr(self, 'lease', {})
         return self.engine.request({'version': 1, 'runtime_id': 'run', 'action': action,
@@ -362,7 +428,7 @@ class CommandsTests(unittest.TestCase):
         self.lease = self.request('acquire', source='phone')
         with self.assertRaisesRegex(ValueError, 'epoch'):
             self.request('joint', q=self.state.q.tolist(), epoch=self.lease['epoch']-2)
-        command = self.engine.next(self.state, self.now)
+        command = self.tick()
         self.assertTrue(command.hold and command.reset_reference)
         self.assertEqual(command.mode, Mode.COMMAND_FOLLOWING)
 
@@ -370,10 +436,10 @@ class CommandsTests(unittest.TestCase):
         self.request('joint', q=(self.state.q+.001).tolist(), ttl_ms=100)
         self.now += .08
         self.request('heartbeat')
-        self.assertIsNotNone(self.engine.next(self.state, self.now).joint_target)
+        self.assertIsNotNone(self.tick().joint_target)
         self.now += .03
         self.request('heartbeat')
-        self.assertTrue(self.engine.next(self.state, self.now).hold)
+        self.assertTrue(self.tick().hold)
         with self.assertRaisesRegex(ValueError, 'expired'):
             self.request('joint', q=self.state.q.tolist(), sent_monotonic_ns=round((self.now-.11)*1e9))
         with self.assertRaisesRegex(ValueError, 'source sequence'):
@@ -381,10 +447,10 @@ class CommandsTests(unittest.TestCase):
 
     def test_free_drive_optionally_holds_the_gripper(self):
         self.request('free-drive')
-        command = self.engine.next(self.state, self.now)
+        command = self.tick()
         self.assertEqual((command.mode, command.gripper_mode), (Mode.FREE_DRIVE, Mode.FREE_DRIVE))
         self.request('free-drive', gripper_width=.03)
-        command = self.engine.next(self.state, self.now)
+        command = self.tick()
         self.assertEqual((command.mode, command.gripper_mode, command.gripper_target),
                          (Mode.FREE_DRIVE, Mode.COMMAND_FOLLOWING, .03))
         with self.assertRaisesRegex(ValueError, 'gripper width'):
@@ -393,7 +459,7 @@ class CommandsTests(unittest.TestCase):
     def test_lease_expiry_cancel_and_stop_hold_without_home(self):
         self.request('joint', q=self.state.q.tolist())
         self.now += .51
-        command = self.engine.next(self.state, self.now)
+        command = self.tick()
         self.assertIsNone(self.engine.owner)
         self.assertTrue(command.hold and command.reset_reference)
         self.assertEqual(command.mode, Mode.COMMAND_FOLLOWING)
@@ -411,7 +477,7 @@ class CommandsTests(unittest.TestCase):
         self.assertEqual(self.request('execute', _plan=plan)['status'], 'running')
         self.request('cancel')
         self.assertEqual(self.engine.operations[plan['plan_id']]['status'], 'cancelled')
-        self.assertTrue(self.engine.next(self.state, self.now).reset_reference)
+        self.assertTrue(self.tick().reset_reference)
         bad = {**plan, 'model_id': 'other'}
         with self.assertRaisesRegex(ValueError, 'owner/model'):
             self.request('execute', _plan=bad)
@@ -432,7 +498,7 @@ class CommandsTests(unittest.TestCase):
                     self.state.received_at = self.now
                     self.state.dq[:] = .03 if moving else (.03297 if index % 4 == 0 else -.01099)
                     self.request('heartbeat')
-                    command = self.engine.next(self.state, self.now)
+                    command = self.tick()
                     if self.engine.operation is None:
                         break
                 operation = self.engine.operations[plan['plan_id']]
@@ -463,12 +529,12 @@ class CommandsTests(unittest.TestCase):
         elapsed = plan['times'][-1]*.2
         self.now += elapsed
         self.request('heartbeat')
-        command = self.engine.next(self.state, self.now)
+        command = self.tick()
         np.testing.assert_allclose(command.joint_acceleration_target,
                                    plan['_trajectory'].sample_acceleration(elapsed))
         self.assertGreater(np.max(np.abs(command.joint_acceleration_target)), 1.)
         self.request('cancel')
-        self.assertIsNone(self.engine.next(self.state, self.now).joint_acceleration_target)
+        self.assertIsNone(self.tick().joint_acceleration_target)
 
     def complete_operation(self):
         planner = MotionPlanner(self.config, 'model')
@@ -483,7 +549,7 @@ class CommandsTests(unittest.TestCase):
         for index in range(30):
             self.now = end + index * .01
             self.request('heartbeat')
-            self.engine.next(self.state, self.now)
+            self.tick()
         operation = self.engine.operations[plan['plan_id']]
         self.assertEqual(operation['status'], 'completed')
         self.assertAlmostEqual(operation['settling']['max_joint_error_rad'], .001)
@@ -501,16 +567,21 @@ class CommandsTests(unittest.TestCase):
                 self.request('release')
                 self.assertIsNone(self.engine.owner)
             self.now += .01
-            command = self.engine.next(self.state, self.now)
+            command = self.tick()
             self.assertTrue(command.planned)
             self.assertFalse(command.hold or command.reset_reference)
             self.assertEqual(command.gripper_target, .03)
             np.testing.assert_array_equal(controller.update(command, self.state.q, self.now), goal)
             np.testing.assert_array_equal(controller.dq_target, np.zeros(6))
         self.lease = self.request('acquire', source='next')
-        command = self.engine.next(self.state, self.now)
-        self.assertTrue(command.hold and command.reset_reference)
-        np.testing.assert_array_equal(controller.update(command, self.state.q, self.now), self.state.q)
+        command = self.tick()
+        self.assertFalse(command.hold or command.reset_reference)
+        np.testing.assert_array_equal(controller.update(command, self.state.q, self.now), goal)
+        plan = MotionPlanner(self.config, "model").plan(
+            {"q": self.config.park_q}, self.engine.status(self.state, self.now), self.now)
+        self.request("execute", _plan=plan)
+        self.assertIsNone(self.engine.completed_target)
+        self.assertEqual(self.engine.operation["operation_id"], plan["plan_id"])
 
     def test_abnormal_stop_clears_completed_reference_and_holds_current_feedback(self):
         from embodied.devices.robots.arx5.kinematics import JointTargetController, X5Model
@@ -525,11 +596,27 @@ class CommandsTests(unittest.TestCase):
                     self.engine.clear('feedback-fault')
                 else:
                     self.request(action)
-                command = self.engine.next(self.state, self.now)
+                command = self.tick()
                 self.assertTrue(command.hold and command.reset_reference)
                 controller = JointTargetController(self.config, X5Model(self.config))
                 np.testing.assert_array_equal(controller.update(command, self.state.q, self.now), self.state.q)
                 np.testing.assert_array_equal(controller.dq_target, np.zeros(6))
+
+    def test_native_handoff_preserves_hold_until_first_target_then_discards_it(self):
+        from embodied.devices.inputs.quest.ingress import Candidate
+        goal = self.complete_operation()
+        self.request('release')
+        self.engine.ingress_channels = {'xr-test'}
+        self.lease = self.request('acquire', source='test', ingress='xr-test')
+        np.testing.assert_array_equal(self.tick().joint_target, goal)
+        candidate = Candidate(epoch=self.engine.epoch, expires_at=self.now + .1,
+            command=ControlCommand(Mode.COMMAND_FOLLOWING, joint_target=self.state.q.copy()), phase='teleop')
+        self.tick({'xr-test': candidate})
+        self.assertIsNone(self.engine.completed_target)
+        self.now += .11
+        command = self.tick({'xr-test': candidate})
+        self.assertTrue(command.hold)
+        self.assertIsNone(command.joint_target)
 
     def test_operation_velocity_is_cleared_on_every_owner_stop_path(self):
         from embodied.devices.robots.arx5.kinematics import JointTargetController
@@ -546,13 +633,13 @@ class CommandsTests(unittest.TestCase):
                 for elapsed in np.arange(.004, plan['times'][-1]/2, .004):
                     self.now = start + elapsed
                     self.request('heartbeat')
-                    controller.update(self.engine.next(self.state, self.now), self.state.q, self.now)
+                    controller.update(self.tick(), self.state.q, self.now)
                 self.assertGreater(controller.dq_target[0], 0)
                 if action == 'expiry':
                     self.now += .51
                 else:
                     self.request(action)
-                command = self.engine.next(self.state, self.now)
+                command = self.tick()
                 controller.update(command, self.state.q, self.now)
                 self.assertTrue(command.hold)
                 np.testing.assert_array_equal(controller.dq_target, np.zeros(6))
@@ -564,7 +651,7 @@ class CommandsTests(unittest.TestCase):
         del plan['_trajectory']
         self.request('execute', _plan=plan)
         self.now += .1
-        command = self.engine.next(self.state, self.now)
+        command = self.tick()
         self.assertIsNotNone(command.joint_target)
         self.assertIsNone(command.joint_velocity_target)
 
@@ -573,27 +660,27 @@ class CommandsTests(unittest.TestCase):
         self.request('release')
         self.engine.ingress_channels = {'xr-test'}
         self.lease = self.request('acquire', source='arbitrary_label', ingress='xr-test', purpose='teleop')
-        self.engine.next(self.state, self.now)
+        self.tick()
         command = ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=self.state.pose)
         def candidate(**fields):
             return {'xr-test': Candidate(**dict(epoch=self.engine.epoch, command=command,
                                                 expires_at=self.now+.1, phase='teleop') | fields)}
-        self.assertIs(self.engine.next(self.state, self.now, candidate()), command)
+        self.assertIs(self.tick(candidate()), command)
         self.assertEqual(self.engine.phase, 'teleop')
-        self.assertTrue(self.engine.next(self.state, self.now, candidate(epoch=self.engine.epoch-1)).hold)
-        self.assertTrue(self.engine.next(self.state, self.now, candidate(expires_at=self.now)).hold)
+        self.assertTrue(self.tick(candidate(epoch=self.engine.epoch-1)).hold)
+        self.assertTrue(self.tick(candidate(expires_at=self.now)).hold)
         with self.assertRaisesRegex(ValueError, 'installed ingress'):
             self.request('joint', q=self.state.q.tolist())
         self.request('cancel')
-        self.assertTrue(self.engine.next(self.state, self.now, candidate()).hold)
-        self.engine.next(self.state, self.now, candidate(fault='router exited'))
+        self.assertTrue(self.tick(candidate()).hold)
+        self.tick(candidate(fault='router exited'))
         self.assertIsNone(self.engine.owner)
         self.assertEqual(self.engine.last_revocation['reason'], 'router exited')
         self.lease = self.request('acquire', source='phone', purpose='teleop')
         self.request('joint', q=self.state.q.tolist())
-        self.engine.next(self.state, self.now, candidate(fault='router exited'))
+        self.tick(candidate(fault='router exited'))
         self.assertEqual(self.engine.owner['source'], 'phone')
-        self.assertIsNotNone(self.engine.next(self.state, self.now, candidate(fault='router exited')).joint_target)
+        self.assertIsNotNone(self.tick(candidate(fault='router exited')).joint_target)
 
     def test_joint_and_linear_plans_obey_sampled_derivative_bounds(self):
         planner = MotionPlanner(self.config, 'model')

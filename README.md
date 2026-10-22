@@ -88,7 +88,6 @@ configs/          平台配置、插件目录、设备参数与 environments 环
 docs/             指南、架构、examples 示例、plans 工程计划与 history 历史记录
 scripts/          按用途组织的工具；shortcuts 快捷入口、training 训练适配
 tests/            按功能组织的验证
-third_party/      只读参考项目与历史迁移索引，不作为运行依赖
 outputs/          数据、运行记录、安装环境、依赖工作区与构建产物
 ```
 
@@ -98,7 +97,7 @@ outputs/          数据、运行记录、安装环境、依赖工作区与构�
 
 插件统一登记在 `configs/plugins.json`，实现只有被选中时才加载。机器人参数在 `configs/robots/`，输入参数在 `configs/inputs/`，控制策略参数在 `configs/control/`。控制环境定义在 `configs/environments/control/`，安装结果在 `outputs/envs/control/`，运行记录在 `outputs/runtime/control/`；Python 版本隔离不再要求根目录保留一个独立控制工程。
 
-`third_party/` 仅用于阅读、比较和来源核对。正式依赖按锁文件安装；需要维护的上游片段随所属模块保存来源、版本和许可证，构建工作区在 `outputs/dependencies/`。参见 [外部参考边界](third_party/README.md) 与 [PhyAgentOS 参考取舍](docs/architecture/phyagent-reference.md)。
+`third_party/` 是 Git 忽略的可选本地参考目录，仅用于阅读、比较和来源核对；来源与迁移记录保存在 `docs/provenance/`。正式依赖按锁文件安装；需要维护的上游片段随所属模块保存来源、版本和许可证，构建工作区在 `outputs/dependencies/`。参见 [外部参考边界](docs/provenance/README.md) 与 [PhyAgentOS 参考取舍](docs/architecture/phyagent-reference.md)。
 
 本机采集数据、标定结果和原始归档集中在 `outputs/{datasets,calibrations,archives}/`。原 `environments/` 移到 [configs/environments/](configs/environments/README.md)，原 `integrations/openpi/` 移到 `scripts/training/openpi/`，历史 rebot 示例在 `docs/examples/`；统一内核教学示例在 `src/examples/`。依赖版本仍由根目录 `pyproject.toml`、`uv.lock` 和 `dependencies.lock.toml` 管理。
 

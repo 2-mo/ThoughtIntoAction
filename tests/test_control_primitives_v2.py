@@ -71,6 +71,9 @@ class ControlPrimitiveTests(unittest.TestCase):
         plan = self.plan(kind='movej', q=[.1, 0., 0., 0., 0., 0.])
         engine = CommandEngine('r', self.config, 'fixture')
         state = self.state(1.)
+        for stamp in np.linspace(.74, 1., 66):
+            state.received_at = float(stamp)
+            engine.next(state, float(stamp))
         lease = engine.request({'version': 1, 'runtime_id': 'r', 'action': 'acquire', 'source': 'test'}, state, 1.)
         engine.next(state, 1.)
         engine.request({'version': 1, 'runtime_id': 'r', 'action': 'execute',
@@ -102,6 +105,9 @@ class ControlPrimitiveTests(unittest.TestCase):
         self.assertLess(len(json.dumps(public)), 1_000_000)
         engine = CommandEngine('r', self.config, 'fixture')
         state = self.state(1., width=.08)
+        for stamp in np.linspace(.74, 1., 66):
+            state.received_at = float(stamp)
+            engine.next(state, float(stamp))
         lease = engine.request({'version': 1, 'runtime_id': 'r', 'action': 'acquire', 'source': 'test'}, state, 1.)
         engine.next(state, 1.)
         operation = engine.request({'version': 1, 'runtime_id': 'r', 'action': 'execute',
@@ -142,6 +148,8 @@ class ControlPrimitiveTests(unittest.TestCase):
 
     def test_grasp_contact_effort_persists_until_cancel(self):
         engine = CommandEngine('r', self.config, 'fixture', capabilities={'gripper': self.cap})
+        for stamp in np.linspace(-.26, 0., 66):
+            engine.next(self.state(float(stamp), width=.08), float(stamp))
         lease = engine.request({'version': 1, 'runtime_id': 'r', 'action': 'acquire', 'source': 'test'}, self.state(0., width=.08), 0.)
         envelope = {'version': 1, 'runtime_id': 'r', **{k: lease[k] for k in ('token', 'epoch')}}
         engine.next(self.state(0.), 0.)

@@ -52,6 +52,9 @@ class UnifiedMotionLimitsTests(unittest.TestCase):
     def test_native_ingress_uses_same_step_bounds_as_rpc(self):
         engine = CommandEngine('fixture', self.config, 'test', ingress_channels=['vr'])
         state = RobotState(np.zeros(2), np.zeros(2), np.array([0., 0., .3, 0., 0., 0., 1.]), .04, 1.)
+        for stamp in np.linspace(.74, 1., 66):
+            state.received_at = float(stamp)
+            engine.next(state, float(stamp))
         lease = engine.request({'version': 1, 'runtime_id': 'fixture', 'action': 'acquire',
                                 'source': 'test', 'ingress': 'vr'}, state, 1.)
         engine.next(state, 1.)  # Establish holding reference before target delivery.

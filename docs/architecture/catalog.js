@@ -1210,7 +1210,6 @@ window.ARCHITECTURE_CATALOG = {
     "scripts/",
     "src/",
     "tests/",
-    "third_party/",
     "src/embodied/",
     "src/examples/",
     "src/legacy/",

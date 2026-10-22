@@ -192,6 +192,9 @@ class Gateway:
         self.engine.owner['epoch'] = self.engine.epoch
         self.engine.command = self.engine.completed_target = None
         self.engine.settling.clear()
+        self.engine.standstill.clear()
+        self.engine.stationary = False
+        self.engine.feedback_stamp = None
         self.engine.reset_reference = True
         self.engine.ingress_paused = True
         self.engine.source_sequence = -1
@@ -223,6 +226,7 @@ class Gateway:
                 workspace.check_path(self.planner.model.fk, [target])
 
     def tick(self, state, now):
+        self.engine.observe_feedback(state, now)
         # Limit per-tick ingress work; no network wait, file IO, or planning here.
         restored = []
         for _ in range(8):

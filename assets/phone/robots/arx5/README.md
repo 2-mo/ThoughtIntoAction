@@ -6,7 +6,7 @@
 
 The only normalization is removal of an upstream trailing whitespace character.
 The upstream project is MIT licensed, copyright 2024 Yihuai Gao. Its license
-applies to this copied asset; see the repository-level [LICENSE](../../../../third_party/phone_input/LICENSE)
+applies to this copied asset; see the repository-level [LICENSE](../../../../src/embodied/devices/phone/LICENSE)
 for this project's license and `docs/references.md` for attribution details.
 
 This asset is for offline FK, Jacobian, and IK feasibility checks only. It does

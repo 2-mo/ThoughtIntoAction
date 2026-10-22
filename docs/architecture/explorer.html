@@ -75,7 +75,6 @@
 ├─ apps/             网页 / iOS
 ├─ configs/          插件 / 环境声明 / 设备配置
 ├─ assets/robots/    模型 / 网格
-├─ third_party/      只读参考
 └─ outputs/          运行 / 环境 / 安装工作区 / 数据</pre><div class="target-note">模块边界与进程边界分别决定。算法库不必拆成服务；控制循环与相机、GPU 推理继续隔离依赖和故障。</div></article><div class="doc-links"><a href="component-boundaries.md">原始部件边界方案 ↗</a><a href="arx-component-review.md">arx 组件复核 ↗</a><a href="../guides/consolidated-components.md">当前迁移事实 ↗</a></div></div></div>
 </section>
 <footer class="footer"><span>知行有灵 · Thought into Action / 架构快照 · 2026-09-29 · 中文离线导览</span><span><a href="../../scripts/docs/build_architecture.py">更新目录与注册表快照</a><span> · </span><a href="../guides/plugin-workbench.md">工作台说明 ↗</a></span></footer>
@@ -129,7 +128,7 @@ const directoryMeta={
 'outputs/datasets/':['归档与产物','原始 episode 与导出训练数据。','数据'],
 'outputs/runtime/control/':['归档与产物','每次内核运行的状态、连接信息与遥测。','生成'],
 'outputs/envs/control/':['依赖与环境','由独立锁文件安装的控制环境。','环境'],
- 'third_party/':['参考与来源','只读上游参考及迁移索引，不参与运行依赖。','参考'],
+'docs/provenance/':['参考与来源','纳入版本控制的上游来源、许可证索引及历史迁移记录。','来源'],
 'src/embodied/':['功能源码','按应用、公共控制、设备、契约、基础能力、运动、数据和策略组织。','主线'],
 'src/embodied/applications/':['功能源码','控制台、监看、工作台装配、动作入口和标定工作流。','应用'],
 'src/embodied/devices/':['功能源码','输入、手机协议、相机服务和机器人适配。','设备'],

@@ -109,13 +109,14 @@ class SettlingWindow:
 
     Motor velocity readouts are quantized even at rest. Average their absolute
     values over time (never signed velocities), and independently bound the
-    measured position span by the same velocity budget. No gain or motion limit
+    measured position span by the configured settling velocity budget. No gain or motion limit
     is changed. Missing/invalid samples cannot establish a settled interval.
     """
-    def __init__(self, settings):
+    def __init__(self, settings, *, velocity_limit=None):
         self.duration = settings['duration_s']
         self.position_limit = settings['position_tolerance_rad']
-        self.velocity_limit = settings['velocity_tolerance_rad_s']
+        self.velocity_limit = settings['velocity_tolerance_rad_s'] if velocity_limit is None else velocity_limit
+        self.position_span_limit = settings['velocity_tolerance_rad_s'] * self.duration
         self.max_gap = settings['max_sample_gap_s']
         self.samples = deque()
 
@@ -145,7 +146,7 @@ class SettlingWindow:
         times[0] = cutoff
         mean_speed = np.trapz(speeds, x=times, axis=0) / self.duration
         return bool(np.all(mean_speed < self.velocity_limit)
-                    and np.all(np.ptp(positions, axis=0) < self.velocity_limit * self.duration))
+                    and np.all(np.ptp(positions, axis=0) < self.position_span_limit))
 
 
 class CommandEngine:
@@ -172,6 +173,33 @@ class CommandEngine:
         self.phase = 'idle'
         self.source_sequence = -1
         self.settling = SettlingWindow(self.motion_limits.settling)
+        # Retain the original 0.05 rad/s start/transfer criterion, but evaluate
+        # absolute speed over a window rather than one quantized SDK sample.
+        self.standstill = SettlingWindow(self.motion_limits.settling, velocity_limit=.05)
+        self.feedback_stamp = None
+        self.stationary = False
+
+    def observe_feedback(self, state, now):
+        """Keep a rolling standstill window, including while no client owns control.
+
+        Use receipt timestamps so polling the same SDK sample cannot manufacture
+        a stationary interval. Acquisition and execution share the arrival
+        detector's absolute-speed average and independent encoder-span check.
+        """
+        stamp = state.received_at
+        if (not np.isfinite(stamp) or not 0 <= now - stamp < self.standstill.max_gap
+                or not np.isfinite(state.q).all() or not np.isfinite(state.dq).all()):
+            self.standstill.clear()
+            self.feedback_stamp = None
+            self.stationary = False
+        elif stamp != self.feedback_stamp:
+            self.stationary = self.standstill.update(stamp, state.q, state.dq, state.q)
+            self.feedback_stamp = stamp
+
+    def require_standstill(self, state, now):
+        self.observe_feedback(state, now)
+        if not self.stationary:
+            raise ValueError('Robot has not settled: waiting for continuous low-motion feedback')
 
     def clear(self, reason='released', *, preserve_completed=False):
         self.gripper_hold_effort = None
@@ -219,8 +247,7 @@ class CommandEngine:
             source = request.get('source')
             if not isinstance(source, str) or not source.isascii() or not source.replace('-', '').replace('_', '').isalnum() or len(source) > 31:
                 raise ValueError('Source must be an ASCII identifier of at most 31 characters')
-            if np.max(np.abs(state.dq)) > .05:
-                raise ValueError('Wait for the robot to settle before transferring control')
+            self.require_standstill(state, now)
             ingress = request.get('ingress', 'rpc')
             if ingress != 'rpc' and ingress not in self.ingress_channels:
                 raise ValueError('Requested command ingress is not installed')
@@ -233,8 +260,10 @@ class CommandEngine:
             self.ingress_paused = False
             self.last_sequence = -1
             self.expires = now + .5
-            self.completed_target = None
-            self.reset_reference = True
+            # Ownership alone is not a motion command. Resetting a successfully
+            # held goal to measured q removes its position-error torque and can
+            # move the arm while the new owner is still planning its next move.
+            self.reset_reference = self.completed_target is None
             self.source_sequence = -1
             self.phase = 'acquired'
             return {**self.owner, 'q': state.q.tolist(), 'pose': state.pose.tolist(),
@@ -288,8 +317,13 @@ class CommandEngine:
             # A preview must still start where it was planned. The final arrival
             # tolerance is a separate criterion and must not allow a start jump.
             start_tolerance = .0035 if plan.get('_trajectory') is not None else .03
-            if np.max(np.abs(state.q - plan['q'][0])) > start_tolerance or np.max(np.abs(state.dq)) > .05:
-                raise ValueError('Robot moved since preview')
+            errors = np.abs(state.q - plan['q'][0])
+            axis = int(np.argmax(errors))
+            if errors[axis] > start_tolerance:
+                raise ValueError(f'Robot moved since preview: J{axis + 1} changed '
+                                 f'{np.rad2deg(errors[axis]):.2f} deg '
+                                 f'(limit {np.rad2deg(start_tolerance):.2f} deg); preview again')
+            self.require_standstill(state, now)
             if self.operation:
                 raise ValueError('Cancel the active operation first')
             self.settling.clear()
@@ -354,6 +388,7 @@ class CommandEngine:
         return {'status': 'applied'}
 
     def next(self, state, now, candidates=None):
+        self.observe_feedback(state, now)
         if self.owner and now >= self.expires:
             self.clear('lease-expired')
         candidate = (candidates or {}).get(self.owner['ingress']) if self.owner else None
@@ -426,6 +461,7 @@ class CommandEngine:
             command = self.command
         elif (self.owner and candidate is not None and not self.ingress_paused
               and candidate.epoch == self.epoch and now < candidate.expires_at):
+            self.completed_target = None
             command = candidate.command
             command.joint_step_limit = self.motion_limits.step_limits()
             self.source_sequence = candidate.sequence

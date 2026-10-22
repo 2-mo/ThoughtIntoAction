@@ -52,7 +52,7 @@
 ## 来源与环境隔离
 
 - arx-televr 固定为 `cd557afbb9ec280df2d9e12e1582219b85ee1a53`。`control/UPSTREAM_FILES.json` 冻结原 SHA256/执行位，`LOCAL_PATCHES.json` 记录 13 个局部补丁和理由；新增 adapter 单独保留。原兄弟仓库未修改。
-- 手机来源为 robot-teleop `864d6501a3eeef99b7facdc8f592d80e0ff52843` 的实际工作树快照，包含其本地修改。`third_party/phone_input/PROVENANCE.json` 逐文件固定导入的 Python、iOS、golden vectors；MIT 许可同目录保留。
+- 手机来源为 robot-teleop `864d6501a3eeef99b7facdc8f592d80e0ff52843` 的实际工作树快照，包含其本地修改。`docs/provenance/phone_input/PROVENANCE.json` 逐文件固定导入的 Python、iOS、golden vectors；MIT 许可在 `src/embodied/devices/phone/LICENSE` 保留。
 - 运动纯数学来源为 arx5_test `a18d6b67906e450411d56e3d0fd08fd18a01675c` 的工作树；`operations/vendor/arx_motion/PROVENANCE.json` 和 `LOCAL_PATCHES.json` 固定来源与 Python 3.10 cube-root 兼容补丁。没有迁入其大型硬件/网页控制器。
 - reBotArm 的拖动/保持/示教思路用于功能设计；其 B601 增益、动力学和已发现不连续的梯形轨迹实现未复制到 X5。
 - 所有运行依赖位于本仓库；`dependencies.lock.toml` 登记三组 vendored 来源。已有用户修改保留，先前基线备份在 `outputs/migration/arx-runtime-baseline/`。
