@@ -4,7 +4,7 @@
     ./run.sh help --all list every command
     ./run.sh bench stop stop the kernel and web console it started, and close it
 
-Windows: 1 内核, 2 命令, 3 总控, 4 网页, 5 VR, 6 相机, 7 宣传.
+Windows: 1 总控, 2 命令, 3 内核, 4 网页, 5 VR, 6 相机, 7 宣传.
 Web services start with the workbench; device windows stay visible while waiting for setup.
 The dashboard only types commands and sends Ctrl+C to the kernel window; it never owns a device.
 """
@@ -23,11 +23,13 @@ import time
 
 from embodied.core.project import PROJECT_ROOT as ROOT
 
-SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or 'embodied-' + hashlib.sha256(str(ROOT).encode()).hexdigest()[:8]
-WINDOWS = {'kernel': '内核', 'shell': '命令', 'home': '总控', 'web': '网页',
+DEFAULT_SESSION = 'emb'
+LEGACY_SESSION = 'embodied-' + hashlib.sha256(str(ROOT).encode()).hexdigest()[:8]
+SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
+WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': '内核', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传'}
-WINDOW_HINT = 'Ctrl+B → 1 内核 · 2 命令 · 3 总控 · 4 网页 · 5 VR · 6 相机 · 7 宣传'
-UI_REVISION = '3'
+WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 内核 · 4 网页 · 5 VR · 6 相机 · 7 宣传'
+UI_REVISION = '4'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
 KERNELS = [  # key, label, command typed into the kernel window, real arm
@@ -49,7 +51,27 @@ def tmux(*args, check=True):
 
 
 def exists():
-    return bool(shutil.which('tmux')) and tmux('has-session', '-t', SESSION, check=False).returncode == 0
+    return bool(shutil.which('tmux')) and tmux('has-session', '-t', '=' + SESSION, check=False).returncode == 0
+
+
+def check_session_owner():
+    owner = tmux('show-options', '-qv', '-t', f'={SESSION}:', '@bench_root').stdout.strip()
+    if owner != str(ROOT):
+        raise RuntimeError(f'tmux 会话 {SESSION} 已被其他工作区使用；请用 '
+                           'EMBODIED_BENCH_SESSION=其他名称 ./run.sh 启动。')
+
+
+def prepare_session():
+    """Adopt this checkout's old session without replacing its windows or processes."""
+    if exists():
+        check_session_owner()
+    elif SESSION == DEFAULT_SESSION and tmux('has-session', '-t', '=' + LEGACY_SESSION, check=False).returncode == 0:
+        tmux('rename-session', '-t', '=' + LEGACY_SESSION, SESSION)
+        tmux('set-option', '-t', SESSION, '@bench_root', str(ROOT))
+        home = window('home')
+        if home:
+            # Its environment still names the old session; refresh the dashboard.
+            tmux('set-option', '-p', '-t', home[0], '@bench_ui_revision', 'renamed')
 
 
 def window(role):
@@ -78,6 +100,7 @@ def new_window(role, command, first=False):
                     command).stdout.strip()
         tmux('set-option', '-t', SESSION, 'base-index', '1')
         tmux('set-option', '-t', SESSION, 'renumber-windows', 'off')
+        tmux('set-option', '-t', SESSION, '@bench_root', str(ROOT))
         current = tmux('display-message', '-p', '-t', pane, '#{window_index}').stdout.strip()
         if current != str(index):
             tmux('move-window', '-s', pane, '-t', f'{SESSION}:{index}')
@@ -142,6 +165,17 @@ def kernel_busy():
     return bool(found and found[1] and (state == 'kernel' or (found[1] not in SHELLS and state != 'waiting')))
 
 
+def refresh_panel(pane, command):
+    """Let a waiting/web panel clean up its own children before loading new code."""
+    tmux('send-keys', '-t', pane, 'C-c')
+    deadline = time.monotonic() + 8
+    while tmux('display-message', '-p', '-t', pane, '#{pane_dead}').stdout.strip() != '1':
+        if time.monotonic() >= deadline:
+            raise RuntimeError('界面仍在退出，保留原进程；稍后再次执行 ./run.sh。')
+        time.sleep(.1)
+    tmux('respawn-pane', '-t', pane, '-c', str(ROOT), command)
+
+
 def start(attach=True):
     if not shutil.which('tmux'):
         print(overview_text('未安装 tmux。安装后可使用多窗口工作台：sudo apt install tmux'))
@@ -149,6 +183,7 @@ def start(attach=True):
     if importlib.util.find_spec('rich') is None:
         print(overview_text('缺少终端界面依赖。请先创建项目环境：uv sync --locked'))
         return
+    prepare_session()
     running = exists()
     if running:
         tmux('set-option', '-t', SESSION, 'renumber-windows', 'off')
@@ -171,15 +206,20 @@ def start(attach=True):
                 tmux('move-window', '-s', source, '-t', destination)
             revision = tmux('display-message', '-p', '-t', found[0], '#{@bench_ui_revision}').stdout.strip()
             original = tmux('display-message', '-p', '-t', found[0], '#{pane_start_command}').stdout
-            upgrade = revision != UI_REVISION and (
-                (role == 'home' and 'embodied.applications.workstation.bench _dashboard' in original)
-                or (role == 'kernel' and found[1] in SHELLS and not activity('kernel')))
+            tmux('set-option', '-w', '-t', found[0], 'remain-on-exit', 'on')
+            upgrade = (revision != UI_REVISION and role == 'home'
+                       and 'embodied.applications.workstation.bench _dashboard' in original)
+            panel_upgrade = revision != UI_REVISION and (
+                f'embodied.applications.workstation.bench_panels {role}' in original
+                and role in ('web', 'site', 'vr', 'camera'))
             if not found[1] or upgrade:
                 tmux('respawn-pane', '-k', '-t', found[0], '-c', str(ROOT), command)
                 if role == 'kernel':
                     tmux('set-option', '-p', '-t', found[0], '@bench_activity', 'waiting')
-            tmux('set-option', '-p', '-t', found[0], '@bench_ui_revision', UI_REVISION)
-            tmux('set-option', '-w', '-t', found[0], 'remain-on-exit', 'on')
+                tmux('set-option', '-p', '-t', found[0], '@bench_ui_revision', UI_REVISION)
+            elif panel_upgrade:
+                refresh_panel(found[0], command)
+                tmux('set-option', '-p', '-t', found[0], '@bench_ui_revision', UI_REVISION)
         else:
             new_window(role, command, first=not running)
             running = True
@@ -195,6 +235,7 @@ def stop(wait_s=30):
     if not exists():
         print('工作台未运行。')
         return
+    check_session_owner()
     run = owned_run()
     visible = current_run()
     if visible and not run:
@@ -217,7 +258,7 @@ def stop(wait_s=30):
     while time.monotonic() < deadline and (owned_run() or (stopping_kernel and kernel_busy())):
         time.sleep(.2)
     if owned_run() or (stopping_kernel and kernel_busy()):
-        raise RuntimeError('内核仍在退出，工作台保留；查看窗口 1。')
+        raise RuntimeError('内核仍在退出，工作台保留；查看窗口 3。')
     for role in ('web', 'site', 'vr', 'camera', 'kernel'):
         found = window(role)
         if found and found[1] and found[1] not in SHELLS:
@@ -358,14 +399,14 @@ def start_kernel(command):
         raise RuntimeError('已有内核在运行；先按 S 停止（或在其原终端退出）。')
     target = window('kernel')
     if target is None or kernel_busy():
-        raise RuntimeError('内核窗口不空闲；Ctrl+B 1 查看。')
+        raise RuntimeError('内核窗口不空闲；Ctrl+B 3 查看。')
     # A waiting panel owns no device. Replace only that panel (or an idle shell),
     # then return to it after the explicitly selected kernel has finished exiting.
     script = f'trap ":" INT; {command}; result=$?; echo "内核已退出（状态 $result）。"; exec {panel_command("kernel")}'
     tmux('set-option', '-p', '-t', target[0], '@bench_activity', 'kernel')
     tmux('respawn-pane', '-k', '-t', target[0], '-c', str(ROOT), 'bash -c ' + shlex.quote(script))
     tmux('select-window', '-t', target[0])
-    return '内核窗口正在启动；按提示确认，就绪后 Ctrl+B 3 回总控。'
+    return '内核窗口正在启动；按提示确认，就绪后 Ctrl+B 1 回总控。'
 
 
 def open_web(run=None):
@@ -403,7 +444,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
     menu.add_column(ratio=1)
     if found is None:
         status.add_row(Text('待机 · 没有运行中的内核', style='yellow'))
-        status.add_row(Text('真机测试按 3，仿真按 5；启动后 Ctrl+B → 3 返回总控。', style='dim'))
+        status.add_row(Text('真机测试按 3，仿真按 5；启动后 Ctrl+B → 1 返回总控。', style='dim'))
         status.add_row(Text('网页已随工作台启动；内核就绪后自动连接。', style='dim'))
         for real, section in ((False, '仿真'), (True, '真机')):
             first = True
@@ -441,7 +482,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
             '直接按键，无需回车；数字键选择配置，字母键执行对应操作。',
             'B 10°往返测速 · X XYZ直线 · T连续路径；运行目录和后端自动填写。',
             '动作测试、采集、导出、标定与策略先填到命令窗口，按回车开始。',
-            '测试中在命令窗口 Ctrl+C 取消动作；Ctrl+B → 3 返回总控。',
+            '测试中在命令窗口 Ctrl+C 取消动作；Ctrl+B → 1 返回总控。',
             '/  搜索命令：输入关键词后回车；L 查看完整命令目录。',
             WINDOW_HINT,
             'VR、相机或机械臂未就绪时，窗口会继续显示状态与下一步提示。',
