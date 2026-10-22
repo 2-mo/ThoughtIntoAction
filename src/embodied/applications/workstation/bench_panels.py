@@ -87,7 +87,7 @@ def kernel_rows():
     if found:
         run, identity = found
         mode = '真机' if identity.get('backend') == 'real' else '仿真'
-        rows = [('内核', mode + '内核运行中'), ('运行目录', bench.relative(run))]
+        rows = [('robot', mode + '控制运行中'), ('运行目录', bench.relative(run))]
         rows.extend(('反馈' if i == 0 else '', line)
                     for i, line in enumerate(bench.kernel_summary(run, identity)[1:]))
         hints = ['当前内核保留运行；控制操作在总控窗口选择。']
@@ -100,13 +100,21 @@ def kernel_rows():
         raise ValueError('configs/robots/arx5/robot.json 未配置 can_interface')
     device = resolve_path(config.get('can_device', '/dev/arx_r5'))
     visible = (Path('/sys/class/net') / can_port).exists() or device.is_char_device()
-    return [('内核', Status('等待启动 / 真机尚未提供反馈', 'waiting')),
+    state = bench.activity('kernel') if os.environ.get('EMBODIED_BENCH_SESSION') else ''
+    if state == 'failed':
+        status = Status('启动失败；Ctrl+B → 3 查看原始错误', 'error')
+        hints = ['启动错误已保留在 robot 窗口；修复后在总控按 3 重新启动。']
+    elif state == 'kernel':
+        status = Status('等待启动确认 / 正在启动；Ctrl+B → 3 查看', 'waiting')
+        hints = ['robot 启动流程已准备；在窗口 3 按唯一提示确认后，才会使能电机。']
+    else:
+        status = Status('等待启动；接通 USB-CAN 不会自动使能电机', 'waiting')
+        hints = ['真机未通电或尚未连接时，本窗口保持等待。',
+                 '重新执行 ./run.sh 会直接打开 robot 的启动确认；也可在总控按 3 启动。']
+    hints.append('无硬件也可在总控按 5 启动无输入仿真。')
+    return [('robot', status),
             ('USB-CAN', Status('适配器可见；等待机械臂反馈' if visible else '未发现配置中的 CAN 接口或适配器', 'waiting')),
-            ('配置', f'{can_port} · {device}')], [
-                '真机未通电或尚未连接时，本窗口保持等待。',
-                '通电、连接后，在总控按 1 / 2 / 3 选择真机配置；按内核提示确认。',
-                '无硬件也可在总控按 5 启动无输入仿真。',
-            ]
+            ('配置', f'{can_port} · {device}')], hints
 
 
 def vr_rows(found):
@@ -401,7 +409,10 @@ def mark_waiting(role):
         return
     try:
         from embodied.applications.workstation import bench
-        bench.tmux('set-option', '-p', '-t', os.environ['TMUX_PANE'], '@bench_activity', 'waiting', check=False)
+        pane = os.environ['TMUX_PANE']
+        state = bench.tmux('display-message', '-p', '-t', pane, '#{@bench_activity}', check=False).stdout.strip()
+        if state != 'failed':
+            bench.tmux('set-option', '-p', '-t', pane, '@bench_activity', 'waiting', check=False)
     except (OSError, RuntimeError):
         pass
 

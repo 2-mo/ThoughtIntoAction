@@ -92,8 +92,13 @@ class BenchStateTests(unittest.TestCase):
         rendered = ''.join(fragment.text for fragment in fragments)
         for name in ('robot', 'VR', '腕部相机', '外部相机'):
             self.assertIn(name, rendered)
-        for icon in ('🦾', '🥽', '📷'):
+        for icon in ('◇', '◉', '▣'):
             self.assertIn(icon, rendered)
+            self.assertTrue(any(icon in fragment.text and fragment.style.color == Color.parse('bright_cyan')
+                                for fragment in fragments))
+        self.assertNotIn('🦾', rendered)
+        self.assertNotIn('🥽', rendered)
+        self.assertNotIn('📷', rendered)
         for message, color in [('等待机械臂反馈', 'yellow'), ('图像正常', 'green'), ('图像已过期', 'red')]:
             self.assertTrue(any(message in fragment.text and fragment.style.color == Color.parse(color)
                                 for fragment in fragments))
@@ -223,6 +228,69 @@ class BenchStateTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     bench.start_kernel('test-kernel-command')
                 tmux.assert_not_called()
+
+    def test_only_an_interactive_open_prepares_the_robot_confirmation(self):
+        active = (Path('/run/test-only'), {'backend': 'real'})
+        for attach, tty, state, found, expected in [
+                (True, True, 'waiting', None, True),
+                (False, True, 'waiting', None, False),
+                (True, False, 'waiting', None, False),
+                (True, True, 'failed', None, False),
+                (True, True, 'waiting', active, False),
+                (True, True, 'kernel', None, False)]:
+            with self.subTest(attach=attach, tty=tty, state=state, active=bool(found)), \
+                 patch.object(sys.stdin, 'isatty', return_value=tty), \
+                 patch.object(sys.stdout, 'isatty', return_value=tty), \
+                 patch.object(bench, 'current_run', return_value=found), \
+                 patch.object(bench, 'activity', return_value=state), \
+                 patch.object(bench, 'window', return_value=('%test', 'python')), \
+                 patch.object(bench, 'tmux') as tmux, \
+                 patch.object(bench, 'start_kernel') as start:
+                bench.prepare_robot_start(attach)
+                if expected:
+                    start.assert_called_once_with(bench.REAL + ' --profile real-manual')
+                    self.assertNotIn('--yes', start.call_args.args[0])
+                else:
+                    start.assert_not_called()
+                if state == 'kernel':
+                    tmux.assert_called_once_with('select-window', '-t', '%test')
+                else:
+                    tmux.assert_not_called()
+
+    def test_failed_robot_is_not_an_active_controller(self):
+        with patch.object(bench, 'window', return_value=('%test', 'python')), \
+             patch.object(bench, 'activity', return_value='failed'):
+            self.assertFalse(bench.kernel_busy())
+
+    def test_robot_failure_keeps_original_logs_until_acknowledged(self):
+        with patch.object(bench, 'current_run', return_value=None), \
+             patch.object(bench, 'window', return_value=('%test', 'python')), \
+             patch.object(bench, 'activity', return_value='waiting'), \
+             patch.object(bench, 'panel_command', return_value="printf 'panel-entered\\n'"), \
+             patch.object(bench, 'tmux') as tmux:
+            bench.start_kernel("printf 'original-test-error\\n' >&2; false")
+        command = next(call.args[-1] for call in tmux.call_args_list if call.args[0] == 'respawn-pane')
+        # Execute only the shell error-handling path, with tmux replaced by a
+        # harmless stub. The fake failing command cannot start any device.
+        with tempfile.TemporaryDirectory() as directory:
+            stub = Path(directory) / 'tmux'
+            stub.write_text('#!/bin/sh\nexit 0\n')
+            stub.chmod(0o755)
+            env = dict(os.environ, PATH=directory + os.pathsep + os.environ['PATH'])
+            process = subprocess.Popen(shlex.split(command), stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+            try:
+                self.assertEqual(process.stdout.readline().strip(), 'original-test-error')
+                self.assertEqual(process.stdout.readline().strip(), '')
+                self.assertIn('启动失败（退出码 1）', process.stdout.readline())
+                self.assertIsNone(process.poll())  # waiting for acknowledgment, not the panel
+                output, _ = process.communicate('\n', timeout=3)
+                self.assertIn('panel-entered', output)
+                self.assertEqual(process.returncode, 0)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
 
     def test_kernel_selection_replaces_only_the_waiting_panel(self):
         with patch.object(bench, 'current_run', return_value=None), \

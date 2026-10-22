@@ -5,6 +5,7 @@ import io
 import os
 from pathlib import Path
 import signal
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -14,6 +15,29 @@ from embodied.applications.workstation import bench, bench_panels as panels
 
 
 class BenchPanelTests(unittest.TestCase):
+    def test_robot_waiting_page_preserves_failure_until_an_explicit_retry(self):
+        result = subprocess.CompletedProcess([], 0, stdout='failed\n')
+        with patch.dict(os.environ, {'TMUX_PANE': '%test'}), \
+             patch.object(bench, 'tmux', return_value=result) as tmux:
+            panels.mark_waiting('kernel')
+        tmux.assert_called_once_with('display-message', '-p', '-t', '%test', '#{@bench_activity}', check=False)
+
+    def test_robot_distinguishes_confirmation_from_launch_failure(self):
+        with patch.dict(os.environ, {'EMBODIED_BENCH_SESSION': 'test-only'}), \
+             patch.object(bench, 'current_run', return_value=None), \
+             patch.object(panels, 'load_config', return_value={'robot': {}}), \
+             patch.object(panels, 'load_robot_profile', return_value={'robot': {'can_interface': 'test-can'}}), \
+             patch.object(Path, 'exists', return_value=False), \
+             patch.object(Path, 'is_char_device', return_value=False), \
+             patch.object(bench, 'activity', return_value='kernel') as state:
+            rows, _ = panels.kernel_rows()
+            self.assertIn('等待启动确认', str(dict(rows)['robot']))
+            self.assertEqual(dict(rows)['robot'].level, 'waiting')
+            state.return_value = 'failed'
+            rows, _ = panels.kernel_rows()
+            self.assertIn('启动失败', str(dict(rows)['robot']))
+            self.assertEqual(dict(rows)['robot'].level, 'error')
+
     def test_shared_camera_service_retries_without_owning_or_stopping_it(self):
         with patch('embodied.devices.sensors.client.ensure_service', side_effect=[RuntimeError('startup failed'), None]) as ensure, \
              patch.object(panels, 'load_config', return_value={'paths': {'log_dir': '/tmp/camera-logs'}}), \

@@ -6,7 +6,8 @@
     ./run.sh bench stop stop the kernel and web console it started, and close it
 
 Windows: 1 总控, 2 命令, 3 robot, 4 网页, 5 VR, 6 相机, 7 宣传.
-Web and shared camera services start with the workbench; robot startup remains explicit.
+Web and shared camera services start with the workbench; interactive startup opens
+the robot's confirmation prompt before any motor is enabled.
 The dashboard only types commands and sends Ctrl+C to the kernel window; it never owns a device.
 """
 import argparse
@@ -31,7 +32,8 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传'
-UI_REVISION = '7'
+UI_REVISION = '8'
+ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
 KERNELS = [  # key, label, command typed into the kernel window, real arm
@@ -42,9 +44,9 @@ KERNELS = [  # key, label, command typed into the kernel window, real arm
     ('5', '仿真 · 无输入（网页 / 动作 / 策略）', './run.sh kernel profiles start --profile sim-manual', False),
 ]
 RESTART_TARGETS = {
-    '1': ('interfaces', '🖥', '工作台界面', '重启网页、宣传站与状态页；robot、共享相机保持运行'),
-    '2': ('robot', '🦾', 'robot', '沿用本次启动配置；真机退出会进入阻尼，执行前确认'),
-    '3': ('camera', '📷', '共享相机', '重启服务并读取配置；录制中不能重启'),
+    '1': ('interfaces', '▤', '工作台界面', '重启网页、宣传站与状态页；robot、共享相机保持运行'),
+    '2': ('robot', '◇', 'robot', '沿用本次启动配置；真机退出会进入阻尼，执行前确认'),
+    '3': ('camera', '▣', '共享相机', '重启服务并读取配置；录制中不能重启'),
 }
 
 
@@ -169,7 +171,22 @@ def owned_run():
 def kernel_busy():
     found = window('kernel')
     state = activity('kernel')
-    return bool(found and found[1] and (state == 'kernel' or (found[1] not in SHELLS and state != 'waiting')))
+    return bool(found and found[1] and (state == 'kernel' or (found[1] not in SHELLS and state not in ('waiting', 'failed'))))
+
+
+def prepare_robot_start(attach):
+    """An interactive open stages the normal real-manual confirmation once."""
+    if not attach or not sys.stdin.isatty() or not sys.stdout.isatty() or current_run():
+        return False
+    state = activity('kernel')
+    if state == 'waiting':
+        start_kernel(REAL + ' --profile real-manual')
+        return True
+    if state == 'kernel':
+        # Reopening at an existing confirmation never submits or replaces it.
+        tmux('select-window', '-t', window('kernel')[0])
+        return True
+    return False
 
 
 def refresh_panel(pane, command):
@@ -222,7 +239,7 @@ def start(attach=True):
                 and role in ('web', 'site', 'vr', 'camera'))
             if not found[1] or upgrade:
                 tmux('respawn-pane', '-k', '-t', found[0], '-c', str(ROOT), command)
-                if role == 'kernel':
+                if role == 'kernel' and activity('kernel') != 'failed':
                     tmux('set-option', '-p', '-t', found[0], '@bench_activity', 'waiting')
                 tmux('set-option', '-p', '-t', found[0], '@bench_ui_revision', UI_REVISION)
             elif panel_upgrade:
@@ -231,7 +248,8 @@ def start(attach=True):
         else:
             new_window(role, command, first=not running)
             running = True
-    tmux('select-window', '-t', window('home')[0])
+    if not prepare_robot_start(attach):
+        tmux('select-window', '-t', window('home')[0])
     if attach:
         if not sys.stdin.isatty():
             print(f'工作台已在后台运行：tmux attach -t {SESSION}')
@@ -413,10 +431,24 @@ def start_kernel(command):
         raise RuntimeError('robot 窗口不空闲；Ctrl+B 3 查看。')
     # A waiting panel owns no device. Replace only that panel (or an idle shell),
     # then return to it after the explicitly selected kernel has finished exiting.
-    script = f'trap ":" INT; {command}; result=$?; echo "内核已退出（状态 $result）。"; exec {panel_command("kernel")}'
+    pane = shlex.quote(target[0])
+    script = f'''trap ":" INT
+{command}
+result=$?
+tmux set-option -p -t {pane} @bench_last_exit "$result"
+if [ "$result" -ne 0 ]; then
+    tmux set-option -p -t {pane} @bench_activity failed
+    printf '\\nrobot 启动失败（退出码 %s）；原始错误保留在上方。\\n' "$result"
+    read -r -p '启动失败，按回车返回总控。' _
+    tmux select-window -t {shlex.quote(SESSION + ':1')}
+else
+    echo "robot 已退出（状态 $result）。"
+fi
+exec {panel_command("kernel")}'''
     tmux('set-option', '-p', '-t', target[0], '@bench_activity', 'kernel')
-    tmux('respawn-pane', '-k', '-t', target[0], '-c', str(ROOT), 'bash -c ' + shlex.quote(script))
+    tmux('set-option', '-p', '-t', target[0], '@bench_last_exit', '')
     tmux('set-option', '-p', '-t', target[0], '@bench_kernel_command', command)
+    tmux('respawn-pane', '-k', '-t', target[0], '-c', str(ROOT), 'bash -c ' + shlex.quote(script))
     tmux('select-window', '-t', target[0])
     return 'robot 窗口正在启动；按提示确认，就绪后 Ctrl+B 1 回总控。'
 
@@ -451,7 +483,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
     from embodied.applications.workstation.bench_panels import snapshot, vr_rows
 
     status = Table(box=None, padding=(0, 1), expand=True, header_style='dim')
-    status.add_column('', width=3, no_wrap=True)
+    status.add_column('', width=2, no_wrap=True, style=ICON_STYLE)
     status.add_column('设备', width=12, no_wrap=True, style='bold')
     status.add_column('状态', ratio=1)
     details = []
@@ -464,8 +496,8 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
         for label, value in robot_rows:
             if isinstance(value, Status):
                 is_robot = label != 'USB-CAN'
-                status.add_row('🦾' if is_robot else '🔌', Text('robot' if is_robot else label), status_text(value))
-        details.append(Text('真机测试按 3，仿真按 5；网页会自动连接就绪的 robot。', style='dim'))
+                status.add_row('◇' if is_robot else '↔', Text('robot' if is_robot else label), status_text(value))
+        details.append(Text('Ctrl+B → 3 查看 robot 启动确认或错误；仿真按 5。网页自动连接就绪的 robot。', style='dim'))
         for real, section in ((False, '仿真'), (True, '真机')):
             first = True
             for key, label, _, is_real in KERNELS:
@@ -477,7 +509,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
     else:
         run, identity = found
         summary = kernel_summary(run, identity)
-        status.add_row('🦾', 'robot', status_text(summary[1]))
+        status.add_row('◇', 'robot', status_text(summary[1]))
         details.extend(Text(str(line), style='dim') for line in (summary[0], *summary[2:]))
         rows = actions(run, identity, episode)
         for section, keys in (('观察', 'wmvo'), ('测试', 'bxt'), ('数据', 'cke'), ('进阶', 'hjg')):
@@ -493,12 +525,12 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
         menu.add_row('停止', 'S', Text('连按两次停止内核；真机进入阻尼，请先扶住', style='yellow'))
     vr, _ = vr_rows(found)
     label, value = vr[0]
-    status.add_row('🥽', Text(label), status_text(value))
+    status.add_row('◉', Text(label), status_text(value))
     _, cameras, _ = snapshot('camera')
     for label, value in cameras:
         if isinstance(value, Status):
             service = label == '共享服务'
-            status.add_row('▦' if service else '📷', Text('相机服务' if service else label), status_text(value))
+            status.add_row('▤' if service else '▣', Text('相机服务' if service else label), status_text(value))
     try:
         from embodied.core.project import load_config
         from embodied.applications.workstation.ports import summary
@@ -510,7 +542,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
     if show_restart:
         body = Table.grid(padding=(0, 2), expand=True)
         body.add_column(style='bold color(215)', width=2)
-        body.add_column(width=3)
+        body.add_column(width=2, style=ICON_STYLE)
         body.add_column(style='bold', width=12)
         body.add_column(ratio=1)
         for key, (_, icon, label, description) in RESTART_TARGETS.items():
