@@ -1,1 +1,1 @@
-"""Function-oriented components consolidated into QuestArmTeleop."""
+"""Function-oriented components consolidated into ThoughtIntoAction."""

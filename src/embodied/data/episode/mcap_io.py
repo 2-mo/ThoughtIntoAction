@@ -13,7 +13,7 @@ TOPICS = {'state': '/robot/state', 'frame': '/camera/wrist/rgb/index',
 class RecordWriter:
     def __init__(self, stream, manifest):
         self.writer = Writer(stream, compression=CompressionType.ZSTD, enable_crcs=True)
-        self.writer.start(library='QuestArmTeleop', profile='')
+        self.writer.start(library='ThoughtIntoAction', profile='')
         self.offset = manifest['started_unix_ns'] - manifest['started_monotonic_ns']
         self.started = manifest['started_monotonic_ns']
         self.last_diagnostics_ns = None

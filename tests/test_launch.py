@@ -225,7 +225,7 @@ class CatalogTests(unittest.TestCase):
              patch.dict(os.environ, {'TERM': 'xterm'}), \
              patch.dict(sys.modules, {'rich.console': None}):
             self.assertEqual(main(['help']), 0)
-            self.assertIn('QuestArm', output.getvalue())
+            self.assertIn('知行有灵 · Thought into Action', output.getvalue())
             self.assertIn('./run.sh help --all', output.getvalue())
 
     def test_rich_help_keeps_literal_parameters_on_narrow_terminals(self):

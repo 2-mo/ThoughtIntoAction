@@ -11,7 +11,7 @@
 
 **先直接复用完整 arx Quest 链路，再接入本页功能。** 包括 XR 输入、coordinator/router、相对映射和按键状态机在内的上游实现均优先保留。手机、点动、通用动作 API 和控制权切换从主方案阶段五开始实施；本页“第一批”指扩展的第一批，不是整个迁移的第一批。每项先尝试配置或边界适配，确需修改 worker 时登记局部补丁，并保留原 Quest 基线的独立回归入口。
 
-所有选用代码统一交付在 QuestArmTeleop：Swift App/Xcode 工程放入 `apps/ios/`，协议与设备适配放入 `src/embodied/devices/inputs/`，运动算法按环境边界纳入操作模块或 `control/motion/`。来源和补丁固定记录，构建及运行不引用兄弟仓库。现有 `src/embodied/applications/calibration/wrist/` 的手动/自动采样、计划、求解与独立验证同样保留，详见主方案的自动手眼标定迁移；它与后续负载辨识分别交付。
+所有选用代码统一交付在 ThoughtIntoAction：Swift App/Xcode 工程放入 `apps/ios/`，协议与设备适配放入 `src/embodied/devices/inputs/`，运动算法按环境边界纳入操作模块或 `control/motion/`。来源和补丁固定记录，构建及运行不引用兄弟仓库。现有 `src/embodied/applications/calibration/wrist/` 的手动/自动采样、计划、求解与独立验证同样保留，详见主方案的自动手眼标定迁移；它与后续负载辨识分别交付。
 
 各功能的依赖方向、状态所有权和独立验证见 [组件边界与独立优化方案](component-boundaries.md)。运动操作接口供手机、网页、标定和策略使用；相机、采集、标定流程与模型推理保留各自模块，不集中到一个操作管理器。
 

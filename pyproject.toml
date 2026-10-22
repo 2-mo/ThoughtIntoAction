@@ -1,7 +1,7 @@
 [project]
-name = "quest-arm-teleop"
+name = "thought-into-action"
 version = "0.1.0"
-description = "Quest teleoperation, collection, calibration and simulation for X5-2025"
+description = "知行有灵 · Thought into Action — Modular embodied intelligence platform"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [

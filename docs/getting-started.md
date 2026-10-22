@@ -94,7 +94,7 @@ uv sync --locked           # 平台环境：Python 3.12，安装到 .venv/
 ## 5. 从数据到策略
 
 ```text
-遥操采集 ──▶ episode（MCAP + 视频）──▶ LeRobot v2.1 ──▶ H800 训练 ──▶ checkpoint ──▶ 机械臂执行
+遥操采集 ──▶ episode（MCAP + 视频）──▶ LeRobot v2.1 ──▶ 训练服务器 训练 ──▶ checkpoint ──▶ 机械臂执行
  sim / real      data review            data export        scripts/training/openpi    policy pi05-sft
 ```
 

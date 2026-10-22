@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>QuestArmTeleop · 运行监看</title>
+<title>知行有灵 · Thought into Action · 运行监看</title>
 <style>
-:root{color-scheme:dark;font:15px system-ui;background:#111820;color:#e2ebf3}body{max-width:1100px;margin:32px auto;padding:0 20px}h1{font-size:24px}header{display:flex;justify-content:space-between;align-items:center}small{color:#a7b9c8}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}section{background:#1b2632;padding:20px;border-radius:10px;margin-top:18px}img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#0d131b}canvas{width:100%;height:220px;background:#111820}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}.bad{color:#ffb284}.ok{color:#85d9ae}table{width:100%;text-align:right;font-variant-numeric:tabular-nums}th:first-child,td:first-child{text-align:left}td,th{padding:6px;border-bottom:1px solid #30404f}@media(max-width:760px){.grid{grid-template-columns:1fr}}
+:root{color-scheme:dark;font:15px system-ui;background:#111820;color:#e2ebf3}body{max-width:1100px;margin:32px auto;padding:0 20px}h1{font-size:24px}header{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}small{color:#a7b9c8}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}section{background:#1b2632;padding:20px;border-radius:10px;margin-top:18px}img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#0d131b}canvas{width:100%;height:220px;background:#111820}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}.bad{color:#ffb284}.ok{color:#85d9ae}table{width:100%;text-align:right;font-variant-numeric:tabular-nums}th:first-child,td:first-child{text-align:left}td,th{padding:6px;border-bottom:1px solid #30404f}@media(max-width:760px){.grid{grid-template-columns:1fr}}
 </style>
-<header><h1>QuestArmTeleop · 运行监看</h1><small>只读 · 操作从终端执行</small></header>
+<header><h1>知行有灵 · 运行监看</h1><small>只读 · 操作从终端执行</small></header>
 <p id="health">等待运行中的遥操会话…</p>
 <div class="grid"><section><h2>腕部 D435i</h2><img id="camera" alt="相机尚未就绪"><p id="cameraStatus"></p></section>
 <section><h2>机械臂</h2><table><thead><tr><th>关节</th><th>反馈 rad</th><th>提交 rad</th><th>误差 rad</th></tr></thead><tbody id="joints"></tbody></table><p id="mode"></p><small>力矩来自 SDK 电机估算；画面与曲线约 5 Hz 更新。</small></section></div>

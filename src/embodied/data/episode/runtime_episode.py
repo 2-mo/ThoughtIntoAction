@@ -92,7 +92,7 @@ class RuntimeEpisodeWriter:
         save_json(self.path / 'episode.json', self.manifest)
         self.stream = (self.path / 'episode.mcap').open('xb')
         self.writer = Writer(self.stream, compression=CompressionType.ZSTD, enable_crcs=True)
-        self.writer.start(library='QuestArmTeleop', profile='quest.runtime.v2')
+        self.writer.start(library='ThoughtIntoAction', profile='quest.runtime.v2')
         self.channels = {}
         for kind, topic in self.topics.items():
             schema = self.writer.register_schema('quest_runtime.' + kind.split(':')[0] + '.v2', 'jsonschema',

@@ -303,7 +303,7 @@ def relative(path):
 def overview_text(reason=None):
     """Read-only fallback for pipes and machines without terminal UI dependencies."""
     found = current_run()
-    lines = ['QuestArmTeleop · 工作台概览', '']
+    lines = ['知行有灵 · Thought into Action · 工作台概览', '']
     if reason:
         lines += [reason, '']
     if found:
@@ -501,7 +501,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False):
         body = menu
     hints = Text('? 帮助   / 搜索   L 命令目录   P 端口   Q 离开   Z 关闭', style='dim')
     return Group(
-        Panel(status, title='QuestArmTeleop · 工作台', border_style='#b7a1e8'),
+        Panel(status, title='知行有灵 · Thought into Action · 工作台', border_style='#b7a1e8'),
         Panel(body, title='操作帮助' if show_help else '选择下一步', border_style='dim'),
         Text(('操作未完成 · ' if failed else '') + message, style='red' if failed else '#63c5f8'),
         hints,

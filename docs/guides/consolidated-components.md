@@ -1,6 +1,6 @@
 # 三个仓库合并后的使用与维护
 
-`arx5_test`、`reBotArm_control_py`、`robot-teleop` 已从原位置移入 QuestArmTeleop。日常只维护本仓库；可用源码按功能位于 `src/`，前端位于 `apps/console/`，iOS 工程仍在 `apps/ios/`。原项目完整工作树曾归档在本机 `outputs/archives/migration/originals/`（未纳入 git），不参与导入、启动、构建或测试。
+`arx5_test`、`reBotArm_control_py`、`robot-teleop` 已从原位置移入 ThoughtIntoAction。日常只维护本仓库；可用源码按功能位于 `src/`，前端位于 `apps/console/`，iOS 工程仍在 `apps/ios/`。原项目完整工作树曾归档在本机 `outputs/archives/migration/originals/`（未纳入 git），不参与导入、启动、构建或测试。
 
 默认 Quest 遥操继续使用 `control/` 中的 arx 原生 VR、coordinator/router、控制器、设备后端与现有工作台。合并没有替换它的默认控制算法。
 

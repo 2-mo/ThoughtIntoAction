@@ -615,7 +615,7 @@ wheels = [
 ]
 
 [[package]]
-name = "quest-arm-teleop"
+name = "thought-into-action"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

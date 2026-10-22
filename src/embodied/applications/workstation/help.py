@@ -44,7 +44,7 @@ def _plain_rows(rows) -> list[str]:
 
 
 def overview_text() -> str:
-    lines = ["QuestArm · 命令导航", "用法：./run.sh <功能> <命令> [参数]"]
+    lines = ["知行有灵 · Thought into Action · 命令导航", "用法：./run.sh <功能> <命令> [参数]"]
     for title, rows in (("常用起点", QUICK_START), ("按任务找功能组", TASK_GROUPS), ("逐层查看", HELP_ROUTES)):
         lines.extend(["", title, *_plain_rows(rows)])
     return "\n".join(lines)
@@ -116,7 +116,7 @@ def print_help(group: str | None = None, *, full: bool = False) -> None:
         contents = [Text("用法：./run.sh <功能> <命令> [参数]")]
         for title, rows in (("常用起点", QUICK_START), ("按任务找功能组", TASK_GROUPS), ("逐层查看", HELP_ROUTES)):
             contents.extend([Text(""), Text(title, style="bold"), _rich_rows(console, rows)])
-        console.print(Panel(Group(*contents), title=Text("QuestArm · 命令导航", style="bold cyan"),
+        console.print(Panel(Group(*contents), title=Text("知行有灵 · Thought into Action · 命令导航", style="bold cyan"),
                             title_align="left", border_style="bright_black", expand=False))
         return
 

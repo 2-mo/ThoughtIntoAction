@@ -1,1 +1,1 @@
-"""QuestArmTeleop integration around the pinned arx implementation."""
+"""ThoughtIntoAction integration around the pinned arx implementation."""

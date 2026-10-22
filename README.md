@@ -1,6 +1,6 @@
-# 模块化具身智能平台
+# 知行有灵 · Thought into Action
 
-一个仓库覆盖遥操、运动控制、采集、导出、训练和策略执行。公共操作接口、运动算法、数据流程与设备驱动各自维护，机械臂、相机和控制来源按契约接入。设备实现包括 ARX X5-2025 与七轴无夹爪 Reference7 教学仿真，输入支持 Quest / iPhone，相机支持 RealSense，训练和策略包括 π0.5、GR00T。Reference7 验证不同轴数的插件接入，不是另一款真机；具体边界见[完整架构](docs/architecture/overview.md)。
+模块化具身智能平台。一个仓库覆盖遥操、运动控制、采集、导出、训练和策略执行。公共操作接口、运动算法、数据流程与设备驱动各自维护，机械臂、相机和控制来源按契约接入。设备实现包括 ARX X5-2025 与七轴无夹爪 Reference7 教学仿真，输入支持 Quest / iPhone，相机支持 RealSense，训练和策略包括 π0.5、GR00T。Reference7 验证不同轴数的插件接入，不是另一款真机；具体边界见[完整架构](docs/architecture/overview.md)。
 
 ## 从这里开始
 
@@ -22,6 +22,8 @@
 ## 安装
 
 ```bash
+git clone https://github.com/2-mo/ThoughtIntoAction.git
+cd ThoughtIntoAction
 ./run.sh setup deps        # 准备锁版本的正式外部依赖（outputs/dependencies）
 uv sync --locked           # 平台环境（Python 3.12）
 ./run.sh kernel setup      # 内核环境（Python 3.10）

@@ -1,6 +1,6 @@
 # 第一阶段重构记录
 
-基准：`teleop-presets-x5`、当前 X5-2025 hybrid 模型、单腕部 D435i、本机推理、H800 训练。
+基准：`teleop-presets-x5`、当前 X5-2025 hybrid 模型、单腕部 D435i、本机推理、训练服务器 训练。
 
 ## 本轮边界
 
