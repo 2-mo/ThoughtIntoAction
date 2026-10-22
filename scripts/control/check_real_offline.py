@@ -110,6 +110,25 @@ class NativeInterfaceChecks(unittest.TestCase):
             np.testing.assert_allclose(model_gravity - jaws,
                                        solver.inverse_dynamics(q, np.zeros(6), np.zeros(6)), atol=1e-9)
 
+    def test_grasp_effort_uses_sdk_units_feedback_and_clears_position_gains(self):
+        backend = self.backend()
+        hardware = backend._hardware
+        hardware.state.gripper_vel = -.002
+        hardware.state.gripper_torque = .2
+        state = backend.read_state(10.)
+        self.assertEqual(state.gripper_velocity, -.002)
+        self.assertEqual(state.gripper_effort, .2)
+        self.assertIsNone(state.gripper_contact)
+        backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, gripper_effort=.2), 10.)
+        packet, gain = hardware.sent[-1]
+        self.assertEqual(packet.gripper_torque, .2)  # Negative open readout -> positive closes.
+        self.assertEqual((gain.gripper_kp, gain.gripper_kd), (0., 0.))
+        with self.assertRaises(ValueError):
+            backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, gripper_effort=backend._gripper_effort_max + 1), 10.004)
+        backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, gripper_target=.04), 10.008)
+        self.assertEqual(hardware.sent[-1][0].gripper_torque, 0.)
+        self.assertGreater(hardware.sent[-1][1].gripper_kp, 0.)
+
     def test_native_gravity_and_unscaled_gains(self):
         backend = self.backend()
         hardware = backend._hardware

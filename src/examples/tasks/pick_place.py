@@ -23,6 +23,7 @@ def run(robot: Robot, *, observe=None, verify_grasp=None):
     try:
         with robot.task("visual pick and place") as task:
             task.pick(observe=observe, width=width, verify_grasp=verify_grasp,
+                      effort=robot.describe()['robot']['gripper']['effort_max'] * .2,
                       approach_offset=[0., 0., .02])
             task.place(xyz=destination, approach_offset=[0., 0., .02])
     except GraspUnconfirmed:

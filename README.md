@@ -1,6 +1,6 @@
 # 模块化具身智能平台
 
-一个仓库覆盖遥操、运动控制、采集、导出、训练和策略执行。公共操作接口、运动算法、数据流程与设备驱动各自维护，机械臂、相机和控制来源按契约接入；当前贯通的机械臂是 ARX X5-2025，搭配 Quest / iPhone、RealSense 与 MuJoCo，训练和策略包括 π0.5、GR00T。其他机械臂仍需模型与后端适配，具体边界见[完整架构](docs/architecture/overview.md)。
+一个仓库覆盖遥操、运动控制、采集、导出、训练和策略执行。公共操作接口、运动算法、数据流程与设备驱动各自维护，机械臂、相机和控制来源按契约接入。设备实现包括 ARX X5-2025 与七轴无夹爪 Reference7 教学仿真，输入支持 Quest / iPhone，相机支持 RealSense，训练和策略包括 π0.5、GR00T。Reference7 验证不同轴数的插件接入，不是另一款真机；具体边界见[完整架构](docs/architecture/overview.md)。
 
 ## 从这里开始
 
@@ -14,6 +14,9 @@
 | 理解代码、找实现 | [架构概览](docs/architecture/overview.md) · [源码导航](src/README.md) |
 | 学习如何写运动与采集程序 | `./run.sh examples` · [Python 示例](src/examples/README.md) · [Robot 接口](docs/reference/robot-primitives.md) |
 | 编写分阶段任务、重复仿真测试 | `./run.sh examples approach_retreat`、`./run.sh examples sim_task` |
+| 验证七轴无夹爪模型 | `./run.sh examples reference7` |
+| 用反馈评估速度与跟踪质量 | `./run.sh examples benchmark --degrees 10 --speed 0` |
+| 连续路径、任务与相机一起录制 | `./run.sh examples move_path`、`./run.sh examples record_task` |
 | 查看后续工作 | [工程计划](docs/plans/README.md) |
 
 ## 安装
@@ -33,7 +36,7 @@ uv sync --locked           # 平台环境（Python 3.12）
 
 工作台固定打开 **1 内核、2 命令、3 总控、4 网页、5 VR、6 相机、7 宣传** 七个终端窗口，用 `Ctrl+B` 后按数字切换。默认打开带采集面板的监看页（<http://127.0.0.1:18081/>），只读连接统一内核，并启动宣传网站。VR 未连接、机械臂未通电或相机未就绪时，对应窗口保留状态与操作提示，设备接入不会自动使能机械臂。网页启动失败会显示日志，按 `R` 重试。再次运行 `./run.sh` 会补齐缺少的窗口，保留已有进程。
 
-新版监看页提供“实测速度 · 质量”和“任务 / 技能复核”：查看反馈速度、周期与相机帧质量，复核任务阶段及版本化技能标注。采集数据按机器人关节与夹爪契约保存，可选择外部相机作为参考，见[采集与复核](docs/guides/recording.md)。
+新版监看页提供“实测速度 · 质量”和“任务 / 技能复核”：查看反馈速度、周期、采集心跳、帧计数和错误，自动更新任务阶段。模型与相机来自当前运行描述，可显示七轴无夹爪模型。采集数据按机器人关节与夹爪契约保存，可选择外部相机作为参考；程序任务保留 scripted 来源并生成待复核标注，见[采集与复核](docs/guides/recording.md)。
 
 通过 SSH 打开工作台时，监看页自动绑定 SSH 连接使用的服务器地址，**以窗口 4 显示的链接为准**；客户端的 `127.0.0.1` 不指向远程机器。也可在 `configs/local.toml` 的 `[viewer_service]` 中指定 `host`，或手动启动时使用 `--host <服务器 IPv4>`。
 

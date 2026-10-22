@@ -227,6 +227,7 @@ class RealBackend:
             control.default_gripper_kp, control.default_gripper_kd = map(float, gripper_gains)
         self._gripper_kp = control.default_gripper_kp
         self._gripper_kd = control.default_gripper_kd
+        self._gripper_effort_max = float(robot.gripper_torque_max)
         self._last_sdk_timestamp = None
         self._received_at = float("-inf")
         self._closed = False
@@ -364,6 +365,8 @@ class RealBackend:
             dq=dq,
             pose=pose,
             gripper_width=width,
+            gripper_velocity=float(sample.gripper_vel),
+            gripper_effort=float(sample.gripper_torque),
             received_at=self._received_at,
             mode=Mode.DISABLED if self._stopped else self.controller.mode,
             gripper_mode=Mode.FREE_DRIVE if self._stopped else self.controller.gripper_mode,
@@ -397,6 +400,10 @@ class RealBackend:
         check_cancelled()
         if state.fault:
             raise RuntimeError(f"cannot command invalid feedback: {state.fault}")
+        effort = command.gripper_effort
+        if effort is not None and (damping_only or command.mode != Mode.COMMAND_FOLLOWING
+                or not np.isfinite(effort) or not 0 <= effort <= self._gripper_effort_max):
+            raise ValueError('Gripper closing effort is invalid or exceeds the SDK torque capability')
         if damping_only and (command.mode is not Mode.FREE_DRIVE
                              or command.gripper_mode is not Mode.FREE_DRIVE):
             raise ValueError('damping feedback phase cannot include position or gripper control')
@@ -411,6 +418,8 @@ class RealBackend:
         if self.controller.gripper_mode != Mode.FREE_DRIVE:
             gain.gripper_kp = self._gripper_kp
             gain.gripper_kd = self._gripper_kd
+        if effort is not None:
+            gain.gripper_kp = gain.gripper_kd = 0.0
         packet = self._sdk.JointState(6)
         packet.pos()[:] = state.q if target is None else target
         packet.vel()[:] = self.controller.dq_target
@@ -431,7 +440,8 @@ class RealBackend:
             else self.controller.gripper_target
         )
         packet.gripper_vel = 0.0
-        packet.gripper_torque = 0.0
+        packet.gripper_torque = (0.0 if effort is None else
+                                 -float(np.copysign(effort, self.config.gripper_open_readout)))
         packet.timestamp = 0.0  # With zero preview, replace the current waypoint.
         sent = {
             "command_time_s": _json_value(float(now)),

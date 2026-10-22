@@ -47,7 +47,11 @@ def load_settings(path: str | Path | None = None, vr_path: str | Path | None = N
         raise ValueError('park_q is outside joint limits')
     if any(x <= 0 for x in robot.joint_velocity_max + robot.torque_max) or any(x < 0 for x in robot.kp + robot.kd):
         raise ValueError('Profile capabilities must be positive and gains nonnegative')
-    for key in ('joint_step_limit', 'gripper_max_width', 'gripper_velocity_max_m_s'):
+    for key in ('joint_step_limit',):
         if not math.isfinite(getattr(robot, key)) or getattr(robot, key) <= 0:
             raise ValueError(f'{key} must be finite and positive')
+    for key in ('gripper_max_width', 'gripper_velocity_max_m_s'):
+        value = getattr(robot, key)
+        if not math.isfinite(value) or (value <= 0 if getattr(robot, 'has_gripper', True) else value != 0):
+            raise ValueError(f'{key} must be positive for a gripper, or zero when has_gripper is false')
     return Settings(robot, str(config_path), str(vr_config_path))

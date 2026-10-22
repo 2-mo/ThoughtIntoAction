@@ -1,1 +1,1 @@
-"""Shared OpenPI observation/action embodied.devices.robots.arx5; no training execution at import."""
+"""Shared OpenPI observation/action adapters; no training execution at import."""

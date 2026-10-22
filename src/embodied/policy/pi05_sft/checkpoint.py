@@ -35,7 +35,7 @@ def trained_cameras(data_config):
     return ['wrist_rgb', 'exterior_rgb'] if data_config['exterior_camera'] else ['wrist_rgb']
 
 
-def inspect_checkpoint(path):
+def inspect_checkpoint(path, *, adapter_spec=None):
     path = Path(path).resolve()
     with zipfile.ZipFile(path/'metadata.pt') as archive:
         names = [n for n in archive.namelist() if n.endswith('/data.pkl')]
@@ -50,23 +50,26 @@ def inspect_checkpoint(path):
     stats = (path/'assets'/repo/'norm_stats.json').resolve()
     if not stats.is_relative_to(path/'assets'):
         raise ValueError('Asset path escapes checkpoint')
+    adapter = checkpoint_adapter(config['data'].get('adapter_spec'), adapter_spec, repo)
+    dimension = len(adapter['action_indices']) if adapter else 7
     values = json.loads(stats.read_text())['norm_stats']
     for key in ('state', 'actions'):
         for field in ('mean', 'std', 'q01', 'q99'):
-            if len(values[key][field]) != 7:
-                raise ValueError('Expected seven-dimensional X5 normalization statistics')
+            if len(values[key][field]) != dimension:
+                raise ValueError('Normalization dimension disagrees with the checkpoint adapter')
     if not (path/'model.safetensors').is_file():
         raise FileNotFoundError(path/'model.safetensors')
     return {'checkpoint': str(path), 'step': meta['global_step'], 'config_name': config['name'],
-            'model': model, 'asset_id': repo, 'stats': str(stats), 'cameras': trained_cameras(config['data']),
-            'adapter': 'project X5Inputs/X5Outputs; delta6 joints + absolute gripper metres (user confirmed)',
+            'model': model, 'asset_id': repo, 'stats': str(stats), 'cameras': list(adapter['camera_roles'].values()) if adapter else trained_cameras(config['data']),
+            'adapter_spec': adapter,
+            'adapter': 'joint contract' if adapter else 'X5 preset: delta6 joints + absolute gripper metres',
             'openpi_revision': OPENPI_REVISION}
 
 
 DEFAULT_JAX_CHECKPOINT = Path('/home/r2/work/checkpoints/blue_cube_jax_v1')
 
 
-def inspect_jax_checkpoint(path, horizon=15):
+def inspect_jax_checkpoint(path, horizon=15, *, adapter_spec=None):
     path = Path(path).expanduser().resolve()
     if not (path/'params').is_dir():
         steps = [p for p in path.iterdir() if p.name.isdigit() and (p/'params/_METADATA').is_file()]
@@ -77,12 +80,15 @@ def inspect_jax_checkpoint(path, horizon=15):
         raise ValueError('Missing Orbax params metadata')
     files = list((path/'assets').rglob('norm_stats.json'))
     if len(files) != 1:
-        raise ValueError('Expected exactly one checkpoint-owned X5 stats asset')
+        raise ValueError('Expected exactly one checkpoint-owned normalization asset')
+    repo = str(files[0].parent.relative_to(path / 'assets'))
+    adapter = checkpoint_adapter(None, adapter_spec, repo)
+    dimension = len(adapter['action_indices']) if adapter else 7
     values = json.loads(files[0].read_text())['norm_stats']
     for key in ('state', 'actions'):
         for field in ('mean', 'std', 'q01', 'q99'):
-            if len(values[key][field]) != 7:
-                raise ValueError('Expected seven-dimensional X5 statistics')
+            if len(values[key][field]) != dimension:
+                raise ValueError('Normalization dimension disagrees with the checkpoint adapter')
     if not 1 <= horizon <= 50:
         raise ValueError('JAX horizon must be in 1..50')
     return {'checkpoint':str(path), 'step':int(path.name) if path.name.isdigit() else None,
@@ -90,5 +96,26 @@ def inspect_jax_checkpoint(path, horizon=15):
                 action_horizon=horizon, max_token_len=200, discrete_state_input=True,
                 dtype='bfloat16', pytorch_compile_mode=None),
             'stats':str(files[0]), 'asset_id':str(files[0].parent.relative_to(path/'assets')),
-            'openpi_revision':OPENPI_REVISION, 'cameras':None,
-            'config_source':'project X5 adapter defaults; Orbax checkpoint does not store training config'}
+            'openpi_revision':OPENPI_REVISION, 'cameras':list(adapter['camera_roles'].values()) if adapter else None,
+            'adapter_spec':adapter,
+            'config_source':'explicit contract adapter; Orbax model defaults' if adapter else 'project X5 adapter defaults; Orbax checkpoint does not store training config'}
+
+
+def checkpoint_adapter(recorded, supplied, repo):
+    """Orbax callers pass the dataset adapter explicitly; never guess from 7D stats.
+
+    Contract asset IDs bind normalization to joint order, gripper and camera roles.
+    Old X5 assets retain their explicitly named legacy preset.
+    """
+    from embodied.policy.openpi.adapter import validate_spec, asset_id
+    if recorded is not None and supplied is not None and recorded != supplied:
+        raise ValueError('Supplied adapter differs from checkpoint training metadata')
+    spec = recorded if recorded is not None else supplied
+    if spec is None:
+        if repo.startswith('local/joint_contract_'):
+            raise ValueError('This JAX checkpoint requires the explicit adapter_spec from its training dataset')
+        return None
+    spec = validate_spec(spec)
+    if asset_id(spec) != repo:
+        raise ValueError('Adapter joint order/camera roles differ from the normalization asset identity')
+    return spec

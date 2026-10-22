@@ -77,3 +77,22 @@ el('review-task').onchange = taskTimeline;
 el('review-episode').onchange = () => {annotations = null; annotationTimeline(); load();};
 el('annotation-approve').onclick = () => review('approved');
 el('annotation-reject').onclick = () => review('rejected');
+
+let refreshingTasks = false, closed = false;
+export async function refreshTasks() {
+  if (busy || refreshingTasks || closed || !el('task-review-dialog').open) return;
+  refreshingTasks = true;
+  try {
+    const response = await fetch('/api/review?tasks_only=1', {cache: 'no-store', signal: AbortSignal.timeout(3000)});
+    const result = await response.json();
+    if (!response.ok || result.error) throw Error(result.error || '任务进度刷新失败');
+    snapshot.tasks = result.tasks;
+    options('review-task', (snapshot.tasks || []).map(t => ({...t, id: t.task_id})),
+      t => `${t.task_name} · ${label(t.status)}`, el('review-task').value);
+    taskTimeline();
+    el('task-refresh-status').textContent = '阶段自动刷新 · 每秒一次';
+  } catch (error) {el('task-refresh-status').textContent = `阶段更新中断：${error.message}`;}
+  finally {refreshingTasks = false;}
+}
+const taskTimer = setInterval(refreshTasks, 1000);
+window.addEventListener('pagehide', () => {closed = true; clearInterval(taskTimer);});

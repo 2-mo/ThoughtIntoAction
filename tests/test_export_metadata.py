@@ -59,6 +59,11 @@ class RuntimeTimingTests(unittest.TestCase):
         for layout in ('aligned30_raw250_v2', 'aligned30_runtime_v2'):
             self.assertEqual(entry.dataset_config({'layout': layout, **action}, info),
                              ('local/x5_kernel', 'pi05_x5_kernel'))
+        # A freshly exported historical schema-1 episode now includes its contract,
+        # but keeps requested-target semantics and the original X5 preset.
+        self.assertEqual(entry.dataset_config({'layout': 'aligned30_raw240_v1',
+            'data_contract': {'legacy': True}, 'action_definition': 'requested_joint_position + requested_gripper_width'}, info),
+            ('local/quest_x5', 'pi05_quest_x5'))
         info['features']['action']['shape'] = [8]
         with self.assertRaisesRegex(SystemExit, 'select an adapter'):
             entry.dataset_config({'layout': 'aligned30_runtime_v2', **action}, info)

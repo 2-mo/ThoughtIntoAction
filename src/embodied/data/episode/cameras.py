@@ -27,6 +27,17 @@ def anchor_camera(manifest):
     return selected
 
 
+def camera_roles(cameras, roles):
+    """Optional explicit consumer role -> recorded camera ID mapping."""
+    if roles is None:
+        return None
+    if (not isinstance(roles, dict) or not roles or
+            any(not isinstance(role, str) or not role or not isinstance(camera, str) or camera not in cameras for role, camera in roles.items()) or
+            len(set(roles.values())) != len(roles)):
+        raise ValueError('Camera roles must map unique roles to distinct recorded camera IDs')
+    return dict(roles)
+
+
 def camera_topic(camera_id):
     if not re.fullmatch(r'[a-z][a-z0-9_]*_rgb', camera_id):
         raise ValueError('Invalid camera ID')

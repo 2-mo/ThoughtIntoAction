@@ -2,6 +2,8 @@
 import {renderCameras} from './cameras.js';
 import {renderQuality} from './quality.js';
 import {renderLiveQuality} from './live-quality.js';
+import {collectionMetrics, expireRecording} from './collection-view.js';
+let collectionData = null, collectionReceivedAt = 0;
 // Keep the complete dashboard visible even in a narrow embedded browser pane.
 function fitDashboard() {
   document.documentElement.style.setProperty('--dashboard-scale', String(Math.min(1, innerWidth / 1024)));
@@ -79,7 +81,7 @@ function renderCollection(data = {}) {
   const error = collection?.error || recording?.error || data.runtime_error;
   const kernelMonitor = data.runtime_monitor === true;
   const state = error ? 'ERROR' : collection?.state || (recording ? 'RECORDING' : data.session_id ? 'DISABLED' : 'OFFLINE');
-  const labels = {REPLAY_POSITIONING: '真机回放 · 前往起点', REPLAYING: '真机回放 · 执行中', REPLAY_LOADING: '正在加载回放', PAUSED: '任务采集已暂停', IDLE: '任务采集未开启', POSITIONING: '前往预抓取位', READY: '准备就绪', RECORDING: '● 采集中', BUSY: '正在处理', HOME_WAIT: '等待保存 / 松开 Grip', HOMING: '正在回零', ERROR: '采集异常', DISABLED: '按键采集未启用', OFFLINE: '未连接'};
+  const labels = {FINALIZING: '正在结束写盘', COMPLETE: '已完整保存', STALE: '录制心跳过期', INTERRUPTED: '录制已中断', UNVERIFIED: '录制身份待确认', REPLAY_POSITIONING: '真机回放 · 前往起点', REPLAYING: '真机回放 · 执行中', REPLAY_LOADING: '正在加载回放', PAUSED: '任务采集已暂停', IDLE: '任务采集未开启', POSITIONING: '前往预抓取位', READY: '准备就绪', RECORDING: '● 采集中', BUSY: '正在处理', HOME_WAIT: '等待保存 / 松开 Grip', HOMING: '正在回零', ERROR: '采集异常', DISABLED: '按键采集未启用', OFFLINE: '未连接'};
   document.querySelector('.collection-panel').dataset.state = state;
   const put = (id, text) => { byId(id).textContent = text; byId(id).title = text; };
   put('collection-state', labels[state] || state);
@@ -96,22 +98,16 @@ function renderCollection(data = {}) {
   put('collection-task', recording?.task || collection?.task || '等待采集会话');
   const seconds = recording?.duration_s;
   put('collection-duration', Number.isFinite(seconds) ? Math.floor(seconds / 60).toString().padStart(2, '0') + ':' + Math.floor(seconds % 60).toString().padStart(2, '0') : '—');
-  const cameraCounts = recording?.camera_counts;
-  put('collection-frames', cameraCounts?.exterior_rgb !== undefined ? `${cameraCounts.wrist_rgb} / ${cameraCounts.exterior_rgb}` : String(recording?.counts?.frame ?? '—'));
-  byId('collection-frames').title = cameraCounts?.exterior_rgb !== undefined ? '腕部 / 外部实际写入帧数' : '腕部实际写入帧数';
-  put('collection-samples', String(recording?.counts?.state ?? '—'));
-  put('collection-episode', '当前 Episode：' + (recording?.id || '—'));
-  const drops = Object.values(recording?.dropped || {}).reduce((a, b) => a + b, 0);
-  put('collection-health', error || (recording ? `写入队列 ${recording.queue_size ?? 0} · 丢弃样本 ${drops}` : state === 'IDLE' ? '右摇杆左推开启任务 · B 前往预抓取位' : state === 'PAUSED' ? '右摇杆左推恢复任务 · B 前往预抓取位' : state === 'READY' ? 'A 开始下一条 · B 前往预抓取位' : state === 'OFFLINE' ? '等待采集会话' : '等待采集操作完成'));
+  const metrics = collectionMetrics(data);
+  put('collection-frames', metrics.frames);
+  byId('collection-frames').title = metrics.frameTitle;
+  put('collection-samples', metrics.samples);
+  byId('collection-samples').title = recording ? (recording.live ? '采集进程报告的实时写入计数' : '最后收到的计数，非实时') : '最近已结束记录的最终计数';
+  put('collection-episode', 'Episode：' + (recording?.id || data.episode_metadata?.id || '—'));
+  put('collection-health', error || [metrics.progress, data.collection_hint].filter(Boolean).join(' · ') || '等待采集会话');
   if (kernelMonitor) {
-    put('collection-health', error || data.monitor_message || data.collection_hint || '统一内核只读监看');
-    put('collection-episode', '最近元数据：' + (data.episode_metadata?.id || '—'));
-    const counts = data.episode_metadata?.counts;
-    put('collection-samples', String(counts?.state ?? '—'));
-    put('collection-frames', String(counts?.frame ?? '—'));
-    byId('collection-samples').title = byId('collection-frames').title = '最近已结束记录的最终计数；不代表实时写入速率';
     const help = document.querySelector('.collection-controls');
-    if (help) help.textContent = '统一内核只读监看 · 总控 C / collect run 启动采集 · 未提交元数据不能证明采集仍在运行';
+    if (help) help.textContent = '总控 C / collect run 启动采集 · 心跳计数在完成写盘前不代表数据已持久保存';
     byId('open-replay').disabled = true;
     byId('open-replay').title = '统一内核网页回放尚未接入；旧回放控制已隔离';
   }
@@ -137,6 +133,7 @@ async function refresh() {
     }
     renderCameras(data);
     renderLiveQuality(data);
+    collectionData = data; collectionReceivedAt = performance.now();
     renderCollection(data);
     const safety = data.table_safety;
     byId('table-safety').hidden = !safety;
@@ -191,6 +188,7 @@ async function refresh() {
     }
   } catch {
     window.dispatchEvent(new CustomEvent('teleop-preview', { detail: null }));
+    collectionData = null;
     renderCollection();
     renderLiveQuality();
     renderCameras({camera_error: '监看接口未连接'});
@@ -210,6 +208,10 @@ clearInput('等待手柄新帧');
 refresh();
 // A stalled HTTP request must not leave the last green frame on screen.
 const inputWatchdog = setInterval(() => {
+  if (collectionData) {
+    const expired = expireRecording(collectionData, (performance.now() - collectionReceivedAt) / 1000);
+    if (expired !== collectionData) {collectionData = expired; renderCollection(expired);}
+  }
   if (inputDeadline && performance.now() >= inputDeadline) clearInput('手柄输入数据已过期', 'stale');
   if (controlDeadline && performance.now() >= controlDeadline) {
     controlDeadline = 0;

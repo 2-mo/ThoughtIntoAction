@@ -24,7 +24,7 @@ class MujocoBackend:
         self.controller = controller_factory(config, self.kinematics)
         self._controller_factory = controller_factory
         self.data.qpos[:6] = config.park_q
-        self.data.qpos[6:] = config.gripper_max_width / 2
+        self.data.qpos[6:8] = config.gripper_max_width / 2
         mujoco.mj_forward(self.model, self.data)
         self._state_spec = mujoco.mjtState.mjSTATE_INTEGRATION
         self._model_id = config.model_id
@@ -36,6 +36,16 @@ class MujocoBackend:
         if self._substeps < 1 or not np.isclose(ratio, self._substeps):
             raise ValueError('model timestep must divide 4 ms exactly')
         self._closed = False
+        self._jaw_bodies = {mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, name)
+                            for name in ('jaw_left', 'jaw_right')}
+        self._robot_bodies = set(self.model.jnt_bodyid[:8].tolist())
+        jaw_geoms = np.isin(self.model.geom_bodyid, list(self._jaw_bodies))
+        self.model.geom_contype[jaw_geoms] = 1
+        self.model.geom_conaffinity[jaw_geoms] = 1
+        # MuJoCo caches the OR of geom masks per body for broad-phase filtering.
+        self.model.body_contype[list(self._jaw_bodies)] = 1
+        self.model.body_conaffinity[list(self._jaw_bodies)] = 1
+        self._gripper_effort_max = float(np.min(np.abs(self.model.actuator_forcerange[6:, 0])))
         self._runtime_parameters = {
             'backend': 'sim',
             'robot_config': asdict(config),
@@ -50,6 +60,7 @@ class MujocoBackend:
                 'active_joint_torque_limits': list(config.torque_max),
                 'active_gripper_kp': 80.0,
                 'active_gripper_kd': 1.0,
+                'gripper_collision_policy': 'Both jaw geometries use collision mask 1 for physical contact evidence',
                 'actuators_initial': [
                     {
                         'name': mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, index),
@@ -135,7 +146,7 @@ class MujocoBackend:
         mujoco.mj_forward(self.model, self.data)
         self.controller = self._controller_factory(self.config, self.kinematics)
         self.controller.update(ControlCommand(Mode.COMMAND_FOLLOWING, hold=True,
-            gripper_target=float(self.data.qpos[6:].sum()), reset_reference=True),
+            gripper_target=float(self.data.qpos[6:8].sum()), reset_reference=True),
             self.data.qpos[:6], time.monotonic())
         for key in self._telemetry:
             if key != 'reported_joint_torque_source':
@@ -175,12 +186,30 @@ class MujocoBackend:
         if not np.isfinite(self.data.qpos).all():
             fault = 'non-finite simulation state'
         return RobotState(q=self.data.qpos[:6].copy(), dq=self.data.qvel[:6].copy(), pose=pose,
-                          gripper_width=float(np.clip(self.data.qpos[6:].sum(), 0, self.config.gripper_max_width)),
+                          gripper_width=float(np.clip(self.data.qpos[6:8].sum(), 0, self.config.gripper_max_width)),
+                          gripper_velocity=float(self.data.qvel[6:8].sum()),
+                          gripper_effort=float(np.mean(self.data.actuator_force[6:8])),
+                          gripper_contact=self._gripper_contact(),
                           received_at=now, mode=self.controller.mode, fault=fault, gripper_mode=self.controller.gripper_mode)
+
+    def _gripper_contact(self):
+        touched = set()
+        for contact in self.data.contact[:self.data.ncon]:
+            a, b = (int(self.model.geom_bodyid[g]) for g in (contact.geom1, contact.geom2))
+            if contact.dist <= 0:
+                if a in self._jaw_bodies and b not in self._robot_bodies:
+                    touched.add(a)
+                if b in self._jaw_bodies and a not in self._robot_bodies:
+                    touched.add(b)
+        return touched == self._jaw_bodies
 
     def step(self, command, now):
         if self._closed:
             raise RuntimeError('simulation backend is closed')
+        effort = command.gripper_effort
+        if effort is not None and (command.mode != Mode.COMMAND_FOLLOWING or not np.isfinite(effort)
+                                  or not 0 <= effort <= self._gripper_effort_max):
+            raise ValueError('Gripper closing effort exceeds the simulated actuator capability')
         target = self.controller.update(command, self.data.qpos[:6], now)
         kp = np.zeros(6) if target is None else np.asarray(self.config.kp)
         kd = np.zeros(6) if target is None else np.asarray(self.config.kd)
@@ -190,6 +219,8 @@ class MujocoBackend:
         gripper_enabled = self.controller.gripper_mode != Mode.FREE_DRIVE
         self.model.actuator_biasprm[6:, 1] = -80 if gripper_enabled else 0
         self.model.actuator_biasprm[6:, 2] = -1 if gripper_enabled else 0
+        if effort is not None:
+            self.model.actuator_biasprm[6:, 1:3] = 0
         sent = {
             'command_started_ns': time.monotonic_ns(),
             'command_time_s': float(now),
@@ -198,9 +229,9 @@ class MujocoBackend:
             'sent_q': (self.data.qpos[:6] if target is None else target).tolist(),
             'sent_dq': self.controller.dq_target.tolist(),
             'gripper_target': float(self.controller.gripper_target if gripper_enabled else
-                                    np.clip(self.data.qpos[6:].sum(), 0, self.config.gripper_max_width)),
-            'gripper_applied_kp': 80.0 if gripper_enabled else 0.0,
-            'gripper_applied_kd': 1.0 if gripper_enabled else 0.0,
+                                    np.clip(self.data.qpos[6:8].sum(), 0, self.config.gripper_max_width)),
+            'gripper_applied_kp': 80.0 if gripper_enabled and effort is None else 0.0,
+            'gripper_applied_kd': 1.0 if gripper_enabled and effort is None else 0.0,
             'user_feedforward_torque': [0.0] * 6,
         }
         for _ in range(self._substeps):
@@ -208,6 +239,8 @@ class MujocoBackend:
             gravity = self.kinematics.gravity(self.data.qpos[:6])
             self.data.ctrl[:6] = gravity if target is None else gravity + kp * target + kd * self.controller.dq_target
             self.data.ctrl[6:] = 80 * self.controller.gripper_target / 2 if gripper_enabled else 0
+            if effort is not None:
+                self.data.ctrl[6:] = -effort
             mujoco.mj_step(self.model, self.data)
         sent['command_submitted_ns'] = time.monotonic_ns()
         # mj_step leaves Cartesian fields from the pre-integration state.

@@ -31,6 +31,7 @@ with Robot.sim(viewer=True, speed=.5) as robot:
 | --- | --- | --- |
 | `Robot.sim(viewer=True)` | 新建 MuJoCo 仿真，并打开观察窗口 | 关闭本次仿真与窗口 |
 | `Robot.sim()` | 新建无窗口 MuJoCo 仿真 | 关闭本次仿真 |
+| `Robot.sim(config="configs/robots/reference7/robot.json")` | 新建七轴无夹爪教学仿真 | 关闭本次仿真 |
 | `Robot.sim(run="outputs/runtime/control/<RUN>")` | 连接已有仿真并核对后端类型 | 保留外部内核 |
 | `Robot.real("outputs/runtime/control/<RUN>")` | 连接已经启动的真机内核，核对后端类型 | 保留外部内核 |
 | `Robot.connect("outputs/runtime/control/<RUN>")` | 连接已有仿真或真机内核，保留通用连接入口 | 保留外部内核 |
@@ -60,14 +61,19 @@ examples/
 | --- | --- | --- |
 | [control.py](simulation/control.py) | `sim_control` / `sim_control --headless` | 在仿真中逐步执行关节、XYZ 和夹爪动作 |
 | [task_reset.py](simulation/task_reset.py) | `sim_task` | 保存/恢复物理状态，重复执行任务并检查成功条件 |
+| [reference7.py](simulation/reference7.py) | `reference7` | 通过同一 Robot 接口控制独立的七轴无夹爪模型 |
 | [read_state.py](control/read_state.py) | `read_state` | 读取 `state`、关节、末端和能力说明 |
 | [movej.py](control/movej.py) | `movej --joint 1 --degrees 10` | 从当前关节位置构造目标，再调用 `movej` |
 | [movel.py](control/movel.py) | `movel` / `movel --xyz X Y Z` / `movel --offset 0 0 0.02` | 绝对 XYZ、相对平移与完整位姿控制 |
+| [move_path.py](control/move_path.py) | `move_path` | 一次执行带圆角的多段路径，使用显式 TCP 速度 |
+| [benchmark.py](control/benchmark.py) | `benchmark --degrees 10 --speed 0` | 保存往返动作的全量反馈、速度与跟踪报告；可用 `--baseline` 比较 |
 | [gripper.py](control/gripper.py) | `gripper --width 0.04` | 用夹爪对象控制 40 mm 开口 |
+| [grasp.py](control/grasp.py) | `grasp --effort <幅值>` | 按设备声明的 effort 单位判断真实接触，空闭合不算抓住 |
 | [teach_return.py](control/teach_return.py) | `teach_return` | 记住当前点位，移动，再返回 |
 | [approach_retreat.py](tasks/approach_retreat.py) | `approach_retreat` | 使用同一 Robot 接口组合接近/退离，记录阶段结果 |
 | [pick_place.py](tasks/pick_place.py) | `pick_place` | 注入目标观测和抓取验证；默认仿真空抓失败后停止 |
 | [record.py](data/record.py) | `record --duration 2` | 采集一段数据，查看记录结果 |
+| [record_task.py](data/record_task.py) | `record_task --help` | 同步任务与相机录制，保留 scripted 来源，生成待复核标注和导出预检 |
 | [annotate.py](data/annotate.py) | `annotate <EPISODE> <EVENTS> --annotator operator --confidence 0.8` | 将同一运行的任务事件映射到已录制相机帧，保存待复核技能区间 |
 | [offline_trajectory.py](planning/offline_trajectory.py) | `offline_trajectory` | 离线生成 Ruckig 轨迹，读取 q / dq / ddq |
 | [cartesian_blend.py](planning/cartesian_blend.py) | `cartesian_blend --radius 0.025` | 离线生成直线与圆角几何路径 |
@@ -102,7 +108,7 @@ examples/
 两个离线规划示例不启动内核。
 `sim_task` 仅支持仿真，演示场景快照、重置和观测成功判据；它不把动作结束直接当作任务成功。
 `pick_place` 默认演示没有物体时的失败分支，结果为 `failed`，不会继续抬升或放置。
-将真实检测器和 `verify_grasp` 传给示例的 `run()` 后可复用同一流程；夹爪目前是宽度定位，不是力控抓取。
+抓放需要明确的闭合 `effort` 幅值；实际接触成立后才继续，`verify_grasp` 可追加视觉验证。ARX 的电机力矩与仿真指端力单位不同，必须先读取设备能力；不把电机力矩直接当作指端力。
 示例数据保存在 `outputs/examples/`，支持输出路径的例子可用 `--output` 指定位置；仿真日志保存在 `outputs/robot/runs/`。
 
 要使用已经运行的内核，显式选择后端和运行目录：
@@ -139,6 +145,17 @@ with Robot.sim(speed=.5) as robot:
 
 `record.py` 只采集，不触发运动；默认记录无相机诊断数据。
 视觉训练数据需要另行配置相机；支持只有外部相机的录制，不要求双相机。
+`record_task` 连接显式 `--run`，执行任务并录制指定相机；`--camera-roles` 把设备 ID 映射到策略图像角色。
+例如在仓库根目录，对已经运行的仿真内核和已配置的 `front_rgb` 相机执行：
+
+```bash
+./run.sh examples record_task --run outputs/runtime/control/<SIM_RUN> \
+  --cameras front_rgb --camera-roles '{"base_0_rgb":"front_rgb"}' \
+  --annotator operator --confidence .8
+```
+
+录制目录含 `task/events.jsonl`、`task/result.json`、相机数据、`capture-status.json` 和技能标注。
+程序示范与人工示范通过 provenance 区分；未给出场景成功判据时，任务执行完成后的 outcome 仍为 unknown。
 `annotate` 只处理已结束、带相机的录制，需要同一次内核运行的 `tasks/<TASK_ID>/events.jsonl`；
 不会从无相机的 `record` 诊断数据生成帧标签。完整工作流见[采集说明](../../docs/guides/recording.md)。
 
@@ -148,9 +165,9 @@ with Robot.sim(speed=.5) as robot:
 | --- | --- |
 | MoveJ | 输入关节目标，在关节空间规划；末端路径不保证直线 |
 | MoveL | 输入绝对 XYZ、完整位姿或平移偏移，规划直线路径 |
-| MoveP | 工艺路径及圆角衔接；当前只有离线几何例子，尚未接入内核执行 |
+| `move_path` | 多点与圆角组成一条连续轨迹；不承诺完整 UR MoveP 的恒定工艺速度语义 |
 
-`q` 用 rad，长度与机器人关节数一致；当前内核仍是六轴 X5。
+`q` 用 rad，长度与机器人关节数一致；X5 为六轴，Reference7 为七轴且不带夹爪。
 `robot.xyz` 为基座系位置（m），`robot.pose` 始终返回 `[x, y, z, qx, qy, qz, qw]`。
 `movel(pose)` 同时接受 UR 风格六值 `[x, y, z, rx, ry, rz]`（旋转向量 rad，**不是 RPY**）和七值 XYZ + **XYZW**；两种输入共用同一个 MoveL 实现。
 `--xyz`、`--offset`、`--pose` 三选一；绝对 XYZ / 位姿仅使用 `frame="base"`。
@@ -160,6 +177,10 @@ Python 关节编号从 0 开始；示例命令行的 `--joint 1` 表示第一个
 `speed` / `acceleration` / `jerk` 是关节约束，单位为 rad/s、rad/s²、rad/s³；
 **MoveL 的 speed 当前也不是末端 m/s**。运动示例默认使用 `.5 / 2 / 10`。
 `speed=0` 使用后端每轴上限；离线轨迹没有后端，速度必须为正数。
+
+MoveL 和 `move_path` 的末端约束使用 `tcp_speed/tcp_acceleration/tcp_jerk`（m/s、m/s²、m/s³）；
+旋转约束使用 `angular_speed/angular_acceleration/angular_jerk`（rad/s、rad/s²、rad/s³）。
+这些约束和设备关节限值同时生效，计划指标与限制原因可直接查看。
 
 MoveL 小步运动仍有已知局限：此前离线检查中，仿真零姿态的 +Z 20 mm 约 0.888 s，
 而 +Z 5 mm 约 15.786 s；IK 离散误差可能放大 jerk 估计。示例保留真实规划指标，

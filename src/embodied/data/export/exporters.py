@@ -2,8 +2,9 @@
 import json
 import math
 import numpy as np
-from embodied.data.episode.cameras import camera_metadata, anchor_camera
+from embodied.data.episode.cameras import camera_metadata, anchor_camera, camera_roles
 from embodied.data.episode.contract import episode_contract, vector
+from embodied.data.episode.provenance import training_sources, training_phases
 
 # Kept camera anchors further apart than this many frame periods form a gap.
 GAP_PERIODS = 1.5
@@ -125,7 +126,9 @@ class Schema2:
             raise ValueError('Episode is labelled failure/discarded')
         from embodied.data.episode.runtime_episode import frame_kind
         reference = raw[frame_kind(anchor_id)]
-        anchors, excluded = align(raw['state'], raw['command'], reference, sources=('quest', 'phone'), contract=contract)
+        sources = training_sources(meta)
+        phases = training_phases(meta)
+        anchors, excluded = align(raw['state'], raw['command'], reference, sources=sources, phases=phases, contract=contract)
         if len(anchors) < 2:
             raise ValueError('Insufficient causal position-following RGB anchors')
         parameters = meta['runtime'].get('parameters', {})
@@ -155,7 +158,10 @@ class Schema2:
                   'action_max_age_ms': max(r[3]['host_received_monotonic_ns']-r[4]['requested_monotonic_ns'] for r in rows)/1e6,
                   'image_max_age_ms': 0, 'repeated_images': 0, 'action_definition': self.identity[1],
                   'cameras': camera_report(rows, frames, anchor_id=anchor_id), 'anchor_camera': anchor_id,
-                  'hand_eye': meta.get('hand_eye'), 'robot_timing': runtime_timing(meta, raw)}
+                  'hand_eye': meta.get('hand_eye'), 'robot_timing': runtime_timing(meta, raw),
+                  'demonstration': meta.get('demonstration'), 'accepted_sources': list(sources), 'accepted_phases': list(phases),
+                  'task_execution': meta.get('task_execution'), 'scene': meta.get('scene'),
+                  'camera_roles': camera_roles(cameras, meta.get('camera_roles'))}
         annotate(report, rows, control_stack='runtime kernel: submitted joint position commands',
                  backend=meta['runtime']['backend'])
         return meta, rows, report, raw

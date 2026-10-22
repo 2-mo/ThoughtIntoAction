@@ -158,6 +158,8 @@ def run(directory):
                                   "joint_count": len(parameters["effective_robot_config"]["park_q"]),
                                   "backend_parameters": json.loads(backend_file.read_text()) if backend_file.exists() else None,
                                   "mode": request["mode"]}
+                    if 'data_contract' in parameters:
+                        descriptor['data_contract'] = parameters['data_contract']
                     peer = Peer(sock, descriptor, request["mode"] == "latest")
                     peers.append(peer)
                     if latest_packet is not None:

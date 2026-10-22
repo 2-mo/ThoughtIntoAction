@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>X5</title>
+  <title>具身工作台 · 监看与采集</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/scene.css">
   <link rel="stylesheet" href="/cameras.css">
@@ -15,7 +15,7 @@
       <div class="scene-viewport"><canvas id="robot-canvas" aria-label="旋转、缩放和查看机械臂"></canvas></div>
       <div class="stage-top"><span id="connection" role="status" data-state="waiting">等待场景</span><span class="view-switch"><button id="view-live" type="button" aria-pressed="true">实时</button><button id="open-replay" type="button" aria-pressed="false">回放</button></span><span id="live-arm-status" title="实时机械臂连接，与回放画面独立">真机 —</span><button id="reset-view" type="button">重置视角</button></div>
       <div id="table-safety" role="status" hidden></div>
-      <div id="loading" role="status">正在加载 X5 模型与材质…</div>
+      <div id="loading" role="status">等待运行时模型与反馈…</div>
 
       <section id="dataset-replay" aria-label="回放时间轴" hidden>
         <div class="replay-buttons"><select id="replay-episodes" aria-label="已保存数据集"></select><button id="replay-load" type="button">加载</button><button id="replay-last" type="button">上一条</button><button id="replay-play" type="button">播放</button><button id="replay-pause" type="button">暂停</button><select id="replay-speed" aria-label="播放倍速"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select><span id="replay-time">0 / 0 s</span></div>
@@ -107,7 +107,7 @@
   <dialog id="task-review-dialog" class="review-dialog" aria-labelledby="task-review-title">
     <div class="camera-dialog-heading"><h2 id="task-review-title">任务阶段与技能标注</h2><button id="close-task-review" type="button">关闭 · Esc</button></div>
     <div class="review-toolbar"><label>当前内核任务<select id="review-task"></select></label><button id="review-refresh" type="button">刷新记录</button></div>
-    <p id="task-result">等待任务记录</p>
+    <p id="task-result">等待任务记录</p><p id="task-refresh-status">阶段自动刷新 · 每秒一次</p>
     <table class="command-table"><thead><tr><th>阶段</th><th>状态</th><th>耗时</th><th>操作 ID</th><th>结果 / 错误</th></tr></thead><tbody id="task-timeline"></tbody></table>
     <p class="details-note">阶段“执行完成”只表示该阶段返回，任务成功需看任务验证结果。这里只查看记录，不触发机械臂动作。</p>
     <label>已完整保存的 Episode<select id="review-episode"></select></label><p id="annotation-status">尚无标注</p>
