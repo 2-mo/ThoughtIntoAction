@@ -131,6 +131,11 @@ def compare_reports(current, baseline):
             or current['runtime'].get('backend') != baseline['runtime'].get('backend')
             or current['description'].get('model_id') != baseline['description'].get('model_id')):
         raise ValueError('Compare completed benchmarks with the same model, backend and test definition')
+    initial = [np.asarray(value.get('start_q', []), dtype=float) for value in (current, baseline)]
+    if (initial[0].ndim != 1 or not initial[0].size or initial[0].shape != initial[1].shape
+            or not all(np.isfinite(q).all() for q in initial)
+            or not np.allclose(*initial, atol=.001, rtol=0)):
+        raise ValueError('Benchmark starting joint positions must match within 0.001 rad')
     metrics = ('execute_to_settled_s', 'planning_ms', 'peak_feedback_rad_s', 'estimated_position_lag_ms')
     def summary(report, key):
         values = []
@@ -151,6 +156,7 @@ def compare_reports(current, baseline):
     config_keys = ('effective_robot_config', 'planning_limits_config', 'gain_policy', 'controller_policy')
     changed = any(parameters[0].get(key) != parameters[1].get(key) for key in config_keys)
     return {'schema': 'embodied.motion_benchmark_comparison/1', 'aggregate': 'median over out-and-return operations',
+            'start_position_tolerance_rad': .001,
             'metrics': result, 'configuration_changed': changed,
             'source_changed': parameters[0].get('source_sha256') != parameters[1].get('source_sha256'),
             'baseline_runtime': baseline['runtime'], 'current_runtime': current['runtime']}
@@ -166,7 +172,7 @@ def benchmark(robot, *, joint=0, delta_rad=math.radians(10), repeats=1, speed=0.
         raise ValueError('joint must be zero-based and repeats a positive integer')
     if not math.isfinite(delta_rad) or delta_rad == 0:
         raise ValueError('delta_rad must be finite and nonzero')
-    start_q = robot.q
+    start_q = list(robot.q)
     if joint >= len(start_q):
         raise ValueError('joint is outside the connected robot')
     target = list(start_q)
@@ -177,9 +183,11 @@ def benchmark(robot, *, joint=0, delta_rad=math.radians(10), repeats=1, speed=0.
     folder.mkdir(parents=True)
     ticks, operations, errors = [], [], []
     done = threading.Event()
+    progress = threading.Condition()
     identity = dict(robot._connected().identity)
     report = {'schema': 'embodied.motion_benchmark/1', 'runtime': identity,
               'description': robot.describe(), 'joint': joint, 'delta_rad': delta_rad,
+              'start_q': start_q,
               'repeats': repeats, 'requested_speed_rad_s': speed, 'operations': operations,
               'status': 'running', 'error': None}
     reader = RuntimeReader(robot.run, 'full', timeout=.5)
@@ -189,13 +197,19 @@ def benchmark(robot, *, joint=0, delta_rad=math.radians(10), repeats=1, speed=0.
             with (folder / 'ticks.jsonl').open('x') as stream:
                 while not done.is_set():
                     tick = reader.read()
-                    ticks.append(tick)
-                    stream.write(json.dumps(tick, allow_nan=False) + '\n')
                     if tick.get('terminal') or tick.get('error'):
                         raise RuntimeError(tick.get('error') or 'Runtime ended during benchmark')
+                    stream.write(json.dumps(tick, allow_nan=False) + '\n')
+                    with progress:
+                        ticks.append(tick)
+                        progress.notify_all()
         except Exception as exc:
             if not done.is_set():
-                errors.append(f'{type(exc).__name__}: {exc}')
+                # Serialize failure with submission: an in-flight execute must
+                # finish acquiring its operation before cancellation is sent.
+                with progress:
+                    errors.append(f'{type(exc).__name__}: {exc}')
+                    progress.notify_all()
                 robot._cancel_on_error()
     thread = threading.Thread(target=collect, name='motion-benchmark-observer', daemon=True)
     thread.start()
@@ -211,13 +225,23 @@ def benchmark(robot, *, joint=0, delta_rad=math.radians(10), repeats=1, speed=0.
                 item = {'repeat': repeat, 'direction': direction, 'planning_ms': (planned - began) / 1e6,
                         'plan_metrics': plan['metrics'], 'limits': plan.get('limits'), 'status': 'running'}
                 operations.append(item)
-                motion = robot.execute(plan, wait=False)
+                with progress:
+                    if errors:
+                        raise RuntimeError(errors[0])
+                    motion = robot.execute(plan, wait=False)
                 item['operation_id'] = motion.operation_id
                 motion.wait()
                 finished = time.monotonic_ns()
-                if errors:
-                    raise RuntimeError(errors[0])
-                samples = [tick for tick in list(ticks) if planned <= tick['timing']['feedback_received_ns'] <= finished]
+                with progress:
+                    caught_up = progress.wait_for(
+                        lambda: errors or (ticks and ticks[-1]['timing']['feedback_received_ns'] >= finished),
+                        timeout=2.,
+                    )
+                    if errors:
+                        raise RuntimeError(errors[0])
+                    if not caught_up:
+                        raise RuntimeError('Observer did not catch up with motion completion; report would be truncated')
+                    samples = [tick for tick in ticks if planned <= tick['timing']['feedback_received_ns'] <= finished]
                 measured = analyze_motion(samples)
                 if min(measured['feedback_samples'], measured['command_samples']) < 2:
                     raise RuntimeError('Insufficient motion telemetry; performance cannot be measured')

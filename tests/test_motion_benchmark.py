@@ -25,6 +25,7 @@ def trace(lag=.04, paused=False):
 class BenchmarkTests(unittest.TestCase):
     def test_comparison_rejects_different_actions_and_preserves_unknown_metrics(self):
         report = {'schema': 'embodied.motion_benchmark/1', 'joint': 0, 'delta_rad': .1, 'repeats': 1,
+                  'start_q': [0.] * 7,
                   'requested_speed_rad_s': 0, 'status': 'completed', 'runtime': {'backend': 'sim'},
                   'description': {'model_id': 'model'}, 'descriptor': {'parameters': {}},
                   'operations': [{'execute_to_settled_s': 2., 'planning_ms': 10., 'measurement': {}}]}
@@ -35,6 +36,11 @@ class BenchmarkTests(unittest.TestCase):
         self.assertEqual(result['metrics']['execute_to_settled_s']['change_percent'], -50.)
         self.assertIsNone(result['metrics']['peak_feedback_rad_s']['change_percent'])
         self.assertFalse(result['configuration_changed'])
+        current['start_q'][0] = .1
+        with self.assertRaisesRegex(ValueError, 'starting joint'):
+            compare_reports(current, report)
+        current['start_q'][0] = .0005
+        compare_reports(current, report)
         current['delta_rad'] = .2
         with self.assertRaisesRegex(ValueError, 'same model'):
             compare_reports(current, report)
