@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 
 import pytest
 
@@ -17,6 +18,31 @@ from embodied.devices.phone.core.models import (
     Vector3,
 )
 from embodied.devices.phone.policies.relative_pose import RelativePosePolicy
+
+
+def test_bounded_rotation_reverses_without_saved_excess_and_resets_on_clutch():
+    policy = RelativePosePolicy(PoseMapping(), max_position_lead_m=.05, max_rotation_lead_rad=.35)
+    robot = _robot(Quaternion(0, 0, 0, 1))
+    reference = _input(Vector3(0, 0, 0), Quaternion(0, 0, 0, 1))
+    policy.reset(reference, robot)
+    first = policy.update(_input(Vector3(0, 0, 0), quaternion_from_axis_angle(Vector3(0, 0, 1), 1.)), robot, 0)
+    assert quaternion_angular_distance(robot.tcp_pose.orientation, first.target_pose.orientation) == pytest.approx(.35)
+    reverse = policy.update(_input(Vector3(0, 0, 0), quaternion_from_axis_angle(Vector3(0, 0, 1), .9)), robot, 0)
+    assert quaternion_angular_distance(robot.tcp_pose.orientation, reverse.target_pose.orientation) == pytest.approx(.25)
+    policy.reset(reference, robot)
+    target = policy.update(reference, robot, 0)
+    assert quaternion_angular_distance(target.target_pose.orientation, robot.tcp_pose.orientation) < 1e-8
+
+
+def test_lead_bound_does_not_limit_total_travel_when_robot_follows():
+    policy = RelativePosePolicy(PoseMapping(), max_position_lead_m=.05)
+    robot = _robot(Quaternion(0, 0, 0, 1))
+    policy.reset(_input(Vector3(0, 0, 0), Quaternion(0, 0, 0, 1)), robot)
+    for step in range(1, 41):
+        target = policy.update(_input(Vector3(step * .01, 0, 0), Quaternion(0, 0, 0, 1)), robot, 0)
+        assert not policy.limited
+        robot = replace(robot, tcp_pose=target.target_pose)
+    assert robot.tcp_pose.position.x == pytest.approx(.8)
 
 
 def _input(position: Vector3, orientation: Quaternion) -> TeleopInput:

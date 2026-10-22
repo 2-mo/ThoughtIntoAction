@@ -1,7 +1,7 @@
 import Foundation
 
 enum ControlDefaults {
-  static let positionScale: Float = 2
+  static let positionScale: Float = 1
   static let rotationScale: Float = 1
   static let maximumPositionScale: Float = 2
   static let maximumRotationScale: Float = 1

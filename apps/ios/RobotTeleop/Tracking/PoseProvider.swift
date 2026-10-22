@@ -47,6 +47,7 @@ struct PoseSample: Equatable, Sendable {
   let angularVelocity: TeleopVector3?
   let trackingQuality: TrackingQuality
   let captureTelemetry: CaptureTelemetry?
+  let trackingReason: String?
 
   init(
     timestampNs: UInt64,
@@ -54,7 +55,8 @@ struct PoseSample: Equatable, Sendable {
     linearVelocity: TeleopVector3?,
     angularVelocity: TeleopVector3?,
     trackingQuality: TrackingQuality,
-    captureTelemetry: CaptureTelemetry? = nil
+    captureTelemetry: CaptureTelemetry? = nil,
+    trackingReason: String? = nil
   ) {
     self.timestampNs = timestampNs
     self.pose = pose
@@ -62,6 +64,7 @@ struct PoseSample: Equatable, Sendable {
     self.angularVelocity = angularVelocity
     self.trackingQuality = trackingQuality
     self.captureTelemetry = captureTelemetry
+    self.trackingReason = trackingReason
   }
 }
 

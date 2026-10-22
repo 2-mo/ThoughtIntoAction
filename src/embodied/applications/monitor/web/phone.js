@@ -1,7 +1,7 @@
 // Phone status and explicit ownership commands share the independent receiver.
 const byId = id => document.getElementById(id);
 const panel = document.querySelector('.phone-panel');
-let state = {}, pending = false, closed = false, received = 0;
+let state = {}, pending = false, closed = false, received = 0, serviceMessage = false;
 const put = (id, value) => { byId('phone-' + id).textContent = value; };
 const message = (text, error = false) => {
   put('message', text);
@@ -10,7 +10,8 @@ const message = (text, error = false) => {
 function render(value) {
   state = value;
   const fresh = value.connected === true;
-  panel.dataset.state = value.error && value.available ? 'error' : fresh ? 'live' : 'offline';
+  panel.dataset.state = value.estop || (value.error && value.available) ? 'error' : fresh
+    ? value.tracking === 'normal' ? 'live' : value.tracking === 'limited' ? 'warning' : 'error' : 'offline';
   put('status', !value.available ? '接收服务未启动' : !fresh ? '等待手机连接' : value.active ? '遥操中' : '已连接');
   put('endpoint', value.addresses?.length ? 'App 服务器 ' + value.addresses.map(host => `${host}:${value.port}`).join(' / ') : '手机与电脑使用可互通的网络 · UDP 5005');
   put('tracking', fresh ? ({normal: '正常', limited: '受限', unavailable: '无追踪'}[value.tracking] || '—') : '—');
@@ -20,11 +21,15 @@ function render(value) {
   put('clutch', fresh ? value.clutch ? '按住' : '松开' : '—');
   put('gripper', fresh && Number.isFinite(value.gripper) ? `${(value.gripper * 100).toFixed(0)}%` : '—');
   put('position', fresh && value.position ? `XYZ ${value.position.map(v => v.toFixed(3)).join(' / ')} m` : 'XYZ —');
+  put('mapping', Number.isFinite(value.position_scale) ? `相对控制 · 位移 ${value.position_scale.toFixed(2)}× · 旋转 ${Number.isFinite(value.rotation_scale) ? value.rotation_scale.toFixed(2) + '×' : '—'}` : '相对控制');
   byId('phone-start').disabled = pending || value.available;
   byId('phone-enable').disabled = pending || !fresh || value.enabled || value.estop || value.clutch || value.tracking !== 'normal' || !value.kernel_runtime_id;
   byId('phone-disable').disabled = pending || !value.enabled;
-  if (value.error && value.available) message(value.error, true);
-  else if (value.estop) message('手机急停已锁存，无法启用遥操。', true);
+  if (value.error && value.available) { message(value.error, true); serviceMessage = true; }
+  else if (value.estop) { message('手机停止已锁存；松开 Clutch 后在手机点恢复。', true); serviceMessage = true; }
+  else if (fresh && value.tracking !== 'normal') { message('追踪受限：请保持相机画面清晰，观察有纹理的环境。'); serviceMessage = true; }
+  else if (value.target_limited) { message('目标跟随误差较大，超出部分已丢弃；可反向移动或松开重新定位。'); serviceMessage = true; }
+  else if (serviceMessage) { message(value.enabled ? '已启用手机遥操。按住跟随，上下滑动夹爪，松手保持。' : '仅监看；可在手机、终端或本页开始遥操。'); serviceMessage = false; }
 }
 async function poll() {
   try {

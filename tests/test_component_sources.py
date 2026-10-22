@@ -19,7 +19,7 @@ class FakeSession:
     def __init__(self, *args, **kwargs):
         self.actions = []
     def __enter__(self): return self
-    def close(self): pass
+    def close(self): self.actions.append(('release', {}))
     def command(self, action, **fields):
         self.actions.append((action, fields)); return {'status':'applied'}
     request = command
@@ -50,12 +50,12 @@ class PhoneTests(unittest.TestCase):
     def test_release_rearm_mapping_gripper_and_duplicate_cannot_refresh(self):
         self.assertIsNone(self.send(self.packet(clutch_active=True)))
         self.send(self.packet(clutch_active=False, gripper=.25))
-        self.assertEqual(self.phone.client.actions[-1][0], 'gripper')
+        self.assertEqual(self.phone.client.actions, [])
+        self.send(self.packet(clutch_active=True, gripper=.25))
         self.assertAlmostEqual(self.phone.client.actions[-1][1]['gripper_width'], .0205)
-        self.send(self.packet(clutch_active=True))
         packet = replace(self.packet(clutch_active=True), pose=Pose(Vector3(.01,.02,.03),Quaternion(0,0,0,1)))
         result = self.send(packet)
-        for actual, expected in zip(result['pose'][:3], [.34,-.02,.26]):
+        for actual, expected in zip(result['pose'][:3], [.32,-.01,.23]):
             self.assertAlmostEqual(actual, expected, places=6)
         count = len(self.phone.client.actions)
         self.assertIsNone(self.send(packet))
@@ -78,11 +78,27 @@ class PhoneTests(unittest.TestCase):
         self.assertIsNone(self.send(packet))
 
     def test_estop_is_not_discarded_when_newer_pose_in_same_batch(self):
+        client = self.phone.client
         for packet in (self.packet(estop_requested=True), self.packet()):
             self.sock.sendto(encode_packet(packet), self.phone.transport.local_address)
-        with self.assertRaisesRegex(RuntimeError, 'ESTOP'):
+        with self.assertRaisesRegex(RuntimeError, '停止已锁存'):
             self.phone.latest()
-        self.assertEqual(self.phone.client.actions[-1][0], 'stop')
+        self.assertEqual(client.actions, [('release', {})])
+        self.assertTrue(self.phone.ghost)
+        self.assertTrue(self.phone.estop)
+
+    def test_target_lead_does_not_accumulate_and_reversing_responds_immediately(self):
+        self.send(self.packet(clutch_active=False))
+        self.send(self.packet(clutch_active=True))
+        far = replace(self.packet(clutch_active=True), pose=Pose(Vector3(0,.5,0), Quaternion(0,0,0,1)))
+        self.assertAlmostEqual(self.send(far)['pose'][0], .35)
+        self.assertTrue(self.phone.policy.limited)
+        reverse = replace(self.packet(clutch_active=True), pose=Pose(Vector3(0,.49,0), Quaternion(0,0,0,1)))
+        self.assertAlmostEqual(self.send(reverse)['pose'][0], .34)
+        self.send(self.packet(clutch_active=False))
+        # Releasing permits re-positioning the phone without moving the robot.
+        rearmed = replace(self.packet(clutch_active=True), pose=far.pose)
+        self.assertAlmostEqual(self.send(rearmed)['pose'][0], .3)
 
     def test_cross_language_vectors(self):
         path = Path(__file__).parent / 'golden/test_golden_vectors.py'
