@@ -701,3 +701,12 @@ main{
   width:100%!important;
   height:auto!important}
 }
+
+.blue { background: #7396aa; }
+.design-value { font-size: 22px; line-height: 45px; }
+.design-rules { padding-left: 18px; margin: 0; color: #71818a; font-size: 12px; line-height: 1.9; }
+.design-rules li { margin-bottom: 10px; }
+@media (max-width: 800px) {
+  .design-value { font-size: 18px; }
+  .tabs { gap: 18px; }
+}
