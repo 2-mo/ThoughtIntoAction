@@ -712,7 +712,7 @@ main{
 }
 
 /* The design overview uses the whole canvas; details open without shrinking it. */
-.design-view .topbar { height: 48px; }
+.design-view .topbar { height: 42px; }
 .design-view .intro .eyebrow { display: none; }
 .design-view .intro h1 { font-size: 23px; margin-bottom: 4px; }
 .design-view .intro-copy { font-size: 12px; }
@@ -757,19 +757,19 @@ main{
 .reference-item .reference-boundary { color: #a08d78; }
 @media (min-width: 801px) {
   body.design-view { height: 100dvh; overflow: hidden; }
-  .design-view main { max-width: none; height: calc(100dvh - 48px); padding: 12px 24px 8px; display: flex; flex-direction: column; min-height: 0; }
+  .design-view main { max-width: none; height: calc(100dvh - 42px); padding: 8px 20px 6px; display: flex; flex-direction: column; min-height: 0; }
   .design-view .intro { flex: none; align-items: center; margin-bottom: 8px; }
   .design-view .intro > div { display: flex; align-items: baseline; gap: 18px; }
-  .design-view .intro h1 { font-size: 20px; margin: 0; }
+  .design-view .intro h1 { font-size: 18px; margin: 0; }
   .design-view .intro-copy { margin: 0; }
   .design-view .snapshot { font-size: 10px; line-height: 1.6; }
   .design-view .workspace { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .design-view .workspace-toolbar { flex: none; min-height: 44px; padding: 0 16px; flex-wrap: nowrap; }
+  .design-view .workspace-toolbar { flex: none; min-height: 38px; padding: 0 16px; flex-wrap: nowrap; }
   .design-view .tabs { min-height: 0; }
-  .design-view .tabs button { padding: 12px 1px; }
+  .design-view .tabs button { padding: 9px 1px; }
   .design-view .architecture-layout { flex: 1; min-height: 0; }
   .design-view .diagram-pane { display: flex; flex-direction: column; min-height: 0; }
-  .design-view .diagram-toolbar { flex: none; min-height: 38px; padding: 6px 16px; flex-wrap: nowrap; }
+  .design-view .diagram-toolbar { flex: none; min-height: 32px; padding: 3px 16px; flex-wrap: nowrap; }
   .design-view .diagram-viewport { flex: 1; height: auto; min-height: 0; max-height: none; }
   .design-view .diagram-caption { flex: none; padding: 6px 16px; }
   .design-view .footer { flex: none; padding: 6px 0 0; font-size: 10px; }
