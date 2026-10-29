@@ -5,11 +5,11 @@
 <title>知行有灵 · 项目架构与进展</title>
 <link rel="stylesheet" href="progress.css"><script defer src="progress.js"></script><script defer src="lab-design.js"></script><script defer src="progress-view.js"></script>
 </head>
-<body>
+<body class="design-view">
 <header class="topbar"><a class="brand" href="index.html"><span class="brand-symbol" aria-hidden="true">知</span><strong>知行有灵</strong><span class="brand-en">Thought into Action</span></a><div class="top-actions"><button id="method">数据说明</button><a href="explorer.html">详细导览 ↗</a></div></header>
 <main>
-<section class="intro"><div><p class="eyebrow">LAB DEVICE PLATFORM / ARCHITECTURE &amp; PROGRESS</p><h1>实验室设备接入 · 架构与进展</h1><p class="intro-copy">网页与终端分层，网络与安全独立支撑，设备能力按插件接入。</p></div><p class="snapshot" id="snapshot">正在读取本地快照…</p></section>
-<section class="metrics" aria-label="项目统计" id="metrics"></section>
+<section class="intro"><div><p class="eyebrow">LAB DEVICE PLATFORM / ARCHITECTURE &amp; PROGRESS</p><h1>实验室设备平台</h1><p class="intro-copy">从观测到行动，再由执行反馈驱动下一步。</p></div><p class="snapshot" id="snapshot">正在读取本地快照…</p></section>
+<section class="metrics" aria-label="项目统计" id="metrics" hidden></section>
 <section class="workspace">
 <div class="workspace-toolbar"><nav class="tabs" aria-label="查看方式"><button class="active" data-view="design" aria-pressed="true">目标架构</button><button data-view="architecture" aria-pressed="false">实现进展</button><button data-view="commits" aria-pressed="false">提交记录</button><button data-view="contributors" aria-pressed="false">贡献者</button></nav><div class="filters"><label><span class="sr-only">提交时间范围</span><select id="period"><option value="all">全部历史</option><option value="30">近 30 天</option><option value="7">近 7 天</option></select></label><label><span class="sr-only">Git 提交作者</span><select id="author"><option value="all">全部作者</option></select></label><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="搜索模块、提交、文件" aria-label="搜索模块、提交或文件"></label></div></div>
 <div id="architectureView" class="architecture-layout">
@@ -22,6 +22,7 @@
 <noscript>此页面需要 JavaScript 才能显示进展。可直接阅读 <a href="../plans/README.md">项目计划</a>。</noscript>
 </main>
 <dialog id="methodDialog"><button class="dialog-close" id="closeMethod" aria-label="关闭数据说明">×</button><p class="eyebrow">HOW TO READ</p><h2>每个数字，都有来源</h2><div id="methodContent"></div></dialog>
+<dialog id="designDetailDialog" aria-labelledby="designDetailTitle"><button class="dialog-close" id="closeDesignDetail" aria-label="关闭模块详情">×</button><section id="designDetailContent"></section></dialog>
 <div class="toast" id="toast" role="status" hidden></div>
 </body>
 </html>
