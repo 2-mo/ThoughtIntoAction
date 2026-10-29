@@ -1,43 +1,60 @@
-# 中文一屏架构图
+# 项目架构与进展
 
-用浏览器打开本目录的 [index.html](index.html)。首页是一张 16:9 架构海报，完整适应当前屏幕，不需要滚动或切页。点击部件查看职责与源码，顶部支持全屏和 3200 × 1800 PNG 导出。架构连线与文字由网页绘制，部件和界面图标统一使用 Font Awesome Free。页面读取本地 `catalog.js` 和 `vendor/fontawesome/icons.js`，无 CDN、网络依赖或设备连接。
+用浏览器打开 [index.html](index.html)。首页采用白底分层框架图，结合项目计划和本地 Git 记录展示进度与贡献，不连接设备，不请求模型，也不需要安装前端依赖。
 
-总图按「控制源 → arx 原生控制核心 → X5 真机 / 仿真」组织，上方展示算法与工作流扩展，下方串起相机、观测、采集、导出。实线表示主线或数据流，虚线明确标记独立扩展与尚未全部接入的边界；B601 独立设备插件单独说明。
+- **架构进展**：15 个模块按交互、应用、控制内核、设备服务、数据、策略与工程基础分层。点击模块查看职责、计划原文、提交作者和最近改动；支持缩放、全屏、SVG 与 3080 × 3040 PNG 导出。
+- **提交记录**：查看提交摘要、作者、提交者、共同署名、涉及模块和改动文件。按时间、作者、关键词及选定模块筛选。
+- **贡献者**：同邮箱的作者归并为一个 Git 身份，保留历史署名，查看涉及模块与对应提交。
 
-原来的 [详细导览](explorer.html) 从首页右上角「详细资料」进入，包含：
+[详细导览](explorer.html) 保留组件索引、注册表、目录导航与历史设计资料。当前架构与实现边界以 [overview.md](overview.md) 和源码为准。
 
-- **架构总览**：arx 工作台、迁入的独立操作与旧兼容入口；点击节点查看职责、源码位置和边界。
-- **功能与插件**：按功能找代码，筛选真实注册表，搜索和复制组件命令。
-- **采集与标定**：两条数据链路的 action 定义，以及两个手眼包当前各自负责的工作。
-- **目录导航**：实际目录按角色分组，支持名称和中文职责搜索。
-- **整理建议**：明确标记为后续建议，不代表已经实现的目录或接口。
+## 数据口径
 
-当前行为以源码为准：`workbench` 显式使用 arx 工作台；`./run.sh` 提供统一终端入口。日常真机命令 `./run.sh real start` 和 `./run.sh quest teleop` 仍保留旧 presets / service 流程，内核真机链路待现场验收。
+计划读取 `docs/plans/README.md` 链接的 `00`–`09` 正式计划：`[x]` 表示文档标记关闭，`[ ]` 表示未关闭。未关闭条目可能已有部分实现，关闭条目也可能仍待真机验收。进度条只按条目计数，不代表工作量、代码质量或整个平台的完成百分比。`framework.md` 与 `redundancy.md` 不纳入正式任务统计，避免重复计数。
 
-在仓库根目录更新目录与注册表快照：
+Git 统计使用快照提交可达的历史，排除合并提交；不包含未提交改动与未合并分支。按修改路径关联模块，包括明确维护的历史路径；重命名按旧路径删除与新路径添加处理。一次提交可涉及多个模块，全局按哈希去重，不能把模块提交数相加当作总数。未映射提交仍保留在完整时间线中。
+
+作者按邮箱归并，但快照不导出邮箱；共同署名单独展示。Git 署名不等于模块负责人，不据提交数推断工作量，也不据最后修改者断定任务由其独立完成。只有提交说明明确写出任务 ID 时，才在计划详情关联该提交。
+
+快照显示源提交、分支和生成日期，近 7 / 30 天以生成时间为截止点。浅克隆会提示历史不完整。计划内容与 Git 历史读取同一个提交，避免未提交的复选框改动冒充已记录进展。外部源码与提交链接指向 GitHub，需要对应提交已经推送；离线详情与导出不依赖这些链接。
+
+## 更新与预览
+
+在仓库根目录执行：
 
 ```bash
 python3 scripts/docs/build_architecture.py
 ```
 
-生成器仅使用 Python 3.11+ 标准库，读取三个注册表、组件命令配置与目录列表，不导入插件或硬件 SDK。生成的 `catalog.js` 可随文档提交。职责说明与运行链路分别保存在 `index.html`（总图）和 `explorer.html`（详细索引）中，架构变化时需要同步更新。
+预期更新 `catalog.js`（组件与目录快照）和 `progress.js`（计划、Git 与模块快照），终端输出提交、任务与身份数量。生成器只使用 Python 3.11+ 标准库及 Git，不加载硬件 SDK。生成文件可随文档提交；其中的源提交是生成时的 HEAD，不承诺包含生成文件自身的后续提交。每次提交新进展后重新运行命令，再刷新页面。
 
-图标采用 [Font Awesome Free 6.7.2](https://fontawesome.com/)（Fonticons, Inc.，SVG 图标为 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)）。仅打包 23 个使用到的图标，原始路径和 viewBox 保持不变，通过本地 symbol 按原比例渲染；海报导出内嵌这些 symbol，并保留署名。来源、文件哈希和完整许可见 [SOURCE.json](vendor/fontawesome/SOURCE.json) 与 [LICENSE.txt](vendor/fontawesome/LICENSE.txt)。
-
-如需重新生成图标包，在已安装前端锁定依赖的仓库中执行：
+也可以单独更新进展：
 
 ```bash
-python3 scripts/docs/build_architecture_icons.py
+python3 scripts/docs/build_project_progress.py
 ```
 
-生成后浏览器不依赖 `node_modules`，两个页面共用这份本地图标包。
+需要固定统计版本时可加 `--ref <提交号或分支>`，例如 `--ref main`；模块映射仍使用当前 `modules.json`。
 
-如果希望通过 HTTP 预览，在仓库根目录执行：
+直接用浏览器打开 `docs/architecture/index.html` 即可。若需要 HTTP 预览，在仓库根目录运行：
 
 ```bash
 python3 -m http.server 8897 --bind 127.0.0.1
 ```
 
-随后访问 <http://127.0.0.1:8897/docs/architecture/>，停止预览使用 Ctrl+C。此方式也支持网页里的相对源码和文档链接。
+访问 <http://127.0.0.1:8897/docs/architecture/>，停止服务用 Ctrl+C。
 
-浏览器检查和详细导览截图保存在 `outputs/architecture/`；一屏布局截图、检查结果和海报导出位于 `outputs/architecture/poster/`，属于本机生成产物。
+## 维护位置
+
+| 文件 | 职责 |
+| --- | --- |
+| `modules.json` | 模块职责、当前与历史路径、正式任务映射、图中坐标 |
+| `progress-view.js` / `progress.css` | 分层图、筛选、详情、导出与响应式页面 |
+| `scripts/docs/build_project_progress.py` | 单一 Git 提交的计划与贡献快照生成 |
+| `tests/test_project_progress.py` | 计划计数、身份归并、跨模块提交与历史路径回归 |
+
+新增正式任务需要在 `modules.json` 映射到唯一主模块；缺失、重复或歧义会让生成失败，避免静默漏计。计划被删除时将不再进入当前快照，因此这里不绘制跨版本完成率趋势。历史路径映射用于贡献归属，并不表示这些旧路径仍存在。
+
+详细导览使用本地 Font Awesome Free 6.7.2 图标，来源与许可见 [SOURCE.json](vendor/fontawesome/SOURCE.json) 和 [LICENSE.txt](vendor/fontawesome/LICENSE.txt)。新进展图由 SVG 原生文字、边框和连线绘制。
+
+页面检查截图与导出产物位于 `outputs/architecture/progress/`，属于本机生成产物，不纳入版本管理。

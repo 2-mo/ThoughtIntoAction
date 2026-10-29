@@ -12,6 +12,7 @@
 | 找命令或参数 | `./run.sh help` · `./run.sh help data` · `./run.sh search 标定` |
 | 了解平台、演示给别人看 | `./run.sh web site` · [宣传站](apps/site/README.md) |
 | 理解代码、找实现 | [架构概览](docs/architecture/overview.md) · [源码导航](src/README.md) |
+| 查看模块进展、Git 提交与贡献者 | [架构与进展看板](docs/architecture/index.html) · [更新快照](docs/architecture/README.md) |
 | 学习如何写运动与采集程序 | `./run.sh examples` · [Python 示例](src/examples/README.md) · [Robot 接口](docs/reference/robot-primitives.md) |
 | 编写分阶段任务、重复仿真测试 | `./run.sh examples approach_retreat`、`./run.sh examples sim_task` |
 | 验证七轴无夹爪模型 | `./run.sh examples reference7` |

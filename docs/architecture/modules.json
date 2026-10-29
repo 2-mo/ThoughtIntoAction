@@ -1,0 +1,378 @@
+[
+  {
+    "id": "workbench",
+    "title": "统一工作台",
+    "subtitle": "启动 · 组件选择 · 生命周期",
+    "x": 70,
+    "y": 210,
+    "width": 240,
+    "height": 155,
+    "tasks": [
+      "B-02",
+      "B-06",
+      "K-11"
+    ],
+    "paths": [
+      "src/embodied/applications/workstation/",
+      "src/embodied/workstation/",
+      "src/workstation/",
+      "configs/components/",
+      "configs/workbench/",
+      "run.sh"
+    ],
+    "description": "以 ./run.sh 为统一入口，装配组件、选择运行环境并管理工作台服务。",
+    "boundary": "设备接入不代表获得机械臂控制权；运行状态与控制权分别管理。"
+  },
+  {
+    "id": "interface",
+    "title": "网页与监看",
+    "subtitle": "控制台 · 三维反馈 · 采集面板",
+    "x": 70,
+    "y": 400,
+    "width": 240,
+    "height": 155,
+    "tasks": [
+      "U-*",
+      "C-05"
+    ],
+    "paths": [
+      "apps/console/",
+      "src/embodied/applications/console/",
+      "src/embodied/applications/monitor/",
+      "src/embodied/console/",
+      "src/embodied/monitor/",
+      "src/robot_simulation/",
+      "tests/browser/"
+    ],
+    "description": "展示机器人状态、输入追踪、相机和采集状态，提供操作与复核入口。",
+    "boundary": "网页反馈用于监看，完整控制周期与性能分析依据内核原始记录。前端收敛仍有未关闭计划。"
+  },
+  {
+    "id": "inputs",
+    "title": "遥操与输入",
+    "subtitle": "Quest 原生输入 · iPhone",
+    "x": 70,
+    "y": 590,
+    "width": 240,
+    "height": 155,
+    "tasks": [
+      "C-04",
+      "K-04",
+      "K-05"
+    ],
+    "paths": [
+      "apps/ios/",
+      "src/embodied/devices/inputs/",
+      "src/embodied/devices/phone/",
+      "src/embodied/phone/",
+      "src/inputs/",
+      "src/phone/",
+      "src/quest_teleop/",
+      "src/legacy/quest_teleop/",
+      "configs/inputs/",
+      "tests/phone/",
+      "scripts/setup/quest-client/",
+      "scripts/quest/",
+      "tests/migrated/phone/",
+      "myTeleop/"
+    ],
+    "description": "Quest 经原生输入与路由进入内核仲裁；iPhone 将相对位姿映射为 RPC 控制目标。",
+    "boundary": "Quest 原生路径不经过 RPC 工作区检查；追踪质量、心跳、控制许可和来源仲裁另有明确约束。"
+  },
+  {
+    "id": "operations",
+    "title": "Robot 操作接口",
+    "subtitle": "MoveJ / MoveL / Path / 夹爪",
+    "x": 410,
+    "y": 210,
+    "width": 310,
+    "height": 155,
+    "tasks": [],
+    "paths": [
+      "src/embodied/applications/operations/",
+      "src/embodied/operations/",
+      "src/operations/",
+      "src/examples/",
+      "tests/operations/"
+    ],
+    "description": "Python、CLI 与教学示例通过统一操作语义发起动作，等待反馈、取消动作或记录任务。",
+    "boundary": "操作接口不拥有机械臂 SDK，不复制内核控制循环。当前正式计划没有独立的 Robot API 条目，未关联计划不表示功能尚未实现。"
+  },
+  {
+    "id": "calibration",
+    "title": "任务与标定",
+    "subtitle": "分阶段执行 · 采样 · 求解",
+    "x": 770,
+    "y": 210,
+    "width": 310,
+    "height": 155,
+    "tasks": [
+      "C-06"
+    ],
+    "paths": [
+      "src/embodied/applications/calibration/",
+      "src/embodied/calibration/",
+      "src/calibration/",
+      "src/hand_eye/",
+      "src/legacy/hand_eye/"
+    ],
+    "description": "编排手眼标定的采样与求解，动作提交至内核，相机观测通过共享服务获取。",
+    "boundary": "算法与界面接入分开验收；计划条目关闭不等于所有网页流程或真机流程已验收。"
+  },
+  {
+    "id": "control",
+    "title": "控制网关与周期执行",
+    "subtitle": "控制权 · 动作调度 · worker",
+    "x": 410,
+    "y": 540,
+    "width": 310,
+    "height": 215,
+    "tasks": [
+      "K-01",
+      "K-02",
+      "K-03",
+      "K-06",
+      "K-07",
+      "K-08",
+      "K-09",
+      "K-10",
+      "K-12",
+      "C-02",
+      "C-09"
+    ],
+    "paths": [
+      "src/embodied/control/",
+      "control/",
+      "scripts/control/",
+      "configs/control/"
+    ],
+    "description": "命令网关负责请求、租约与动作调度，worker 周期执行并读取设备反馈，observer 输出只读 RobotTick。",
+    "boundary": "RPC 来源检查工作区；原生 Quest 保留上游约束。新版真机内核仍待完整现场验收，日常旧链路保留。"
+  },
+  {
+    "id": "contracts",
+    "title": "共享契约与观测",
+    "subtitle": "Registry · RPC · RobotTick",
+    "x": 770,
+    "y": 540,
+    "width": 310,
+    "height": 100,
+    "tasks": [
+      "C-01",
+      "C-03",
+      "B-03"
+    ],
+    "paths": [
+      "src/embodied/contracts/",
+      "src/embodied_contracts/",
+      "src/component_api/",
+      "src/runtime_client/",
+      "configs/plugins.json"
+    ],
+    "description": "共享接口、注册表、设备锁和内核客户端连接应用与设备；只读观测不接管设备。",
+    "boundary": "协议提供接入边界，实际设备能力仍由具体插件及运行描述决定。"
+  },
+  {
+    "id": "motion",
+    "title": "独立运动算法",
+    "subtitle": "轨迹规划 · Ruckig · 时间参数化",
+    "x": 770,
+    "y": 665,
+    "width": 310,
+    "height": 100,
+    "tasks": [
+      "C-07"
+    ],
+    "paths": [
+      "src/embodied/motion/",
+      "src/motion/",
+      "tests/motion/",
+      "src/operations/vendor/arx_motion/"
+    ],
+    "description": "根据状态、目标与逐轴约束计算轨迹，供操作流程与内核复用。",
+    "boundary": "运动算法不拥有设备连接；机器人模型与逆运动学实现位于设备插件。"
+  },
+  {
+    "id": "capture",
+    "title": "采集与原始记录",
+    "subtitle": "状态 / 图像 · MCAP / 视频",
+    "x": 1190,
+    "y": 210,
+    "width": 280,
+    "height": 155,
+    "tasks": [
+      "D-06",
+      "D-07",
+      "D-09",
+      "D-10",
+      "D-12"
+    ],
+    "paths": [
+      "src/embodied/data/capture/",
+      "src/embodied/data/episode/",
+      "src/embodied/data/alignment/",
+      "src/embodied/data/replay.py",
+      "src/embodied/data/datasets.py",
+      "src/data/",
+      "src/recording/"
+    ],
+    "description": "订阅内核状态与共享相机帧，保存原始记录、元数据、来源与采集心跳。",
+    "boundary": "人工遥操与程序任务分别记录来源；原始数据保留，缺失与失败不能伪装为完整样本。"
+  },
+  {
+    "id": "export",
+    "title": "质检与数据导出",
+    "subtitle": "复核 · LeRobot · GR00T",
+    "x": 1190,
+    "y": 400,
+    "width": 280,
+    "height": 155,
+    "tasks": [
+      "D-01",
+      "D-02",
+      "D-03",
+      "D-04",
+      "D-05",
+      "D-08",
+      "D-11"
+    ],
+    "paths": [
+      "src/embodied/data/export/",
+      "src/embodied/data/groot/",
+      "src/embodied/data/task_package.py",
+      "scripts/data/",
+      "tests/data/",
+      "scripts/datasets/"
+    ],
+    "description": "检查时间与完整性，复核标注并按数据契约导出模型训练所需格式。",
+    "boundary": "LeRobot 与 GR00T 的动作定义分别保留；接口通过不代表已有适合所有硬件的训练权重。"
+  },
+  {
+    "id": "policy",
+    "title": "训练与策略执行",
+    "subtitle": "π0.5 / GR00T · 观测与动作适配",
+    "x": 1190,
+    "y": 755,
+    "width": 280,
+    "height": 175,
+    "tasks": [
+      "P-*",
+      "C-08"
+    ],
+    "paths": [
+      "src/embodied/policy/",
+      "src/policy/",
+      "scripts/training/",
+      "integrations/openpi/",
+      "tests/policy/",
+      "scripts/inference/",
+      "src/下载JAX版本.py"
+    ],
+    "description": "模型在各自环境中训练或推理。π0.5 与 GR00T 都有指定 --run 的内核执行入口，通过共享相机与 ControlSession 适配观测和动作。",
+    "boundary": "旧执行入口仍保留；计划记录与当前实现可能不同步，真机与 checkpoint 的动作语义需分别验收。"
+  },
+  {
+    "id": "robots",
+    "title": "机器人插件",
+    "subtitle": "ARX X5 · Reference7 仿真",
+    "x": 410,
+    "y": 940,
+    "width": 310,
+    "height": 155,
+    "tasks": [
+      "R-*",
+      "C-10"
+    ],
+    "paths": [
+      "src/embodied/devices/robots/",
+      "src/embodied/robots/",
+      "src/robots/",
+      "assets/robots/",
+      "configs/robots/",
+      "src/robot_control/",
+      "src/legacy/robot_control/",
+      "src/legacy/arx5_control/",
+      "src/arx_tools/",
+      "src/robot_teleop/",
+      "scripts/arm/",
+      "myTeleop/simulate_*",
+      "myTeleop/check_arm.py",
+      "myTeleop/test_x5_joint_tracking.py",
+      "myTeleop/固定机械臂id/"
+    ],
+    "description": "插件提供 profile、模型、运动学、反馈和执行后端，封装具体 SDK 与关闭策略。",
+    "boundary": "Reference7 是七轴无夹爪教学仿真，没有对应真机；B601 是独立实验适配。"
+  },
+  {
+    "id": "cameras",
+    "title": "共享相机服务",
+    "subtitle": "RealSense / synthetic · 共享帧",
+    "x": 770,
+    "y": 940,
+    "width": 310,
+    "height": 155,
+    "tasks": [
+      "S-*"
+    ],
+    "paths": [
+      "src/embodied/devices/sensors/",
+      "src/embodied/sensors/",
+      "src/sensors/",
+      "src/camera/",
+      "tests/sensors/"
+    ],
+    "description": "相机服务独占设备并提供图像、内参和时间戳，采集、监看、标定和策略消费共享帧。",
+    "boundary": "统一内核链路通过共享服务取帧；旧入口仍有直连与生命周期迁移待办。"
+  },
+  {
+    "id": "engineering",
+    "title": "工程基础与环境",
+    "subtitle": "环境隔离 · 依赖锁定 · 回归检查",
+    "x": 70,
+    "y": 1240,
+    "width": 650,
+    "height": 135,
+    "tasks": [
+      "G-*",
+      "B-01",
+      "B-04",
+      "B-05"
+    ],
+    "paths": [
+      "configs/environments/",
+      "environments/",
+      "pyproject.toml",
+      "uv.lock",
+      "dependencies.lock.toml",
+      "scripts/check*",
+      "tests/test_*",
+      ".github/",
+      "scripts/setup/can_up.sh"
+    ],
+    "description": "维护依赖与运行环境，提供有针对性的离线、仿真和边界回归。",
+    "boundary": "验证范围以实际记录为准；离线或仿真验证不等于完成真机验收。"
+  },
+  {
+    "id": "docs",
+    "title": "文档与项目治理",
+    "subtitle": "架构 · 操作指南 · 计划与来源",
+    "x": 770,
+    "y": 1240,
+    "width": 700,
+    "height": 135,
+    "tasks": [
+      "O-*"
+    ],
+    "paths": [
+      "docs/",
+      "README.md",
+      "AGENTS.md",
+      "src/README.md",
+      "scripts/docs/",
+      "apps/site/",
+      "site/"
+    ],
+    "description": "维护项目架构、操作指南、计划清单、迁移来源与当前进展视图。",
+    "boundary": "计划勾选表示文档记录的关闭状态；未关闭条目可能已有部分实现。Git 作者不等于模块负责人。"
+  }
+]
