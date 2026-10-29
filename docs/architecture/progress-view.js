@@ -66,95 +66,102 @@
     return `<g class="node ${state.selected === module.id ? 'selected' : ''} ${queryActive && !own.length ? 'dim' : ''}" data-module="${module.id}" tabindex="0" role="button" aria-label="${escape(module.title)}，${count}，${own.length} 次提交" transform="translate(${x} ${y})"><title>${escape(module.description)}</title><rect class="surface" width="${w}" height="${h}" rx="2"/><rect x="1" y="1" width="${w-2}" height="5" fill="${color}" opacity=".65"/><text class="node-title" x="${w/2}" y="${compact ? 30 : 39}">${escape(module.title)}</text><text class="node-sub" x="${w/2}" y="${compact ? 54 : 68}">${escape(module.subtitle)}</text>${module.id === 'control' ? `<text class="node-note" x="${w/2}" y="104">RPC 工作区 · 反馈与关节约束</text><text class="node-note" x="${w/2}" y="134">原生输入仲裁 · 只读观测</text>` : ''}<text class="node-foot" x="${w/2}" y="${h-18}">${count} · ${own.length} 提交</text>${!compact && module.id !== 'control' ? `<text class="node-foot" x="${w/2}" y="${h-43}">${own.length ? `${date(own[0].date)} · ${escape(authors.get(own[0].authorId).name)}` : '当前范围无提交记录'}</text>` : ''}</g>`;
   }
 
-  const relationColors = {control:'#3e6175',data:'#458b85',dependency:'#a08b69'};
+  const relationColors = {control:'#7474b0',data:'#55a7a0',dependency:'#99a3b4',manual:'#c99972'};
+  const tones = {violet:'#8766bd',indigo:'#6265c2',teal:'#348f89',orange:'#bd8557',neutral:'#758296'};
   const overviewStyle = `
-    .region{fill:#fafbfc;stroke:#cbd4da;stroke-width:1.2}
-    .region-title{font-size:19px;font-weight:600;fill:#405965}
-    .region-note{font-size:14px;fill:#7a8b94}
-    .overview-card .surface{stroke:#a0b1bb;stroke-width:1.2;fill:#fff}
-    .overview-card.device .surface{stroke:#6d8b9c;stroke-width:1.6;fill:#f7fafb}
-    .overview-card.data .surface{stroke:#86aaa4;fill:#f6faf9}
-    .overview-card.transport .surface{fill:#f0f4f7;stroke:#bdcbd4;stroke-dasharray:5 4}
-    .overview-card:hover>.surface,.overview-card:focus-visible>.surface,.overview-card.selected>.surface{stroke:#3d7089;stroke-width:2.4;fill:#edf4f8}
-    .overview-title{font-size:21px;font-weight:600;fill:#294958}
-    .overview-subtitle{font-size:15px;fill:#6b808b}
-    .overview-card.device>.overview-title{font-size:22px}
-    .inner-surface{fill:#fff;stroke:#b9c8cf;stroke-width:1}
-    .inner-title{font-size:19px;font-weight:500;fill:#355765}
-    .inner-subtitle{font-size:15px;fill:#71858f}
-    .hardware .inner-surface{fill:#eaf0f2;stroke:none}
-    .hardware .inner-title{font-size:16px;fill:#59707b}
-    .relation{fill:none;stroke-width:1.8;stroke-linejoin:round}
-    .relation-halo{fill:none;stroke:#fff;stroke-width:6;stroke-linejoin:round}
-    .relation-label{font-size:15px;fill:#536e7c;text-anchor:middle;paint-order:stroke;stroke:white;stroke-width:5;stroke-linejoin:round}
-    .relation-group.dependency .relation{stroke-dasharray:5 4;stroke-width:1.5}
-    .relation-group.dependency .relation-label{fill:#8b795e}
-    .relation-group.data .relation-label{fill:#367970}
-    .diagram-muted{opacity:.16}
-    .diagram-related>.surface{stroke-width:2;stroke:#638698}
-    .relation-group.diagram-related .relation{stroke-width:2.8}
+    .region{fill:#fff;stroke:#e7eaf2;stroke-width:1;filter:url(#card-shadow)}
+    .region.indigo{fill:#f5f5ff;stroke:#e1e1f4}
+    .region.neutral{fill:#f3f5f9;stroke:none;filter:none}
+    .region-eyebrow{font-size:12px;letter-spacing:1.8px;font-weight:600}
+    .region-title{font-size:27px;font-weight:650;fill:#27324b}
+    .region.indigo~.region-title{font-size:31px}
+    .region-subtitle{font-size:15px;fill:#8a94a7}
+    .overview-card{outline:none;cursor:pointer}
+    .overview-card>.surface{fill:#fff;stroke:#e7eaf1;stroke-width:1;transition:stroke .15s,fill .15s}
+    .overview-card.session>.surface{fill:#f5f0fb;stroke:none}
+    .overview-card.context>.surface{fill:#fff;stroke:#e8e7f4}
+    .overview-card.loop>.surface{fill:#eeeffb;stroke:none}
+    .overview-card.tools>.surface{fill:#6465b9;stroke:none}
+    .overview-card.perception>.surface{fill:#eef7f5;stroke:none}
+    .overview-card.kernel>.surface{fill:#fcf6ef;stroke:#f0e1d1}
+    .overview-card.foundation>.surface{fill:transparent;stroke:none}
+    .overview-card:hover>.surface,.overview-card:focus-visible>.surface,.overview-card.selected>.surface{stroke:#9293ca;stroke-width:2;fill:#f4f4fd}
+    .overview-card.tools:hover>.surface,.overview-card.tools:focus-visible>.surface{fill:#5556a7}
+    .overview-title{font-size:19px;font-weight:600;fill:#36415a}
+    .overview-subtitle{font-size:14px;fill:#8892a6}
+    .overview-card.tools .overview-title,.overview-card.tools .overview-subtitle{fill:#fff}
+    .node-icon{fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+    .node-status{font-size:11px;fill:#a6a0af}
+    .route{fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+    .route-label{font-size:13px;fill:#999fb2;text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:5px}
+    .loop-step{font-size:18px;font-weight:500;fill:#575a91}
+    .kernel-part{fill:#fff;stroke:#eddcca;stroke-width:1}
+    .kernel-text{font-size:15px;fill:#8f7258;text-anchor:middle}
+    .kernel-link{fill:none;stroke:#c8aa8c;stroke-width:1.2;marker-end:url(#arrow-manual)}
+    .diagram-muted{opacity:.4}
+    .diagram-related>.surface{stroke:#9195c8;stroke-width:1.5}
+    .route-group.diagram-related .route{stroke-width:2.8}
+    .overview-note{font-size:15px;fill:#98a0b0}
   `;
 
   function designRegion(region) {
-    const {x,y,width:w,height:h} = region;
-    const wide = w > 400;
-    return `<g class="design-region"><rect class="region" x="${x}" y="${y}" width="${w}" height="${h}" rx="5"/><text class="region-title" x="${x+20}" y="${y+27}">${escape(region.title)}</text>${region.note ? `<text class="region-note" x="${wide ? x+w-20 : x+20}" y="${wide ? y+27 : y+h-4}" text-anchor="${wide ? 'end' : 'start'}">${escape(region.note)}</text>` : ''}</g>`;
+    const {x,y,width:w,height:h,tone} = region;
+    return `<g><rect class="region ${tone}" x="${x}" y="${y}" width="${w}" height="${h}" rx="18"/>${region.title ? `<text class="region-eyebrow" x="${x+22}" y="${y+30}" fill="${tones[tone]}">${escape(region.eyebrow)}</text><text class="region-title" x="${x+22}" y="${y+69}" style="font-size:${tone === 'indigo' ? 31 : 27}px">${escape(region.title)}</text><text class="region-subtitle" x="${x+22}" y="${y+92}">${escape(region.subtitle)}</text>` : ''}</g>`;
   }
 
-  function relationMarkup(relation,index) {
-    const color = relationColors[relation.kind];
-    return `<g class="relation-group ${relation.kind}" data-relation="${index}"><title>${escape(relation.detail)}</title><path class="relation-halo" d="${relation.path}"/><path class="relation" stroke="${color}" d="${relation.path}" marker-end="url(#arrow-${relation.kind})" ${relation.both ? `marker-start="url(#arrow-${relation.kind})"` : ''}/></g>`;
+  function routeMarkup(route) {
+    return `<g class="route-group" data-route="${route.id}"><path class="route" stroke="${relationColors[route.kind]}" d="${route.path}" marker-end="url(#arrow-${route.kind})" ${route.both ? `marker-start="url(#arrow-${route.kind})"` : ''}/><text class="route-label" x="${route.x}" y="${route.y}">${escape(route.label)}</text></g>`;
   }
 
-  function relationLabel(relation,index) {
-    return relation.label ? `<g class="relation-group ${relation.kind}" data-relation="${index}"><text class="relation-label" x="${relation.x}" y="${relation.y}" style="text-anchor:${relation.anchor || 'middle'}" ${relation.rotate ? `transform="rotate(${relation.rotate} ${relation.x} ${relation.y})"` : ''}>${escape(relation.label)}</text></g>` : '';
+  function nodeIcon(name,tone) {
+    const paths = {
+      monitor:'<rect x="1" y="2" width="18" height="12" rx="2"/><path d="M7 18h6M10 14v4"/>',
+      terminal:'<rect x="1" y="2" width="18" height="16" rx="3"/><path d="m5 7 3 3-3 3m6 0h4"/>',
+      mic:'<rect x="7" y="1" width="6" height="12" rx="3"/><path d="M4 9v1a6 6 0 0 0 12 0V9M10 16v3M7 19h6"/>',
+      hand:'<path d="M8 11V3a1.5 1.5 0 0 1 3 0v7-9a1.5 1.5 0 0 1 3 0v9-6a1.5 1.5 0 0 1 3 0v7-4a1.5 1.5 0 0 1 3 0v7c0 5-3 7-7 7-3 0-5-2-7-5L3 11c-1-2 1-3 2-2l3 3"/>',
+    };
+    return name ? `<g class="node-icon" stroke="${tones[tone]}" transform="translate(13 12) scale(.9)">${paths[name] || ''}</g>` : '';
   }
 
   function designNode(node) {
-    const {x,y,width:w,height:h,kind} = node;
-    const compound = kind === 'device' || kind === 'data';
-    let labels = '';
-    if (compound) {
-      labels = `<text class="overview-title" x="20" y="28">${kind === 'data' ? '03  数据与实验资产' : escape(node.title)}</text>`;
-      if (kind === 'device') labels += `<text class="overview-subtitle" x="${w-20}" y="28" text-anchor="end" style="font-size:13px">${escape(node.subtitle)}</text>`;
-      labels += node.rows.map(row => `<g class="${row.hardware ? 'hardware' : ''}" transform="translate(${row.x} ${row.y})"><rect class="inner-surface" width="${row.width}" height="${row.height}" rx="3"/><text class="inner-title" x="${row.width/2}" y="${row.subtitle ? (row.height === 48 ? 21 : 27) : row.height/2+6}" text-anchor="middle">${escape(row.title)}</text>${row.subtitle ? `<text class="inner-subtitle" x="${row.width/2}" y="${row.height-9}" text-anchor="middle">${escape(row.subtitle)}</text>` : ''}</g>`).join('');
-      if (kind === 'data') {
-        labels += `<path class="relation" stroke="${relationColors.data}" d="M130 118V160" marker-end="url(#arrow-data)"/><text class="inner-subtitle" x="145" y="145">记录</text>`;
-      } else {
-        const center = w/2;
-        const direction = node.id === 'perception' ? 'data' : 'control';
-        const paths = node.id === 'perception' ? [`M${center} 122V96`,`M${center} 182V158`] : [`M${center-55} 96V122`,`M${center-55} 158V182`,`M${center+55} 122V96`,`M${center+55} 182V158`];
-        labels += paths.map((path,i) => {const type = i>1 ? 'data' : direction; return `<path class="relation" stroke="${relationColors[type]}" d="${path}" marker-end="url(#arrow-${type})"/>`;}).join('');
-      }
-    } else if (kind === 'transport') {
-      labels = `<text class="overview-title" x="24" y="23" style="font-size:19px">${escape(node.title)}</text><text class="overview-subtitle" x="24" y="44">${escape(node.subtitle)}</text><text class="overview-subtitle" x="240" y="32">本机 IPC / 跨主机传输</text><text class="overview-subtitle" x="530" y="32">控制与数据通道可替换</text>`;
+    const {x,y,width:w,height:h,kind,tone,icon} = node;
+    let content='';
+    if (kind === 'loop') {
+      content=`<text class="overview-title" x="20" y="26">${escape(node.title)}</text><text class="overview-subtitle" x="${w-20}" y="26" text-anchor="end">Agent 执行循环</text>${['观测','规划','调用','复核'].map((label,i)=>`<text class="loop-step" x="${48+i*150}" y="62">${label}</text>${i<3 ? `<path d="M${118+i*150} 55h32m-5-4 5 4-5 4" fill="none" stroke="#b8bad7" stroke-width="1.3"/>` : ''}`).join('')}`;
+    } else if (kind === 'kernel') {
+      content=`<text class="overview-title" x="20" y="28">${escape(node.title)}</text><text x="${w-20}" y="28" text-anchor="end" font-size="12" fill="#c4a78c">本地实时闭环</text><rect class="kernel-part" x="18" y="50" width="150" height="34" rx="6"/><text class="kernel-text" x="93" y="72">动作网关 / 会话</text><rect class="kernel-part" x="258" y="50" width="288" height="34" rx="6"/><text class="kernel-text" x="402" y="72">命令调度 → 周期 worker</text><rect class="kernel-part" x="18" y="105" width="150" height="36" rx="6"/><text class="kernel-text" x="93" y="120" style="font-size:13px">轨迹规划</text><text class="kernel-text" x="93" y="134" style="font-size:10px">MoveJ / MoveL / Path</text><rect class="kernel-part" x="258" y="105" width="288" height="36" rx="6"/><text class="kernel-text" x="402" y="128">驱动 ↔ 机械臂</text><path class="kernel-link" d="M168 67H258"/><text class="kernel-text" x="213" y="58" style="font-size:10px">短 TTL 目标</text><path class="kernel-link" d="M93 84V105"/><path class="kernel-link" d="M168 123H214V77H258"/><path class="kernel-link" d="M370 84V105"/><path class="kernel-link" d="M434 105V84"/><text class="overview-subtitle" x="20" y="164" style="font-size:13px">${escape(node.subtitle)}</text>`;
+    } else if (kind === 'foundation') {
+      content=`<text class="overview-title" x="0" y="21" style="font-size:18px">${escape(node.title)}</text><text class="overview-subtitle" x="0" y="44" style="font-size:14px">${escape(node.subtitle)}</text>${node.id !== 'operations' ? `<path d="M${w+10} 0v46" stroke="#e1e5ed"/>` : ''}`;
+    } else if (icon) {
+      content=`${nodeIcon(icon,tone)}<text class="overview-title" x="40" y="28" style="font-size:18px">${escape(node.title)}</text><text class="overview-subtitle" x="13" y="51" style="font-size:12px">${escape(node.subtitle)}</text>${['voice-interaction','gesture-interaction'].includes(node.id) ? `<text class="node-status" x="13" y="71">${node.id === 'voice-interaction' ? '规划接入' : '已有手势基础'}</text>` : ''}`;
     } else {
-      labels = `<text class="overview-title" x="${w/2}" y="${h === 56 ? 24 : 28}" text-anchor="middle" style="font-size:${w < 150 ? 18 : w < 240 ? 19 : 21}px">${escape(node.title)}</text><text class="overview-subtitle" x="${w/2}" y="${h === 56 ? 44 : 50}" text-anchor="middle" style="font-size:${w < 150 ? 13 : 15}px">${escape(node.subtitle)}</text>`;
+      content=`<text class="overview-title" x="20" y="28" style="font-size:${kind === 'session' || kind === 'tools' || kind === 'perception' ? 21 : 19}px">${escape(node.title)}</text><text class="overview-subtitle" x="20" y="51">${escape(node.subtitle)}</text>`;
+      if (kind === 'session') content+='<path d="M20 65h248" stroke="#e4daef"/>';
     }
-    return `<g class="node overview-card ${kind} ${state.designSelected === node.id ? 'selected' : ''}" data-design="${node.id}" tabindex="0" role="button" aria-label="${escape(node.title)}，查看职责、对接关系和实现进展" transform="translate(${x} ${y})"><title>${escape(node.description)}</title><rect class="surface" width="${w}" height="${h}" rx="4"/>${labels}</g>`;
+    return `<g class="node overview-card ${kind} ${state.designSelected === node.id ? 'selected' : ''}" data-design="${node.id}" tabindex="0" role="button" aria-label="${escape(node.title)}，查看职责、接口与实现现状" transform="translate(${x} ${y})"><title>${escape(node.description)}</title><rect class="surface" width="${w}" height="${h}" rx="10"/>${content}</g>`;
   }
 
   function highlightRelations(id) {
-    const relations = design.edges.flatMap((relation,index) => relation.from === id || relation.to === id || relation.via?.includes(id) ? [index] : []);
-    const connected = new Set([id,...relations.flatMap(index => {const r=design.edges[index];return [r.from,r.to,...(r.via || [])];})]);
-    $('diagram').querySelectorAll('[data-design]').forEach(element => {
-      element.classList.toggle('diagram-muted',Boolean(id) && !connected.has(element.dataset.design));
-      element.classList.toggle('diagram-related',Boolean(id) && connected.has(element.dataset.design));
+    const connected = new Set([id]);
+    design.edges.filter(e=>e.from === id || e.to === id).forEach(e=>{connected.add(e.from);connected.add(e.to);});
+    $('diagram').querySelectorAll('[data-design]').forEach(element=>{
+      element.classList.toggle('diagram-muted',Boolean(id)&&!connected.has(element.dataset.design));
+      element.classList.toggle('diagram-related',Boolean(id)&&connected.has(element.dataset.design));
     });
-    $('diagram').querySelectorAll('[data-relation]').forEach(element => {
-      const related = relations.includes(Number(element.dataset.relation));
-      element.classList.toggle('diagram-muted',Boolean(id) && !related);
-      element.classList.toggle('diagram-related',Boolean(id) && related);
+    $('diagram').querySelectorAll('[data-route]').forEach(element=>{
+      const route=design.routes.find(route=>route.id===element.dataset.route);
+      element.classList.toggle('diagram-muted',Boolean(id)&&!route.nodes.some(node=>connected.has(node)));
+      element.classList.toggle('diagram-related',Boolean(id)&&route.nodes.includes(id));
     });
   }
 
   function drawDesign() {
-    const markers = Object.entries(relationColors).map(([kind,color]) => `<marker id="arrow-${kind}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="${color}"/></marker>`).join('');
-    $('diagramMount').innerHTML = `<svg id="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${design.width} ${design.height}" role="group" aria-labelledby="diagramTitle diagramDesc"><title id="diagramTitle">知行有灵 · ${escape(design.title)}</title><desc id="diagramDesc">整体架构按交互入口、平台应用、数据资产、插件与运行管理、设备接入主机和基础设施划分职责。实线表示调用，绿色线表示数据，虚线表示装配或依赖。感知、任务与执行构成闭环，网络承载跨服务接口，安全策略在 API 和设备服务端执行。</desc><style>${svgStyle}${overviewStyle}</style><defs>${markers}</defs><rect width="${design.width}" height="${design.height}" fill="white"/>${design.regions.map(designRegion).join('')}${design.nodes.filter(n=>n.kind === 'transport').map(designNode).join('')}${design.edges.map(relationMarkup).join('')}${design.nodes.filter(n=>n.kind !== 'transport').map(designNode).join('')}${design.junctions.map(p=>`<circle cx="${p.x}" cy="${p.y}" r="3" fill="${relationColors[p.kind]}"/>`).join('')}${design.edges.map(relationLabel).join('')}</svg>`;
-    $('diagram').querySelectorAll('[data-design]').forEach(element => {
-      const select = () => {state.designSelected = element.dataset.design; drawDesign(); openDesignDetail();};
+    const markers=Object.entries(relationColors).map(([kind,color])=>`<marker id="arrow-${kind}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="${color}"/></marker>`).join('');
+    $('diagramMount').innerHTML=`<svg id="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${design.width} ${design.height}" role="group" aria-labelledby="diagramTitle diagramDesc"><title id="diagramTitle">${escape(design.title)}</title><desc id="diagramDesc">一台电脑通过网页、终端、语音和手势管理全实验室。中央 Embodied Agent Harness 维护上下文、任务与技能循环；感知提供观测，机械臂运动内核与移动机器人各自执行。人工接管和连续目标通过控制会话直达设备运行时，平台底座共享设备目录、能力契约、网络安全和插件运维。</desc><style>${svgStyle}${overviewStyle}</style><defs>${markers}<filter id="card-shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#283858" flood-opacity=".035"/></filter></defs><rect width="${design.width}" height="${design.height}" fill="#fff"/>${design.regions.map(designRegion).join('')}${design.routes.map(routeMarkup).join('')}${design.nodes.map(designNode).join('')}${design.annotations.map(a=>`<text class="overview-note" x="${a.x}" y="${a.y}" style="font-size:${a.size}px">${escape(a.text)}</text>`).join('')}<text class="overview-note" x="1772" y="729" text-anchor="end" style="font-size:13px">目标设计 · 实现现状见模块详情</text></svg>`;
+    $('diagram').querySelectorAll('[data-design]').forEach(element=>{
+      const select=()=>{state.designSelected=element.dataset.design;drawDesign();openDesignDetail();};
       element.addEventListener('click',select);
-      element.addEventListener('keydown',event => {if (event.key === 'Enter' || event.key === ' ') {event.preventDefault();select();}});
+      element.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});
       element.addEventListener('mouseenter',()=>highlightRelations(element.dataset.design));
       element.addEventListener('mouseleave',()=>highlightRelations(null));
       element.addEventListener('focus',()=>highlightRelations(element.dataset.design));
@@ -173,7 +180,7 @@
       const title = id=>design.nodes.find(n=>n.id === id).title;
       return `<div class="interface-row"><div><span class="interface-type ${relation.kind}">${{control:'调用',data:'数据',dependency:'依赖'}[relation.kind]}</span><button class="interface-link" data-neighbor="${other}">${transit ? `${escape(title(relation.from))} → ${escape(title(relation.to))}` : `${relation.both ? '↔' : relation.from === node.id ? '→' : '←'} ${escape(title(other))}`}</button></div><p>${escape(relation.detail)}</p></div>`;
     }).join('');
-    $('designDetailContent').innerHTML = `<p class="eyebrow">MODULE / ${escape(node.id.toUpperCase())}</p><h2 id="designDetailTitle">${escape(node.title)}</h2><p class="design-lead">${escape(node.description)}</p><h3>职责与分工边界</h3>${node.responsibilities.map(item => `<p>${escape(item)}</p>`).join('')}<h3>需要对接的接口</h3><div class="interface-list">${interfaces}</div><div class="warning-note">${escape(node.boundary)}</div><h3>实现细节与现状</h3>${components.map(component => `<details class="component-detail"><summary>${escape(component.title)}<span>${designStatus[component.status].label}</span></summary><p>${escape(component.description)}</p>${component.responsibilities.map(item => `<p>${escape(item)}</p>`).join('')}<p class="component-boundary">${escape(component.boundary)}</p></details>`).join('')}<h3>相关实现与 Git 贡献</h3><div class="chips">${node.related.map(id => `<button class="chip" data-existing="${id}">${escape(byId.get(id).title)} →</button>`).join('')}</div><p class="detail-footnote">Git 署名用于追溯贡献，不代表已分配负责人。目标模块不继承旧模块完成率。<a href="lab-device-platform.md">完整设计说明 ↗</a></p>`;
+    $('designDetailContent').innerHTML = `<p class="eyebrow">MODULE / ${escape(node.id.toUpperCase())}</p><h2 id="designDetailTitle">${escape(node.title)}</h2><p class="design-lead">${escape(node.description)}</p><h3>职责与分工边界</h3>${node.responsibilities.map(item => `<p>${escape(item)}</p>`).join('')}<h3>需要对接的接口</h3><div class="interface-list">${interfaces}</div><div class="warning-note">${escape(node.boundary)}</div><h3>实现细节与现状</h3>${components.map(component => `<details class="component-detail"><summary>${escape(component.title)}<span>${designStatus[component.status].label}</span></summary><p>${escape(component.description)}</p>${component.responsibilities.map(item => `<p>${escape(item)}</p>`).join('')}<p class="component-boundary">${escape(component.boundary)}</p></details>`).join('')}<h3>相关实现与 Git 贡献</h3>${!node.related.length ? '<p class="detail-footnote">尚无该模块的实现证据；不借用其他模块完成率。</p>' : ''}<div class="chips">${node.related.map(id => `<button class="chip" data-existing="${id}">${escape(byId.get(id).title)} →</button>`).join('')}</div><p class="detail-footnote">Git 署名用于追溯贡献，不代表已分配负责人。目标模块不继承旧模块完成率。<a href="lab-device-platform.md">完整设计说明 ↗</a></p>`;
     $('designDetailContent').querySelectorAll('[data-neighbor]').forEach(button=>{
       button.onclick=()=>{state.designSelected=button.dataset.neighbor;drawDesign();openDesignDetail();};
     });
@@ -184,6 +191,7 @@
       };
     });
     if (!$('designDetailDialog').open) $('designDetailDialog').showModal();
+    else $('closeDesignDetail').focus({preventScroll:true});
     $('designDetailDialog').scrollTop = 0;
   }
 
@@ -288,13 +296,13 @@
     for (const view of ['commits','contributors']) $(view + 'View').hidden = state.view !== view;
     document.querySelector('.filters').hidden = isDesign;
     document.querySelector('.legend').innerHTML = isDesign
-      ? '<span><i class="flow-key control"></i>调用 / 命令</span><span><i class="flow-key data"></i>观测 / 反馈</span><span><i class="flow-key dependency"></i>装配 / 依赖</span>'
+      ? '<span>点击模块，查看职责、接口与实现进展</span>'
       : '<span><i class="green"></i>计划全部关闭</span><span><i class="amber"></i>仍有未关闭项</span><span><i class="gray"></i>无关联计划</span>';
     document.querySelector('.diagram-caption').textContent = isDesign
-      ? '框表示职责与部署边界；箭头标明对接接口。悬停突出关联，点击查看分工边界与 Git 进展。网络带表示传输边界，虚线不代表运行时中转。'
+      ? '主图呈现关键交互；完整调用与依赖在模块详情中。Agent 编排、人工接管和设备实时控制分别维护。'
       : '点击模块查看计划、作者与提交。时间和作者筛选只影响 Git 活动，计划计数保持完整。';
     $('coverage').textContent = isDesign
-      ? '总体设计 · 子系统边界 / 模块接口 / 实现证据'
+      ? '一台工作台 · 中央 Agent · 全实验室能力'
       : `${data.modules.length} 个已有模块 · ${data.planFiles.length} 份正式计划 · ${data.shallow ? '浅克隆，仅含本地可用历史' : 'HEAD 可达的已提交历史'}`;
     document.querySelectorAll('[data-view]').forEach(button => { const active = button.dataset.view === state.view; button.classList.toggle('active',active); button.setAttribute('aria-pressed',String(active)); });
     if (state.view === 'architecture') { draw(commits); renderPanel(commits); }
@@ -310,16 +318,12 @@
     svg.setAttribute('height',String(svg.viewBox.baseVal.height * 2));
     svg.querySelectorAll('.node').forEach(node => { node.classList.remove('selected','diagram-muted','diagram-related'); node.removeAttribute('tabindex'); node.removeAttribute('role'); });
     svg.querySelectorAll('.diagram-muted,.diagram-related').forEach(element=>element.classList.remove('diagram-muted','diagram-related'));
-    if (state.view === 'design') {
-      const legend = document.createElementNS('http://www.w3.org/2000/svg','g');
-      legend.setAttribute('aria-label','连线图例');
-      legend.innerHTML = [['control','调用 / 命令'],['data','观测 / 反馈'],['dependency','装配 / 依赖']].map(([kind,label],index)=>`<path d="M${40+index*160} 775h28" fill="none" stroke="${relationColors[kind]}" stroke-width="2" ${kind === 'dependency' ? 'stroke-dasharray="5 4"' : ''}/><text x="${76+index*160}" y="779" font-size="13">${label}</text>`).join('');
-      svg.append(legend);
+    if (state.view !== 'design') {
+      const note = document.createElementNS('http://www.w3.org/2000/svg','text');
+      note.setAttribute('x','40'); note.setAttribute('y',String(svg.viewBox.baseVal.height - 5)); note.setAttribute('font-size','12');
+      note.textContent = `Git 筛选：${state.period === 'all' ? '全部历史' : '近 ' + state.period + ' 天'} / ${state.author === 'all' ? '全部作者' : authors.get(state.author).name} / 搜索：${state.search || '无'}；计划计数为完整快照。`;
+      svg.append(note);
     }
-    const note = document.createElementNS('http://www.w3.org/2000/svg','text');
-    note.setAttribute('x','40'); note.setAttribute('y',String(svg.viewBox.baseVal.height - 5)); note.setAttribute('font-size','12');
-    note.textContent = state.view === 'design' ? '目标设计；已有实现基础不代表完成实验室范围的接入与现场验收。具体设备型号和协议按实际接入确认。' : `Git 筛选：${state.period === 'all' ? '全部历史' : '近 ' + state.period + ' 天'} / ${state.author === 'all' ? '全部作者' : authors.get(state.author).name} / 搜索：${state.search || '无'}；计划计数为完整快照。`;
-    svg.append(note);
     return new XMLSerializer().serializeToString(svg);
   }
   function download(blob, name) {
@@ -361,6 +365,9 @@
     drawDesign();
     $('diagram').querySelector(`[data-design="${id}"]`)?.focus({preventScroll:true});
   });
+  $('referenceContent').innerHTML = `<p>参考职责与接口设计，本轮未安装这些框架，也未新增设备或模型连接。</p>${design.references.map(ref=>`<article class="reference-item"><h3><a href="${escape(ref.url)}" target="_blank" rel="noopener noreferrer">${escape(ref.name)} ↗</a></h3><p class="reference-role">${escape(ref.role)}</p><p>${escape(ref.take)}</p><p class="reference-boundary">${escape(ref.boundary)}</p></article>`).join('')}<p><a href="lab-device-platform.md">完整架构与参考取舍 ↗</a></p>`;
+  $('references').onclick=()=>$('referenceDialog').showModal();
+  $('closeReferences').onclick=()=>$('referenceDialog').close();
   $('method').onclick = () => $('methodDialog').showModal();
   $('closeMethod').onclick = () => $('methodDialog').close();
   new ResizeObserver(resize).observe($('viewport'));
