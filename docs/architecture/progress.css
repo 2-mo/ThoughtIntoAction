@@ -710,3 +710,51 @@ main{
   .design-value { font-size: 18px; }
   .tabs { gap: 18px; }
 }
+
+/* The design overview uses the whole canvas; details open without shrinking it. */
+.design-view .topbar { height: 48px; }
+.design-view .intro .eyebrow { display: none; }
+.design-view .intro h1 { font-size: 23px; margin-bottom: 4px; }
+.design-view .intro-copy { font-size: 12px; }
+.design-view .architecture-layout { display: flex; }
+.design-view .diagram-pane { flex: 1; min-width: 0; }
+.design-view .diagram-viewport { padding: 8px; }
+.design-view #diagramMount { width: max-content; min-height: 100%; display: flex; align-items: center; margin: 0 auto; }
+#designDetailDialog { width: 720px; max-height: 86dvh; padding: 30px; }
+#designDetailDialog h2 { font-size: 26px; }
+#designDetailDialog h3 { font-size: 13px; margin: 26px 0 12px; color: #526c79; }
+#designDetailDialog .design-lead { color: #405c69; font-size: 15px; }
+#designDetailDialog .warning-note { margin: 20px 0; }
+.component-detail { border-top: 1px solid #e2e8eb; padding: 13px 0; }
+.component-detail summary { display: flex; justify-content: space-between; gap: 16px; cursor: pointer; font-size: 13px; color: #415c69; }
+.component-detail summary span { color: #99a1a4; font-size: 11px; }
+.component-detail p { margin-bottom: 0; font-size: 12px; }
+.component-detail .component-boundary { padding-left: 12px; border-left: 2px solid #d4bd91; }
+#designDetailDialog .detail-footnote { font-size: 11px; margin-top: 20px; }
+.detail-footnote a { color: #567e91; }
+@media (min-width: 801px) {
+  body.design-view { height: 100dvh; overflow: hidden; }
+  .design-view main { max-width: none; height: calc(100dvh - 48px); padding: 12px 24px 8px; display: flex; flex-direction: column; min-height: 0; }
+  .design-view .intro { flex: none; align-items: center; margin-bottom: 10px; }
+  .design-view .snapshot { font-size: 10px; line-height: 1.6; }
+  .design-view .workspace { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .design-view .workspace-toolbar { flex: none; min-height: 44px; padding: 0 16px; flex-wrap: nowrap; }
+  .design-view .tabs { min-height: 0; }
+  .design-view .tabs button { padding: 12px 1px; }
+  .design-view .architecture-layout { flex: 1; min-height: 0; }
+  .design-view .diagram-pane { display: flex; flex-direction: column; min-height: 0; }
+  .design-view .diagram-toolbar { flex: none; min-height: 38px; padding: 6px 16px; flex-wrap: nowrap; }
+  .design-view .diagram-viewport { flex: 1; height: auto; min-height: 0; max-height: none; }
+  .design-view .diagram-caption { flex: none; padding: 6px 16px; }
+  .design-view .footer { flex: none; padding: 6px 0 0; font-size: 10px; }
+}
+@media (max-width: 800px) {
+  .design-view main { padding: 18px 14px 10px; }
+  .design-view .intro { margin-bottom: 16px; }
+  .design-view .snapshot { margin-top: 8px; }
+  .design-view .workspace-toolbar { padding-bottom: 0; }
+  .design-view .diagram-viewport { height: 52dvh; min-height: 280px; max-height: 520px; }
+  #designDetailDialog { padding: 22px; }
+  .component-detail summary { display: block; }
+  .component-detail summary span { display: block; margin-top: 4px; }
+}
