@@ -54,7 +54,7 @@
       ['设备类别',4,'机械臂 · 相机 · 移动机器人 · 传感器'],
       ['可复用的模块基础',design.nodes.length - planned,'包含部分复用，不等于目标能力全部实现'],
       ['待建设模块',planned,'设备目录、跨类型契约与新增设备能力'],
-      ['当前设计方向','解耦 · 插件化','目标设计与已有实现进展分别展示'],
+      ['当前设计方向','分层 · 插件化','网页与终端分开，网络与安全独立支撑'],
     ];
     $('metrics').innerHTML = values.map(([label,value,note]) => `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value ${typeof value === 'string' ? 'design-value' : ''}">${value}</div><div class="metric-note">${note}</div></div>`).join('');
   }
@@ -85,7 +85,7 @@
   }
 
   function drawDesign() {
-    $('diagramMount').innerHTML = `<svg id="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${design.width} ${design.height}" role="group" aria-labelledby="diagramTitle diagramDesc"><title id="diagramTitle">${escape(design.title)}</title><desc id="diagramDesc">实验室设备平台目标设计。公共设备契约与资源管理连接独立的机械臂、相机、移动机器人及传感器运行时。状态表示当前实现基础，待建设模块用虚线边框。</desc><style>${svgStyle}</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#59656b"/></marker></defs><rect width="${design.width}" height="${design.height}" fill="white"/><text x="40" y="78" font-size="34" font-weight="650">知行有灵 · ${escape(design.title)}</text><text x="40" y="110" class="hint">${escape(design.scope)}</text><text x="1500" y="105" class="hint" text-anchor="end">目标设计 · 插件化接入</text>${design.layers.map(args => layer(...args)).join('')}${design.edges.map(args => edge(...args)).join('')}${design.nodes.map(designNode).join('')}<rect x="40" y="1550" width="1460" height="56" fill="#fafbfb" stroke="#bdc5ca"/><text x="770" y="1586" text-anchor="middle" font-size="20">设备与接入主机　｜　现有 X5 / RealSense / 输入设备 / 仿真　＋　待选移动机器人与传感器</text></svg>`;
+    $('diagramMount').innerHTML = `<svg id="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${design.width} ${design.height}" role="group" aria-labelledby="diagramTitle diagramDesc"><title id="diagramTitle">${escape(design.title)}</title><desc id="diagramDesc">实验室设备平台目标设计。网页与终端是独立入口，共享应用服务。网络、安全、公共契约与运维提供横向基础设施，四类设备分别维护能力运行时和驱动。待建设模块用虚线边框。</desc><style>${svgStyle}</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#59656b"/></marker></defs><rect width="${design.width}" height="${design.height}" fill="white"/><text x="40" y="78" font-size="34" font-weight="650">知行有灵 · ${escape(design.title)}</text><text x="40" y="110" class="hint">${escape(design.scope)}</text><text x="1500" y="105" class="hint" text-anchor="end">目标设计 · 插件化接入</text>${design.layers.map(args => layer(...args)).join('')}${design.edges.map(args => edge(...args)).join('')}${design.nodes.map(designNode).join('')}${(design.annotations || []).map(item => `<text x="${item.x}" y="${item.y}" class="hint" style="font-size:${item.size}px">${escape(item.text)}</text>`).join('')}<rect x="40" y="1550" width="1460" height="56" fill="#fafbfb" stroke="#bdc5ca"/><text x="770" y="1586" text-anchor="middle" font-size="20">设备与接入主机　｜　现有 X5 / RealSense / 输入设备 / 仿真　＋　待选移动机器人与传感器</text></svg>`;
     $('diagram').querySelectorAll('[data-design]').forEach(element => {
       const select = () => {
         state.designSelected = element.dataset.design; drawDesign(); renderDesignPanel();
@@ -105,7 +105,7 @@
   function renderDesignPanel() {
     const node = design.nodes.find(node => node.id === state.designSelected);
     if (!node) {
-      $('detailPanel').innerHTML = `<div class="panel-label">LAB PLATFORM / TARGET DESIGN</div><div class="panel-heading"><h2>面向实验室的设备平台</h2></div><p class="panel-copy">统一接入机械臂、相机、移动机器人与传感器。点击模块查看插件职责、解耦边界和已有实现基础。</p><div class="section-label">设计约束</div><ul class="design-rules">${design.principles.map(rule => `<li>${escape(rule)}</li>`).join('')}</ul><div class="section-label">建议推进顺序</div>${design.roadmap.map(([step,title,description]) => `<div class="timeline-item"><div class="timeline-date">阶段 ${step}</div><div class="timeline-title">${escape(title)}</div><div class="timeline-author">${escape(description)}</div></div>`).join('')}<a class="subtle-link" href="lab-device-platform.md">完整设计说明 ↗</a><div class="warning-note">虚线模块为待建设。设备在线、健康、空闲和已获控制权分别记录；设备接入不会自动产生动作。</div>`;
+      $('detailPanel').innerHTML = `<div class="panel-label">LAB PLATFORM / TARGET DESIGN</div><div class="panel-heading"><h2>面向实验室的设备平台</h2></div><p class="panel-copy">网页展示与统一终端分别接入公共应用服务；网络、安全与运维独立支撑设备平台。点击模块查看职责、边界与现有基础。</p><div class="section-label">设计约束</div><ul class="design-rules">${design.principles.map(rule => `<li>${escape(rule)}</li>`).join('')}</ul><div class="section-label">建议推进顺序</div>${design.roadmap.map(([step,title,description]) => `<div class="timeline-item"><div class="timeline-date">阶段 ${step}</div><div class="timeline-title">${escape(title)}</div><div class="timeline-author">${escape(description)}</div></div>`).join('')}<a class="subtle-link" href="lab-device-platform.md">完整设计说明 ↗</a><div class="warning-note">虚线模块为待建设。设备在线、健康、空闲和已获控制权分别记录；设备接入不会自动产生动作。</div>`;
       return;
     }
     const status = designStatus[node.status];
