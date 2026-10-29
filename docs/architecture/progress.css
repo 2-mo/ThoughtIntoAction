@@ -732,10 +732,23 @@ main{
 .component-detail .component-boundary { padding-left: 12px; border-left: 2px solid #d4bd91; }
 #designDetailDialog .detail-footnote { font-size: 11px; margin-top: 20px; }
 .detail-footnote a { color: #567e91; }
+.legend .flow-key { width: 20px; height: 0; border-radius: 0; border-top: 2px solid; background: none; }
+.legend .flow-key.control { border-color: #3e6175; }
+.legend .flow-key.data { border-color: #458b85; }
+.legend .flow-key.dependency { border-color: #a08b69; border-top-style: dashed; }
+.interface-row { padding: 12px 0; border-top: 1px solid #e4eaee; }
+.interface-row p { font-size: 12px; margin: 6px 0 0; }
+.interface-type { color: #3e6175; font-size: 11px; margin-right: 10px; }
+.interface-type.data { color: #458b85; }
+.interface-type.dependency { color: #8b795e; }
+.interface-link { padding: 0; border: 0; font-size: 13px; color: #3e6175; background: none; text-align: left; }
 @media (min-width: 801px) {
   body.design-view { height: 100dvh; overflow: hidden; }
   .design-view main { max-width: none; height: calc(100dvh - 48px); padding: 12px 24px 8px; display: flex; flex-direction: column; min-height: 0; }
-  .design-view .intro { flex: none; align-items: center; margin-bottom: 10px; }
+  .design-view .intro { flex: none; align-items: center; margin-bottom: 8px; }
+  .design-view .intro > div { display: flex; align-items: baseline; gap: 18px; }
+  .design-view .intro h1 { font-size: 20px; margin: 0; }
+  .design-view .intro-copy { margin: 0; }
   .design-view .snapshot { font-size: 10px; line-height: 1.6; }
   .design-view .workspace { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .design-view .workspace-toolbar { flex: none; min-height: 44px; padding: 0 16px; flex-wrap: nowrap; }
