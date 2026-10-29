@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from build_project_progress import main as build_progress
+
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / 'docs/architecture/catalog.js'
 
@@ -36,6 +38,7 @@ def main():
                       + 'window.ARCHITECTURE_CATALOG = '
                       + json.dumps(data, ensure_ascii=False, indent=2) + ';\n')
     print(f'{OUTPUT.relative_to(ROOT)}: {len(plugins)} plugins, {len(data["commands"])} commands')
+    build_progress()
 
 
 if __name__ == '__main__':

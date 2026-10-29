@@ -118,6 +118,14 @@ window.ARCHITECTURE_CATALOG = {
       "runtime": "control"
     },
     {
+      "kind": "viewer",
+      "name": "reference7",
+      "origin": "统一插件目录",
+      "registry": "configs/plugins.json",
+      "factory": "embodied.devices.robots.reference7.viewer:Viewer",
+      "runtime": "control"
+    },
+    {
       "kind": "telemetry",
       "name": "local",
       "origin": "统一插件目录",
@@ -210,6 +218,20 @@ window.ARCHITECTURE_CATALOG = {
         "joint",
         "gripper",
         "free-drive"
+      ]
+    },
+    {
+      "kind": "robot",
+      "name": "reference7.sim",
+      "origin": "统一插件目录",
+      "registry": "configs/plugins.json",
+      "factory": "embodied.devices.robots.reference7.plugin:Simulation",
+      "runtime": "control",
+      "simulation_only": true,
+      "capabilities": [
+        "feedback",
+        "joint",
+        "cartesian"
       ]
     },
     {
@@ -312,6 +334,17 @@ window.ARCHITECTURE_CATALOG = {
         "lerobot-v2.1",
         "raw-sidecar",
         "independent-action-clock"
+      ]
+    },
+    {
+      "kind": "mapping",
+      "name": "phone_calibrated",
+      "origin": "统一插件目录",
+      "registry": "configs/plugins.json",
+      "factory": "embodied.devices.inputs.phone:phone_calibrated",
+      "capabilities": [
+        "relative-pose",
+        "manual-calibration"
       ]
     },
     {
@@ -766,6 +799,14 @@ window.ARCHITECTURE_CATALOG = {
       "runtime": "control"
     },
     {
+      "kind": "kinematics",
+      "name": "reference7",
+      "origin": "统一插件目录",
+      "registry": "configs/plugins.json",
+      "factory": "embodied.devices.robots.reference7.model:Model",
+      "runtime": "control"
+    },
+    {
       "kind": "perception",
       "name": "rgb_cube",
       "origin": "统一插件目录",
@@ -814,6 +855,14 @@ window.ARCHITECTURE_CATALOG = {
       "origin": "统一插件目录",
       "registry": "configs/plugins.json",
       "factory": "embodied.devices.robots.arx5.profile:load_profile",
+      "runtime": "control"
+    },
+    {
+      "kind": "robot_profile",
+      "name": "reference7",
+      "origin": "统一插件目录",
+      "registry": "configs/plugins.json",
+      "factory": "embodied.devices.robots.reference7.profile:load_profile",
       "runtime": "control"
     },
     {
@@ -1233,6 +1282,7 @@ window.ARCHITECTURE_CATALOG = {
     "src/embodied/control/ipc/",
     "src/embodied/devices/robots/arx5/",
     "src/embodied/devices/robots/rebot/",
+    "src/embodied/devices/robots/reference7/",
     "src/embodied/devices/inputs/quest/",
     "apps/console/",
     "apps/ios/",
@@ -1244,6 +1294,7 @@ window.ARCHITECTURE_CATALOG = {
     "docs/plans/",
     "docs/provenance/",
     "docs/reference/",
+    "docs/todo/",
     "scripts/arm/",
     "scripts/control/",
     "scripts/datasets/",
