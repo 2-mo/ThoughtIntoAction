@@ -742,6 +742,19 @@ main{
 .interface-type.data { color: #458b85; }
 .interface-type.dependency { color: #8b795e; }
 .interface-link { padding: 0; border: 0; font-size: 13px; color: #3e6175; background: none; text-align: left; }
+.design-view { background: #f6f7fb; color: #323c55; }
+.design-view .workspace { border-color: #e9ecf3; border-radius: 14px; box-shadow: 0 8px 32px #25365304; }
+.design-view .workspace-toolbar,.design-view .diagram-toolbar { border-color: #eef0f5; }
+.design-view .tabs button.active { color: #6865aa; border-color: #8883c8; }
+.design-view .diagram-actions button { border-color: #e9ecf3; border-radius: 7px; }
+.design-view .diagram-caption { color: #a2a8b6; border-color: #f0f1f5; }
+.design-view .footer > span:last-child { display: none; }
+#referenceDialog { width: 760px; max-height: 86dvh; }
+.reference-item { padding: 16px 0; border-top: 1px solid #e8eaf1; }
+.reference-item h3 { margin: 0 0 4px; color: #6865aa; }
+.reference-item p { margin: 5px 0; font-size: 13px; }
+.reference-item .reference-role { font-size: 11px; color: #8d95a6; }
+.reference-item .reference-boundary { color: #a08d78; }
 @media (min-width: 801px) {
   body.design-view { height: 100dvh; overflow: hidden; }
   .design-view main { max-width: none; height: calc(100dvh - 48px); padding: 12px 24px 8px; display: flex; flex-direction: column; min-height: 0; }
