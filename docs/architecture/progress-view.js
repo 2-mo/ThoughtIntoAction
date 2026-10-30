@@ -17,8 +17,8 @@
   const design = window.LAB_DESIGN;
   const deployment = window.LAB_DEPLOYMENT;
   const designStatus = {base:{label:'已有实现基础',color:'#528c76'},partial:{label:'部分复用 / 待补齐',color:'#7396aa'},planned:{label:'待建设',color:'#c79449'}};
-  const state = {view:location.hash === '#deployment' ? 'deployment' : 'design', selected:null, designSelected:null, deploymentSelected:null, deploymentFocus:null, period:'all', author:'all', search:'', zoom:null, shown:40};
-  const isOverview = () => ['design','deployment'].includes(state.view);
+  const state = {view:'design', selected:null, designSelected:null, deploymentSelected:null, detailTrigger:null, period:'all', author:'all', search:'', zoom:null, shown:40};
+  const isOverview = () => state.view === 'design';
   let timer;
 
   function filteredCommits() {
@@ -140,7 +140,7 @@
     } else if (kind === 'support') {
       content=`<text class="overview-title" x="16" y="26">${escape(node.title)}</text><text class="overview-subtitle" x="16" y="51" style="font-size:14px">${escape(node.subtitle)}</text><text class="overview-scope" x="16" y="${h-13}">${escape(node.scope)}</text>`;
     } else {
-      const tall=h>80;
+      const tall=h>60;
       content=`<text class="overview-title" x="16" y="${tall ? 29 : 22}" style="font-size:${kind === 'driver' ? 17 : 18}px">${escape(node.title)}</text><text class="overview-subtitle" x="16" y="${tall ? 57 : h-9}" style="font-size:12px">${escape(node.subtitle)}</text>${node.id === 'voice-interaction' ? `<text class="node-status" x="${w-12}" y="21" text-anchor="end">规划</text>` : ''}${node.id === 'gesture-interaction' ? `<text class="node-status" x="${w-12}" y="21" text-anchor="end">已有基础</text>` : ''}`;
     }
     return `<g class="node overview-card ${kind} ${state.designSelected === node.id ? 'selected' : ''}" data-design="${node.id}" tabindex="0" role="button" aria-label="${escape(node.title)}，${escape(node.layer)}，查看职责、接口与实现现状" transform="translate(${x} ${y})"><title>${escape(node.description)}</title><rect class="surface" width="${w}" height="${h}" rx="4"/>${content}</g>`;
@@ -162,9 +162,9 @@
 
   function drawDesign() {
     const markers=Object.entries(relationColors).map(([kind,color])=>`<marker id="arrow-${kind}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="${color}"/></marker>`).join('');
-    $('diagramMount').innerHTML=`<svg id="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${design.width} ${design.height}" role="group" aria-labelledby="diagramTitle diagramDesc"><title id="diagramTitle">${escape(design.title)}</title><desc id="diagramDesc">八层项目架构：交互呈现、应用服务、中央 Agent 智能编排、能力接入与契约、推理部署与策略、设备运行时、驱动适配、硬件设备。模型与数据按接口支撑各层，网络、安全、插件装配和运维横向提供基础设施。人工连续控制绕过 Agent，但仍通过控制会话与设备运行时。</desc><style>${svgStyle}${overviewStyle}</style><defs>${markers}</defs><rect width="${design.width}" height="${design.height}" fill="#fff"/>${design.layers.map(designLayer).join('')}${design.supportRegions.map(supportRegion).join('')}${design.routes.map(routeMarkup).join('')}${design.nodes.map(designNode).join('')}${design.hardware.map(h=>`<g class="hardware-item"><rect class="hardware-surface" x="${h.x}" y="${h.y}" width="${h.width}" height="${h.height}" rx="3"/><text class="hardware-title" x="${h.x+h.width/2}" y="${h.y+28}">${escape(h.title)}</text></g>`).join('')}${design.annotations.map(a=>`<text class="overview-note" x="${a.x}" y="${a.y}" style="font-size:${a.size}px">${escape(a.text)}</text>`).join('')}<text class="overview-note" x="1872" y="882" text-anchor="end" style="font-size:13px">目标架构 · 具体实现与验收状态见详情</text></svg>`;
+    $('diagramMount').innerHTML=`<svg id="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${design.width} ${design.height}" role="group" aria-labelledby="diagramTitle diagramDesc"><title id="diagramTitle">${escape(design.title)}</title><desc id="diagramDesc">八层项目架构：交互呈现、应用服务、中央 Agent 智能编排、能力接入与契约、推理部署与策略、设备运行时、驱动适配、硬件设备。模型与数据按接口支撑各层，网络、安全、插件装配和运维横向提供基础设施。人工连续控制绕过 Agent 和策略推理，仍经过控制会话。层内标明总台、算力与设备端职责，底部展示同款 E2631 有线 Mesh、无 GPU 总台、5090 及设备接入机。</desc><style>${svgStyle}${overviewStyle}</style><defs>${markers}</defs><rect width="${design.width}" height="${design.height}" fill="#fff"/>${design.layers.map(designLayer).join('')}${design.supportRegions.map(supportRegion).join('')}${design.routes.map(routeMarkup).join('')}${design.nodes.map(designNode).join('')}${design.hardware.map(h=>`<g class="hardware-item"><rect class="hardware-surface" x="${h.x}" y="${h.y}" width="${h.width}" height="${h.height}" rx="3"/><text class="hardware-title" x="${h.x+h.width/2}" y="${h.y+28}">${escape(h.title)}</text></g>`).join('')}${deploymentMarkup()}${design.annotations.map(a=>`<text class="overview-note" x="${a.x}" y="${a.y}" style="font-size:${a.size}px">${escape(a.text)}</text>`).join('')}<text class="overview-note" x="1872" y="924" text-anchor="end" style="font-size:13px">目标架构 · 具体实现与验收状态见详情</text></svg>`;
     $('diagram').querySelectorAll('[data-design]').forEach(element=>{
-      const select=()=>{state.designSelected=element.dataset.design;drawDesign();openDesignDetail();};
+      const select=()=>{state.detailTrigger=`[data-design="${element.dataset.design}"]`;state.designSelected=element.dataset.design;drawDesign();openDesignDetail();};
       element.addEventListener('click',select);
       element.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});
       element.addEventListener('mouseenter',()=>highlightRelations(element.dataset.design));
@@ -172,77 +172,31 @@
       element.addEventListener('focus',()=>highlightRelations(element.dataset.design));
       element.addEventListener('blur',()=>highlightRelations(null));
     });
+    $('diagram').querySelectorAll('[data-deployment]').forEach(element=>{
+      const select=()=>{state.detailTrigger=`[data-deployment="${element.dataset.deployment}"]`;state.deploymentSelected=element.dataset.deployment;openDeploymentDetail();};
+      element.addEventListener('click',select);
+      element.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});
+    });
     resize();
   }
 
-  function drawDeployment() {
-    const styles = `
-      .deploy-panel{fill:#fcfdff;stroke:#e0e6ee;stroke-width:1}
-      .deploy-panel-title{font-size:19px;font-weight:600;fill:#41566e}
-      .deploy-panel-note{font-size:13px;fill:#75869a}
-      .deployment-card{cursor:pointer;outline:none}
+  function deploymentMarkup() {
+    const styles=`
+      .deployment-band{fill:#f8fafc;stroke:#dfe6ee;stroke-width:1}
       .deployment-card>.surface{fill:#fff;stroke:#d9e1eb;stroke-width:1}
       .deployment-card.hub>.surface{fill:#f3f2fb;stroke:#d4d5e8}
       .deployment-card.compute>.surface{fill:#eff7f4;stroke:#cee2d8}
       .deployment-card.router>.surface{fill:#eaf0f8;stroke:#c2d1e2}
       .deployment-card.service>.surface{fill:#f5f7fa;stroke:#d8e0e9;stroke-dasharray:4 3}
       .deployment-card:hover>.surface,.deployment-card:focus-visible>.surface{stroke:#7d8ba8;stroke-width:2}
-      .deploy-label{font-size:11px;fill:#7b8aa0}
-      .deploy-title{font-size:19px;font-weight:600;fill:#34445b}
-      .deploy-subtitle{font-size:13px;fill:#6d7d90}
-      .deploy-item{font-size:14px;fill:#4c627c}
-      .deploy-foot{font-size:12px;fill:#738397}
-      .physical-cable{fill:none;stroke:#92aac6;stroke-width:1.5;stroke-linejoin:round}
-      .physical-cable.backhaul{stroke:#7193b9;stroke-width:2}
-      .physical-cable.device{stroke:#b6a58a}
-      .cable-label{font-size:12px;fill:#6d8299;text-anchor:middle;paint-order:stroke;stroke:#fcfdff;stroke-width:5px}
-      .hardware-box{fill:#f3f0ea;stroke:#e5ded2;stroke-width:1}
-      .workflow-node{cursor:pointer;outline:none}
-      .workflow-node:hover .workflow-card,.workflow-node:focus-visible .workflow-card{stroke:#7d8ba8;stroke-width:2}
-      .workflow-card{fill:#fff;stroke:#d9e1eb;stroke-width:1}
-      .workflow-card.hub{fill:#f3f2fb;stroke:#d4d5e8}
-      .workflow-card.compute{fill:#eff7f4;stroke:#cee2d8}
-      .workflow-card.device{fill:#fcf6ee;stroke:#e5d7c5}
-      .workflow-group{fill:#f2f8f5;stroke:#bad7c8;stroke-width:1;stroke-dasharray:5 4}
-      .workflow-link{fill:none;stroke-width:1.5;stroke-linejoin:round}
-      .workflow-label{font-size:12px;fill:#6e7f93;paint-order:stroke;stroke:#fcfdff;stroke-width:5px}
+      .deploy-title{font-size:17px;font-weight:600;fill:#34445b}
+      .deploy-subtitle{font-size:12px;fill:#6d7d90}
+      .physical-cable{fill:none;stroke:#8ba5c2;stroke-width:1.5;stroke-linejoin:round}
+      .cable-label{font-size:12px;fill:#6d8299;text-anchor:middle;paint-order:stroke;stroke:#f8fafc;stroke-width:5px}
     `;
-    const cards=deployment.nodes.map(n=>{
-      let content;
-      if(n.kind==='router') {
-        content=`<text class="deploy-title" x="16" y="25">${escape(n.title)}</text><text class="deploy-subtitle" x="16" y="47">${escape(n.subtitle)}</text>`;
-      } else if(n.kind==='service') {
-        content=`<text class="deploy-title" x="16" y="23" style="font-size:16px">${escape(n.title)}</text><text class="deploy-foot" x="150" y="23">${escape(n.subtitle)}</text><text class="deploy-foot" x="16" y="44">${escape(n.footer)}</text>`;
-      } else {
-        content=`<text class="deploy-label" x="16" y="21">${escape(n.label)}</text><text class="deploy-title" x="16" y="47">${escape(n.title)}</text>${n.rows.map((row,i)=>`<text class="deploy-item" x="16" y="${72+i*21}">${escape(row)}</text>`).join('')}<text class="deploy-foot" x="16" y="${n.height-13}">${escape(n.footer)}</text>`;
-      }
-      return `<g class="node deployment-card ${n.kind}" data-deployment="${n.id}" transform="translate(${n.x} ${n.y})" tabindex="0" role="button" aria-label="${escape(n.title)}，查看部署职责与建设边界"><title>${escape(n.description)}</title><rect class="surface" width="${n.width}" height="${n.height}" rx="5"/>${content}</g>`;
-    }).join('');
-    const colors={model:'#7c9e93',task:'#8988ad',policy:'#b29874',target:'#b29874'};
-    const markers=Object.entries(colors).map(([kind,color])=>`<marker id="deploy-${kind}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="${color}"/></marker>`).join('');
-    const panels=deployment.panels.map(p=>`<rect class="deploy-panel" x="${p.x}" y="${p.y}" width="${p.width}" height="${p.height}" rx="7"/><text class="deploy-panel-title" x="${p.x+24}" y="${p.y+30}">${escape(p.title)}</text><text class="deploy-panel-note" x="${p.x+24}" y="${p.y+52}">${escape(p.subtitle)}</text>`).join('');
-    const cables=deployment.cables.map(c=>`<g data-cable="${c.from}:${c.to}"><path class="physical-cable ${c.kind}" d="${c.path}"/>${c.label?`<text class="cable-label" x="${c.x}" y="${c.y}">${escape(c.label)}</text>`:''}</g>`).join('');
-    const hardware=deployment.hardware.map(h=>`<g class="deployment-hardware"><rect class="hardware-box" x="${h.x}" y="${h.y}" width="${h.width}" height="${h.height}" rx="4"/><text class="deploy-title" x="${h.x+h.width/2}" y="${h.y+25}" text-anchor="middle" style="font-size:16px">${escape(h.title)}</text><text class="deploy-foot" x="${h.x+h.width/2}" y="${h.y+45}" text-anchor="middle">${escape(h.subtitle)}</text></g>`).join('');
-    const workflow=deployment.workflow;
-    const groups=(workflow.groups||[]).map(g=>`<rect class="workflow-group" x="${g.x}" y="${g.y}" width="${g.width}" height="${g.height}" rx="6"/><text class="deploy-title" x="${g.x+16}" y="${g.y+23}" style="font-size:17px">${escape(g.title)}</text>`).join('');
-    const flowLinks=workflow.links.map(l=>`<path class="workflow-link" stroke="${colors[l.kind]}" d="${l.path}" marker-start="url(#deploy-${l.kind})" marker-end="url(#deploy-${l.kind})"/><text class="workflow-label" x="${l.x}" y="${l.y}" ${l.rotate?`text-anchor="middle" transform="rotate(${l.rotate} ${l.x} ${l.y})"`:l.center?'text-anchor="middle"':''}>${escape(l.label)}</text>`).join('');
-    const flowNodes=workflow.nodes.map(n=>`<g class="node workflow-node" data-workflow="${n.id}" tabindex="0" role="button" aria-label="${escape(n.title)}，查看职责和实现边界"><rect class="workflow-card ${n.kind}" x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" rx="5"/><text class="deploy-title" x="${n.x+18}" y="${n.y+27}" style="font-size:18px">${escape(n.title)}</text><text class="deploy-item" x="${n.x+18}" y="${n.y+49}">${escape(n.subtitle)}</text><text class="deploy-foot" x="${n.x+18}" y="${n.y+n.height-12}">${escape(n.footer)}</text></g>`).join('');
-    $('diagramMount').innerHTML=`<svg id="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${deployment.width} ${deployment.height}" role="group" aria-labelledby="diagramTitle diagramDesc"><title id="diagramTitle">${escape(deployment.title)}</title><desc id="diagramDesc">目标架构：左侧是中兴 E2631 有线 Mesh 物理拓扑，主节点连接无 GPU Ubuntu 总台和两个子节点，子节点分别连接算力与设备接入机。右侧是服务协作：总台编排，推理部署层跨算力端和设备端，设备内核本地执行。RTC 与跨机接入尚待实现。</desc><style>${svgStyle}${styles}</style><defs>${markers}</defs><rect width="${deployment.width}" height="${deployment.height}" fill="#fff"/><text class="deploy-title" x="28" y="34" style="font-size:24px">一台总台，管理整个实验室</text><text class="deploy-subtitle" x="28" y="60">有线 Mesh 连接机器 · 总台编排任务 · 推理与设备控制分开部署</text><text class="deploy-foot" x="1872" y="35" text-anchor="end">目标设计 · 型号与网络方案由用户提供</text>${panels}${cables}${cards}${hardware}${groups}${flowLinks}${flowNodes}<text class="deploy-foot" x="62" y="326">三路 LAN：总台 + Mesh A + Mesh B</text><text class="deploy-foot" x="62" y="635">5090 也可兼任设备节点；</text><text class="deploy-foot" x="62" y="655">一台主机可连接多个设备。</text><text class="deploy-panel-note" x="52" y="750">同款中兴巡天 ZXHN E2631 · 原生 Mesh 模式 · 后台确认有线回程与主机互通</text><text class="deploy-foot" x="52" y="776">图示接入机走网线；移动机载电脑最后一跳可选 Wi-Fi。路由器型号不进入业务或设备插件。</text><text class="deploy-foot" x="28" y="837">实线：物理连接　箭头：服务协作　｜　节点可点击查看职责、接口与 Git 进展。</text><text class="deploy-foot" x="1872" y="862" text-anchor="end">RTC、跨机能力接入为待建设设计；现有启动仍以本机工作台为主。</text></svg>`;
-    $('diagram').querySelectorAll('[data-deployment]').forEach(element=>{
-      const select=()=>{state.deploymentFocus=element;state.deploymentSelected=element.dataset.deployment;openDeploymentDetail();};
-      element.addEventListener('click',select);
-      element.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});
-    });
-    $('diagram').querySelectorAll('[data-workflow]').forEach(element=>{
-      const select=()=>{
-        state.deploymentFocus=element;
-        if(element.dataset.workflow==='hub'){state.deploymentSelected='hub';openDeploymentDetail();}
-        else{state.designSelected=element.dataset.workflow;openDesignDetail();}
-      };
-      element.addEventListener('click',select);
-      element.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});
-    });
-    resize();
+    const cables=deployment.cables.map(c=>`<g data-cable="${c.from}:${c.to}"><path class="physical-cable" d="${c.path}"/>${c.label?`<text class="cable-label" x="${c.x}" y="${c.y}">${escape(c.label)}</text>`:''}</g>`).join('');
+    const nodes=deployment.nodes.map(n=>`<g class="node deployment-card ${n.kind}" data-deployment="${n.id}" transform="translate(${n.x} ${n.y})" tabindex="0" role="button" aria-label="${escape(n.title)}，查看部署职责与建设边界"><title>${escape(n.description)}</title><rect class="surface" width="${n.width}" height="${n.height}" rx="4"/><text class="deploy-title" x="14" y="22">${escape(n.title)}</text><text class="deploy-subtitle" x="14" y="${n.height-10}">${escape(n.subtitle)}</text></g>`).join('');
+    return `<style>${styles}</style><rect class="deployment-band" x="28" y="714" width="1852" height="194" rx="6"/><text class="deploy-title" x="42" y="739">部署与物理网络</text><text class="deploy-subtitle" x="290" y="732">上方标职责，下方标主机 · 一台主机可兼任多个角色、连接多个设备</text>${cables}${nodes}<text class="deploy-subtitle" x="42" y="831">实线：网线 / 有线回程</text><text class="deploy-subtitle" x="42" y="849">主 LAN → 子 WAN</text><text class="deploy-subtitle" x="42" y="867">同款中兴 E2631 · 按固件确认</text><text class="deploy-subtitle" x="42" y="885">移动机载末跳可选 Wi-Fi</text>`;
   }
 
   function openDeploymentDetail() {
@@ -373,38 +327,31 @@
 
   function setView(view) {
     state.view = view; state.shown = 40; state.zoom = null;
-    history.replaceState(null,'',location.pathname+location.search+(view === 'deployment' ? '#deployment' : ''));
+    history.replaceState(null,'',location.pathname+location.search);
     render();
   }
   function render() {
     const commits = filteredCommits();
-    const isDesign = state.view === 'design', isDeployment = state.view === 'deployment';
+    const isDesign = state.view === 'design';
     document.body.classList.toggle('design-view',isOverview());
     $('metrics').hidden = isOverview();
     if (!isOverview()) metrics(commits);
     $('detailPanel').hidden = isOverview();
-    $('architectureView').hidden = !['design','deployment','architecture'].includes(state.view);
+    $('architectureView').hidden = !['design','architecture'].includes(state.view);
     for (const view of ['commits','contributors']) $(view + 'View').hidden = state.view !== view;
     document.querySelector('.filters').hidden = isOverview();
-    document.querySelector('.legend').innerHTML = isDeployment
-      ? '<span>目标部署 · 点击节点查看职责、通信边界与架构模块</span>'
-      : isDesign
-      ? '<span>点击模块，查看职责、接口与实现进展</span>'
+    document.querySelector('.legend').innerHTML = isDesign
+      ? '<span>架构、部署与接线合为一图 · 点击模块或主机查看职责、接口与 Git 进展</span>'
       : '<span><i class="green"></i>计划全部关闭</span><span><i class="amber"></i>仍有未关闭项</span><span><i class="gray"></i>无关联计划</span>';
-    document.querySelector('.diagram-caption').textContent = isDeployment
-      ? '左侧实线说明有线 Mesh 与设备接线，右侧箭头说明服务协作。L5 推理层跨算力与设备部署，RTC 采样与动作块执行器共同衔接；L6 保留本地控制。'
-      : isDesign
-      ? 'L1—L8 按职责分层；策略经 L5 推理与执行器，人工和确定性控制可直接调用 L6 设备能力。机器接线见“多机部署”。点击模块查看所属层、接口与 Git 进展。'
+    document.querySelector('.diagram-caption').textContent = isDesign
+      ? 'L1—L8 按职责分层，层内标部署位置；L5 跨设备端与算力端协作，人工控制可直接调用设备能力。底部 Mesh 负责联网，设备周期控制留在本地。'
       : '点击模块查看计划、作者与提交。时间和作者筛选只影响 Git 活动，计划计数保持完整。';
-    $('coverage').textContent = isDeployment
-      ? '有线 Mesh · 无 GPU 总台 · 分布式推理与 RTC · 设备本地控制'
-      : isDesign
-      ? '八层架构 · 推理部署与 RTC · 横向基础设施'
+    $('coverage').textContent = isDesign
+      ? '统一总图 · 无 GPU 总台 · RTC 策略链路 · 有线 Mesh'
       : `${data.modules.length} 个已有模块 · ${data.planFiles.length} 份正式计划 · ${data.shallow ? '浅克隆，仅含本地可用历史' : 'HEAD 可达的已提交历史'}`;
     document.querySelectorAll('[data-view]').forEach(button => { const active = button.dataset.view === state.view; button.classList.toggle('active',active); button.setAttribute('aria-pressed',String(active)); });
     if (state.view === 'architecture') { draw(commits); renderPanel(commits); }
     if (isDesign) drawDesign();
-    if (isDeployment) drawDeployment();
     if (state.view === 'commits') renderCommits(commits);
     if (state.view === 'contributors') renderAuthors(commits);
   }
@@ -429,7 +376,7 @@
     link.href = url; link.download = name; document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 15000);
   }
-  const exportName = () => state.view === 'deployment' ? '知行有灵-实验室多机部署' : state.view === 'design' ? '知行有灵-实验室目标架构' : '知行有灵-架构进展';
+  const exportName = () => state.view === 'design' ? '知行有灵-实验室总架构' : '知行有灵-架构进展';
   $('exportSvg').onclick = () => download(new Blob([exportSource()],{type:'image/svg+xml;charset=utf-8'}),exportName() + '.svg');
   $('exportPng').onclick = async () => {
     $('exportPng').disabled = true;
@@ -455,29 +402,22 @@
   for (const id of ['period','author','search']) $(id).addEventListener(id === 'search' ? 'input' : 'change', () => { state[id] = $(id).value; state.shown = 40; render(); });
   $('author').insertAdjacentHTML('beforeend',data.authors.map(author => `<option value="${author.id}">${escape(author.name)}</option>`).join(''));
   $('snapshot').innerHTML = `Git 快照 <code>${data.head.slice(0,8)}</code> · ${escape(data.branch)}<br>最新提交 ${date(data.headDate)} · 生成于 ${date(data.generatedAt)}`;
-  $('methodContent').innerHTML = `<p><strong>目标架构</strong>是面向实验室设备的设计说明，状态由已核对的实现边界人工维护。关联已有模块表示可复用基础，不继承它的任务完成率，也不代表新设备已接通。</p><p><strong>计划进度</strong>取自 00–09 正式计划的复选框。已勾选为“文档标记关闭”，未勾选为“未关闭”，不自动推断未开始、已实现或验收通过。设计草案与退役清单不重复计数。</p><p><strong>贡献记录</strong>只统计快照 HEAD 可达的非合并提交。按显式路径及历史路径关联模块；一条提交可涉及多个模块，全局按提交哈希去重。未映射提交仍在完整时间线中保留。</p><p><strong>作者身份</strong>按 Git 作者邮箱归并，页面不显示邮箱。保留历史署名、提交者与共同署名；这些记录不自动等于模块负责人、实际工时或工作量。</p><p><strong>快照范围</strong>计划与提交均读取 ${data.head.slice(0,8)}，不包含未提交改动。近 7 / 30 天以快照生成时间为截止点。${data.shallow ? '当前为浅克隆，历史统计不完整。' : ''}</p><p><strong>更新方式</strong>：在仓库根目录执行下列命令后刷新页面。此网页离线可用，不会自行读取 Git 或修改计划；GitHub 链接需要对应提交已推送。</p><p><code>python3 scripts/docs/build_architecture.py</code></p>`;
+  $('methodContent').innerHTML = `<p><strong>架构总图</strong>是面向实验室设备的设计说明，状态由已核对的实现边界人工维护。关联已有模块表示可复用基础，不继承它的任务完成率，也不代表新设备已接通。</p><p><strong>计划进度</strong>取自 00–09 正式计划的复选框。已勾选为“文档标记关闭”，未勾选为“未关闭”，不自动推断未开始、已实现或验收通过。设计草案与退役清单不重复计数。</p><p><strong>贡献记录</strong>只统计快照 HEAD 可达的非合并提交。按显式路径及历史路径关联模块；一条提交可涉及多个模块，全局按提交哈希去重。未映射提交仍在完整时间线中保留。</p><p><strong>作者身份</strong>按 Git 作者邮箱归并，页面不显示邮箱。保留历史署名、提交者与共同署名；这些记录不自动等于模块负责人、实际工时或工作量。</p><p><strong>快照范围</strong>计划与提交均读取 ${data.head.slice(0,8)}，不包含未提交改动。近 7 / 30 天以快照生成时间为截止点。${data.shallow ? '当前为浅克隆，历史统计不完整。' : ''}</p><p><strong>更新方式</strong>：在仓库根目录执行下列命令后刷新页面。此网页离线可用，不会自行读取 Git 或修改计划；GitHub 链接需要对应提交已推送。</p><p><code>python3 scripts/docs/build_architecture.py</code></p>`;
   $('closeDesignDetail').onclick = () => $('designDetailDialog').close();
   $('designDetailDialog').addEventListener('close', () => {
-    const id = state.designSelected; state.designSelected = null;
-    if (state.view === 'deployment') {
-      state.deploymentSelected=null;
-      const trigger=state.deploymentFocus; state.deploymentFocus=null;
-      trigger?.focus({preventScroll:true});
-      return;
-    }
+    // A queued close event must not reset a detail opened immediately afterwards.
+    if ($('designDetailDialog').open) return;
+    const trigger=state.detailTrigger;
+    state.designSelected=null;state.deploymentSelected=null;state.detailTrigger=null;
     if (state.view !== 'design') return;
     drawDesign();
-    $('diagram').querySelector(`[data-design="${id}"]`)?.focus({preventScroll:true});
+    if(trigger) $('diagram').querySelector(trigger)?.focus({preventScroll:true});
   });
   $('referenceContent').innerHTML = `<p>参考职责与接口设计，本轮未安装这些框架，也未新增设备或模型连接。</p>${design.references.map(ref=>`<article class="reference-item"><h3><a href="${escape(ref.url)}" target="_blank" rel="noopener noreferrer">${escape(ref.name)} ↗</a></h3><p class="reference-role">${escape(ref.role)}</p><p>${escape(ref.take)}</p><p class="reference-boundary">${escape(ref.boundary)}</p></article>`).join('')}<p><a href="lab-device-platform.md">完整架构与参考取舍 ↗</a></p>`;
   $('references').onclick=()=>$('referenceDialog').showModal();
   $('closeReferences').onclick=()=>$('referenceDialog').close();
   $('method').onclick = () => $('methodDialog').showModal();
   $('closeMethod').onclick = () => $('methodDialog').close();
-  window.addEventListener('hashchange',()=>{
-    const view=location.hash === '#deployment' ? 'deployment' : 'design';
-    if(state.view!==view){$('designDetailDialog').close();setView(view);}
-  });
   new ResizeObserver(resize).observe($('viewport'));
   render();
 })();
