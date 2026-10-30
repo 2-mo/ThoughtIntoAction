@@ -17,7 +17,7 @@
   const design = window.LAB_DESIGN;
   const deployment = window.LAB_DEPLOYMENT;
   const designStatus = {base:{label:'已有实现基础',color:'#528c76'},partial:{label:'部分复用 / 待补齐',color:'#7396aa'},planned:{label:'待建设',color:'#c79449'}};
-  const state = {view:location.hash === '#deployment' ? 'deployment' : 'design', selected:null, designSelected:null, deploymentSelected:null, period:'all', author:'all', search:'', zoom:null, shown:40};
+  const state = {view:location.hash === '#deployment' ? 'deployment' : 'design', selected:null, designSelected:null, deploymentSelected:null, deploymentFocus:null, period:'all', author:'all', search:'', zoom:null, shown:40};
   const isOverview = () => ['design','deployment'].includes(state.view);
   let timer;
 
@@ -79,7 +79,9 @@
     .layer-label.orange{fill:#f5eee6}
     .layer-band.gray{fill:#f3f5f7}
     .layer-id{font-size:14px;font-weight:650}
-    .layer-name{font-size:21px;font-weight:600;fill:#344156}
+    .layer-name{font-size:19px;font-weight:600;fill:#344156}
+    .layer-band.teal{fill:#f2f8f6;stroke:#cfe2db}
+    .layer-label.teal{fill:#e5f0eb}
     .layer-purpose{font-size:13px;fill:#6c7b8e}
     .support-region{fill:#f8fafc;stroke:#e1e6ed;stroke-width:1;stroke-dasharray:4 4}
     .support-title{font-size:18px;font-weight:600;fill:#627387}
@@ -92,7 +94,7 @@
     .overview-card.driver>.surface{fill:#f5f7fa;stroke:#dce2e9}
     .overview-card.support>.surface{fill:#fff;stroke:#e5eaf0}
     .overview-card:hover>.surface,.overview-card:focus-visible>.surface,.overview-card.selected>.surface{stroke:#8a96b8;stroke-width:2;fill:#f2f4fa}
-    .overview-title{font-size:20px;font-weight:600;fill:#364359}
+    .overview-title{font-size:19px;font-weight:600;fill:#364359}
     .overview-subtitle{font-size:13px;fill:#6d7b8e}
     .overview-scope{font-size:12px;fill:#6f7f93}
     .node-status{font-size:10px;fill:#a79eb0}
@@ -112,7 +114,7 @@
 
   function designLayer(layer) {
     const {x,y,width:w,height:h,tone} = layer;
-    return `<g class="design-layer" data-layer="${layer.id}"><rect class="layer-band ${tone}" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/><path class="layer-label ${tone}" d="M${x+6} ${y}H${x+230}V${y+h}H${x+6}Q${x} ${y+h} ${x} ${y+h-6}V${y+6}Q${x} ${y} ${x+6} ${y}"/><text class="layer-id" x="${x+16}" y="${y+h/2-3}" fill="${tones[tone]}">${layer.id}</text><text class="layer-name" x="${x+50}" y="${y+h/2-3}" style="font-size:${layer.id === 'L4' ? 19 : 21}px">${escape(layer.title)}</text><text class="layer-purpose" x="${x+50}" y="${y+h/2+20}">${escape(layer.subtitle)}</text></g>`;
+    return `<g class="design-layer" data-layer="${layer.id}"><rect class="layer-band ${tone}" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/><path class="layer-label ${tone}" d="M${x+6} ${y}H${x+230}V${y+h}H${x+6}Q${x} ${y+h} ${x} ${y+h-6}V${y+6}Q${x} ${y} ${x+6} ${y}"/><text class="layer-id" x="${x+16}" y="${y+h/2-3}" fill="${tones[tone]}">${layer.id}</text><text class="layer-name" x="${x+50}" y="${y+h/2-3}">${escape(layer.title)}</text><text class="layer-purpose" x="${x+50}" y="${y+h/2+20}" style="font-size:12px">${escape(layer.subtitle)}</text></g>`;
   }
 
   function supportRegion(region) {
@@ -133,11 +135,13 @@
       content=`<text class="overview-title" x="16" y="26">${escape(node.title)}</text><text x="${w-16}" y="26" text-anchor="end" font-size="11" fill="#bba389">非实时规划 + 本地周期控制</text><rect class="kernel-part" x="16" y="42" width="125" height="30" rx="3"/><text class="kernel-text" x="78.5" y="62">动作网关 / 会话</text><rect class="kernel-part" x="232" y="42" width="294" height="52" rx="3"/><text class="kernel-text" x="379" y="63" style="font-size:15px">命令调度 · 周期 worker</text><text class="kernel-text" x="379" y="83" style="font-size:12px">租约 / 来源仲裁 / 状态与约束</text><rect class="kernel-part" x="16" y="83" width="125" height="30" rx="3"/><text class="kernel-text" x="78.5" y="96" style="font-size:12px">轨迹规划</text><text class="kernel-text" x="78.5" y="109" style="font-size:9px">MoveJ / MoveL / Path</text><path class="kernel-link" d="M141 57H232"/><text class="kernel-text" x="186" y="50" style="font-size:10px">连续目标</text><path class="kernel-link" d="M78.5 72V83"/><path class="kernel-link" d="M141 98H192V84H232"/><text class="overview-subtitle" x="16" y="127" style="font-size:12px">读取状态 → 仲裁 / 执行 → 驱动读写 → RobotTick</text>`;
     } else if (kind === 'perception') {
       content=`<text class="overview-title" x="16" y="27">${escape(node.title)}</text><text class="overview-subtitle" x="16" y="50">${escape(node.subtitle)}</text><text x="16" y="84" font-size="17" fill="#638e85">采集 → 校验 → 发布</text><text class="overview-subtitle" x="16" y="119">订阅 · 时间质量 · 生命周期</text>`;
+    } else if (kind === 'policy-stage') {
+      content=`<text class="overview-title" x="16" y="25">${escape(node.title)}</text><text class="overview-subtitle" x="16" y="49">${escape(node.subtitle)}</text><text class="overview-scope" x="16" y="72">${escape(node.scope)}</text>`;
     } else if (kind === 'support') {
       content=`<text class="overview-title" x="16" y="26">${escape(node.title)}</text><text class="overview-subtitle" x="16" y="51" style="font-size:14px">${escape(node.subtitle)}</text><text class="overview-scope" x="16" y="${h-13}">${escape(node.scope)}</text>`;
     } else {
       const tall=h>80;
-      content=`<text class="overview-title" x="16" y="${tall ? 29 : 23}" style="font-size:${kind === 'driver' ? 18 : 20}px">${escape(node.title)}</text><text class="overview-subtitle" x="16" y="${tall ? 57 : h-10}">${escape(node.subtitle)}</text>${node.id === 'voice-interaction' ? `<text class="node-status" x="${w-12}" y="21" text-anchor="end">规划</text>` : ''}${node.id === 'gesture-interaction' ? `<text class="node-status" x="${w-12}" y="21" text-anchor="end">已有基础</text>` : ''}`;
+      content=`<text class="overview-title" x="16" y="${tall ? 29 : 22}" style="font-size:${kind === 'driver' ? 17 : 18}px">${escape(node.title)}</text><text class="overview-subtitle" x="16" y="${tall ? 57 : h-9}" style="font-size:12px">${escape(node.subtitle)}</text>${node.id === 'voice-interaction' ? `<text class="node-status" x="${w-12}" y="21" text-anchor="end">规划</text>` : ''}${node.id === 'gesture-interaction' ? `<text class="node-status" x="${w-12}" y="21" text-anchor="end">已有基础</text>` : ''}`;
     }
     return `<g class="node overview-card ${kind} ${state.designSelected === node.id ? 'selected' : ''}" data-design="${node.id}" tabindex="0" role="button" aria-label="${escape(node.title)}，${escape(node.layer)}，查看职责、接口与实现现状" transform="translate(${x} ${y})"><title>${escape(node.description)}</title><rect class="surface" width="${w}" height="${h}" rx="4"/>${content}</g>`;
   }
@@ -158,7 +162,7 @@
 
   function drawDesign() {
     const markers=Object.entries(relationColors).map(([kind,color])=>`<marker id="arrow-${kind}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="${color}"/></marker>`).join('');
-    $('diagramMount').innerHTML=`<svg id="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${design.width} ${design.height}" role="group" aria-labelledby="diagramTitle diagramDesc"><title id="diagramTitle">${escape(design.title)}</title><desc id="diagramDesc">七层项目架构：交互呈现、应用服务、中央 Agent 智能编排、能力接入与契约、设备运行时、驱动适配、硬件设备。模型与数据按接口支撑各层，网络、安全、插件装配和运维横向提供基础设施。人工连续控制绕过 Agent，但仍通过控制会话与设备运行时。</desc><style>${svgStyle}${overviewStyle}</style><defs>${markers}</defs><rect width="${design.width}" height="${design.height}" fill="#fff"/>${design.layers.map(designLayer).join('')}${design.supportRegions.map(supportRegion).join('')}${design.routes.map(routeMarkup).join('')}${design.nodes.map(designNode).join('')}${design.hardware.map(h=>`<g class="hardware-item"><rect class="hardware-surface" x="${h.x}" y="${h.y}" width="${h.width}" height="${h.height}" rx="3"/><text class="hardware-title" x="${h.x+h.width/2}" y="${h.y+28}">${escape(h.title)}</text></g>`).join('')}${design.annotations.map(a=>`<text class="overview-note" x="${a.x}" y="${a.y}" style="font-size:${a.size}px">${escape(a.text)}</text>`).join('')}<text class="overview-note" x="1872" y="868" text-anchor="end" style="font-size:13px">目标架构 · 具体实现与验收状态见详情</text></svg>`;
+    $('diagramMount').innerHTML=`<svg id="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${design.width} ${design.height}" role="group" aria-labelledby="diagramTitle diagramDesc"><title id="diagramTitle">${escape(design.title)}</title><desc id="diagramDesc">八层项目架构：交互呈现、应用服务、中央 Agent 智能编排、能力接入与契约、推理部署与策略、设备运行时、驱动适配、硬件设备。模型与数据按接口支撑各层，网络、安全、插件装配和运维横向提供基础设施。人工连续控制绕过 Agent，但仍通过控制会话与设备运行时。</desc><style>${svgStyle}${overviewStyle}</style><defs>${markers}</defs><rect width="${design.width}" height="${design.height}" fill="#fff"/>${design.layers.map(designLayer).join('')}${design.supportRegions.map(supportRegion).join('')}${design.routes.map(routeMarkup).join('')}${design.nodes.map(designNode).join('')}${design.hardware.map(h=>`<g class="hardware-item"><rect class="hardware-surface" x="${h.x}" y="${h.y}" width="${h.width}" height="${h.height}" rx="3"/><text class="hardware-title" x="${h.x+h.width/2}" y="${h.y+28}">${escape(h.title)}</text></g>`).join('')}${design.annotations.map(a=>`<text class="overview-note" x="${a.x}" y="${a.y}" style="font-size:${a.size}px">${escape(a.text)}</text>`).join('')}<text class="overview-note" x="1872" y="882" text-anchor="end" style="font-size:13px">目标架构 · 具体实现与验收状态见详情</text></svg>`;
     $('diagram').querySelectorAll('[data-design]').forEach(element=>{
       const select=()=>{state.designSelected=element.dataset.design;drawDesign();openDesignDetail();};
       element.addEventListener('click',select);
@@ -173,40 +177,68 @@
 
   function drawDeployment() {
     const styles = `
+      .deploy-panel{fill:#fcfdff;stroke:#e0e6ee;stroke-width:1}
+      .deploy-panel-title{font-size:19px;font-weight:600;fill:#41566e}
+      .deploy-panel-note{font-size:13px;fill:#75869a}
       .deployment-card{cursor:pointer;outline:none}
-      .deployment-card>.surface{fill:#fafbfc;stroke:#dce3ec;stroke-width:1.2}
-      .deployment-card.hub>.surface{fill:#f3f3fc;stroke:#d6d9ec}
-      .deployment-card.compute>.surface{fill:#f1f7f6;stroke:#d3e5df}
-      .deployment-card.network>.surface{fill:#f5f7fa;stroke:#bfcbd9;stroke-dasharray:5 4}
-      .deployment-card:hover>.surface,.deployment-card:focus-visible>.surface{stroke:#7d8ba8;stroke-width:2.5}
-      .deploy-label{font-size:13px;fill:#7e8ba0;letter-spacing:1px}
-      .deploy-title{font-size:25px;font-weight:600;fill:#34445b}
-      .deploy-subtitle{font-size:16px;fill:#6d7d90}
-      .deploy-tile{fill:#fff;stroke:#e2e7ee;stroke-width:1}
-      .deploy-item{font-size:18px;fill:#4e627b}
-      .deploy-foot{font-size:15px;fill:#738397}
-      .deploy-link{fill:none;stroke:#a0adc1;stroke-width:1.6;marker-start:url(#deploy-arrow);marker-end:url(#deploy-arrow)}
-      .deploy-link-label{font-size:15px;fill:#7a8ba1;text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:5px}
-      .deploy-flow{font-size:17px;fill:#526a82}
+      .deployment-card>.surface{fill:#fff;stroke:#d9e1eb;stroke-width:1}
+      .deployment-card.hub>.surface{fill:#f3f2fb;stroke:#d4d5e8}
+      .deployment-card.compute>.surface{fill:#eff7f4;stroke:#cee2d8}
+      .deployment-card.router>.surface{fill:#eaf0f8;stroke:#c2d1e2}
+      .deployment-card.service>.surface{fill:#f5f7fa;stroke:#d8e0e9;stroke-dasharray:4 3}
+      .deployment-card:hover>.surface,.deployment-card:focus-visible>.surface{stroke:#7d8ba8;stroke-width:2}
+      .deploy-label{font-size:11px;fill:#7b8aa0}
+      .deploy-title{font-size:19px;font-weight:600;fill:#34445b}
+      .deploy-subtitle{font-size:13px;fill:#6d7d90}
+      .deploy-item{font-size:14px;fill:#4c627c}
+      .deploy-foot{font-size:12px;fill:#738397}
+      .physical-cable{fill:none;stroke:#92aac6;stroke-width:1.5;stroke-linejoin:round}
+      .physical-cable.backhaul{stroke:#7193b9;stroke-width:2}
+      .physical-cable.device{stroke:#b6a58a}
+      .cable-label{font-size:12px;fill:#6d8299;text-anchor:middle;paint-order:stroke;stroke:#fcfdff;stroke-width:5px}
+      .hardware-box{fill:#f3f0ea;stroke:#e5ded2;stroke-width:1}
+      .workflow-node{cursor:pointer;outline:none}
+      .workflow-node:hover .workflow-card,.workflow-node:focus-visible .workflow-card{stroke:#7d8ba8;stroke-width:2}
+      .workflow-card{fill:#fff;stroke:#d9e1eb;stroke-width:1}
+      .workflow-card.hub{fill:#f3f2fb;stroke:#d4d5e8}
+      .workflow-card.compute{fill:#eff7f4;stroke:#cee2d8}
+      .workflow-card.device{fill:#fcf6ee;stroke:#e5d7c5}
+      .workflow-group{fill:#f2f8f5;stroke:#bad7c8;stroke-width:1;stroke-dasharray:5 4}
+      .workflow-link{fill:none;stroke-width:1.5;stroke-linejoin:round}
+      .workflow-label{font-size:12px;fill:#6e7f93;paint-order:stroke;stroke:#fcfdff;stroke-width:5px}
     `;
-    const cards = deployment.nodes.map(n => {
+    const cards=deployment.nodes.map(n=>{
       let content;
-      if (n.kind === 'network') {
-        content=`<text class="deploy-title" x="24" y="30" style="font-size:22px">${escape(n.title)}</text><text class="deploy-subtitle" x="24" y="55">${escape(n.subtitle)}</text><text class="deploy-foot" x="${n.width-24}" y="43" text-anchor="end">观测与策略数据按授权端点直连或中继</text>`;
+      if(n.kind==='router') {
+        content=`<text class="deploy-title" x="16" y="25">${escape(n.title)}</text><text class="deploy-subtitle" x="16" y="47">${escape(n.subtitle)}</text>`;
+      } else if(n.kind==='service') {
+        content=`<text class="deploy-title" x="16" y="23" style="font-size:16px">${escape(n.title)}</text><text class="deploy-foot" x="150" y="23">${escape(n.subtitle)}</text><text class="deploy-foot" x="16" y="44">${escape(n.footer)}</text>`;
       } else {
-        const top=n.kind !== 'device';
-        const tileWidth=n.kind === 'hub' ? (n.width-64)/2 : n.width-48;
-        content=`<text class="deploy-label" x="24" y="25">${escape(n.label)}</text><text class="deploy-title" x="24" y="58">${escape(n.title)}</text><text class="deploy-subtitle" x="24" y="83">${escape(n.subtitle)}</text>${n.rows.map((row,i)=>{
-          const x=n.kind==='hub' ? 24+(i%2)*(tileWidth+16) : 24;
-          const y=top ? 111+Math.floor(n.kind==='hub' ? i/2 : i)*49 : 102+i*38;
-          return `<rect class="deploy-tile" x="${x}" y="${y}" width="${tileWidth}" height="${top?37:30}" rx="4"/><text class="deploy-item" x="${x+12}" y="${y+(top?25:22)}">${escape(row)}</text>`;
-        }).join('')}<text class="deploy-foot" x="24" y="${n.height-18}">${escape(n.footer)}</text>`;
+        content=`<text class="deploy-label" x="16" y="21">${escape(n.label)}</text><text class="deploy-title" x="16" y="47">${escape(n.title)}</text>${n.rows.map((row,i)=>`<text class="deploy-item" x="16" y="${72+i*21}">${escape(row)}</text>`).join('')}<text class="deploy-foot" x="16" y="${n.height-13}">${escape(n.footer)}</text>`;
       }
-      return `<g class="node deployment-card ${n.kind}" data-deployment="${n.id}" transform="translate(${n.x} ${n.y})" tabindex="0" role="button" aria-label="${escape(n.title)}，查看部署职责与建设边界"><title>${escape(n.description)}</title><rect class="surface" width="${n.width}" height="${n.height}" rx="8"/>${content}</g>`;
+      return `<g class="node deployment-card ${n.kind}" data-deployment="${n.id}" transform="translate(${n.x} ${n.y})" tabindex="0" role="button" aria-label="${escape(n.title)}，查看部署职责与建设边界"><title>${escape(n.description)}</title><rect class="surface" width="${n.width}" height="${n.height}" rx="5"/>${content}</g>`;
     }).join('');
-    $('diagramMount').innerHTML=`<svg id="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${deployment.width} ${deployment.height}" role="group" aria-labelledby="diagramTitle diagramDesc"><title id="diagramTitle">${escape(deployment.title)}</title><desc id="diagramDesc">目标部署：无 GPU 总台负责工作台、中央 Agent 编排与目录；独立算力节点提供模型推理；多个设备接入节点保留本地运行时、驱动与控制循环。设备节点认证登记，观测与策略数据可按授权直接连接算力节点。角色可在同一物理机组合。</desc><style>${svgStyle}${styles}</style><defs><marker id="deploy-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#a0adc1"/></marker></defs><rect width="1800" height="850" fill="#fff"/><text class="deploy-title" x="40" y="38" style="font-size:27px">一台总台，多台机器，按能力协同</text><text class="deploy-foot" x="1760" y="38" text-anchor="end">目标部署 · 节点示例</text><path class="deploy-link" d="M822 204H1138"/><text class="deploy-link-label" x="980" y="184">模型调用 / 结果</text><text class="deploy-link-label" x="980" y="231">Harness 与推理分开部署</text><path class="deploy-link" d="M430 334V388"/><text class="deploy-link-label" x="530" y="367">任务 / 状态 / 节点登记</text><path class="deploy-link" d="M1450 334V388"/><text class="deploy-link-label" x="1570" y="367">注册 / 数据与推理通道</text>${[310,900,1490].map(x=>`<path class="deploy-link" d="M${x} 462V512"/>`).join('')}${cards}<path d="M40 771H1760" stroke="#e5eaf0"/><text class="deploy-flow" x="40" y="802">任务：总台 → 设备能力 → 执行结果</text><text class="deploy-flow" x="630" y="802">策略：观测 → 算力 → 设备控制会话</text><text class="deploy-flow" x="1220" y="802">周期控制：设备节点本地完成</text><text class="deploy-foot" x="40" y="835">节点主动认证登记；一台接入机可管理多个设备，算力与设备角色也可同机组合。</text><text class="deploy-foot" x="1760" y="835" text-anchor="end">当前仍以本机工作台为主，多机接入待实现</text></svg>`;
+    const colors={model:'#7c9e93',task:'#8988ad',policy:'#b29874',target:'#b29874'};
+    const markers=Object.entries(colors).map(([kind,color])=>`<marker id="deploy-${kind}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="${color}"/></marker>`).join('');
+    const panels=deployment.panels.map(p=>`<rect class="deploy-panel" x="${p.x}" y="${p.y}" width="${p.width}" height="${p.height}" rx="7"/><text class="deploy-panel-title" x="${p.x+24}" y="${p.y+30}">${escape(p.title)}</text><text class="deploy-panel-note" x="${p.x+24}" y="${p.y+52}">${escape(p.subtitle)}</text>`).join('');
+    const cables=deployment.cables.map(c=>`<g data-cable="${c.from}:${c.to}"><path class="physical-cable ${c.kind}" d="${c.path}"/>${c.label?`<text class="cable-label" x="${c.x}" y="${c.y}">${escape(c.label)}</text>`:''}</g>`).join('');
+    const hardware=deployment.hardware.map(h=>`<g class="deployment-hardware"><rect class="hardware-box" x="${h.x}" y="${h.y}" width="${h.width}" height="${h.height}" rx="4"/><text class="deploy-title" x="${h.x+h.width/2}" y="${h.y+25}" text-anchor="middle" style="font-size:16px">${escape(h.title)}</text><text class="deploy-foot" x="${h.x+h.width/2}" y="${h.y+45}" text-anchor="middle">${escape(h.subtitle)}</text></g>`).join('');
+    const workflow=deployment.workflow;
+    const groups=(workflow.groups||[]).map(g=>`<rect class="workflow-group" x="${g.x}" y="${g.y}" width="${g.width}" height="${g.height}" rx="6"/><text class="deploy-title" x="${g.x+16}" y="${g.y+23}" style="font-size:17px">${escape(g.title)}</text>`).join('');
+    const flowLinks=workflow.links.map(l=>`<path class="workflow-link" stroke="${colors[l.kind]}" d="${l.path}" marker-start="url(#deploy-${l.kind})" marker-end="url(#deploy-${l.kind})"/><text class="workflow-label" x="${l.x}" y="${l.y}" ${l.rotate?`text-anchor="middle" transform="rotate(${l.rotate} ${l.x} ${l.y})"`:l.center?'text-anchor="middle"':''}>${escape(l.label)}</text>`).join('');
+    const flowNodes=workflow.nodes.map(n=>`<g class="node workflow-node" data-workflow="${n.id}" tabindex="0" role="button" aria-label="${escape(n.title)}，查看职责和实现边界"><rect class="workflow-card ${n.kind}" x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" rx="5"/><text class="deploy-title" x="${n.x+18}" y="${n.y+27}" style="font-size:18px">${escape(n.title)}</text><text class="deploy-item" x="${n.x+18}" y="${n.y+49}">${escape(n.subtitle)}</text><text class="deploy-foot" x="${n.x+18}" y="${n.y+n.height-12}">${escape(n.footer)}</text></g>`).join('');
+    $('diagramMount').innerHTML=`<svg id="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${deployment.width} ${deployment.height}" role="group" aria-labelledby="diagramTitle diagramDesc"><title id="diagramTitle">${escape(deployment.title)}</title><desc id="diagramDesc">目标架构：左侧是中兴 E2631 有线 Mesh 物理拓扑，主节点连接无 GPU Ubuntu 总台和两个子节点，子节点分别连接算力与设备接入机。右侧是服务协作：总台编排，推理部署层跨算力端和设备端，设备内核本地执行。RTC 与跨机接入尚待实现。</desc><style>${svgStyle}${styles}</style><defs>${markers}</defs><rect width="${deployment.width}" height="${deployment.height}" fill="#fff"/><text class="deploy-title" x="28" y="34" style="font-size:24px">一台总台，管理整个实验室</text><text class="deploy-subtitle" x="28" y="60">有线 Mesh 连接机器 · 总台编排任务 · 推理与设备控制分开部署</text><text class="deploy-foot" x="1872" y="35" text-anchor="end">目标设计 · 型号与网络方案由用户提供</text>${panels}${cables}${cards}${hardware}${groups}${flowLinks}${flowNodes}<text class="deploy-foot" x="62" y="326">三路 LAN：总台 + Mesh A + Mesh B</text><text class="deploy-foot" x="62" y="635">5090 也可兼任设备节点；</text><text class="deploy-foot" x="62" y="655">一台主机可连接多个设备。</text><text class="deploy-panel-note" x="52" y="750">同款中兴巡天 ZXHN E2631 · 原生 Mesh 模式 · 后台确认有线回程与主机互通</text><text class="deploy-foot" x="52" y="776">图示接入机走网线；移动机载电脑最后一跳可选 Wi-Fi。路由器型号不进入业务或设备插件。</text><text class="deploy-foot" x="28" y="837">实线：物理连接　箭头：服务协作　｜　节点可点击查看职责、接口与 Git 进展。</text><text class="deploy-foot" x="1872" y="862" text-anchor="end">RTC、跨机能力接入为待建设设计；现有启动仍以本机工作台为主。</text></svg>`;
     $('diagram').querySelectorAll('[data-deployment]').forEach(element=>{
-      const select=()=>{state.deploymentSelected=element.dataset.deployment;openDeploymentDetail();};
+      const select=()=>{state.deploymentFocus=element;state.deploymentSelected=element.dataset.deployment;openDeploymentDetail();};
+      element.addEventListener('click',select);
+      element.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});
+    });
+    $('diagram').querySelectorAll('[data-workflow]').forEach(element=>{
+      const select=()=>{
+        state.deploymentFocus=element;
+        if(element.dataset.workflow==='hub'){state.deploymentSelected='hub';openDeploymentDetail();}
+        else{state.designSelected=element.dataset.workflow;openDesignDetail();}
+      };
       element.addEventListener('click',select);
       element.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});
     });
@@ -215,7 +247,7 @@
 
   function openDeploymentDetail() {
     const node=deployment.nodes.find(n=>n.id===state.deploymentSelected);
-    $('designDetailContent').innerHTML=`<p class="eyebrow">目标部署 / ${escape(node.id.toUpperCase())}</p><h2 id="designDetailTitle">${escape(node.title)}</h2><p class="design-lead">${escape(node.description)}</p><h3>部署职责与通信边界</h3>${node.responsibilities.map(text=>`<p>${escape(text)}</p>`).join('')}<div class="warning-note">${escape(node.boundary)}</div><h3>对应的架构模块</h3><div class="chips">${node.modules.map(id=>`<button class="chip" data-deployment-module="${id}">${escape(design.nodes.find(n=>n.id===id).title)} →</button>`).join('')}</div><p class="detail-footnote">点击模块查看所属逻辑层、接口与 Git 贡献。<a href="lab-device-platform.md">多机部署与迁移依据 ↗</a></p>`;
+    $('designDetailContent').innerHTML=`<p class="eyebrow">目标部署 / ${escape(node.id.toUpperCase())}</p><h2 id="designDetailTitle">${escape(node.title)}</h2><p class="design-lead">${escape(node.description)}</p><h3>部署职责与通信边界</h3>${node.responsibilities.map(text=>`<p>${escape(text)}</p>`).join('')}<div class="warning-note">${escape(node.boundary)}</div><h3>相关架构模块与协作接口</h3><div class="chips">${node.modules.map(id=>`<button class="chip" data-deployment-module="${id}">${escape(design.nodes.find(n=>n.id===id).title)} →</button>`).join('')}</div><p class="detail-footnote">点击模块查看所属逻辑层、接口与 Git 贡献。<a href="lab-device-platform.md">多机部署与迁移依据 ↗</a></p>`;
     $('designDetailContent').querySelectorAll('[data-deployment-module]').forEach(button=>{
       button.onclick=()=>{state.designSelected=button.dataset.deploymentModule;openDesignDetail();};
     });
@@ -360,14 +392,14 @@
       ? '<span>点击模块，查看职责、接口与实现进展</span>'
       : '<span><i class="green"></i>计划全部关闭</span><span><i class="amber"></i>仍有未关闭项</span><span><i class="gray"></i>无关联计划</span>';
     document.querySelector('.diagram-caption').textContent = isDeployment
-      ? '总台协调任务，算力节点负责推理，设备节点执行本地闭环。网络带表示通信关系；观测与策略数据按需直连或中继，不要求总台逐帧转发。'
+      ? '左侧实线说明有线 Mesh 与设备接线，右侧箭头说明服务协作。L5 推理层跨算力与设备部署，RTC 采样与动作块执行器共同衔接；L6 保留本地控制。'
       : isDesign
-      ? 'L1—L7 按职责分层；调用向下、反馈向上。逻辑层可跨主机部署，机器分工见“多机部署”。点击模块查看所属层、接口与 Git 进展。'
+      ? 'L1—L8 按职责分层；策略经 L5 推理与执行器，人工和确定性控制可直接调用 L6 设备能力。机器接线见“多机部署”。点击模块查看所属层、接口与 Git 进展。'
       : '点击模块查看计划、作者与提交。时间和作者筛选只影响 Git 活动，计划计数保持完整。';
     $('coverage').textContent = isDeployment
-      ? '三类部署角色 · 多主机 / 多设备 · 与七层逻辑架构对应'
+      ? '有线 Mesh · 无 GPU 总台 · 分布式推理与 RTC · 设备本地控制'
       : isDesign
-      ? '七层架构 · 模型与数据服务 · 横向基础设施'
+      ? '八层架构 · 推理部署与 RTC · 横向基础设施'
       : `${data.modules.length} 个已有模块 · ${data.planFiles.length} 份正式计划 · ${data.shallow ? '浅克隆，仅含本地可用历史' : 'HEAD 可达的已提交历史'}`;
     document.querySelectorAll('[data-view]').forEach(button => { const active = button.dataset.view === state.view; button.classList.toggle('active',active); button.setAttribute('aria-pressed',String(active)); });
     if (state.view === 'architecture') { draw(commits); renderPanel(commits); }
@@ -428,8 +460,9 @@
   $('designDetailDialog').addEventListener('close', () => {
     const id = state.designSelected; state.designSelected = null;
     if (state.view === 'deployment') {
-      const deploymentId=state.deploymentSelected; state.deploymentSelected=null;
-      $('diagram').querySelector(`[data-deployment="${deploymentId}"]`)?.focus({preventScroll:true});
+      state.deploymentSelected=null;
+      const trigger=state.deploymentFocus; state.deploymentFocus=null;
+      trigger?.focus({preventScroll:true});
       return;
     }
     if (state.view !== 'design') return;
