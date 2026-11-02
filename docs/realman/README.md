@@ -2,6 +2,7 @@
 
 - [MuJoCo 仿真：无需 VR 的脚本演示、简化夹爪与 Quest 输入](simulation.md)
 - [真机平台接入与 Quest 遥操](platform.md)
+- [第二台 RM65-BI `.18` 的独立配置与核对](robot18.md)
 
 ## 示教器远程访问（Windows）
 
