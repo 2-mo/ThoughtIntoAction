@@ -99,7 +99,7 @@ def test_speed_limit_deadman_and_no_enable(setup):
         backend.step(command(target), time.monotonic())
         assert client.sent[-1]['command'] == 'movep_canfd'
         assert client.sent[-1]['follow'] is False
-        assert client.sent[-1]['pose'][0] == 301600
+        assert client.sent[-1]['pose'][0] == 302400
         assert target[0] == pytest.approx(.34)  # Caller-owned target is not mutated.
         backend.step(ControlCommand(Mode.DISABLED), time.monotonic())
         assert client.sent[-1] == {'command': 'set_arm_stop'}
@@ -455,9 +455,9 @@ def test_joint_step_backoff_checks_wire_pose_before_send(setup):
         backend.motion_check.check = check
         goal = origin.copy(); goal[0] += .01
         backend.step(command(goal), time.monotonic())
-        assert len(calls) == 3
-        assert backend.command_diagnostics['joint_step_scale'] == .25
-        assert len(backend.command_diagnostics['joint_step_rejections']) == 2
+        assert len(calls) == 4
+        assert backend.command_diagnostics['joint_step_scale'] == .125
+        assert len(backend.command_diagnostics['joint_step_rejections']) == 3
         assert np.allclose(decode_pose(client.sent[-1]['pose']), calls[-1])
         assert abs(calls[-1][0] - origin[0]) <= .0005
     finally:
@@ -481,7 +481,7 @@ def test_persistent_joint_step_rejection_still_stops_without_send(setup):
 
 
 @pytest.mark.parametrize('offline_query', [1, 2, 3])
-def test_gripper_offline_disables_only_gripper_and_requires_restart(setup, monkeypatch, capsys, offline_query):
+def test_gripper_offline_disables_motion_until_neutral_recovery(setup, monkeypatch, capsys, offline_query):
     import sys
     from types import SimpleNamespace
     from embodied.devices.robots.realman import cli
@@ -492,7 +492,7 @@ def test_gripper_offline_disables_only_gripper_and_requires_restart(setup, monke
         if key != 'get_gripper_state':
             return original_query(key)
         gripper_queries.append(key)
-        # Subsequent reads would recover. A latched fault must never auto-resume.
+        # Recovery reads may observe ready, but two neutral samples are required.
         if len(gripper_queries) == offline_query:
             return dict(enable=0, status=0, error=0, mode=0,
                         current_force=0, temperature=0, actpos=0)
@@ -517,8 +517,24 @@ def test_gripper_offline_disables_only_gripper_and_requires_restart(setup, monke
     output = capsys.readouterr().out
     assert '"enabled_for_session": false' in output
     assert '"gripper_enabled_for_session": false' in output
-    assert len(gripper_queries) == offline_query
+    assert len(gripper_queries) == offline_query + int(offline_query == 1)
     assert sum(m['command'] == 'set_gripper_position' for m in client.sent) == int(offline_query == 3)
     assert any(m['command'] == 'movep_canfd' for m in client.sent)
     assert client.sent[-1] == {'command': 'set_arm_stop'}
+    assert client.closed
+
+
+def test_explicit_open_initialization_entry_from_all_zero_feedback(setup, monkeypatch, capsys):
+    import sys
+    from embodied.devices.robots.realman import cli
+    config, client = setup
+    client.responses['get_gripper_state'] = dict.fromkeys(
+        ('enable', 'status', 'error', 'mode', 'current_force', 'temperature', 'actpos'), 0)
+    client.exchange = lambda message, expected: (client.sent.append(message) or {'state': True})
+    monkeypatch.setattr(cli, 'load_config', lambda _: config)
+    monkeypatch.setattr(cli, 'Backend', lambda config, allow_motion: Backend(config, client=client, allow_motion=allow_motion))
+    monkeypatch.setattr(sys, 'argv', ['realman', 'gripper-open', '--execute', '--gripper-initialize-open'])
+    cli.main()
+    assert client.sent == [{'command':'set_gripper_release','speed':100,'block':False}]
+    assert '"initializing_from_zero_feedback": true' in capsys.readouterr().out
     assert client.closed

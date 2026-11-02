@@ -21,14 +21,18 @@ def status(client):
     return {key: raw[key] for key in fields}
 
 
-def move(client, action, *, speed=100, force=50):
+def move(client, action, *, speed=100, force=50, initialize_open=False):
     if action not in ('open', 'close') or type(speed) is not int or not 1 <= speed <= 1000:
         raise ValueError('Invalid gripper action/speed')
     if type(force) is not int or not 50 <= force <= 1000:
         raise ValueError('Invalid gripper force')
+    if initialize_open and action != 'open':
+        raise ValueError('Initialization permits only an explicit full open')
     before = status(client)
-    require_ready(before)
-    if before['mode'] not in (1, 2, 3, 6):
+    initializing = initialize_open and all(value == 0 for value in before.values())
+    if not initializing:
+        require_ready(before)
+    if not initializing and before['mode'] not in (1, 2, 3, 6):
         if before['mode'] in (4, 5):
             return {'action': action, 'accepted': False, 'reason': 'busy; press again after motion completes'}
         raise RuntimeError(f'Unknown gripper mode: {before}')
@@ -40,7 +44,7 @@ def move(client, action, *, speed=100, force=50):
     if reply.get('state') is not True:
         raise RuntimeError(f'Gripper command rejected: {reply}')
     return {'action': action, 'accepted': True, 'completed': False, 'speed': speed,
-            'force': force if action == 'close' else None}
+            'force': force if action == 'close' else None, 'initializing_from_zero_feedback': initializing}
 
 
 class Buttons:
@@ -124,3 +128,53 @@ class Jog:
             self.contact = False
         return {'action': action, 'accepted': True, 'completed': False,
                 'position_target_raw': target, 'segment_raw': self.step, 'feedback': before}
+
+
+class SessionJog:
+    """Read-only recovery while controls are neutral; never replay an old action."""
+    def __init__(self, unavailable=None):
+        self.unavailable = unavailable
+        self.jog = Jog()
+        self.next_check = 0.
+        self.ready_samples = 0
+
+    def update(self, client, action, now, *, controls_neutral):
+        if self.unavailable is not None:
+            if not controls_neutral:
+                self.ready_samples = 0
+                return None
+            if now < self.next_check:
+                return None
+            self.next_check = now + 1.
+            feedback = status(client)
+            try:
+                require_ready(feedback)
+            except GripperNotReady:
+                self.unavailable = feedback
+                self.ready_samples = 0
+                return {'accepted': False, 'enabled_for_session': False,
+                        'reason': 'not ready; release Grip/A/Trigger for read-only recovery checks',
+                        'feedback': feedback}
+            if feedback['mode'] not in (1, 2, 3, 4, 5, 6):
+                raise RuntimeError(f'Unknown gripper mode: {feedback}')
+            if not -5 <= feedback['actpos'] <= 1005:
+                raise RuntimeError(f'Gripper opening outside expected raw range: {feedback["actpos"]}')
+            if feedback['mode'] in (4, 5):
+                self.ready_samples = 0
+                return {'accepted': False, 'reason': 'waiting for idle gripper feedback', 'feedback': feedback}
+            self.ready_samples += 1
+            if self.ready_samples < 2:
+                return {'accepted': False, 'reason': 'confirming idle gripper feedback', 'feedback': feedback}
+            self.unavailable = None
+            self.jog = Jog()  # Discard old scheduling after two measured idle responses.
+            return {'accepted': False, 'enabled_for_session': True,
+                    'reason': 'ready; press A/Trigger again to move', 'feedback': feedback}
+        try:
+            return self.jog.update(client, action, now)
+        except GripperNotReady as exc:
+            self.unavailable = exc.feedback
+            self.ready_samples = 0
+            self.next_check = now + 1.
+            return {'accepted': False, 'enabled_for_session': False,
+                    'reason': 'not ready; release Grip/A/Trigger for read-only recovery checks',
+                    'feedback': self.unavailable}

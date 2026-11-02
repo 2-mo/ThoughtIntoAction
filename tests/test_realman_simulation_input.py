@@ -38,7 +38,7 @@ class InputTests(unittest.TestCase):
         targets = [fields['pose'] for action,fields in session.commands if action == 'cartesian']
         self.assertEqual(len(targets), 2)
         self.assertAlmostEqual(targets[-1][0], -.4)
-        self.assertAlmostEqual(targets[-1][1], .0016)
+        self.assertAlmostEqual(targets[-1][1], .0024)
         self.assertAlmostEqual(targets[-1][2], .5)
         gripper = [fields['gripper_width'] for action,fields in session.commands if action == 'gripper']
         self.assertEqual(len(gripper), 1)

@@ -1,5 +1,5 @@
 import pytest
-from embodied.devices.robots.realman.gripper import move, Buttons, Jog, GripperNotReady
+from embodied.devices.robots.realman.gripper import move, Buttons, Jog, GripperNotReady, SessionJog
 
 
 class Client:
@@ -101,3 +101,64 @@ def test_unavailable_feedback_is_distinct_from_communication_failure():
     c.query = timeout
     with pytest.raises(TimeoutError):
         Jog().update(c, 'open', 0.)
+
+
+def test_initialization_is_explicit_open_only_and_rejects_real_faults():
+    c = Client()
+    c.query = lambda _: dict.fromkeys(('enable','status','error','mode','current_force','temperature','actpos'), 0)
+    with pytest.raises(GripperNotReady):
+        move(c, 'open')
+    with pytest.raises(ValueError):
+        move(c, 'close', initialize_open=True)
+    assert move(c, 'open', initialize_open=True)['initializing_from_zero_feedback']
+    assert c.sent == [dict(command='set_gripper_release',speed=100,block=False)]
+    original = c.query
+    c.query = lambda _: {**original(_), 'error': 16}
+    with pytest.raises(GripperNotReady):
+        move(c, 'open', initialize_open=True)
+    assert len(c.sent) == 1
+
+
+def test_recovery_requires_two_idle_samples_neutral_controls_and_new_press():
+    c = Client(); c.pos = 500
+    session = SessionJog(unavailable={'status':0})
+    assert session.update(c, None, 0., controls_neutral=True)['reason'].startswith('confirming')
+    assert session.update(c, 'close', 1., controls_neutral=False) is None
+    assert session.update(c, None, 2., controls_neutral=True)['reason'].startswith('confirming')
+    c.mode = 5
+    assert session.update(c, None, 3., controls_neutral=True)['reason'].startswith('waiting')
+    c.mode = 3
+    session.update(c, None, 4., controls_neutral=True)
+    assert session.update(c, None, 5., controls_neutral=True)['enabled_for_session']
+    assert c.sent == []
+    assert session.update(c, 'close', 5.1, controls_neutral=False)['position_target_raw'] == 490
+
+
+def test_pending_fault_recovery_never_replays_pending_or_held_action():
+    c = Client(); c.pos = 500
+    session = SessionJog()
+    session.update(c, 'close', 0., controls_neutral=False)
+    c.ready = False
+    assert not session.update(c, 'close', .2, controls_neutral=False)['enabled_for_session']
+    c.ready = True; c.pos = 490
+    assert session.update(c, 'close', 2., controls_neutral=False) is None
+    session.update(c, None, 3., controls_neutral=True)
+    assert session.update(c, None, 4., controls_neutral=True)['enabled_for_session']
+    assert len(c.sent) == 1
+    assert session.jog.pending is None
+
+
+@pytest.mark.parametrize('invalid', ['mode', 'position', 'timeout'])
+def test_recovery_does_not_hide_invalid_feedback_or_transport_errors(invalid):
+    c = Client()
+    if invalid == 'mode':
+        c.mode = 99
+    elif invalid == 'position':
+        c.pos = 2000
+    else:
+        def timeout(command):
+            raise TimeoutError('connection lost')
+        c.query = timeout
+    with pytest.raises((RuntimeError, TimeoutError)):
+        SessionJog(unavailable={'status':0}).update(c, None, 0., controls_neutral=True)
+    assert c.sent == []

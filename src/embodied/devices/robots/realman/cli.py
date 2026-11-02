@@ -9,7 +9,7 @@ import numpy as np
 
 from embodied.contracts.control import ControlCommand, Mode
 from .backend import Backend, DEFAULT_CONFIG, load_config
-from .gripper import status as gripper_status, move as gripper_move, Buttons, Jog, GripperNotReady, require_ready
+from .gripper import status as gripper_status, move as gripper_move, Buttons, SessionJog, GripperNotReady, require_ready
 from .teleop import RelativeTarget, GripGate, XRClock
 
 
@@ -20,6 +20,8 @@ def run():
     parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
     parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
     parser.add_argument('--gripper', action='store_true', help='Hold A to open or Trigger to close in small position segments; release Grip first')
+    parser.add_argument('--gripper-initialize-open', action='store_true',
+                        help='Explicit full open at startup (speed 100/1000), including all-zero gripper feedback; requires clear empty jaws')
     parser.add_argument('--position-only', action='store_true', help='Translate while preserving the TCP orientation at each Grip engagement')
     parser.add_argument('--xr-startup-timeout', type=float, default=15.,
                         help='Seconds to wait for the first XR frame; live stale limit is unchanged')
@@ -32,6 +34,9 @@ def run():
         parser.error('--gripper requires quest --execute')
     if args.position_only and args.action != 'quest':
         parser.error('--position-only requires quest')
+    if args.gripper_initialize_open and not (args.execute and (
+            args.action == 'gripper-open' or (args.action == 'quest' and args.gripper))):
+        parser.error('--gripper-initialize-open requires quest --execute --gripper or gripper-open --execute')
     if not np.isfinite(args.duration) or args.duration < 0:
         parser.error('--duration must be finite and nonnegative')
     if not np.isfinite(args.xr_startup_timeout) or args.xr_startup_timeout <= 0:
@@ -52,7 +57,8 @@ def run():
         if args.action in ('gripper-open', 'gripper-close'):
             if backend.state.fault:
                 raise RuntimeError(backend.state.fault)
-            print(json.dumps(gripper_move(backend.client, args.action.removeprefix('gripper-'))), flush=True)
+            print(json.dumps(gripper_move(backend.client, args.action.removeprefix('gripper-'),
+                initialize_open=args.gripper_initialize_open)), flush=True)
             return
         if args.action == 'gripper-status':
             raw = gripper_status(backend.client)
@@ -75,6 +81,12 @@ def run():
             return
         gripper_unavailable = None
         if args.gripper:
+            if backend.state.fault:
+                raise RuntimeError(backend.state.fault)
+            if args.gripper_initialize_open:
+                print('Gripper startup: explicit full open at speed 100/1000.', flush=True)
+                print(json.dumps({'gripper_initialization': gripper_move(
+                    backend.client, 'open', initialize_open=True)}), flush=True)
             try:
                 require_ready(gripper_status(backend.client))
             except GripperNotReady as exc:
@@ -102,12 +114,12 @@ def run():
             print('Gripper: release Grip; HOLD A=open, HOLD Trigger=close in 10/1000 position segments. Release ends scheduling; current segment may finish. Speed/force inherited from controller.', flush=True)
             if gripper_unavailable is not None:
                 print(json.dumps({'gripper': {'enabled_for_session': False,
-                    'reason': 'not ready; gripper disabled until session restart; arm Grip control remains available',
+                    'reason': 'not ready; release Grip/A/Trigger for read-only recovery checks; arm Grip control remains available',
                     'feedback': gripper_unavailable}}), flush=True)
         else:
             print('Gripper control disabled.', flush=True)
         buttons = Buttons()
-        jog = Jog()
+        jog = SessionJog(gripper_unavailable)
         last_gripper_report = None
         last_gripper_input = None
         gripper_actions = 0
@@ -143,7 +155,7 @@ def run():
             if started >= next_status:
                 print(json.dumps({'xr_fresh': fresh, 'right_grip': grip, 'robot_fault': state.fault,
                                   'armed': gate.armed, 'following': gate.following, 'preview': not args.execute,
-                                  'gripper_enabled_for_session': args.gripper and gripper_unavailable is None,
+                                  'gripper_enabled_for_session': args.gripper and jog.unavailable is None,
                                   'xr_timestamp_ns': timestamp,
                                   'waiting_for_first_xr': not seen_xr and not fresh}), flush=True)
                 next_status = started + 1.
@@ -181,7 +193,7 @@ def run():
                 a = bool(xr.get_A_button())
                 trigger = float(xr.get_right_trigger())
                 action = buttons.update(a, trigger, fresh=fresh, grip=grip, now=started)
-                if gripper_unavailable is not None:
+                if jog.unavailable is not None:
                     buttons.ready = False
                     action = None
                 input_state = (a, round(trigger, 1), fresh, grip < .2, buttons.ready)
@@ -193,24 +205,21 @@ def run():
                     last_gripper_input = input_state
                 # No gripper TCP transactions while the arm is following.
                 # Release/Grip/B never queues another position segment.
-                if not following and gripper_unavailable is None:
-                    try:
-                        report = jog.update(backend.client, action, time.monotonic())
-                    except GripperNotReady as exc:
-                        gripper_unavailable = exc.feedback
-                        report = {'accepted': False, 'enabled_for_session': False,
-                            'reason': 'not ready; gripper disabled until session restart; arm Grip control remains available',
-                            'feedback': gripper_unavailable}
+                if not following:
+                    report = jog.update(backend.client, action, time.monotonic(),
+                        controls_neutral=fresh and grip < .2 and not a and trigger < .2)
                     if report is not None:
                         gripper_actions += int(report.get('accepted', False))
                         report_key = (report.get('reason'), report.get('position_target_raw'))
                         if report_key != last_gripper_report:
                             print(json.dumps({'gripper': report}), flush=True)
                             last_gripper_report = report_key
+                elif jog.unavailable is not None:
+                    jog.ready_samples = 0
             time.sleep(max(0, 1/config['control_hz'] - (time.monotonic() - started)))
         print(json.dumps({'samples': samples, 'fresh_xr_samples': fresh_samples, 'target_samples': previews,
                           'execute_requested': args.execute, 'gripper_actions': gripper_actions,
-                          'gripper_enabled_for_session': args.gripper and gripper_unavailable is None}), flush=True)
+                          'gripper_enabled_for_session': args.gripper and jog.unavailable is None}), flush=True)
 
 
 def main():
