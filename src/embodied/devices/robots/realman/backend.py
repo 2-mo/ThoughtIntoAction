@@ -73,6 +73,7 @@ class Backend:
         self.state = None
         self.origin = None
         self.last_target = None
+        self.last_joint_target = None
         self.lead_hold_since = None
         self.command_diagnostics = {}
         self.done = threading.Event()
@@ -144,6 +145,7 @@ class Backend:
                 self.active = False
                 self.client.send({'command': 'set_arm_stop'})
             self.last_target = None
+            self.last_joint_target = None
             self.lead_hold_since = None
 
     def step(self, command, now, **options):
@@ -213,13 +215,20 @@ class Backend:
             # Check exactly the quantized pose sent on the wire, after rate/lead limits.
             wire_pose = encode_pose(target)
             checked_target = decode_pose(wire_pose)
-            self.command_diagnostics['precheck'] = self.motion_check.check(checked_target, self.state)
+            try:
+                precheck = self.motion_check.check(
+                    checked_target, self.state, previous_joint_deg=self.last_joint_target)
+            except Exception:
+                self.command_diagnostics['precheck'] = getattr(self.motion_check, 'diagnostics', {})
+                raise
+            self.command_diagnostics['precheck'] = precheck
             self.command_diagnostics['sent_m_xyzw'] = checked_target.tolist()
             if time.monotonic() - self.feedback_at > self.config['stale_s']:
                 raise RuntimeError('Feedback expired during offline motion precheck')
             self.active = True  # A failed send may still have delivered bytes; close must attempt stop.
             self.client.send({'command': 'movep_canfd', 'pose': wire_pose, 'follow': False})
-            self.last_target = target.copy()
+            self.last_joint_target = np.array(precheck['ik_joint_deg'], dtype=float)
+            self.last_target = checked_target.copy()
             self.last_command = time.monotonic()
             self.active = True
 

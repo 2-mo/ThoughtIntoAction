@@ -99,7 +99,8 @@ class MotionCheck:
                 'singularity_code': singularity, 'shoulder_distance_m': distance,
                 'offline_algorithm_version': self.model.version}
 
-    def check(self, target, state):
+    def check(self, target, state, *, previous_joint_deg=None):
+        self.diagnostics = {}
         self.validate_feedback(state)
         seed = np.rad2deg(state.q)
         code, solution = self.model.solve(target, seed)
@@ -114,9 +115,23 @@ class MotionCheck:
         if code != 0 or not np.isfinite(distance):
             raise RuntimeError(f'Candidate near vendor singularity region: code={code}, shoulder_m={distance}')
         # Conservative continuity guard, not a guarantee on actual joint velocity.
-        step = float(np.max(np.abs(solution - seed)))
+        previous = seed if previous_joint_deg is None else np.asarray(previous_joint_deg, dtype=float)
+        if previous.shape != (6,) or not np.isfinite(previous).all():
+            raise ValueError('Invalid previous commanded joints')
+        delta = solution - previous
+        step = float(np.max(np.abs(delta)))
+        self.diagnostics = {
+            'feedback_joint_deg': seed.tolist(),
+            'previous_command_joint_deg': previous.tolist(),
+            'command_delta_deg': delta.tolist(),
+            'feedback_lead_deg': (solution - seed).tolist(),
+            'max_change_joint': int(np.argmax(np.abs(delta))) + 1,
+            'joint_step_limit_deg': 1.,
+            'baseline': 'feedback' if previous_joint_deg is None else 'previous_sent_command',
+            'ik_joint_deg': solution.tolist(), 'max_joint_change_deg': step,
+        }
         if step > 1.:
-            raise RuntimeError(f'Offline IK joint change too large: {step:.3f} deg (limit 1 deg)')
-        return {'ik_joint_deg': solution.tolist(), 'max_joint_change_deg': step,
+            raise RuntimeError(f'Offline IK adjacent command joint change too large: joint {self.diagnostics["max_change_joint"]}, {step:.3f} deg (limit 1 deg)')
+        return {**self.diagnostics,
                 'fk_position_error_m': position, 'fk_angle_error_rad': angle,
                 'singularity_code': code, 'shoulder_distance_m': distance}

@@ -45,8 +45,8 @@ def setup(monkeypatch):
     class FakeCheck:
         def __init__(self, info, state):
             self.fit = {}
-        def check(self, target, state):
-            return {'singularity_code': 0}
+        def check(self, target, state, **kwargs):
+            return {'singularity_code': 0, 'ik_joint_deg': [0.]*6}
     monkeypatch.setattr('embodied.devices.robots.realman.backend.MotionCheck', FakeCheck)
     config = load_config()
     config['host'] = 'test-realman'
@@ -351,11 +351,38 @@ def test_offline_rejection_stops_before_transmitting_candidate(setup):
     try:
         backend.step(command(backend.state.pose), time.monotonic())
         client.sent.clear()
-        def reject(target, state):
+        def reject(target, state, **kwargs):
             raise RuntimeError('Offline IK rejected candidate')
         backend.motion_check.check = reject
         with pytest.raises(RuntimeError, match='Offline IK rejected'):
             backend.step(command(backend.state.pose), time.monotonic())
         assert client.sent == [{'command': 'set_arm_stop'}]
+    finally:
+        backend.close()
+
+
+def test_joint_command_baseline_commits_only_after_send_and_resets_on_stop(setup):
+    config, client = setup
+    backend = Backend(config, client=client, allow_motion=True)
+    seen = []
+    def check(target, state, *, previous_joint_deg):
+        seen.append(previous_joint_deg)
+        return {'ik_joint_deg': [len(seen)*.2]*6}
+    backend.motion_check.check = check
+    try:
+        backend.step(command(backend.state.pose), time.monotonic())
+        assert seen[0] is None
+        backend.step(command(backend.state.pose), time.monotonic())
+        assert np.allclose(seen[1], .2)
+        backend.stop()
+        assert backend.last_joint_target is None
+        def fail_send(message):
+            if message['command'] == 'movep_canfd':
+                raise OSError('simulated send failure')
+        client.send = fail_send
+        with pytest.raises(OSError, match='send failure'):
+            backend.step(command(backend.state.pose), time.monotonic())
+        assert seen[2] is None
+        assert backend.last_joint_target is None
     finally:
         backend.close()

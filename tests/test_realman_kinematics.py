@@ -56,3 +56,23 @@ def test_offline_guard_rejects_invalid_models_and_candidates(inputs, reason):
     if reason == 'nan': model.solve = lambda target, seed: (0, np.full(6, np.nan))
     with pytest.raises((RuntimeError, ValueError)):
         check.check(target, state)
+
+
+def test_accumulated_feedback_lag_is_not_adjacent_command_jump(inputs):
+    model, state, target = inputs
+    check = MotionCheck({}, state, model=model)
+    previous = None
+    for change in (.4, .8, 1.232):
+        target[0] = .3 + change/1000
+        out = check.check(target, state, previous_joint_deg=previous)
+        previous = out['ik_joint_deg']
+    assert out['max_joint_change_deg'] == pytest.approx(.432)
+    assert out['feedback_lead_deg'][0] == pytest.approx(1.232)
+    assert out['baseline'] == 'previous_sent_command'
+    target[0] += .0011
+    with pytest.raises(RuntimeError, match='joint 1'):
+        check.check(target, state, previous_joint_deg=previous)
+    assert check.diagnostics['command_delta_deg'][0] == pytest.approx(1.1)
+    # Releasing Grip removes the command baseline; first command is conservative.
+    with pytest.raises(RuntimeError, match='joint 1'):
+        check.check(target, state)
