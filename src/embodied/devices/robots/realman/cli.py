@@ -3,12 +3,13 @@ import argparse
 from contextlib import ExitStack
 import json
 import time
+import sys
 
 import numpy as np
 
 from embodied.contracts.control import ControlCommand, Mode
 from .backend import Backend, DEFAULT_CONFIG, load_config, vector
-from .geometry import matrix, quaternion, limited_rotation
+from .geometry import matrix, quaternion, limited_rotation, rotation_vector
 
 
 class RelativeTarget:
@@ -17,6 +18,8 @@ class RelativeTarget:
         self.basis = np.asarray(config['xr_to_robot_basis'])
         self.reference = None
         self.robot_reference = None
+        self.origin = None
+        self.limits = []
 
     def reset(self):
         self.reference = None
@@ -28,14 +31,46 @@ class RelativeTarget:
         if self.reference is None:
             self.reference = controller.copy()
             self.robot_reference = robot_pose.copy()
+        if self.origin is None:
+            self.origin = robot_pose.copy()
+        self.limits = []
         target = self.robot_reference.copy()
         delta = self.basis @ (controller[:3] - self.reference[:3]) * self.config['position_scale']
+        if np.linalg.norm(delta) > self.config['translation_radius_m']:
+            self.limits.append('translation_boundary')
         delta *= min(1., self.config['translation_radius_m'] / max(np.linalg.norm(delta), 1e-12))
         target[:3] += delta
         rotation = self.basis @ matrix(controller[3:]) @ matrix(self.reference[3:]).T @ self.basis.T
         desired = quaternion(rotation @ matrix(self.robot_reference[3:]))
+        if np.linalg.norm(rotation_vector(desired, self.robot_reference[3:])) > self.config['rotation_radius_rad']:
+            self.limits.append('rotation_boundary')
         target[3:] = limited_rotation(desired, self.robot_reference[3:], self.config['rotation_radius_rad'])
+        offset = target[:3] - self.origin[:3]
+        radius = self.config['translation_radius_m']
+        if np.linalg.norm(offset) > radius:
+            self.limits.append('translation_boundary')
+            target[:3] = self.origin[:3] + offset * radius / np.linalg.norm(offset)
+        if np.linalg.norm(rotation_vector(target[3:], self.origin[3:])) > self.config['rotation_radius_rad']:
+            self.limits.append('rotation_boundary')
+        target[3:] = limited_rotation(target[3:], self.origin[3:], self.config['rotation_radius_rad'])
         return target
+
+
+class GripGate:
+    """Release to arm, squeeze to engage, release below 0.2 to disengage."""
+    def __init__(self):
+        self.armed = False
+        self.following = False
+
+    def update(self, grip, fresh):
+        if not fresh:
+            self.armed = self.following = False
+        elif grip < .2:
+            self.armed = True
+            self.following = False
+        elif grip > .8 and self.armed:
+            self.following = True
+        return self.following
 
 
 class XRClock:
@@ -52,17 +87,17 @@ class XRClock:
         return timestamp > 0 and not rollback and now - self.updated_at < self.stale_s
 
 
-def main():
+def run():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['status', 'quest'])
     parser.add_argument('--config', default=str(DEFAULT_CONFIG))
     parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
-    parser.add_argument('--duration', type=float, default=30.)
+    parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
     args = parser.parse_args()
     if args.execute and args.action != 'quest':
         parser.error('--execute is only valid with quest')
-    if not np.isfinite(args.duration) or args.duration <= 0:
-        parser.error('--duration must be finite and positive')
+    if not np.isfinite(args.duration) or args.duration < 0:
+        parser.error('--duration must be finite and nonnegative')
     config = load_config(args.config)
     with ExitStack() as stack:
         backend = Backend(config, allow_motion=args.execute)
@@ -76,11 +111,13 @@ def main():
         import xrobotoolkit_sdk as xr
         xr.init()
         stack.callback(xr.close)
+        stack.callback(backend.stop)  # Stop before closing the XR SDK, which can block.
         tracker = RelativeTarget(config)
+        tracker.origin = backend.origin.copy()
         print('EXECUTE: right Grip is the deadman; B stops and exits.' if args.execute else
               'READ-ONLY PREVIEW: hold right Grip to preview relative targets; B exits.', flush=True)
         print('Release Grip first. No gripper commands; no automatic enable/home.', flush=True)
-        released = False
+        gate = GripGate()
         clock = XRClock(config["stale_s"])
         last_update = time.monotonic()
         last_print = 0.
@@ -91,7 +128,7 @@ def main():
         samples = 0
         fresh_samples = 0
         previews = 0
-        deadline = last_update + args.duration
+        deadline = last_update + args.duration if args.duration else float('inf')
         while time.monotonic() < deadline:
             started = time.monotonic()
             state = backend.read_state(started)
@@ -108,39 +145,46 @@ def main():
             grip = float(xr.get_right_grip())
             if not np.isfinite(grip) or not 0 <= grip <= 1:
                 raise ValueError('Invalid Grip reading')
+            following = gate.update(grip, fresh)
             if started >= next_status:
                 print(json.dumps({'xr_fresh': fresh, 'right_grip': grip, 'robot_fault': state.fault,
-                                  'armed': released, 'preview': not args.execute}), flush=True)
+                                  'armed': gate.armed, 'following': gate.following, 'preview': not args.execute}), flush=True)
                 next_status = started + 1.
             if xr.get_B_button():
                 break
             if state.fault:
                 raise RuntimeError(state.fault)
+            if fresh:
+                seen_xr = True
             if not fresh:
                 backend.stop()
                 tracker.reset()
-                released = False
                 if args.execute and (seen_xr or started > startup_deadline):
                     raise RuntimeError('XR timestamp stalled, missing or rolled back; restart session')
-            elif grip < .2:
-                seen_xr = True
+            elif not following:
                 backend.stop()
                 tracker.reset()
-                released = True
-            elif grip > .8 and released:
+            else:
                 target = tracker.update(xr.get_right_controller_pose(), state.pose)
                 previews += 1
                 if args.execute:
                     backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=target, engaged=True), started)
                 if started - last_print > .5:
-                    print(json.dumps({'preview': not args.execute, 'target_m_xyzw': target.tolist()}), flush=True)
+                    print(json.dumps({'preview': not args.execute, 'target_m_xyzw': target.tolist(), 'limits': sorted(set(tracker.limits))}), flush=True)
                     last_print = started
-            else:
-                backend.stop()
-                tracker.reset()
             time.sleep(max(0, 1/config['control_hz'] - (time.monotonic() - started)))
         print(json.dumps({'samples': samples, 'fresh_xr_samples': fresh_samples, 'target_samples': previews,
                           'execute_requested': args.execute}), flush=True)
+
+
+def main():
+    try:
+        run()
+    except KeyboardInterrupt:
+        print('已退出；已尝试停止机械臂，请确认现场状态。', flush=True)
+    except (RuntimeError, ValueError, OSError) as exc:
+        print(f'会话已停止：{exc}。请确认机械臂已停，再处理原因并重新启动。', file=sys.stderr, flush=True)
+        raise SystemExit(1) from None
 
 
 if __name__ == '__main__':

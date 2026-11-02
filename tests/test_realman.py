@@ -195,8 +195,9 @@ def test_feedback_error_stops_active_session(setup):
         backend.close()
 
 
+@pytest.mark.parametrize('duration', ['.15', '0'])
 @pytest.mark.parametrize('execute', [False, True])
-def test_cli_preview_and_explicit_execute_use_same_mapping(setup, monkeypatch, capsys, execute):
+def test_cli_preview_and_explicit_execute_use_same_mapping(setup, monkeypatch, capsys, execute, duration):
     import sys
     from types import SimpleNamespace
     from embodied.devices.robots.realman import cli
@@ -208,11 +209,11 @@ def test_cli_preview_and_explicit_execute_use_same_mapping(setup, monkeypatch, c
     xr = SimpleNamespace(init=lambda: None, close=lambda: None,
         get_time_stamp_ns=time.monotonic_ns, get_right_grip=grip,
         get_right_controller_pose=lambda: [0., 0., -.001*ticks[0], 0., 0., 0., 1.],
-        get_B_button=lambda: False)
+        get_B_button=lambda: duration == '0' and ticks[0] > 3)
     monkeypatch.setitem(sys.modules, 'xrobotoolkit_sdk', xr)
     monkeypatch.setattr(cli, 'load_config', lambda _: config)
     monkeypatch.setattr(cli, 'Backend', lambda config, allow_motion: Backend(config, client=client, allow_motion=allow_motion))
-    monkeypatch.setattr(sys, 'argv', ['realman', 'quest', '--duration', '.15'] + (['--execute'] if execute else []))
+    monkeypatch.setattr(sys, 'argv', ['realman', 'quest', '--duration', duration] + (['--execute'] if execute else []))
     cli.main()
     output = capsys.readouterr().out
     assert 'target_m_xyzw' in output
@@ -240,3 +241,57 @@ def test_partial_motion_send_failure_still_attempts_stop(setup):
         assert backend.fault
     finally:
         backend.close()
+
+
+def test_grip_hysteresis_and_rearm_after_tracking_loss():
+    from embodied.devices.robots.realman.cli import GripGate
+    gate = GripGate()
+    assert not gate.update(1., True)  # Held at startup cannot engage.
+    assert not gate.update(0., True)
+    assert gate.update(1., True)
+    assert gate.update(.5, True)  # Pressure fluctuation must not reset reference.
+    assert not gate.update(.1, True)
+    assert not gate.update(.5, True)
+    assert gate.update(.9, True)
+    assert not gate.update(.9, False)
+    assert not gate.update(1., True)  # Must release after losing tracking.
+    assert not gate.update(0., True)
+    assert gate.update(1., True)
+
+
+def test_reclutch_cannot_expand_session_workspace_and_can_return(setup):
+    from embodied.devices.robots.realman.geometry import rotation_vector
+    from meshcat import transformations as tf
+    config, _ = setup
+    tracker = RelativeTarget(config)
+    start = np.array([.3, 0., .4, 0., 0., 0., 1.])
+    tracker.origin = start.copy()
+    current = start.copy()
+    controller = np.array([0., 0., 0., 0., 0., 0., 1.])
+    for _ in range(4):
+        tracker.reset()
+        tracker.update(controller, current)
+        moved = controller.copy()
+        moved[2] = -1.
+        moved[3:] = np.roll(tf.quaternion_from_euler(0., .5, 0.), -1)
+        current = tracker.update(moved, current)
+        assert np.linalg.norm(current[:3] - start[:3]) <= config['translation_radius_m'] + 1e-10
+        assert np.linalg.norm(rotation_vector(current[3:], start[3:])) <= config['rotation_radius_rad'] + 1e-10
+        assert 'translation_boundary' in tracker.limits
+    # A fresh grip at the boundary can move back into the permitted workspace.
+    tracker.reset()
+    tracker.update(controller, current)
+    moved = controller.copy(); moved[2] = .02
+    returned = tracker.update(moved, current)
+    assert np.linalg.norm(returned[:3] - start[:3]) < np.linalg.norm(current[:3] - start[:3])
+
+
+def test_cli_error_is_readable_without_traceback(monkeypatch, capsys):
+    from embodied.devices.robots.realman import cli
+    def fail():
+        raise RuntimeError('XR stalled')
+    monkeypatch.setattr(cli, 'run', fail)
+    with pytest.raises(SystemExit) as err:
+        cli.main()
+    assert err.value.code == 1
+    assert 'XR stalled' in capsys.readouterr().err
