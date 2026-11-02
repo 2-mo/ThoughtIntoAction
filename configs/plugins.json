@@ -29,6 +29,14 @@
       "capabilities": [
         "experimental"
       ]
+    },
+    "realman": {
+      "factory": "embodied.devices.robots.realman.backend:Backend",
+      "hardware": true,
+      "capabilities": [
+        "feedback",
+        "cartesian"
+      ]
     }
   },
   "input": {

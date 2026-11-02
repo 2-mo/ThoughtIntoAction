@@ -50,6 +50,7 @@ MAINTENANCE_COMMANDS = {
     "check-camera": "diagnostics/check_camera.py",
 }
 MODULE_COMMANDS = {
+    "realman": "embodied.devices.robots.realman.cli",
     "examples": "examples",
     "collect": "embodied.data.capture.capture",
     "workbench": "embodied.applications.workstation.workbench",

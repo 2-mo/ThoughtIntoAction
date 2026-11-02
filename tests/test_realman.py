@@ -1,0 +1,242 @@
+"""Protocol and motion guards use fake devices only; no robot motion in tests."""
+import copy
+import json
+import socket
+import threading
+import time
+
+import numpy as np
+import pytest
+
+from embodied.contracts.control import ControlCommand, Mode
+from embodied.contracts.registry import Registry
+from embodied.devices.robots.realman.backend import Backend, load_config, decode_pose, encode_pose
+from embodied.devices.robots.realman.cli import RelativeTarget
+from embodied.devices.robots.realman.protocol import Client
+
+
+class FakeClient:
+    def __init__(self, config):
+        self.sent = []
+        self.closed = False
+        self.responses = {
+            'get_arm_software_info': {'Product_version': 'RM65-BI'},
+            'get_current_tool_frame': {'tool_name': config['expected_tool'], 'pose': config['expected_tool_pose']},
+            'get_current_work_frame': {'frame_name': config['expected_work_frame'], 'pose': config['expected_work_pose']},
+            'get_current_arm_state': {'arm_state': {'joint': [1000, 0, 0, 0, 0, 0],
+                                                   'pose': [300000, 0, 400000, 0, 0, 0], 'err': [0]}},
+        }
+
+    def query(self, command):
+        return copy.deepcopy(self.responses[command])
+
+    def send(self, message):
+        self.sent.append(message)
+
+    def close(self):
+        self.closed = True
+
+
+@pytest.fixture
+def setup():
+    config = load_config()
+    config['host'] = 'test-realman'
+    return config, FakeClient(config)
+
+
+def command(pose, **kwargs):
+    return ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=pose, engaged=True, **kwargs)
+
+
+def test_units_and_quaternion_roundtrip():
+    raw = [-313200, 1229, 398102, 3147, 581, -8]
+    pose = decode_pose(raw)
+    assert np.allclose(pose[:3], [-.3132, .001229, .398102])
+    assert np.isclose(np.linalg.norm(pose[3:]), 1)
+    # Euler representations may differ by 2pi; compare physical rotations.
+    from embodied.devices.robots.realman.geometry import matrix
+    assert np.allclose(matrix(decode_pose(encode_pose(pose))[3:]), matrix(pose[3:]), atol=.001)
+
+
+def test_read_only_never_sends_and_unknown_feedback_is_nan(setup):
+    config, client = setup
+    backend = Backend(config, client=client)
+    try:
+        s = backend.read_state(time.monotonic())
+        assert s.q[0] == pytest.approx(np.pi/180)
+        assert np.isnan(s.dq).all() and np.isnan(s.gripper_width)
+        with pytest.raises(PermissionError):
+            backend.step(command(s.pose), time.monotonic())
+    finally:
+        backend.close()
+    assert client.sent == []
+
+
+def test_identity_mismatch_closes_connection_and_releases_lease(setup):
+    config, client = setup
+    client.responses['get_current_tool_frame']['tool_name'] = 'other'
+    with pytest.raises(ValueError):
+        Backend(config, client=client)
+    assert client.closed
+    client.responses['get_current_tool_frame']['tool_name'] = config['expected_tool']
+    Backend(config, client=client).close()
+
+
+def test_speed_limit_deadman_and_no_enable(setup):
+    config, client = setup
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        target = backend.state.pose.copy(); target[0] += .04
+        backend.step(command(target), time.monotonic())
+        assert client.sent[-1]['command'] == 'movep_canfd'
+        assert client.sent[-1]['follow'] is False
+        assert client.sent[-1]['pose'][0] == 300800
+        assert target[0] == pytest.approx(.34)  # Caller-owned target is not mutated.
+        backend.step(ControlCommand(Mode.DISABLED), time.monotonic())
+        assert client.sent[-1] == {'command': 'set_arm_stop'}
+    finally:
+        backend.close()
+    assert {r['command'] for r in client.sent} == {'movep_canfd', 'set_arm_stop'}
+
+
+def test_watchdog_stops_when_loop_stalls(setup):
+    config, client = setup
+    config['stale_s'] = .05
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        backend.step(command(backend.state.pose), time.monotonic())
+        deadline = time.monotonic() + .6
+        while not backend.fault and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert 'timeout' in backend.fault
+        assert client.sent[-1]['command'] == 'set_arm_stop'
+        with pytest.raises(RuntimeError):
+            backend.step(command(backend.state.pose), time.monotonic())
+    finally:
+        backend.close()
+
+
+@pytest.mark.parametrize('kind', ['stale', 'error', 'radius', 'gripper', 'free-drive'])
+def test_unsafe_targets_rejected(setup, kind):
+    config, client = setup
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        target = backend.state.pose.copy()
+        c = command(target)
+        if kind == 'stale': backend.feedback_at -= 1
+        if kind == 'error': backend.state.fault = 'fault'
+        if kind == 'radius': target[0] += .2
+        if kind == 'gripper': c.gripper_target = .01
+        if kind == 'free-drive': c.mode = Mode.FREE_DRIVE
+        with pytest.raises((RuntimeError, ValueError)):
+            backend.step(c, time.monotonic())
+        assert not any(m['command'] == 'movep_canfd' for m in client.sent)
+    finally:
+        backend.close()
+
+
+def test_relative_reference_and_basis(setup):
+    config, _ = setup
+    tracker = RelativeTarget(config)
+    robot = np.array([.3, 0, .4, 0, 0, 0, 1.])
+    controller = np.array([0., 0, 0, 0, 0, 0, 1])
+    assert np.allclose(tracker.update(controller, robot), robot)
+    controller[2] = -.1
+    assert np.allclose(tracker.update(controller, robot)[:3], [.33, 0, .4])
+    tracker.reset()
+    assert np.allclose(tracker.update(controller, robot), robot)
+
+
+def test_protocol_fragmentation_and_readonly_whitelist():
+    listener = socket.socket(); listener.bind(('127.0.0.1', 0)); listener.listen()
+    def server():
+        with listener.accept()[0] as conn:
+            request = b''
+            while not request.endswith(b'\r\n'): request += conn.recv(4096)
+            assert json.loads(request)['command'] == 'get_current_arm_state'
+            conn.sendall(b'{"command":"movep_canfd","state":true}\r\n{"sta')
+            conn.sendall(b'te":"current_arm_state","arm_state":{"err":[0]}}\r\n')
+    thread = threading.Thread(target=server); thread.start()
+    client = Client('127.0.0.1', listener.getsockname()[1])
+    try:
+        with pytest.raises(PermissionError): client.send({'command':'set_arm_stop'})
+        assert client.query('get_current_arm_state')['arm_state']['err'] == [0]
+    finally:
+        client.close(); listener.close(); thread.join(1)
+
+
+def test_registry_loads_without_opening_device():
+    assert Registry().load('arm', 'realman') is Backend
+    with pytest.raises(ValueError): Registry().load('arm', 'realman', allow_hardware=False)
+
+
+def test_xr_clock_freeze_rollback_and_recovery():
+    from embodied.devices.robots.realman.cli import XRClock
+    clock = XRClock(.3)
+    assert not clock.fresh(0, 0)
+    assert clock.fresh(100, 1.)
+    assert clock.fresh(100, 1.1)  # Stationary pose is valid while XR time progresses.
+    assert not clock.fresh(100, 1.31)
+    assert not clock.fresh(90, 1.32)
+    assert clock.fresh(110, 1.4)
+
+
+def test_feedback_error_stops_active_session(setup):
+    config, client = setup
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        backend.step(command(backend.state.pose), time.monotonic())
+        client.responses['get_current_arm_state']['arm_state']['err'] = [10]
+        state = backend.read_state(time.monotonic())
+        with pytest.raises(RuntimeError):
+            backend.step(command(state.pose), time.monotonic())
+        assert client.sent[-1]['command'] == 'set_arm_stop'
+    finally:
+        backend.close()
+
+
+@pytest.mark.parametrize('execute', [False, True])
+def test_cli_preview_and_explicit_execute_use_same_mapping(setup, monkeypatch, capsys, execute):
+    import sys
+    from types import SimpleNamespace
+    from embodied.devices.robots.realman import cli
+    config, client = setup
+    ticks = [0]
+    def grip():
+        ticks[0] += 1
+        return 0. if ticks[0] == 1 else 1.
+    xr = SimpleNamespace(init=lambda: None, close=lambda: None,
+        get_time_stamp_ns=time.monotonic_ns, get_right_grip=grip,
+        get_right_controller_pose=lambda: [0., 0., -.001*ticks[0], 0., 0., 0., 1.],
+        get_B_button=lambda: False)
+    monkeypatch.setitem(sys.modules, 'xrobotoolkit_sdk', xr)
+    monkeypatch.setattr(cli, 'load_config', lambda _: config)
+    monkeypatch.setattr(cli, 'Backend', lambda config, allow_motion: Backend(config, client=client, allow_motion=allow_motion))
+    monkeypatch.setattr(sys, 'argv', ['realman', 'quest', '--duration', '.15'] + (['--execute'] if execute else []))
+    cli.main()
+    output = capsys.readouterr().out
+    assert 'target_m_xyzw' in output
+    if execute:
+        assert client.sent[0]['command'] == 'movep_canfd'
+        assert client.sent[-1]['command'] == 'set_arm_stop'
+    else:
+        assert client.sent == []
+    assert client.closed
+
+
+def test_partial_motion_send_failure_still_attempts_stop(setup):
+    config, client = setup
+    original_send = client.send
+    def send(message):
+        if message['command'] == 'movep_canfd':
+            raise ConnectionError('partial write')
+        original_send(message)
+    client.send = send
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        with pytest.raises(ConnectionError, match='partial write'):
+            backend.step(command(backend.state.pose), time.monotonic())
+        assert client.sent == [{'command': 'set_arm_stop'}]
+        assert backend.fault
+    finally:
+        backend.close()

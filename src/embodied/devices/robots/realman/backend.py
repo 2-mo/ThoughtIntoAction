@@ -1,0 +1,202 @@
+"""RealMan adapter implementing the platform RobotBackend value contract.
+
+Feedback uses radians, metres and xyzw quaternions. Missing velocity and gripper
+feedback are NaN, never synthesized as measured zero. No automatic enable/home.
+"""
+import json
+from pathlib import Path
+import threading
+import time
+
+import numpy as np
+from meshcat import transformations as tf
+from .geometry import rotation_vector, limited_rotation
+
+from embodied.contracts.control import Mode, RobotState
+from embodied.contracts.device_lease import DeviceLease
+from .protocol import Client
+
+DEFAULT_CONFIG = Path(__file__).resolve().parents[5] / 'configs/robots/realman/rm65-19.json'
+
+
+def vector(value, size):
+    a = np.asarray(value, dtype=float)
+    if a.shape != (size,) or not np.isfinite(a).all():
+        raise ValueError(f'Expected {size} finite values')
+    return a
+
+
+def decode_pose(raw):
+    a = vector(raw, 6)
+    return np.r_[a[:3] / 1e6, np.roll(tf.quaternion_from_euler(*(a[3:] / 1000)), -1)]
+
+
+def encode_pose(pose):
+    p = vector(pose, 7)
+    if not np.isclose(np.linalg.norm(p[3:]), 1, atol=1e-3):
+        raise ValueError('Pose quaternion must be normalized')
+    return np.rint(np.r_[p[:3] * 1e6, np.asarray(tf.euler_from_quaternion(np.roll(p[3:], 1))) * 1000]).astype(int).tolist()
+
+
+def load_config(path=DEFAULT_CONFIG):
+    config = json.loads(Path(path).read_text())
+    for name in ('timeout_s', 'control_hz', 'stale_s', 'linear_speed_m_s',
+                 'angular_speed_rad_s', 'translation_radius_m', 'rotation_radius_rad', 'position_scale'):
+        if not np.isfinite(config[name]) or config[name] <= 0:
+            raise ValueError(f'{name} must be finite and positive')
+    if config['control_hz'] > 50 or config['stale_s'] > .5:
+        raise ValueError('This low-follow driver supports <=50 Hz and <=0.5 s timeout')
+    basis = np.asarray(config['xr_to_robot_basis'], dtype=float)
+    if basis.shape != (3, 3) or not np.allclose(basis.T @ basis, np.eye(3)) or not np.isclose(np.linalg.det(basis), 1):
+        raise ValueError('XR basis must be a proper rotation')
+    return config
+
+
+class Backend:
+    def __init__(self, config=None, *, allow_motion=False, client=None):
+        self.config = load_config() if config is None else config
+        self.allow_motion = allow_motion
+        self.lease = DeviceLease('realman-' + self.config['host'])
+        try:
+            self.client = client or Client(self.config['host'], self.config['port'],
+                                           self.config['timeout_s'], allow_motion=allow_motion)
+        except BaseException:
+            self.lease.close()
+            raise
+        self.lock = threading.RLock()
+        self.active = False
+        self.closed = False
+        self.fault = ''
+        self.last_command = None
+        self.feedback_at = None
+        self.state = None
+        self.origin = None
+        self.last_target = None
+        self.done = threading.Event()
+        self.watchdog = None
+        try:
+            self.info = {k: self.client.query(k) for k in
+                         ('get_arm_software_info', 'get_current_tool_frame', 'get_current_work_frame')}
+            self._check_identity()
+            self.read_state(time.monotonic())
+            self.origin = self.state.pose.copy()
+            if allow_motion:
+                self.watchdog = threading.Thread(target=self._watch, daemon=True)
+                self.watchdog.start()
+        except BaseException:
+            self.client.close()
+            self.lease.close()
+            raise
+
+    def _check_identity(self):
+        c = self.config
+        if self.info['get_arm_software_info']['Product_version'] != c['expected_model']:
+            raise ValueError('Unexpected RealMan model')
+        for key, field, expected, pose in (
+            ('get_current_tool_frame', 'tool_name', 'expected_tool', 'expected_tool_pose'),
+            ('get_current_work_frame', 'frame_name', 'expected_work_frame', 'expected_work_pose')):
+            if self.info[key][field] != c[expected] or self.info[key]['pose'] != c[pose]:
+                raise ValueError(f'{key} differs from the deployment configuration')
+
+    def read_state(self, now):
+        if self.closed:
+            raise RuntimeError('Backend closed')
+        raw = self.client.query('get_current_arm_state')['arm_state']
+        q = np.deg2rad(vector(raw['joint'], 6) / 1000)
+        pose = decode_pose(raw['pose'])
+        errors = raw['err']
+        if not isinstance(errors, list):
+            raise ValueError('Missing RealMan error list')
+        fault = f'RealMan errors: {errors}' if any(errors) else ''
+        with self.lock:
+            self.feedback_at = time.monotonic()
+            self.state = RobotState(q, np.full(6, np.nan), pose, float('nan'),
+                                    self.feedback_at, Mode.COMMAND_FOLLOWING if self.active else Mode.DISABLED,
+                                    fault or self.fault)
+            return self.state
+
+    def _watch(self):
+        while not self.done.wait(.02):
+            with self.lock:
+                if self.active and (time.monotonic() - self.last_command > self.config['stale_s'] or
+                                    time.monotonic() - self.feedback_at > self.config['stale_s']):
+                    self.fault = 'Command or feedback timeout; reopen session to recover'
+                    try:
+                        self.stop()
+                    except Exception as exc:
+                        self.fault += f'; stop delivery failed: {exc}'
+
+    def stop(self):
+        with self.lock:
+            if self.active:
+                self.active = False
+                self.client.send({'command': 'set_arm_stop'})
+            self.last_target = None
+
+    def step(self, command, now, **options):
+        try:
+            self._step(command, now, **options)
+        except Exception as exc:
+            self.fault = self.fault or 'Command rejected; reopen session to recover'
+            try:
+                self.stop()
+            except Exception as stop_error:
+                exc.add_note(f'Stop delivery also failed: {stop_error}')
+            raise
+
+    def _step(self, command, now, **options):
+        if not self.allow_motion:
+            raise PermissionError('RealMan backend is read-only')
+        with self.lock:
+            if self.closed or self.fault:
+                raise RuntimeError(self.fault or 'Backend closed')
+            if command.gripper_target is not None or command.joint_target is not None or options:
+                raise ValueError('This RealMan adapter supports Cartesian control only; gripper is unconfigured')
+            if command.mode == Mode.FREE_DRIVE:
+                raise ValueError('Free drive is not implemented')
+            if command.mode == Mode.DISABLED or command.hold or not command.engaged:
+                self.stop()
+                return
+            if self.state.fault or time.monotonic() - self.feedback_at > self.config['stale_s']:
+                self.stop()
+                raise RuntimeError(self.state.fault or 'Stale robot feedback')
+            target = vector(command.pose_target, 7).copy()
+            encode_pose(target)  # Validate quaternion before doing rotation arithmetic.
+            c = self.config
+            distance = np.linalg.norm(target[:3] - self.origin[:3])
+            angle = np.linalg.norm(rotation_vector(target[3:], self.origin[3:]))
+            if distance > c['translation_radius_m'] + 1e-6 or angle > c['rotation_radius_rad'] + 1e-6:
+                self.stop()
+                raise ValueError('Target exceeds session workspace radius')
+            previous = self.last_target if self.last_target is not None else self.state.pose
+            elapsed = min(max(time.monotonic() - (self.last_command or time.monotonic()), 0), 1/c['control_hz'])
+            if self.last_target is None:
+                elapsed = 1/c['control_hz']
+            dp = target[:3] - previous[:3]
+            target[:3] = previous[:3] + dp * min(1., c['linear_speed_m_s'] * elapsed / max(np.linalg.norm(dp), 1e-12))
+            target[3:] = limited_rotation(target[3:], previous[3:], c['angular_speed_rad_s'] * elapsed)
+            # Also bound lead over measured feedback, not merely over previous commands.
+            if np.linalg.norm(target[:3] - self.state.pose[:3]) > .01 or np.linalg.norm(rotation_vector(target[3:], self.state.pose[3:])) > .1:
+                self.stop()
+                raise ValueError('Command leads feedback beyond permitted distance/angle')
+            self.active = True  # A failed send may still have delivered bytes; close must attempt stop.
+            self.client.send({'command': 'movep_canfd', 'pose': encode_pose(target), 'follow': False})
+            self.last_target = target.copy()
+            self.last_command = time.monotonic()
+            self.active = True
+
+    def telemetry(self):
+        return {'backend': 'realman', 'allow_motion': self.allow_motion, 'active': self.active,
+                'fault': self.fault, 'identity': self.info, 'gripper': {'present': None, 'configured': False},
+                'velocity_feedback_available': False, 'motion_verified': False}
+
+    def close(self):
+        self.done.set()
+        try:
+            self.stop()
+        finally:
+            self.closed = True
+            if self.watchdog is not None:
+                self.watchdog.join(timeout=1)
+            self.client.close()
+            self.lease.close()
