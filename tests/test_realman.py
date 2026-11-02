@@ -410,3 +410,24 @@ def test_gripper_status_query_is_readonly_and_matches_command_with_numeric_statu
             client.send({'command': 'set_gripper_release', 'speed': 100})
     finally:
         client.close(); thread.join(timeout=1)
+
+
+def test_gripper_exchange_requires_separate_permission_and_matches_ack():
+    listener = socket.socket(); listener.bind(('127.0.0.1', 0)); listener.listen()
+    def server():
+        with listener.accept()[0] as conn:
+            request = b''
+            while not request.endswith(b'\r\n'):
+                request += conn.recv(4096)
+            assert json.loads(request)['command'] == 'set_gripper_release'
+            conn.sendall(b'{"command":"set_gripper","state":true}\r\n')
+        listener.close()
+    thread = threading.Thread(target=server); thread.start()
+    client = Client('127.0.0.1', listener.getsockname()[1], allow_gripper=True)
+    try:
+        with pytest.raises(PermissionError):
+            client.send({'command': 'movep_canfd'})
+        reply = client.exchange(dict(command='set_gripper_release', speed=100, block=False), 'set_gripper')
+        assert reply['state'] is True
+    finally:
+        client.close(); thread.join(timeout=1)

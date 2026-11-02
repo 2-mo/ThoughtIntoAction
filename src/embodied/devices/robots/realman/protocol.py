@@ -18,11 +18,12 @@ READS = {
 
 
 class Client:
-    def __init__(self, host, port=8080, timeout_s=.3, *, allow_motion=False):
+    def __init__(self, host, port=8080, timeout_s=.3, *, allow_motion=False, allow_gripper=False):
         self.socket = socket.create_connection((host, port), timeout_s)
         self.socket.settimeout(timeout_s)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.timeout = timeout_s
+        self.allow_gripper = allow_gripper
         self.allow_motion = allow_motion
         self.buffer = b''
         self.lock = threading.RLock()
@@ -30,7 +31,8 @@ class Client:
     def send(self, message):
         command = message.get('command')
         if command not in READS and not (self.allow_motion and command in
-                                        {'movep_canfd', 'set_arm_stop'}):
+                                        {'movep_canfd', 'set_arm_stop'}) and not (self.allow_gripper and command in
+                                        {'set_gripper_release', 'set_gripper_pick'}):
             raise PermissionError(f'Command not permitted: {command}')
         with self.lock:
             self.socket.sendall((json.dumps(message, allow_nan=False, separators=(',', ':')) + '\r\n').encode())
@@ -38,8 +40,11 @@ class Client:
     def query(self, command):
         if command not in READS:
             raise ValueError('Only documented read commands are queryable')
+        return self.exchange({'command': command}, READS[command])
+
+    def exchange(self, message, expected):
         with self.lock:
-            self.send({'command': command})
+            self.send(message)
             deadline = time.monotonic() + self.timeout
             while time.monotonic() < deadline:
                 while b'\n' not in self.buffer:
@@ -52,10 +57,10 @@ class Client:
                         raise ValueError('Oversized RealMan JSON frame')
                 line, self.buffer = self.buffer.split(b'\n', 1)
                 reply = json.loads(line)
-                if reply.get('command') == READS[command] or reply.get('state') == READS[command]:
+                if reply.get('command') == expected or reply.get('state') == expected:
                     return reply
                 # Motion acknowledgements and asynchronous notifications are not feedback.
-            raise TimeoutError(f'No matching reply to {command}')
+            raise TimeoutError(f'No matching reply to {expected}')
 
     def close(self):
         self.socket.close()

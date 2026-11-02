@@ -9,6 +9,7 @@ import numpy as np
 
 from embodied.contracts.control import ControlCommand, Mode
 from .backend import Backend, DEFAULT_CONFIG, load_config, vector
+from .gripper import status as gripper_status, move as gripper_move, Buttons
 from .geometry import matrix, quaternion, limited_rotation, rotation_vector
 
 
@@ -89,25 +90,34 @@ class XRClock:
 
 def run():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['status', 'quest', 'check-kinematics', 'gripper-status'])
+    parser.add_argument('action', choices=['status', 'quest', 'check-kinematics', 'gripper-status', 'gripper-open', 'gripper-close'])
     parser.add_argument('--config', default=str(DEFAULT_CONFIG))
     parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
     parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
+    parser.add_argument('--gripper', action='store_true', help='Enable Quest A=open, right Trigger=close; Grip must be released')
     args = parser.parse_args()
-    if args.execute and args.action != 'quest':
-        parser.error('--execute is only valid with quest')
+    if args.execute and args.action not in ('quest', 'gripper-open', 'gripper-close'):
+        parser.error('--execute requires quest or gripper-open/close')
+    if args.action in ('gripper-open', 'gripper-close') and not args.execute:
+        parser.error('Gripper movement requires --execute')
+    if args.gripper and (args.action != 'quest' or not args.execute):
+        parser.error('--gripper requires quest --execute')
     if not np.isfinite(args.duration) or args.duration < 0:
         parser.error('--duration must be finite and nonnegative')
     config = load_config(args.config)
     with ExitStack() as stack:
-        backend = Backend(config, allow_motion=args.execute)
+        backend = Backend(config, allow_motion=args.execute and args.action == 'quest')
         stack.callback(backend.close)
+        if args.action in ('gripper-open', 'gripper-close') or args.gripper:
+            backend.client.allow_gripper = True
+        if args.action in ('gripper-open', 'gripper-close'):
+            if backend.state.fault:
+                raise RuntimeError(backend.state.fault)
+            print(json.dumps(gripper_move(backend.client, args.action.removeprefix('gripper-'))), flush=True)
+            return
         if args.action == 'gripper-status':
-            raw = backend.client.query('get_gripper_state')
-            fields = ('enable', 'status', 'error', 'mode', 'current_force', 'temperature', 'actpos')
-            if any(type(raw.get(key)) is not int for key in fields):
-                raise ValueError(f'Incomplete EG2-4C2 status response: {raw}')
-            print(json.dumps({'model': 'EG2-4C2', 'feedback': {key: raw[key] for key in fields},
+            raw = gripper_status(backend.client)
+            print(json.dumps({'model': 'EG2-4C2', 'feedback': raw,
                               'online': raw['status'] == 1, 'enabled': raw['enable'] == 1,
                               'opening_unit': 'controller raw value; not calibrated to mm',
                               'motion_sent': False, 'configuration_changed': False}, ensure_ascii=False, indent=2))
@@ -132,7 +142,12 @@ def run():
         tracker.origin = backend.origin.copy()
         print('EXECUTE: right Grip is the deadman; B stops and exits.' if args.execute else
               'READ-ONLY PREVIEW: hold right Grip to preview relative targets; B exits.', flush=True)
-        print('Release Grip first. No gripper commands; no automatic enable/home.', flush=True)
+        print('Release Grip first. No automatic enable/home.', flush=True)
+        if args.gripper:
+            print('Gripper: release Grip, then A opens; right Trigger closes once (speed=100, force=50). B/exit stops arm only; gripper action may continue.', flush=True)
+        else:
+            print('Gripper control disabled.', flush=True)
+        buttons = Buttons()
         gate = GripGate()
         clock = XRClock(config["stale_s"])
         last_update = time.monotonic()
@@ -194,6 +209,13 @@ def run():
                                       'limits': sorted(set(tracker.limits)),
                                       'command_diagnostics': backend.telemetry()['command'] if args.execute else None}), flush=True)
                     last_print = started
+            if args.gripper:
+                action = buttons.update(bool(xr.get_A_button()), float(xr.get_right_trigger()),
+                                        fresh=fresh, grip=grip, now=started)
+                if action:
+                    backend.stop()
+                    tracker.reset()
+                    print(json.dumps({'gripper': gripper_move(backend.client, action)}), flush=True)
             time.sleep(max(0, 1/config['control_hz'] - (time.monotonic() - started)))
         print(json.dumps({'samples': samples, 'fresh_xr_samples': fresh_samples, 'target_samples': previews,
                           'execute_requested': args.execute}), flush=True)

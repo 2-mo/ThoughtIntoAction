@@ -115,3 +115,29 @@ Quest 中打开 XRoboToolkit，选择头显与 Controller 数据，IP 填 `127.0
 在项目根目录执行 `./run.sh realman gripper-status`，仅发送 `get_gripper_state`。不改工具电压、协议开关、串口参数，不发送使能或开合指令。`enable` 是使能标志，`status` 是在线标志；离线时零值不能作为实际力、温度或位置。`actpos` 保留控制器原始开口度数值，不擅自换算毫米。
 
 本次真实只读查询得到 `enable=0, status=0`，其余字段为零；控制器能回答查询，但尚未报告夹爪在线，不能据此判定通信正常。需现场确认夹爪供电、接线及示教器夹爪设备选择；目前 Quest 仍不发送夹爪指令。
+
+
+## EG2-4C2 开合与 Quest 按键
+
+现场通过示教器松开/闭合已验证可运动，随后查询得到 `enable=1,status=1,error=0,mode=1,temperature=34,actpos=1002`，之前全零不再代表当前状态。采用官方旧版 EG2-4C2 内置命令，无需修改 RM_ARM+ 或 RS485 配置。
+
+项目根目录独立实机测试（先退出遥操，夹爪空载、手远离夹指）：
+
+```bash
+./run.sh realman gripper-open --execute
+./run.sh realman gripper-status
+./run.sh realman gripper-close --execute
+./run.sh realman gripper-status
+```
+
+两条运动命令应逐条执行并观察；速度固定为100，闭合使用 `set_gripper_pick`、力参数50（协议无量纲，不代表50g或牛顿），不是持续夹取。非阻塞确认只表示接受，不表示完成；待状态变为空闲再发下一条。不设置行程、供电或使能，不自动重试运动。当前未由代码实机验证开合。
+
+独立开合确认后：
+
+```bash
+./run.sh realman quest --execute --gripper --duration 15
+```
+
+默认不加 `--gripper` 时保持原控制方式。启用时右 Grip 仍只控制机械臂，必须完全松开（<0.2）才能操作夹爪；右A单击张开，右Trigger按过0.8触发一次夹取，持续按住不重复。启动/数据恢复后先松开A与Trigger；按键在Grip按住时会被忽略，不会在之后补发。相邻夹爪指令间隔至少1秒，同时按A和Trigger不发送。发指令前要求在线、已使能、无错误且夹爪空闲。夹爪通信查询/确认在机械臂停止跟随时执行。
+
+**B、Ctrl+C、Grip松开及机械臂 `set_arm_stop` 不保证停止已发出的夹爪动作，也不会自动松爪；夹爪可能继续完成开合。** 本版本不宣称夹爪支持即时停止；操作时避免夹持人体或需要退出即释放的物体。
