@@ -148,6 +148,8 @@ def run():
         else:
             print('Gripper control disabled.', flush=True)
         buttons = Buttons()
+        last_gripper_input = None
+        gripper_actions = 0
         gate = GripGate()
         clock = XRClock(config["stale_s"])
         last_update = time.monotonic()
@@ -210,15 +212,25 @@ def run():
                                       'command_diagnostics': backend.telemetry()['command'] if args.execute else None}), flush=True)
                     last_print = started
             if args.gripper:
-                action = buttons.update(bool(xr.get_A_button()), float(xr.get_right_trigger()),
-                                        fresh=fresh, grip=grip, now=started)
+                a = bool(xr.get_A_button())
+                trigger = float(xr.get_right_trigger())
+                action = buttons.update(a, trigger, fresh=fresh, grip=grip, now=started)
+                input_state = (a, round(trigger, 1), fresh, grip < .2, buttons.ready)
+                if input_state != last_gripper_input:
+                    print(json.dumps({'gripper_input': {
+                        'right_A': a, 'right_trigger': trigger, 'xr_fresh': fresh,
+                        'grip_released': grip < .2, 'buttons_armed': buttons.ready,
+                        'cooldown_remaining_s': max(0., 1. - (started - buttons.last_action)),
+                        'requested_action': action}}), flush=True)
+                    last_gripper_input = input_state
                 if action:
+                    gripper_actions += 1
                     backend.stop()
                     tracker.reset()
                     print(json.dumps({'gripper': gripper_move(backend.client, action)}), flush=True)
             time.sleep(max(0, 1/config['control_hz'] - (time.monotonic() - started)))
         print(json.dumps({'samples': samples, 'fresh_xr_samples': fresh_samples, 'target_samples': previews,
-                          'execute_requested': args.execute}), flush=True)
+                          'execute_requested': args.execute, 'gripper_actions': gripper_actions}), flush=True)
 
 
 def main():
