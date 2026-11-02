@@ -431,3 +431,45 @@ def test_gripper_exchange_requires_separate_permission_and_matches_ack():
         assert reply['state'] is True
     finally:
         client.close(); thread.join(timeout=1)
+
+
+def test_joint_step_backoff_checks_wire_pose_before_send(setup):
+    from embodied.devices.robots.realman.kinematics import JointStepTooLarge
+    config, client = setup
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        calls = []
+        origin = backend.state.pose.copy()
+        def check(target, state, **kwargs):
+            calls.append(target.copy())
+            step = abs(target[0] - origin[0])*2000
+            backend.motion_check.diagnostics = {'max_joint_change_deg': step}
+            if step > 1:
+                raise JointStepTooLarge('too large')
+            return {'ik_joint_deg': [step]*6}
+        backend.motion_check.check = check
+        goal = origin.copy(); goal[0] += .01
+        backend.step(command(goal), time.monotonic())
+        assert len(calls) == 2
+        assert backend.command_diagnostics['joint_step_scale'] == .5
+        assert len(backend.command_diagnostics['joint_step_rejections']) == 1
+        assert np.allclose(decode_pose(client.sent[-1]['pose']), calls[-1])
+        assert abs(calls[-1][0] - origin[0]) <= .0005
+    finally:
+        backend.close()
+
+
+def test_persistent_joint_step_rejection_still_stops_without_send(setup):
+    from embodied.devices.robots.realman.kinematics import JointStepTooLarge
+    config, client = setup
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        def reject(*args, **kwargs):
+            raise JointStepTooLarge('persistent joint discontinuity')
+        backend.motion_check.check = reject
+        with pytest.raises(JointStepTooLarge):
+            backend.step(command(backend.state.pose), time.monotonic())
+        assert len(backend.command_diagnostics['joint_step_rejections']) == 5
+        assert not client.sent
+    finally:
+        backend.close()

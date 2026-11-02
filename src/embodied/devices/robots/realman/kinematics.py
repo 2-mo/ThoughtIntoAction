@@ -79,6 +79,10 @@ class OfflineModel:
         return self.algo.rm_algo_kin_robot_singularity_analyse(q_deg.tolist())
 
 
+class JointStepTooLarge(RuntimeError):
+    """Valid local IK candidate exceeds the adjacent command step bound."""
+
+
 class MotionCheck:
     def __init__(self, info, state, *, model=None):
         self.model = model if model is not None else OfflineModel(info)
@@ -131,7 +135,7 @@ class MotionCheck:
             'ik_joint_deg': solution.tolist(), 'max_joint_change_deg': step,
         }
         if step > 1.:
-            raise RuntimeError(f'Offline IK adjacent command joint change too large: joint {self.diagnostics["max_change_joint"]}, {step:.3f} deg (limit 1 deg)')
+            raise JointStepTooLarge(f'Offline IK adjacent command joint change too large: joint {self.diagnostics["max_change_joint"]}, {step:.3f} deg (limit 1 deg)')
         return {**self.diagnostics,
                 'fk_position_error_m': position, 'fk_angle_error_rad': angle,
                 'singularity_code': code, 'shoulder_distance_m': distance}

@@ -15,7 +15,7 @@ from .geometry import rotation_vector, limited_rotation
 from embodied.contracts.control import Mode, RobotState
 from embodied.contracts.device_lease import DeviceLease
 from .protocol import Client
-from .kinematics import MotionCheck
+from .kinematics import MotionCheck, JointStepTooLarge
 
 DEFAULT_CONFIG = Path(__file__).resolve().parents[5] / 'configs/robots/realman/rm65-19.json'
 
@@ -212,15 +212,36 @@ class Backend:
                     raise RuntimeError('Following lag persisted for 1 s; stopped instead of advancing target')
             else:
                 self.lead_hold_since = None
-            # Check exactly the quantized pose sent on the wire, after rate/lead limits.
-            wire_pose = encode_pose(target)
-            checked_target = decode_pose(wire_pose)
-            try:
-                precheck = self.motion_check.check(
-                    checked_target, self.state, previous_joint_deg=self.last_joint_target)
-            except Exception:
-                self.command_diagnostics['precheck'] = getattr(self.motion_check, 'diagnostics', {})
-                raise
+            # A fixed Cartesian speed can require larger joint steps in a
+            # sensitive posture. Back off only a valid IK continuity rejection;
+            # all model, limit, residual and singularity failures remain terminal.
+            candidate = target.copy()
+            reductions = []
+            for attempt in range(5):
+                scale = .5 ** attempt
+                target = previous.copy()
+                target[:3] += (candidate[:3] - previous[:3]) * scale
+                target[3:] = limited_rotation(candidate[3:], previous[3:],
+                    np.linalg.norm(rotation_vector(candidate[3:], previous[3:])) * scale)
+                wire_pose = encode_pose(target)
+                checked_target = decode_pose(wire_pose)
+                if time.monotonic() - self.feedback_at > c['stale_s']:
+                    raise RuntimeError('Feedback expired during offline motion precheck')
+                try:
+                    precheck = self.motion_check.check(
+                        checked_target, self.state, previous_joint_deg=self.last_joint_target)
+                    break
+                except JointStepTooLarge:
+                    diagnostic = dict(getattr(self.motion_check, 'diagnostics', {}))
+                    reductions.append(diagnostic)
+                    self.command_diagnostics['precheck'] = diagnostic
+                    self.command_diagnostics['joint_step_rejections'] = reductions
+                    if attempt == 4:
+                        raise
+                except Exception:
+                    self.command_diagnostics['precheck'] = getattr(self.motion_check, 'diagnostics', {})
+                    raise
+            self.command_diagnostics['joint_step_scale'] = scale
             self.command_diagnostics['precheck'] = precheck
             self.command_diagnostics['sent_m_xyzw'] = checked_target.tolist()
             if time.monotonic() - self.feedback_at > self.config['stale_s']:
