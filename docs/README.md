@@ -14,6 +14,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | [安装](guides/setup.md) | 环境、依赖、设备驱动与权限 |
+| [RM65 远程示教器](realman/README.md) | Windows 双机械臂 SSH 转发脚本与排查 |
 | [日常操作](guides/operation.md) | tmux 工作台、总控按键、真机与仿真切换 |
 | [真机验收（arx 内核）](guides/real-arm-acceptance.md) | 切换到内核前的现场验收清单 |
 | [内核工作台](guides/plugin-workbench.md) | 内核 profile、多来源控制权、MoveJ / MoveL、手机与标定适配 |

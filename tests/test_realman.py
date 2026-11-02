@@ -295,3 +295,42 @@ def test_cli_error_is_readable_without_traceback(monkeypatch, capsys):
         cli.main()
     assert err.value.code == 1
     assert 'XR stalled' in capsys.readouterr().err
+
+
+def test_transient_following_lag_holds_then_resumes(setup):
+    config, client = setup
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        previous = backend.state.pose.copy(); previous[0] += .0099
+        backend.last_target = previous.copy()
+        goal = previous.copy(); goal[0] += .01
+        backend.last_command = time.monotonic() - 1/config['control_hz']
+        backend.step(command(goal), time.monotonic())
+        assert backend.command_diagnostics['lead_limited']
+        assert np.allclose(backend.last_target, previous)
+        backend.state.pose[0] += .005  # Measured robot catches up.
+        backend.last_command -= 1/config['control_hz']
+        backend.step(command(goal), time.monotonic())
+        assert not backend.command_diagnostics['lead_limited']
+        assert backend.last_target[0] > previous[0]
+        assert backend.lead_hold_since is None
+    finally:
+        backend.close()
+
+
+def test_persistent_following_lag_stops_without_widening_limits(setup):
+    config, client = setup
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        previous = backend.state.pose.copy(); previous[0] += .0099
+        backend.last_target = previous.copy()
+        backend.last_command = time.monotonic() - .04
+        backend.active = True
+        backend.lead_hold_since = time.monotonic() - 1.1
+        goal = previous.copy(); goal[0] += .01
+        with pytest.raises(RuntimeError, match='lag persisted'):
+            backend.step(command(goal), time.monotonic())
+        assert client.sent == [{'command': 'set_arm_stop'}]
+        assert backend.command_diagnostics['candidate_lead_m'] > .01
+    finally:
+        backend.close()

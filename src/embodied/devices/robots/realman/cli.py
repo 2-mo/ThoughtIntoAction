@@ -168,9 +168,15 @@ def run():
                 target = tracker.update(xr.get_right_controller_pose(), state.pose)
                 previews += 1
                 if args.execute:
-                    backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=target, engaged=True), started)
+                    try:
+                        backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=target, engaged=True), started)
+                    except Exception:
+                        print(json.dumps({'command_diagnostics': backend.telemetry()['command']}), flush=True)
+                        raise
                 if started - last_print > .5:
-                    print(json.dumps({'preview': not args.execute, 'target_m_xyzw': target.tolist(), 'limits': sorted(set(tracker.limits))}), flush=True)
+                    print(json.dumps({'preview': not args.execute, 'target_m_xyzw': target.tolist(),
+                                      'limits': sorted(set(tracker.limits)),
+                                      'command_diagnostics': backend.telemetry()['command'] if args.execute else None}), flush=True)
                     last_print = started
             time.sleep(max(0, 1/config['control_hz'] - (time.monotonic() - started)))
         print(json.dumps({'samples': samples, 'fresh_xr_samples': fresh_samples, 'target_samples': previews,

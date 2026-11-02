@@ -72,6 +72,8 @@ class Backend:
         self.state = None
         self.origin = None
         self.last_target = None
+        self.lead_hold_since = None
+        self.command_diagnostics = {}
         self.done = threading.Event()
         self.watchdog = None
         try:
@@ -132,6 +134,7 @@ class Backend:
                 self.active = False
                 self.client.send({'command': 'set_arm_stop'})
             self.last_target = None
+            self.lead_hold_since = None
 
     def step(self, command, now, **options):
         try:
@@ -175,10 +178,29 @@ class Backend:
             dp = target[:3] - previous[:3]
             target[:3] = previous[:3] + dp * min(1., c['linear_speed_m_s'] * elapsed / max(np.linalg.norm(dp), 1e-12))
             target[3:] = limited_rotation(target[3:], previous[3:], c['angular_speed_rad_s'] * elapsed)
-            # Also bound lead over measured feedback, not merely over previous commands.
-            if np.linalg.norm(target[:3] - self.state.pose[:3]) > .01 or np.linalg.norm(rotation_vector(target[3:], self.state.pose[3:])) > .1:
-                self.stop()
-                raise ValueError('Command leads feedback beyond permitted distance/angle')
+            # Pause advance at the existing lead limits; do not widen the envelope.
+            position_lead = float(np.linalg.norm(target[:3] - self.state.pose[:3]))
+            angle_lead = float(np.linalg.norm(rotation_vector(target[3:], self.state.pose[3:])))
+            limited = position_lead > .01 or angle_lead > .1
+            self.command_diagnostics = {
+                'requested_m_xyzw': vector(command.pose_target, 7).tolist(),
+                'feedback_m_xyzw': self.state.pose.tolist(),
+                'candidate_lead_m': position_lead, 'candidate_lead_rad': angle_lead,
+                'lead_limited': limited, 'feedback_age_s': time.monotonic() - self.feedback_at,
+            }
+            if limited:
+                # Retaining the previous command preserves command speed continuity.
+                target = previous.copy()
+                if (np.linalg.norm(target[:3] - self.state.pose[:3]) > .01 or
+                        np.linalg.norm(rotation_vector(target[3:], self.state.pose[3:])) > .1):
+                    raise RuntimeError('Previous command already exceeds feedback lead limits')
+                if self.lead_hold_since is None:
+                    self.lead_hold_since = time.monotonic()
+                if time.monotonic() - self.lead_hold_since >= 1.:
+                    raise RuntimeError('Following lag persisted for 1 s; stopped instead of advancing target')
+            else:
+                self.lead_hold_since = None
+            self.command_diagnostics['sent_m_xyzw'] = target.tolist()
             self.active = True  # A failed send may still have delivered bytes; close must attempt stop.
             self.client.send({'command': 'movep_canfd', 'pose': encode_pose(target), 'follow': False})
             self.last_target = target.copy()
@@ -187,7 +209,7 @@ class Backend:
 
     def telemetry(self):
         return {'backend': 'realman', 'allow_motion': self.allow_motion, 'active': self.active,
-                'fault': self.fault, 'identity': self.info, 'gripper': {'present': None, 'configured': False},
+                'fault': self.fault, 'identity': self.info, 'command': self.command_diagnostics, 'gripper': {'present': None, 'configured': False},
                 'velocity_feedback_available': False, 'motion_verified': False}
 
     def close(self):
