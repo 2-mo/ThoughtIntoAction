@@ -1,26 +1,34 @@
-"""Explicit low-speed SDK joint zero move, separate from Cartesian teleoperation."""
+"""Explicit low-speed SDK joint positioning, separate from Cartesian teleoperation."""
 import time
 import numpy as np
 from .kinematics import OfflineModel, load_sdk
 
 
-def zero_preview(backend):
+JOINT_POSES = {'zero': [0., 0., 0., 0., 0., 0.],
+               'pregrasp': [0., 0., 90., 0., 90., 0.]}
+
+
+def joint_preview(backend, target_deg):
     for key in ('get_DH_data', 'get_joint_min_pos', 'get_joint_max_pos'):
         backend.info[key] = backend.client.query(key)
     model = OfflineModel(backend.info)
-    target = np.zeros(6)
+    target = np.asarray(target_deg, dtype=float)
+    if target.shape != (6,) or not np.isfinite(target).all():
+        raise ValueError('Joint target must contain six finite angles in degrees')
     if np.any(target < model.lower) or np.any(target > model.upper):
-        raise ValueError('Zero joints outside controller limits')
+        raise ValueError('Joint target outside controller limits')
     return {'target_joint_deg': target.tolist(), 'speed_percent': 5,
             'current_joint_deg': np.rad2deg(backend.state.q).tolist(),
-            'zero_tcp_m_xyzw': model.fk(target).tolist(),
-            'zero_singularity_code': model.singularity(target)[0],
+            'target_tcp_m_xyzw': model.fk(target).tolist(),
+            'target_singularity_code': model.singularity(target)[0],
             'collision_clearance_verified': False,
-            'note': 'Joint zero is a singular calibration reference; use a bent posture for Cartesian teleoperation.'}
+            'note': 'Joint positioning does not check collision clearance; zero is singular.'}
 
 
-def execute_zero(backend, *, sdk=None):
+def execute_joint_target(backend, target_deg, *, sdk=None):
     """Caller holds the device lease; no implicit enable, fault reset or tool writes."""
+    preview = joint_preview(backend, target_deg)
+    target = np.asarray(preview['target_joint_deg'], dtype=float)
     initial = backend.read_state(time.monotonic())
     if initial.fault:
         raise RuntimeError(initial.fault)
@@ -28,7 +36,7 @@ def execute_zero(backend, *, sdk=None):
     time.sleep(.2)
     state = backend.read_state(time.monotonic())
     if state.fault or np.max(np.abs(np.rad2deg(state.q - start_q))) > .05:
-        raise RuntimeError('Arm must be stationary and fault-free before joint zero')
+        raise RuntimeError('Arm must be stationary and fault-free before joint positioning')
     sdk = load_sdk() if sdk is None else sdk
     arm = sdk.RoboticArm(sdk.rm_thread_mode_e.RM_DUAL_MODE_E)
     connected = False
@@ -48,7 +56,7 @@ def execute_zero(backend, *, sdk=None):
                 joints, np.rad2deg(state.q), atol=.1, rtol=0):
             raise RuntimeError('SDK joint feedback disagrees with JSON state')
         motion_attempted = True
-        code = arm.rm_movej([0.]*6, 5, 0, 0, 0)
+        code = arm.rm_movej(target.tolist(), 5, 0, 0, 0)
         if code != 0:
             raise RuntimeError(f'SDK movej rejected/failed: {code}')
         deadline = time.monotonic() + 90.
@@ -57,12 +65,12 @@ def execute_zero(backend, *, sdk=None):
             state = backend.read_state(time.monotonic())
             if state.fault:
                 raise RuntimeError(state.fault)
-            stable = stable + 1 if np.max(np.abs(np.rad2deg(state.q))) <= .1 else 0
+            stable = stable + 1 if np.max(np.abs(np.rad2deg(state.q) - target)) <= .1 else 0
             if stable >= 3:
                 complete = True
                 return {'completed': True, 'joint_deg': np.rad2deg(state.q).tolist()}
             time.sleep(.1)
-        raise RuntimeError('SDK joint zero did not finish within 90 s')
+        raise RuntimeError('SDK joint positioning did not finish within 90 s')
     except BaseException as exc:
         if motion_attempted and not complete:
             try:
