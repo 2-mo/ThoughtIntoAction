@@ -11,7 +11,7 @@ import pytest
 from embodied.contracts.control import ControlCommand, Mode
 from embodied.contracts.registry import Registry
 from embodied.devices.robots.realman.backend import Backend, load_config, decode_pose, encode_pose
-from embodied.devices.robots.realman.cli import RelativeTarget
+from embodied.devices.robots.realman.teleop import RelativeTarget
 from embodied.devices.robots.realman.protocol import Client
 
 
@@ -184,7 +184,7 @@ def test_registry_loads_without_opening_device():
 
 
 def test_xr_clock_freeze_rollback_and_recovery():
-    from embodied.devices.robots.realman.cli import XRClock
+    from embodied.devices.robots.realman.teleop import XRClock
     clock = XRClock(.3)
     assert not clock.fresh(0, 0)
     assert clock.fresh(100, 1.)
@@ -262,7 +262,7 @@ def test_partial_motion_send_failure_still_attempts_stop(setup):
 
 
 def test_grip_hysteresis_and_rearm_after_tracking_loss():
-    from embodied.devices.robots.realman.cli import GripGate
+    from embodied.devices.robots.realman.teleop import GripGate
     gate = GripGate()
     assert not gate.update(1., True)  # Held at startup cannot engage.
     assert not gate.update(0., True)
@@ -555,6 +555,7 @@ def test_cli_gripper_uses_default_and_explicit_segment_size(setup, monkeypatch, 
         return 0.
     xr = SimpleNamespace(init=lambda: None,close=lambda: None,get_time_stamp_ns=time.monotonic_ns,
         get_right_grip=grip,get_A_button=lambda: False,
+        get_right_controller_pose=lambda: [0.,0.,0.,0.,0.,0.,1.],
         get_right_trigger=lambda: 1. if ticks[0] in (2,3) else 0.,get_B_button=lambda: ticks[0]>=4)
     monkeypatch.setitem(sys.modules, 'xrobotoolkit_sdk', xr)
     monkeypatch.setattr(cli, 'load_config', lambda _: config)

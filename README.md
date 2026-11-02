@@ -16,6 +16,7 @@
 | 学习如何写运动与采集程序 | `./run.sh examples` · [Python 示例](src/examples/README.md) · [Robot 接口](docs/reference/robot-primitives.md) |
 | 编写分阶段任务、重复仿真测试 | `./run.sh examples approach_retreat`、`./run.sh examples sim_task` |
 | 使用 RealMan RM65 仿真（无需 VR） | `./run.sh examples realman` · [模型与验证边界](docs/realman/simulation.md) |
+| RealMan 双臂 Quest 预览（左 `.19`、右 `.18`） | `./run.sh realman quest-dual --position-only --duration 30` · [接入与按键](docs/realman/robot18.md#双臂遥操) |
 | 验证七轴无夹爪模型 | `./run.sh examples reference7` |
 | 用反馈评估速度与跟踪质量 | `./run.sh examples benchmark --degrees 10 --speed 0` |
 | 连续路径、任务与相机一起录制 | `./run.sh examples move_path`、`./run.sh examples record_task` |
