@@ -18,27 +18,33 @@ def pose_error(first, second):
             float(np.linalg.norm(rotation_vector(first[3:], second[3:]))))
 
 
+def load_sdk():
+    """Load the pinned local algorithm package without opening a robot handle."""
+    root = dependency_root('realman-api')
+    revision = dependency('realman-api')['commit']
+    if not (root / '.git').exists():
+        raise RuntimeError('Missing offline SDK: ./run.sh fetch-dependencies --name realman-api')
+    if subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip() != revision:
+        raise RuntimeError('RealMan offline SDK revision mismatch')
+    package = root / 'Python/Robotic_Arm'
+    subprocess.run(['git', '-C', str(root), 'diff', '--exit-code', 'HEAD', '--', 'Python/Robotic_Arm'],
+                   check=True, capture_output=True)
+    name = '_tia_realman_offline_sdk'
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, package / '__init__.py',
+                                                     submodule_search_locations=[str(package)])
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+    from importlib import import_module
+    sdk = import_module(name + '.rm_robot_interface')
+    return sdk
+
+
 class OfflineModel:
     """Only Algo is instantiated; frame/limit setters modify local algorithm data."""
     def __init__(self, info):
-        root = dependency_root('realman-api')
-        revision = dependency('realman-api')['commit']
-        if not (root / '.git').exists():
-            raise RuntimeError('Missing offline SDK: ./run.sh fetch-dependencies --name realman-api')
-        if subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip() != revision:
-            raise RuntimeError('RealMan offline SDK revision mismatch')
-        package = root / 'Python/Robotic_Arm'
-        subprocess.run(['git', '-C', str(root), 'diff', '--exit-code', 'HEAD', '--', 'Python/Robotic_Arm'],
-                       check=True, capture_output=True)
-        name = '_tia_realman_offline_sdk'
-        if name not in sys.modules:
-            spec = importlib.util.spec_from_file_location(name, package / '__init__.py',
-                                                         submodule_search_locations=[str(package)])
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[name] = module
-            spec.loader.exec_module(module)
-        from importlib import import_module
-        sdk = import_module(name + '.rm_robot_interface')
+        sdk = load_sdk()
         self.sdk = sdk
         self.algo = sdk.Algo(sdk.rm_robot_arm_model_e.RM_MODEL_RM_65_E,
                              sdk.rm_force_type_e.RM_MODEL_RM_B_E)

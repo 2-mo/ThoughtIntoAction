@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "tcp_link": "tcp_link",
+  "upstream_commit": "711abedd48c6614f26fb4f7661db92f306ff05bd",
+  "calibration_status": "official nominal RM65; not calibrated to the physical arm",
+  "tool_offset_m": 0.14,
+  "simplified_gripper_width_m": 0.04,
+  "sha256": {
+    "meshes/base_link.STL": "e83f8626e0b92137b02dbedd6f59281fb3cbd02a7905470fa461fa7f3014fde3",
+    "meshes/link1.STL": "008894df7deb20d9aec98b4dbc3ac8e12dbc31b90e6a8485542140eb0ab3ded5",
+    "meshes/link2.STL": "d3a46b4b619bfd28d8948d5335f8bd62284ea0742ec4fb2b7ac5e5ab858d67f8",
+    "meshes/link3.STL": "5d903745e9369009ac064bc24c080d03f503b3386b8e14325a318cf8fde0959d",
+    "meshes/link4.STL": "2fc93b2bc970eadca950afa3120129766e2bead60234c6d8752d3b223e407046",
+    "meshes/link5.STL": "f9d0216056f7e1512858033163b0415973e1db573a1fee5af1609171967c043f",
+    "meshes/link6.STL": "a491f4471cf587b0a64c9c25424fd2b096b14f0028b67d0909233bf6f6a947df",
+    "upstream/rm_65.urdf": "240ae37c64cbe13b5f947e04a37cebce7daffd7100cbc09dcf02054b0fe74b57",
+    "UPSTREAM.json": "9f4d00ae173f903d5f4301c81db55bca5f7722859408ae5d699c6dcee98e9e0c",
+    "runtime/rm65.xml": "9cb21694dea7c054996008cbf5eebe6246db55bffa1f63261cc0265cffad32de",
+    "runtime/rm65.urdf": "861244e635dda832ec6c26ddb2cae02094bb9504f84434641bb9c3396e2484b3"
+  }
+}

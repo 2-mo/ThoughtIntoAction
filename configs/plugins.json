@@ -87,6 +87,10 @@
     "reference7": {
       "factory": "embodied.devices.robots.reference7.viewer:Viewer",
       "runtime": "control"
+    },
+    "realman": {
+      "factory": "embodied.devices.robots.realman.viewer:Viewer",
+      "runtime": "control"
     }
   },
   "telemetry": {
@@ -167,6 +171,17 @@
         "feedback",
         "joint",
         "cartesian"
+      ]
+    },
+    "realman.sim": {
+      "factory": "embodied.devices.robots.realman.simulation:Simulation",
+      "runtime": "control",
+      "simulation_only": true,
+      "capabilities": [
+        "feedback",
+        "joint",
+        "cartesian",
+        "gripper"
       ]
     }
   },
@@ -613,6 +628,10 @@
     "reference7": {
       "factory": "embodied.devices.robots.reference7.model:Model",
       "runtime": "control"
+    },
+    "realman": {
+      "factory": "embodied.devices.robots.realman.model:Model",
+      "runtime": "control"
     }
   },
   "perception": {
@@ -657,6 +676,10 @@
     },
     "reference7": {
       "factory": "embodied.devices.robots.reference7.profile:load_profile",
+      "runtime": "control"
+    },
+    "realman": {
+      "factory": "embodied.devices.robots.realman.profile:load_profile",
       "runtime": "control"
     }
   },

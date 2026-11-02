@@ -162,3 +162,11 @@ commit = "a810b9fdea29e3567c5e9155794e6ef9cc17be62"
 path = "outputs/dependencies/realman-api-a810b9fdea29"
 required = false
 purpose = "Optional RealMan offline FK/IK and singularity analysis; no RoboticArm network handle is created."
+
+[[vendored]]
+name = "realman-rm65-description"
+path = "assets/robots/realman"
+url = "https://github.com/RealManRobot/ros2_rm_robot"
+commit = "711abedd48c6614f26fb4f7661db92f306ff05bd"
+manifest = "assets/robots/realman/UPSTREAM.json"
+snapshot = "Official RM65 URDF and seven meshes, Apache-2.0; derived MuJoCo/display models and an explicitly simplified gripper"
