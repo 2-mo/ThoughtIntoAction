@@ -9,7 +9,7 @@ import numpy as np
 
 from embodied.contracts.control import ControlCommand, Mode
 from .backend import Backend, DEFAULT_CONFIG, load_config
-from .gripper import status as gripper_status, move as gripper_move, Buttons, Jog
+from .gripper import status as gripper_status, move as gripper_move, Buttons, Jog, GripperNotReady, require_ready
 from .teleop import RelativeTarget, GripGate, XRClock
 
 
@@ -73,6 +73,12 @@ def run():
                               'current_pose_ik': checker.check(backend.state.pose, backend.state),
                               'motion_sent': False}, indent=2))
             return
+        gripper_unavailable = None
+        if args.gripper:
+            try:
+                require_ready(gripper_status(backend.client))
+            except GripperNotReady as exc:
+                gripper_unavailable = exc.feedback
         import xrobotoolkit_sdk as xr
         xr.init()
         stack.callback(xr.close)
@@ -94,6 +100,10 @@ def run():
         }}), flush=True)
         if args.gripper:
             print('Gripper: release Grip; HOLD A=open, HOLD Trigger=close in 10/1000 position segments. Release ends scheduling; current segment may finish. Speed/force inherited from controller.', flush=True)
+            if gripper_unavailable is not None:
+                print(json.dumps({'gripper': {'enabled_for_session': False,
+                    'reason': 'not ready; gripper disabled until session restart; arm Grip control remains available',
+                    'feedback': gripper_unavailable}}), flush=True)
         else:
             print('Gripper control disabled.', flush=True)
         buttons = Buttons()
@@ -133,6 +143,7 @@ def run():
             if started >= next_status:
                 print(json.dumps({'xr_fresh': fresh, 'right_grip': grip, 'robot_fault': state.fault,
                                   'armed': gate.armed, 'following': gate.following, 'preview': not args.execute,
+                                  'gripper_enabled_for_session': args.gripper and gripper_unavailable is None,
                                   'xr_timestamp_ns': timestamp,
                                   'waiting_for_first_xr': not seen_xr and not fresh}), flush=True)
                 next_status = started + 1.
@@ -170,6 +181,9 @@ def run():
                 a = bool(xr.get_A_button())
                 trigger = float(xr.get_right_trigger())
                 action = buttons.update(a, trigger, fresh=fresh, grip=grip, now=started)
+                if gripper_unavailable is not None:
+                    buttons.ready = False
+                    action = None
                 input_state = (a, round(trigger, 1), fresh, grip < .2, buttons.ready)
                 if input_state != last_gripper_input:
                     print(json.dumps({'gripper_input': {
@@ -179,8 +193,14 @@ def run():
                     last_gripper_input = input_state
                 # No gripper TCP transactions while the arm is following.
                 # Release/Grip/B never queues another position segment.
-                if not following:
-                    report = jog.update(backend.client, action, time.monotonic())
+                if not following and gripper_unavailable is None:
+                    try:
+                        report = jog.update(backend.client, action, time.monotonic())
+                    except GripperNotReady as exc:
+                        gripper_unavailable = exc.feedback
+                        report = {'accepted': False, 'enabled_for_session': False,
+                            'reason': 'not ready; gripper disabled until session restart; arm Grip control remains available',
+                            'feedback': gripper_unavailable}
                     if report is not None:
                         gripper_actions += int(report.get('accepted', False))
                         report_key = (report.get('reason'), report.get('position_target_raw'))
@@ -189,7 +209,8 @@ def run():
                             last_gripper_report = report_key
             time.sleep(max(0, 1/config['control_hz'] - (time.monotonic() - started)))
         print(json.dumps({'samples': samples, 'fresh_xr_samples': fresh_samples, 'target_samples': previews,
-                          'execute_requested': args.execute, 'gripper_actions': gripper_actions}), flush=True)
+                          'execute_requested': args.execute, 'gripper_actions': gripper_actions,
+                          'gripper_enabled_for_session': args.gripper and gripper_unavailable is None}), flush=True)
 
 
 def main():

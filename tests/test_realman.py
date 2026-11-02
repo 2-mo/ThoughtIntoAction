@@ -478,3 +478,47 @@ def test_persistent_joint_step_rejection_still_stops_without_send(setup):
         assert not client.sent
     finally:
         backend.close()
+
+
+@pytest.mark.parametrize('offline_query', [1, 2, 3])
+def test_gripper_offline_disables_only_gripper_and_requires_restart(setup, monkeypatch, capsys, offline_query):
+    import sys
+    from types import SimpleNamespace
+    from embodied.devices.robots.realman import cli
+    config, client = setup
+    original_query = client.query
+    gripper_queries = []
+    def query(key):
+        if key != 'get_gripper_state':
+            return original_query(key)
+        gripper_queries.append(key)
+        # Subsequent reads would recover. A latched fault must never auto-resume.
+        if len(gripper_queries) == offline_query:
+            return dict(enable=0, status=0, error=0, mode=0,
+                        current_force=0, temperature=0, actpos=0)
+        return dict(enable=1, status=1, error=0, mode=3,
+                    current_force=0, temperature=34, actpos=500)
+    client.query = query
+    client.exchange = lambda message, expected: (client.sent.append(message) or {'state': True})
+    ticks = [0]
+    def grip():
+        ticks[0] += 1
+        return 1. if ticks[0] >= 7 else 0.
+    xr = SimpleNamespace(init=lambda: None, close=lambda: None,
+        get_time_stamp_ns=time.monotonic_ns, get_right_grip=grip,
+        get_right_controller_pose=lambda: [0., 0., -.001*ticks[0], 0., 0., 0., 1.],
+        get_A_button=lambda: ticks[0] in (2, 3), get_right_trigger=lambda: 0.,
+        get_B_button=lambda: ticks[0] >= 9)
+    monkeypatch.setitem(sys.modules, 'xrobotoolkit_sdk', xr)
+    monkeypatch.setattr(cli, 'load_config', lambda _: config)
+    monkeypatch.setattr(cli, 'Backend', lambda config, allow_motion: Backend(config, client=client, allow_motion=allow_motion))
+    monkeypatch.setattr(sys, 'argv', ['realman', 'quest', '--execute', '--gripper', '--duration', '0'])
+    cli.main()
+    output = capsys.readouterr().out
+    assert '"enabled_for_session": false' in output
+    assert '"gripper_enabled_for_session": false' in output
+    assert len(gripper_queries) == offline_query
+    assert sum(m['command'] == 'set_gripper_position' for m in client.sent) == int(offline_query == 3)
+    assert any(m['command'] == 'movep_canfd' for m in client.sent)
+    assert client.sent[-1] == {'command': 'set_arm_stop'}
+    assert client.closed

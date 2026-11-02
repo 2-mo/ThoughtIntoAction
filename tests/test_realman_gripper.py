@@ -1,5 +1,5 @@
 import pytest
-from embodied.devices.robots.realman.gripper import move, Buttons, Jog
+from embodied.devices.robots.realman.gripper import move, Buttons, Jog, GripperNotReady
 
 
 class Client:
@@ -88,3 +88,16 @@ def test_jog_stale_idle_and_persistent_busy_do_not_flood_commands():
     with pytest.raises(RuntimeError, match='5 s'):
         jog.update(c, 'close', 6.)
     assert len(c.sent) == 1
+
+
+def test_unavailable_feedback_is_distinct_from_communication_failure():
+    c = Client(); c.ready = False
+    with pytest.raises(GripperNotReady) as caught:
+        Jog().update(c, 'open', 0.)
+    assert caught.value.feedback['status'] == 0
+    assert c.sent == []
+    def timeout(command):
+        raise TimeoutError('connection stalled')
+    c.query = timeout
+    with pytest.raises(TimeoutError):
+        Jog().update(c, 'open', 0.)

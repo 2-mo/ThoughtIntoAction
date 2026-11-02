@@ -1,6 +1,18 @@
 """EG2-4C2 controller commands; no power, serial or enable changes."""
 
 
+class GripperNotReady(RuntimeError):
+    """Valid controller feedback says gripper unavailable; TCP is still usable."""
+    def __init__(self, feedback):
+        self.feedback = dict(feedback)
+        super().__init__(f'Gripper not ready: {self.feedback}')
+
+
+def require_ready(feedback):
+    if feedback['enable'] != 1 or feedback['status'] != 1 or feedback['error'] != 0:
+        raise GripperNotReady(feedback)
+
+
 def status(client):
     raw = client.query('get_gripper_state')
     fields = ('enable', 'status', 'error', 'mode', 'current_force', 'temperature', 'actpos')
@@ -15,8 +27,7 @@ def move(client, action, *, speed=100, force=50):
     if type(force) is not int or not 50 <= force <= 1000:
         raise ValueError('Invalid gripper force')
     before = status(client)
-    if before['enable'] != 1 or before['status'] != 1 or before['error'] != 0:
-        raise RuntimeError(f'Gripper not ready: {before}')
+    require_ready(before)
     if before['mode'] not in (1, 2, 3, 6):
         if before['mode'] in (4, 5):
             return {'action': action, 'accepted': False, 'reason': 'busy; press again after motion completes'}
@@ -77,8 +88,7 @@ class Jog:
             return None
         self.next_poll = now + self.period
         before = status(client)
-        if before['enable'] != 1 or before['status'] != 1 or before['error'] != 0:
-            raise RuntimeError(f'Gripper not ready: {before}')
+        require_ready(before)
         mode = before['mode']
         if mode not in (1, 2, 3, 4, 5, 6):
             raise RuntimeError(f'Unknown gripper mode: {before}')
