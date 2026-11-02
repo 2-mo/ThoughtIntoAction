@@ -52,18 +52,30 @@ class Buttons:
     def __init__(self):
         self.ready = False
         self.trigger_down = False
+        self.blocked_reason = 'release_buttons_to_arm'
 
     def update(self, a, trigger, *, fresh, grip, now):
         import math
         if not math.isfinite(trigger) or not 0 <= trigger <= 1:
             raise ValueError('Invalid trigger reading')
         self.trigger_down = trigger > .8 or (self.trigger_down and trigger >= .2)
-        if not fresh or grip >= .2:
+        if not fresh:
             self.ready = False
-        elif not a and trigger < .2:
-            self.ready = True
-        if not self.ready or not fresh or grip >= .2 or bool(a) == self.trigger_down:
+            self.blocked_reason = 'xr_stale'
             return None
+        if grip >= .2:
+            self.ready = False
+            self.blocked_reason = 'grip_pressed'
+            return None
+        if not a and trigger < .2:
+            self.ready = True
+        if not self.ready:
+            self.blocked_reason = 'release_buttons_to_arm'
+            return None
+        if bool(a) == self.trigger_down:
+            self.blocked_reason = 'conflicting_buttons' if a else None
+            return None
+        self.blocked_reason = None
         return 'open' if a else 'close'
 
 

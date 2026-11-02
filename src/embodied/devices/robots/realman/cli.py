@@ -195,12 +195,14 @@ def run():
                 action = buttons.update(a, trigger, fresh=fresh, grip=grip, now=started)
                 if jog.unavailable is not None:
                     buttons.ready = False
+                    buttons.blocked_reason = 'gripper_unavailable'
                     action = None
-                input_state = (a, round(trigger, 1), fresh, grip < .2, buttons.ready)
+                input_state = (a, round(trigger, 1), fresh, grip < .2, buttons.ready, buttons.blocked_reason)
                 if input_state != last_gripper_input:
                     print(json.dumps({'gripper_input': {
-                        'right_A': a, 'right_trigger': trigger, 'xr_fresh': fresh,
+                        'right_A': a, 'right_trigger': trigger, 'right_grip': grip, 'xr_fresh': fresh,
                         'grip_released': grip < .2, 'buttons_armed': buttons.ready,
+                        'blocked_reason': buttons.blocked_reason,
                         'requested_action': action}}), flush=True)
                     last_gripper_input = input_state
                 # No gripper TCP transactions while the arm is following.

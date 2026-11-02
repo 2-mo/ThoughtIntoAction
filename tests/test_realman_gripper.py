@@ -37,10 +37,16 @@ def test_buttons_release_edges_arm_interlock_and_stale():
     assert update(trigger=1., now=3.) == 'close'
     update(now=4.)
     assert update(a=True, grip=1., now=5.) is None
+    assert b.blocked_reason == 'grip_pressed'
     assert update(a=True, now=6.) is None
+    assert b.blocked_reason == 'release_buttons_to_arm'
     update(now=7.)
     assert update(a=True, now=8.) == 'open'
+    assert b.blocked_reason is None
+    assert update(a=True, trigger=1., now=8.1) is None
+    assert b.blocked_reason == 'conflicting_buttons'
     update(fresh=False, now=9.)
+    assert b.blocked_reason == 'xr_stale'
     assert update(a=True, now=10.) is None
 
 
