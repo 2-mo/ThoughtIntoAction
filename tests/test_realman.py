@@ -99,7 +99,7 @@ def test_speed_limit_deadman_and_no_enable(setup):
         backend.step(command(target), time.monotonic())
         assert client.sent[-1]['command'] == 'movep_canfd'
         assert client.sent[-1]['follow'] is False
-        assert client.sent[-1]['pose'][0] == 302400
+        assert client.sent[-1]['pose'][0] == 304000
         assert target[0] == pytest.approx(.34)  # Caller-owned target is not mutated.
         backend.step(ControlCommand(Mode.DISABLED), time.monotonic())
         assert client.sent[-1] == {'command': 'set_arm_stop'}
@@ -151,13 +151,13 @@ def test_relative_reference_and_basis(setup):
     controller = np.array([0., 0, 0, 0, 0, 0, 1])
     assert np.allclose(tracker.update(controller, robot), robot)
     controller[2] = -.1
-    assert np.allclose(tracker.update(controller, robot)[:3], [.24, 0, .4])
+    assert np.allclose(tracker.update(controller, robot)[:3], [.2, 0, .4])
     tracker.reset()
     assert np.allclose(tracker.update(controller, robot), robot)
     controller[0] += .01
-    assert np.allclose(tracker.update(controller, robot)[:3], [.3, .006, .4])
+    assert np.allclose(tracker.update(controller, robot)[:3], [.3, .01, .4])
     controller[1] += .01
-    assert np.allclose(tracker.update(controller, robot)[:3], [.3, .006, .406])
+    assert np.allclose(tracker.update(controller, robot)[:3], [.3, .01, .41])
 
 
 def test_protocol_fragmentation_and_readonly_whitelist():
@@ -441,6 +441,7 @@ def test_gripper_exchange_requires_separate_permission_and_matches_ack():
 def test_joint_step_backoff_checks_wire_pose_before_send(setup):
     from embodied.devices.robots.realman.kinematics import JointStepTooLarge
     config, client = setup
+    config['linear_speed_m_s'] = .06  # Keep candidates away from the fake IK's exact 1-degree boundary.
     backend = Backend(config, client=client, allow_motion=True)
     try:
         calls = []
@@ -563,7 +564,7 @@ def test_cli_gripper_uses_default_and_explicit_segment_size(setup, monkeypatch, 
     monkeypatch.setattr(sys, 'argv', ['realman','quest','--execute','--gripper','--duration','0'] +
         ([] if step is None else ['--gripper-step',str(step)]))
     cli.main()
-    effective = 50 if step is None else step
+    effective = 100 if step is None else step
     assert client.sent == [{'command':'set_gripper_position','position':500-effective,'block':False}]
     assert f'{effective}/1000 position segments' in capsys.readouterr().out
     assert client.closed

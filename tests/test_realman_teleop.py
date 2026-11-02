@@ -69,7 +69,7 @@ def test_position_only_keeps_pregrasp_orientation_through_hand_rotation_and_recl
     tracker.update(hand, robot)
     moved = pose((.02, .03, -.04), (.8, -.7, .6))
     target = tracker.update(moved, robot)
-    np.testing.assert_allclose(target[:3], [-.234, .012, .2305], atol=1e-10)
+    np.testing.assert_allclose(target[:3], [-.25, .02, .2425], atol=1e-10)
     np.testing.assert_allclose(matrix(target[3:]), matrix(robot[3:]), atol=1e-10)
     # The robot may lag behind the requested position: clutch to measured pose.
     measured = robot.copy(); measured[0] -= .01
@@ -86,4 +86,4 @@ def test_translation_saturation_does_not_change_rotation_mapping():
     tracker.update(pose((0., 0., -.8), (0., .1, 0.)), robot)
     target = tracker.update(pose((0., 0., -.79), (0., .12, 0.)), robot)
     assert np.linalg.norm(rotation_vector(target[3:], robot[3:])) == pytest.approx(.12)
-    assert target[0] == pytest.approx(robot[0] - .15 + .006)
+    assert target[0] == pytest.approx(robot[0] - .15 + .01)

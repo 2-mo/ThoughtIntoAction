@@ -49,18 +49,21 @@ class ArmControl:
     def emit(self, fields):
         print(json.dumps({'hand': self.hand, 'host': self.config['host'], **fields}), flush=True)
 
-    def prepare_gripper(self, initialize_open):
+    def prepare_gripper(self, initialize_open, speed):
         if not self.gripper:
             return
         self.backend.client.allow_gripper = True
         if initialize_open:
-            self.emit({'gripper_initialization': move(self.backend.client, 'open', initialize_open=True)})
+            self.emit({'gripper_initialization': move(self.backend.client, 'open',
+                speed=speed, initialize_open=True)})
         try:
-            require_ready(status(self.backend.client))
+            feedback = status(self.backend.client)
+            require_ready(feedback)
+            self.emit({'gripper': {'enabled_for_session': True, 'feedback': feedback}})
         except GripperNotReady as exc:
             self.jog.unavailable = exc.feedback
             self.emit({'gripper': {'enabled_for_session': False,
-                'reason': 'not ready; release Grip/open button/Trigger for read-only recovery checks',
+                'reason': 'not ready; release open button/Trigger for read-only recovery checks',
                 'feedback': exc.feedback}})
 
     def plan(self, fresh):
@@ -76,8 +79,7 @@ class ArmControl:
         if self.gripper:
             self.open_down = bool(self.get_open())
             self.trigger = float(self.get_trigger())
-            self.action = self.buttons.update(self.open_down, self.trigger,
-                fresh=fresh, grip=self.grip, now=time.monotonic())
+            self.action = self.buttons.update(self.open_down, self.trigger, fresh=fresh)
             if self.jog.unavailable is not None:
                 self.buttons.ready = False
                 self.buttons.blocked_reason = 'gripper_unavailable'
@@ -103,22 +105,18 @@ class ArmControl:
     def update_gripper(self, fresh):
         if not self.gripper:
             return
-        key = (self.open_down, round(self.trigger, 1), fresh, self.grip < .2,
+        key = (self.open_down, round(self.trigger, 1), fresh, self.following,
                self.buttons.ready, self.buttons.blocked_reason)
         if key != self.last_input:
             self.emit({'gripper_input': {
                 f'{self.hand}_{self.open_button}': self.open_down,
                 f'{self.hand}_trigger': self.trigger, f'{self.hand}_grip': self.grip,
-                'xr_fresh': fresh, 'grip_released': self.grip < .2,
+                'xr_fresh': fresh, 'arm_following': self.following,
                 'buttons_armed': self.buttons.ready, 'blocked_reason': self.buttons.blocked_reason,
                 'requested_action': self.action}})
             self.last_input = key
-        if self.following:
-            if self.jog.unavailable is not None:
-                self.jog.ready_samples = 0
-            return
         report = self.jog.update(self.backend.client, self.action, time.monotonic(),
-            controls_neutral=fresh and self.grip < .2 and not self.open_down and self.trigger < .2)
+            controls_neutral=fresh and not self.open_down and self.trigger < .2)
         if report is not None:
             self.gripper_actions += int(report.get('accepted', False))
             key = (report.get('reason'), report.get('position_target_raw'))
@@ -128,7 +126,7 @@ class ArmControl:
 
 
 def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only,
-              gripper, gripper_step, initialize_open=False):
+              gripper, gripper_step, initialize_open=False, gripper_speed=100):
     """Backends are already leased; any exit attempts every arm stop before XR close."""
     controls = [ArmControl(hand, backend, xr, position_only=position_only,
         gripper=gripper, gripper_step=gripper_step) for hand, backend in bindings]
@@ -142,7 +140,7 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
         # Both robot connections and startup states have been checked before
         # any explicitly requested full-open action is sent.
         for control in controls:
-            control.prepare_gripper(initialize_open)
+            control.prepare_gripper(initialize_open, gripper_speed)
         dual = len(controls) == 2
         print(('EXECUTE' if execute else 'READ-ONLY PREVIEW') +
               ': each Grip controls its assigned arm; B' + ('/Y' if dual else '') + ' stops and exits.', flush=True)
@@ -157,7 +155,9 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
             if gripper:
                 print(f'{control.hand} {c["host"]}: HOLD {control.open_button}=open, '
                       f'HOLD Trigger=close in {gripper_step}/1000 position segments. '
-                      'Release Grip first; current segment may finish after release.', flush=True)
+                      'Works while Grip follows; current segment may finish after release.', flush=True)
+        if not gripper:
+            print('Gripper control disabled; add --gripper with --execute to enable it.', flush=True)
         clock = XRClock(min(control.config['stale_s'] for control in controls))
         started = time.monotonic()
         deadline = started + duration if duration else float('inf')

@@ -27,27 +27,22 @@ def test_gripper_requires_online_and_uses_nonpersistent_force_pick():
     with pytest.raises(ValueError): move(c, 'close', force=0)
 
 
-def test_buttons_release_edges_arm_interlock_and_stale():
+def test_buttons_release_edges_conflicting_buttons_and_stale():
     b = Buttons()
-    def update(a=False, trigger=0., fresh=True, grip=0., now=0.):
-        return b.update(a, trigger, fresh=fresh, grip=grip, now=now)
+    def update(a=False, trigger=0., fresh=True):
+        return b.update(a, trigger, fresh=fresh)
     assert update(trigger=1.) is None
     assert update() is None
-    assert update(trigger=1., now=1.) == 'close'
-    assert update(trigger=1., now=3.) == 'close'
-    update(now=4.)
-    assert update(a=True, grip=1., now=5.) is None
-    assert b.blocked_reason == 'grip_pressed'
-    assert update(a=True, now=6.) is None
-    assert b.blocked_reason == 'release_buttons_to_arm'
-    update(now=7.)
-    assert update(a=True, now=8.) == 'open'
+    assert update(trigger=1.) == 'close'
+    assert update(trigger=1.) == 'close'
+    update()
+    assert update(a=True) == 'open'
     assert b.blocked_reason is None
-    assert update(a=True, trigger=1., now=8.1) is None
+    assert update(a=True, trigger=1.) is None
     assert b.blocked_reason == 'conflicting_buttons'
-    update(fresh=False, now=9.)
+    update(fresh=False)
     assert b.blocked_reason == 'xr_stale'
-    assert update(a=True, now=10.) is None
+    assert update(a=True) is None
 
 
 def test_busy_is_not_a_terminal_failure():
@@ -193,4 +188,4 @@ def test_default_segment_reduces_full_travel_command_count_and_clamps_endpoint()
                 break
         counts.append(len(c.sent))
         assert c.pos == 1
-    assert counts == [100, 20]
+    assert counts == [100, 10]

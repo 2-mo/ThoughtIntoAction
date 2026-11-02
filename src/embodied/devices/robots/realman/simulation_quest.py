@@ -72,7 +72,7 @@ def run(session, xr, config, duration, *, now=time.monotonic, wait=time.sleep):
                 previous = pose.copy()
                 session.command('hold')
             action = buttons.update(bool(xr.get_A_button()), float(xr.get_right_trigger()),
-                                    fresh=fresh, grip=grip, now=tick)
+                                    fresh=fresh)
             if action is not None and not following:
                 maximum = session.parameters['effective_robot_config']['gripper_max_width']
                 speed = session.parameters['effective_robot_config']['gripper_velocity_max_m_s']

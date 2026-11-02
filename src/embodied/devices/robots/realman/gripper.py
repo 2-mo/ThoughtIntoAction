@@ -1,6 +1,6 @@
 """EG2-4C2 controller commands; no power, serial or enable changes."""
 
-DEFAULT_STEP = 50  # Raw protocol units out of 1..1000, NOT millimetres.
+DEFAULT_STEP = 100  # Raw protocol units out of 1..1000, NOT millimetres.
 
 
 class GripperNotReady(RuntimeError):
@@ -50,13 +50,13 @@ def move(client, action, *, speed=100, force=50, initialize_open=False):
 
 
 class Buttons:
-    """Hold controls to jog; release after startup, stale data or arm engagement."""
+    """Hold controls to jog; release after startup or stale data, independently of Grip."""
     def __init__(self):
         self.ready = False
         self.trigger_down = False
         self.blocked_reason = 'release_buttons_to_arm'
 
-    def update(self, a, trigger, *, fresh, grip, now):
+    def update(self, a, trigger, *, fresh):
         import math
         if not math.isfinite(trigger) or not 0 <= trigger <= 1:
             raise ValueError('Invalid trigger reading')
@@ -64,10 +64,6 @@ class Buttons:
         if not fresh:
             self.ready = False
             self.blocked_reason = 'xr_stale'
-            return None
-        if grip >= .2:
-            self.ready = False
-            self.blocked_reason = 'grip_pressed'
             return None
         if not a and trigger < .2:
             self.ready = True
@@ -88,7 +84,7 @@ class Jog:
     Release stops scheduling, not the already accepted segment. Position moves
     inherit the controller's speed/force settings; we do not alter them implicitly.
     """
-    period = .15
+    period = .08
 
     def __init__(self, *, step=DEFAULT_STEP):
         if type(step) is not int or not 5 <= step <= 100:
@@ -170,7 +166,7 @@ class SessionJog:
                 self.unavailable = feedback
                 self.ready_samples = 0
                 return {'accepted': False, 'enabled_for_session': False,
-                        'reason': 'not ready; release Grip/A/Trigger for read-only recovery checks',
+                        'reason': 'not ready; release open button/Trigger for read-only recovery checks',
                         'feedback': feedback}
             if feedback['mode'] not in (1, 2, 3, 4, 5, 6):
                 raise RuntimeError(f'Unknown gripper mode: {feedback}')
@@ -185,7 +181,7 @@ class SessionJog:
             self.unavailable = None
             self.jog = Jog(step=self.step)  # Discard scheduling, preserve the chosen segment size.
             return {'accepted': False, 'enabled_for_session': True,
-                    'reason': 'ready; press A/Trigger again to move', 'feedback': feedback}
+                    'reason': 'ready; press open button/Trigger again to move', 'feedback': feedback}
         try:
             return self.jog.update(client, action, now)
         except GripperNotReady as exc:
@@ -193,5 +189,5 @@ class SessionJog:
             self.ready_samples = 0
             self.next_check = now + 1.
             return {'accepted': False, 'enabled_for_session': False,
-                    'reason': 'not ready; release Grip/A/Trigger for read-only recovery checks',
+                    'reason': 'not ready; release open button/Trigger for read-only recovery checks',
                     'feedback': self.unavailable}

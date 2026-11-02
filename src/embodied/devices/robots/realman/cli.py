@@ -19,7 +19,9 @@ def run():
     parser.add_argument('--left-config', help='Left arm config for quest-dual (default .19)')
     parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
     parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
-    parser.add_argument('--gripper', action='store_true', help='Hold A (right) / X (left) to open, corresponding Trigger to close; release that Grip first')
+    parser.add_argument('--gripper', action='store_true', help='Hold A (right) / X (left) to open, corresponding Trigger to close; works while following with Grip')
+    parser.add_argument('--gripper-speed', type=int, metavar='1..1000',
+                        help='Speed for explicit full open/close or startup open only (default 100); position segments inherit controller speed')
     parser.add_argument('--gripper-step', type=int, metavar='5..100',
                         help=f'Raw opening units per segment (default {DEFAULT_STEP}); larger segments continue farther after release')
     parser.add_argument('--gripper-initialize-open', action='store_true',
@@ -48,6 +50,12 @@ def run():
     if args.gripper_initialize_open and not (args.execute and (
             args.action == 'gripper-open' or (quest_action and args.gripper))):
         parser.error('--gripper-initialize-open requires quest/quest-dual --execute --gripper or gripper-open --execute')
+    if args.gripper_speed is not None:
+        if not (args.action in ('gripper-open', 'gripper-close') or args.gripper_initialize_open):
+            parser.error('--gripper-speed requires an explicit full open/close or --gripper-initialize-open')
+        if not 1 <= args.gripper_speed <= 1000:
+            parser.error('--gripper-speed must be in 1..1000')
+    gripper_speed = args.gripper_speed if args.gripper_speed is not None else 100
     if not np.isfinite(args.duration) or args.duration < 0:
         parser.error('--duration must be finite and nonnegative')
     if not np.isfinite(args.xr_startup_timeout) or args.xr_startup_timeout <= 0:
@@ -78,7 +86,7 @@ def run():
             if backend.state.fault:
                 raise RuntimeError(backend.state.fault)
             print(json.dumps(gripper_move(backend.client, args.action.removeprefix('gripper-'),
-                initialize_open=args.gripper_initialize_open)), flush=True)
+                speed=gripper_speed, initialize_open=args.gripper_initialize_open)), flush=True)
             return
         if args.action == 'gripper-status':
             raw = gripper_status(backend.client)
@@ -108,7 +116,7 @@ def run():
         run_quest(bindings, xr, execute=args.execute, duration=args.duration,
             startup_timeout=args.xr_startup_timeout, position_only=args.position_only,
             gripper=args.gripper, gripper_step=gripper_step,
-            initialize_open=args.gripper_initialize_open)
+            initialize_open=args.gripper_initialize_open, gripper_speed=gripper_speed)
 
 
 def main():
