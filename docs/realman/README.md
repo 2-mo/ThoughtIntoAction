@@ -1,4 +1,9 @@
-# RM65 示教器远程访问（Windows）
+# RealMan RM65
+
+- [MuJoCo 仿真：无需 VR 的脚本演示、简化夹爪与 Quest 输入](simulation.md)
+- [真机平台接入与 Quest 遥操](platform.md)
+
+## 示教器远程访问（Windows）
 
 两个 PowerShell 脚本分别连接现场的两台机械臂，只建立 SSH 端口转发，不发送机械臂指令。文件放在文档目录便于下载；必须在 Windows 本机执行，不是在 Linux SSH 终端执行。当前配置为 SSH 主机 `guest@100.126.219.88`，变化时修改脚本顶部的 `$SshTarget`。
 

@@ -6,6 +6,7 @@ from importlib import import_module
 EXAMPLES = {
     "sim_control": ("simulation.control", "可视化仿真控制：关节、XYZ、夹爪与返回；无需真机或 VR"),
     "sim_task": ("simulation.task_reset", "保存/恢复仿真场景，重复执行任务并检查成功条件"),
+    "realman": ("simulation.realman", "RM65 官方模型仿真：关节、XYZ、简化夹爪及快照复位；无需 VR"),
     "reference7": ("simulation.reference7", "同一接口控制七轴无夹爪 MuJoCo 教学模型"),
     "read_state": ("control.read_state", "读取关节、TCP、夹爪和内核能力（不申请控制权）"),
     "movej": ("control.movej", "robot.movej：给定关节目标，等待到位"),

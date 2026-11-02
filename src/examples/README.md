@@ -61,6 +61,7 @@ examples/
 | --- | --- | --- |
 | [control.py](simulation/control.py) | `sim_control` / `sim_control --headless` | 在仿真中逐步执行关节、XYZ 和夹爪动作 |
 | [task_reset.py](simulation/task_reset.py) | `sim_task` | 保存/恢复物理状态，重复执行任务并检查成功条件 |
+| [realman.py](simulation/realman.py) | `realman` / `realman --headless` | 官方 RM65 模型的关节、XYZ、简化夹爪与快照复位；[详细说明](../../docs/realman/simulation.md) |
 | [reference7.py](simulation/reference7.py) | `reference7` | 通过同一 Robot 接口控制独立的七轴无夹爪模型 |
 | [read_state.py](control/read_state.py) | `read_state` | 读取 `state`、关节、末端和能力说明 |
 | [movej.py](control/movej.py) | `movej --joint 1 --degrees 10` | 从当前关节位置构造目标，再调用 `movej` |

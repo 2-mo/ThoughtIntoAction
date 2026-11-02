@@ -8,84 +8,9 @@ import sys
 import numpy as np
 
 from embodied.contracts.control import ControlCommand, Mode
-from .backend import Backend, DEFAULT_CONFIG, load_config, vector
+from .backend import Backend, DEFAULT_CONFIG, load_config
 from .gripper import status as gripper_status, move as gripper_move, Buttons, Jog
-from .geometry import matrix, quaternion, limited_rotation, rotation_vector
-
-
-class RelativeTarget:
-    def __init__(self, config):
-        self.config = config
-        self.basis = np.asarray(config['xr_to_robot_basis'])
-        self.reference = None
-        self.robot_reference = None
-        self.origin = None
-        self.limits = []
-
-    def reset(self):
-        self.reference = None
-
-    def update(self, controller, robot_pose):
-        controller = vector(controller, 7)
-        if not np.isclose(np.linalg.norm(controller[3:]), 1, atol=.01):
-            raise ValueError('Invalid tracked controller quaternion')
-        if self.reference is None:
-            self.reference = controller.copy()
-            self.robot_reference = robot_pose.copy()
-        if self.origin is None:
-            self.origin = robot_pose.copy()
-        self.limits = []
-        target = self.robot_reference.copy()
-        delta = self.basis @ (controller[:3] - self.reference[:3]) * self.config['position_scale']
-        if np.linalg.norm(delta) > self.config['translation_radius_m']:
-            self.limits.append('translation_boundary')
-        delta *= min(1., self.config['translation_radius_m'] / max(np.linalg.norm(delta), 1e-12))
-        target[:3] += delta
-        rotation = self.basis @ matrix(controller[3:]) @ matrix(self.reference[3:]).T @ self.basis.T
-        desired = quaternion(rotation @ matrix(self.robot_reference[3:]))
-        if np.linalg.norm(rotation_vector(desired, self.robot_reference[3:])) > self.config['rotation_radius_rad']:
-            self.limits.append('rotation_boundary')
-        target[3:] = limited_rotation(desired, self.robot_reference[3:], self.config['rotation_radius_rad'])
-        offset = target[:3] - self.origin[:3]
-        radius = self.config['translation_radius_m']
-        if np.linalg.norm(offset) > radius:
-            self.limits.append('translation_boundary')
-            target[:3] = self.origin[:3] + offset * radius / np.linalg.norm(offset)
-        if np.linalg.norm(rotation_vector(target[3:], self.origin[3:])) > self.config['rotation_radius_rad']:
-            self.limits.append('rotation_boundary')
-        target[3:] = limited_rotation(target[3:], self.origin[3:], self.config['rotation_radius_rad'])
-        return target
-
-
-class GripGate:
-    """Release to arm, squeeze to engage, release below 0.2 to disengage."""
-    def __init__(self):
-        self.armed = False
-        self.following = False
-
-    def update(self, grip, fresh):
-        if not fresh:
-            self.armed = self.following = False
-        elif grip < .2:
-            self.armed = True
-            self.following = False
-        elif grip > .8 and self.armed:
-            self.following = True
-        return self.following
-
-
-class XRClock:
-    def __init__(self, stale_s):
-        self.stale_s = stale_s
-        self.previous = 0
-        self.updated_at = float('-inf')
-
-    def fresh(self, timestamp, now):
-        rollback = timestamp < self.previous
-        if timestamp > self.previous:
-            self.updated_at = now
-        self.previous = timestamp
-        return timestamp > 0 and not rollback and now - self.updated_at < self.stale_s
+from .teleop import RelativeTarget, GripGate, XRClock
 
 
 def run():
