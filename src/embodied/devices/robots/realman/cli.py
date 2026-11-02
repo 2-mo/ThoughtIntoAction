@@ -15,7 +15,7 @@ from .teleop import RelativeTarget, GripGate, XRClock
 
 def run():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['status', 'quest', 'check-kinematics', 'gripper-status', 'gripper-open', 'gripper-close'])
+    parser.add_argument('action', choices=['status', 'quest', 'check-kinematics', 'gripper-status', 'gripper-open', 'gripper-close', 'zero'])
     parser.add_argument('--config', default=str(DEFAULT_CONFIG))
     parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
     parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
@@ -23,8 +23,8 @@ def run():
     parser.add_argument('--xr-startup-timeout', type=float, default=15.,
                         help='Seconds to wait for the first XR frame; live stale limit is unchanged')
     args = parser.parse_args()
-    if args.execute and args.action not in ('quest', 'gripper-open', 'gripper-close'):
-        parser.error('--execute requires quest or gripper-open/close')
+    if args.execute and args.action not in ('quest', 'gripper-open', 'gripper-close', 'zero'):
+        parser.error('--execute requires quest, zero or gripper-open/close')
     if args.action in ('gripper-open', 'gripper-close') and not args.execute:
         parser.error('Gripper movement requires --execute')
     if args.gripper and (args.action != 'quest' or not args.execute):
@@ -37,6 +37,12 @@ def run():
     with ExitStack() as stack:
         backend = Backend(config, allow_motion=args.execute and args.action == 'quest')
         stack.callback(backend.close)
+        if args.action == 'zero':
+            from .positioning import zero_preview, execute_zero
+            print(json.dumps({'zero_preview': zero_preview(backend), 'execute_requested': args.execute}), flush=True)
+            if args.execute:
+                print(json.dumps(execute_zero(backend)), flush=True)
+            return
         if args.action in ('gripper-open', 'gripper-close') or args.gripper:
             backend.client.allow_gripper = True
         if args.action in ('gripper-open', 'gripper-close'):

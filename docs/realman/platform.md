@@ -155,3 +155,17 @@ Quest 使用 `set_gripper_position`，每段最多约10/1000原始开口单位�
 ### XR 首帧连接等待
 
 现场独立 SDK 读取观察到启动后6.5秒才出现首帧，之后持续更新；旧执行入口5秒首帧等待会提前终止。现默认等待首帧15秒，可用 `--xr-startup-timeout 30` 指定。等待期间不发送运动，Grip及夹爪按键保持未解锁；首帧到达后仍需松键解锁。已收到数据后的 `stale_s=0.3` 秒断流保护不变，断流不会在原执行会话中自动恢复运动。日志 `waiting_for_first_xr`、`xr_timestamp_ns` 区分连接等待与运行中断流。`--duration` 仍包含启动等待时间，短测建议30秒。
+
+### 显式 SDK 关节零位与放大配置
+
+`./run.sh realman zero` 只读当前关节、控制器关节范围，用官方离线模型计算全零TCP和奇异区信息，不运动。`./run.sh realman zero --execute` 是独立的官方 SDK 关节运动命令 `rm_movej([0,0,0,0,0,0],5,0,0,0)`，速度百分比5%，无轨迹连接。使用已有设备锁、型号与工具核对，不使能、不清错、不改变工具或夹爪。要求机械臂静止、无错误，SDK与JSON关节反馈一致；随后监测反馈至每轴距离0不超过0.1°且连续3次成立。中断、错误、反馈丢失或90秒超时尝试SDK停止，再关闭句柄。SDK连接及关节反馈已实机只读核对，运动生命周期仅通过假设备测试，回零动作未实机验证。
+
+当前安装全零TCP预计在基座上方约0.991m，是官方算法判定的奇异姿态；不能用它直接启动笛卡尔遥操。关节回零不重新标定编码器，也不修正VR坐标映射。回零前需现场确认夹爪、相机、线缆及整个手臂运动路径均有空间；TCP预测不是碰撞检查。回零后由示教器关节模式调整到适合操作的弯曲姿态，再只读 `check-kinematics` 和预览核对方向。
+
+单独配置 `configs/robots/realman/rm65-19-responsive.json`：平移缩放0.6（原0.3）、最大平移速度0.04m/s（原0.02）、角速度0.2rad/s（原0.1）、启动TCP附近半径0.15m（原0.05）、姿态范围0.5rad（原0.25）。控制频率、断流、反馈领先、1°指令步长和奇异区保护保留；不保证达到配置速度，限速/跟随滞后仍可能降低实际速度。原默认配置保留。
+
+```bash
+./run.sh realman quest --config configs/robots/realman/rm65-19-responsive.json --duration 30
+# 现场预览核对空间后才运行：
+./run.sh realman quest --config configs/robots/realman/rm65-19-responsive.json --execute --gripper --duration 30
+```
