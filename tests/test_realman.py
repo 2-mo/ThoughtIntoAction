@@ -151,9 +151,13 @@ def test_relative_reference_and_basis(setup):
     controller = np.array([0., 0, 0, 0, 0, 0, 1])
     assert np.allclose(tracker.update(controller, robot), robot)
     controller[2] = -.1
-    assert np.allclose(tracker.update(controller, robot)[:3], [.33, 0, .4])
+    assert np.allclose(tracker.update(controller, robot)[:3], [.27, 0, .4])
     tracker.reset()
     assert np.allclose(tracker.update(controller, robot), robot)
+    controller[0] += .01
+    assert np.allclose(tracker.update(controller, robot)[:3], [.3, .003, .4])
+    controller[1] += .01
+    assert np.allclose(tracker.update(controller, robot)[:3], [.3, .003, .403])
 
 
 def test_protocol_fragmentation_and_readonly_whitelist():
