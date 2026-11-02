@@ -56,17 +56,18 @@ def test_busy_is_not_a_terminal_failure():
     assert c.sent == []
 
 
-def test_jog_release_and_reverse_wait_for_pending_segment():
+@pytest.mark.parametrize('step', [10, 50, 100])
+def test_jog_release_and_reverse_wait_for_pending_segment(step):
     c = Client(); c.pos = 500; c.mode = 3
-    jog = Jog()
-    assert jog.update(c, 'open', 0.)['position_target_raw'] == 510
+    jog = Jog(step=step)
+    assert jog.update(c, 'open', 0.)['position_target_raw'] == 500 + step
     c.mode = 5; c.pos = 504
     assert jog.update(c, None, .2)['accepted'] is False
     assert len(c.sent) == 1  # Releasing never queues more motion.
     assert jog.update(c, 'close', .4)['accepted'] is False
     c.mode = 3
     assert jog.update(c, 'close', .6)['reason'] == 'awaiting position feedback'
-    c.pos = 510
+    c.pos = 500 + step
     assert jog.update(c, 'close', .8)['position_target_raw'] == 500
     assert c.sent[-1] == dict(command='set_gripper_position', position=500, block=False)
 
@@ -127,7 +128,7 @@ def test_initialization_is_explicit_open_only_and_rejects_real_faults():
 
 def test_recovery_requires_two_idle_samples_neutral_controls_and_new_press():
     c = Client(); c.pos = 500
-    session = SessionJog(unavailable={'status':0})
+    session = SessionJog(unavailable={'status':0}, step=10)
     assert session.update(c, None, 0., controls_neutral=True)['reason'].startswith('confirming')
     assert session.update(c, 'close', 1., controls_neutral=False) is None
     assert session.update(c, None, 2., controls_neutral=True)['reason'].startswith('confirming')
@@ -137,6 +138,7 @@ def test_recovery_requires_two_idle_samples_neutral_controls_and_new_press():
     session.update(c, None, 4., controls_neutral=True)
     assert session.update(c, None, 5., controls_neutral=True)['enabled_for_session']
     assert c.sent == []
+    assert session.jog.step == 10  # Recovery keeps the configured segment size.
     assert session.update(c, 'close', 5.1, controls_neutral=False)['position_target_raw'] == 490
 
 
@@ -168,3 +170,27 @@ def test_recovery_does_not_hide_invalid_feedback_or_transport_errors(invalid):
     with pytest.raises((RuntimeError, TimeoutError)):
         SessionJog(unavailable={'status':0}).update(c, None, 0., controls_neutral=True)
     assert c.sent == []
+
+
+@pytest.mark.parametrize('step', [0, 4, 101, 1000, 10.5, True])
+def test_segment_size_rejects_invalid_values(step):
+    with pytest.raises(ValueError):
+        Jog(step=step)
+
+
+def test_default_segment_reduces_full_travel_command_count_and_clamps_endpoint():
+    counts = []
+    for jog in (Jog(step=10), Jog()):
+        c = Client(); c.pos = 1000; c.mode = 3
+        for tick in range(101):
+            report = jog.update(c, 'close', tick * .16)
+            if report and report.get('accepted'):
+                target = report['position_target_raw']
+                assert 1 <= target <= 1000
+                assert 0 < c.pos - target <= jog.step
+                c.pos = target  # Synthetic completed feedback at the next poll.
+            if c.pos == 1:
+                break
+        counts.append(len(c.sent))
+        assert c.pos == 1
+    assert counts == [100, 20]

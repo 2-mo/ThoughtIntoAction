@@ -9,7 +9,7 @@ import numpy as np
 
 from embodied.contracts.control import ControlCommand, Mode
 from .backend import Backend, DEFAULT_CONFIG, load_config
-from .gripper import status as gripper_status, move as gripper_move, Buttons, SessionJog, GripperNotReady, require_ready
+from .gripper import status as gripper_status, move as gripper_move, Buttons, SessionJog, GripperNotReady, require_ready, DEFAULT_STEP
 from .teleop import RelativeTarget, GripGate, XRClock
 
 
@@ -20,6 +20,8 @@ def run():
     parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
     parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
     parser.add_argument('--gripper', action='store_true', help='Hold A to open or Trigger to close in small position segments; release Grip first')
+    parser.add_argument('--gripper-step', type=int, metavar='5..100',
+                        help=f'Raw opening units per segment (default {DEFAULT_STEP}); larger segments continue farther after release')
     parser.add_argument('--gripper-initialize-open', action='store_true',
                         help='Explicit full open at startup (speed 100/1000), including all-zero gripper feedback; requires clear empty jaws')
     parser.add_argument('--position-only', action='store_true', help='Translate while preserving the TCP orientation at each Grip engagement')
@@ -32,6 +34,12 @@ def run():
         parser.error('Gripper movement requires --execute')
     if args.gripper and (args.action != 'quest' or not args.execute):
         parser.error('--gripper requires quest --execute')
+    if args.gripper_step is not None:
+        if not args.gripper:
+            parser.error('--gripper-step requires quest --execute --gripper')
+        if not 5 <= args.gripper_step <= 100:
+            parser.error('--gripper-step must be in 5..100 raw units')
+    gripper_step = args.gripper_step if args.gripper_step is not None else DEFAULT_STEP
     if args.position_only and args.action != 'quest':
         parser.error('--position-only requires quest')
     if args.gripper_initialize_open and not (args.execute and (
@@ -111,7 +119,7 @@ def run():
             'xr_to_robot_basis': config['xr_to_robot_basis'],
         }}), flush=True)
         if args.gripper:
-            print('Gripper: release Grip; HOLD A=open, HOLD Trigger=close in 10/1000 position segments. Release ends scheduling; current segment may finish. Speed/force inherited from controller.', flush=True)
+            print(f'Gripper: release Grip; HOLD A=open, HOLD Trigger=close in {gripper_step}/1000 position segments. Release ends scheduling; current segment may finish. Speed/force inherited from controller.', flush=True)
             if gripper_unavailable is not None:
                 print(json.dumps({'gripper': {'enabled_for_session': False,
                     'reason': 'not ready; release Grip/A/Trigger for read-only recovery checks; arm Grip control remains available',
@@ -119,7 +127,7 @@ def run():
         else:
             print('Gripper control disabled.', flush=True)
         buttons = Buttons()
-        jog = SessionJog(gripper_unavailable)
+        jog = SessionJog(gripper_unavailable, step=gripper_step)
         last_gripper_report = None
         last_gripper_input = None
         gripper_actions = 0

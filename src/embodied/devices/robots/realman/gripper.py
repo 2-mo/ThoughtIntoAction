@@ -1,5 +1,7 @@
 """EG2-4C2 controller commands; no power, serial or enable changes."""
 
+DEFAULT_STEP = 50  # Raw protocol units out of 1..1000, NOT millimetres.
+
 
 class GripperNotReady(RuntimeError):
     """Valid controller feedback says gripper unavailable; TCP is still usable."""
@@ -86,10 +88,12 @@ class Jog:
     Release stops scheduling, not the already accepted segment. Position moves
     inherit the controller's speed/force settings; we do not alter them implicitly.
     """
-    step = 10  # raw protocol units out of 1..1000, NOT millimetres.
     period = .15
 
-    def __init__(self):
+    def __init__(self, *, step=DEFAULT_STEP):
+        if type(step) is not int or not 5 <= step <= 100:
+            raise ValueError('Gripper segment must be an integer in 5..100 raw units')
+        self.step = step
         self.next_poll = 0.
         self.pending = None
         self.sent_at = None
@@ -144,9 +148,10 @@ class Jog:
 
 class SessionJog:
     """Read-only recovery while controls are neutral; never replay an old action."""
-    def __init__(self, unavailable=None):
+    def __init__(self, unavailable=None, *, step=DEFAULT_STEP):
         self.unavailable = unavailable
-        self.jog = Jog()
+        self.step = step
+        self.jog = Jog(step=step)
         self.next_check = 0.
         self.ready_samples = 0
 
@@ -178,7 +183,7 @@ class SessionJog:
             if self.ready_samples < 2:
                 return {'accepted': False, 'reason': 'confirming idle gripper feedback', 'feedback': feedback}
             self.unavailable = None
-            self.jog = Jog()  # Discard old scheduling after two measured idle responses.
+            self.jog = Jog(step=self.step)  # Discard scheduling, preserve the chosen segment size.
             return {'accepted': False, 'enabled_for_session': True,
                     'reason': 'ready; press A/Trigger again to move', 'feedback': feedback}
         try:

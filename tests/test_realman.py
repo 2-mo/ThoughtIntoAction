@@ -538,3 +538,31 @@ def test_explicit_open_initialization_entry_from_all_zero_feedback(setup, monkey
     assert client.sent == [{'command':'set_gripper_release','speed':100,'block':False}]
     assert '"initializing_from_zero_feedback": true' in capsys.readouterr().out
     assert client.closed
+
+
+@pytest.mark.parametrize('step', [None, 100])
+def test_cli_gripper_uses_default_and_explicit_segment_size(setup, monkeypatch, capsys, step):
+    import sys
+    from types import SimpleNamespace
+    from embodied.devices.robots.realman import cli
+    config, client = setup
+    client.responses['get_gripper_state'] = dict(enable=1,status=1,error=0,mode=3,
+        current_force=0,temperature=33,actpos=500)
+    client.exchange = lambda message, expected: (client.sent.append(message) or {'state':True})
+    ticks = [0]
+    def grip():
+        ticks[0] += 1
+        return 0.
+    xr = SimpleNamespace(init=lambda: None,close=lambda: None,get_time_stamp_ns=time.monotonic_ns,
+        get_right_grip=grip,get_A_button=lambda: False,
+        get_right_trigger=lambda: 1. if ticks[0] in (2,3) else 0.,get_B_button=lambda: ticks[0]>=4)
+    monkeypatch.setitem(sys.modules, 'xrobotoolkit_sdk', xr)
+    monkeypatch.setattr(cli, 'load_config', lambda _: config)
+    monkeypatch.setattr(cli, 'Backend', lambda config, allow_motion: Backend(config,client=client,allow_motion=allow_motion))
+    monkeypatch.setattr(sys, 'argv', ['realman','quest','--execute','--gripper','--duration','0'] +
+        ([] if step is None else ['--gripper-step',str(step)]))
+    cli.main()
+    effective = 50 if step is None else step
+    assert client.sent == [{'command':'set_gripper_position','position':500-effective,'block':False}]
+    assert f'{effective}/1000 position segments' in capsys.readouterr().out
+    assert client.closed
