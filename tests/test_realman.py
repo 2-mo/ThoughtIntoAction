@@ -99,7 +99,7 @@ def test_speed_limit_deadman_and_no_enable(setup):
         backend.step(command(target), time.monotonic())
         assert client.sent[-1]['command'] == 'movep_canfd'
         assert client.sent[-1]['follow'] is False
-        assert client.sent[-1]['pose'][0] == 300800
+        assert client.sent[-1]['pose'][0] == 301600
         assert target[0] == pytest.approx(.34)  # Caller-owned target is not mutated.
         backend.step(ControlCommand(Mode.DISABLED), time.monotonic())
         assert client.sent[-1] == {'command': 'set_arm_stop'}
@@ -151,13 +151,13 @@ def test_relative_reference_and_basis(setup):
     controller = np.array([0., 0, 0, 0, 0, 0, 1])
     assert np.allclose(tracker.update(controller, robot), robot)
     controller[2] = -.1
-    assert np.allclose(tracker.update(controller, robot)[:3], [.27, 0, .4])
+    assert np.allclose(tracker.update(controller, robot)[:3], [.24, 0, .4])
     tracker.reset()
     assert np.allclose(tracker.update(controller, robot), robot)
     controller[0] += .01
-    assert np.allclose(tracker.update(controller, robot)[:3], [.3, .003, .4])
+    assert np.allclose(tracker.update(controller, robot)[:3], [.3, .006, .4])
     controller[1] += .01
-    assert np.allclose(tracker.update(controller, robot)[:3], [.3, .003, .403])
+    assert np.allclose(tracker.update(controller, robot)[:3], [.3, .006, .406])
 
 
 def test_protocol_fragmentation_and_readonly_whitelist():
@@ -210,7 +210,8 @@ def test_feedback_error_stops_active_session(setup):
 
 @pytest.mark.parametrize('duration', ['.15', '0'])
 @pytest.mark.parametrize('execute', [False, True])
-def test_cli_preview_and_explicit_execute_use_same_mapping(setup, monkeypatch, capsys, execute, duration):
+@pytest.mark.parametrize('position_only', [False, True])
+def test_cli_preview_and_explicit_execute_use_same_mapping(setup, monkeypatch, capsys, execute, duration, position_only):
     import sys
     from types import SimpleNamespace
     from embodied.devices.robots.realman import cli
@@ -221,18 +222,22 @@ def test_cli_preview_and_explicit_execute_use_same_mapping(setup, monkeypatch, c
         return 0. if ticks[0] == 1 else 1.
     xr = SimpleNamespace(init=lambda: None, close=lambda: None,
         get_time_stamp_ns=time.monotonic_ns, get_right_grip=grip,
-        get_right_controller_pose=lambda: [0., 0., -.001*ticks[0], 0., 0., 0., 1.],
+        get_right_controller_pose=lambda: [0., 0., -.001*ticks[0], np.sin(.01*ticks[0]), 0., 0., np.cos(.01*ticks[0])],
         get_B_button=lambda: duration == '0' and ticks[0] > 3)
     monkeypatch.setitem(sys.modules, 'xrobotoolkit_sdk', xr)
     monkeypatch.setattr(cli, 'load_config', lambda _: config)
     monkeypatch.setattr(cli, 'Backend', lambda config, allow_motion: Backend(config, client=client, allow_motion=allow_motion))
-    monkeypatch.setattr(sys, 'argv', ['realman', 'quest', '--duration', duration] + (['--execute'] if execute else []))
+    monkeypatch.setattr(sys, 'argv', ['realman', 'quest', '--duration', duration] +
+                        (['--execute'] if execute else []) + (['--position-only'] if position_only else []))
     cli.main()
     output = capsys.readouterr().out
     assert 'target_m_xyzw' in output
+    assert ('"mode": "position_only"' if position_only else '"mode": "position_and_rotation"') in output
     if execute:
         assert client.sent[0]['command'] == 'movep_canfd'
         assert client.sent[-1]['command'] == 'set_arm_stop'
+        orientations = [m['pose'][3:] for m in client.sent if m['command'] == 'movep_canfd']
+        assert any(any(angle != 0 for angle in angles) for angles in orientations) is not position_only
     else:
         assert client.sent == []
     assert client.closed
@@ -450,9 +455,9 @@ def test_joint_step_backoff_checks_wire_pose_before_send(setup):
         backend.motion_check.check = check
         goal = origin.copy(); goal[0] += .01
         backend.step(command(goal), time.monotonic())
-        assert len(calls) == 2
-        assert backend.command_diagnostics['joint_step_scale'] == .5
-        assert len(backend.command_diagnostics['joint_step_rejections']) == 1
+        assert len(calls) == 3
+        assert backend.command_diagnostics['joint_step_scale'] == .25
+        assert len(backend.command_diagnostics['joint_step_rejections']) == 2
         assert np.allclose(decode_pose(client.sent[-1]['pose']), calls[-1])
         assert abs(calls[-1][0] - origin[0]) <= .0005
     finally:

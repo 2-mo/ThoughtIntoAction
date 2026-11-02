@@ -20,6 +20,7 @@ def run():
     parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
     parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
     parser.add_argument('--gripper', action='store_true', help='Hold A to open or Trigger to close in small position segments; release Grip first')
+    parser.add_argument('--position-only', action='store_true', help='Translate while preserving the TCP orientation at each Grip engagement')
     parser.add_argument('--xr-startup-timeout', type=float, default=15.,
                         help='Seconds to wait for the first XR frame; live stale limit is unchanged')
     args = parser.parse_args()
@@ -29,6 +30,8 @@ def run():
         parser.error('Gripper movement requires --execute')
     if args.gripper and (args.action != 'quest' or not args.execute):
         parser.error('--gripper requires quest --execute')
+    if args.position_only and args.action != 'quest':
+        parser.error('--position-only requires quest')
     if not np.isfinite(args.duration) or args.duration < 0:
         parser.error('--duration must be finite and nonnegative')
     if not np.isfinite(args.xr_startup_timeout) or args.xr_startup_timeout <= 0:
@@ -74,11 +77,21 @@ def run():
         xr.init()
         stack.callback(xr.close)
         stack.callback(backend.stop)  # Stop before closing the XR SDK, which can block.
-        tracker = RelativeTarget(config)
+        tracker = RelativeTarget(config, position_only=args.position_only)
         tracker.origin = backend.origin.copy()
         print('EXECUTE: right Grip is the deadman; B stops and exits.' if args.execute else
               'READ-ONLY PREVIEW: hold right Grip to preview relative targets; B exits.', flush=True)
         print('Release Grip first. No automatic enable/home.', flush=True)
+        print(json.dumps({'teleop': {
+            'mode': 'position_only' if args.position_only else 'position_and_rotation',
+            'position_scale': config['position_scale'],
+            'linear_speed_m_s': config['linear_speed_m_s'],
+            'angular_speed_rad_s': config['angular_speed_rad_s'],
+            'translation_radius_m': config['translation_radius_m'],
+            'rotation_radius_rad': config['rotation_radius_rad'],
+            'workspace_center_m_xyzw': tracker.origin.tolist(),
+            'xr_to_robot_basis': config['xr_to_robot_basis'],
+        }}), flush=True)
         if args.gripper:
             print('Gripper: release Grip; HOLD A=open, HOLD Trigger=close in 10/1000 position segments. Release ends scheduling; current segment may finish. Speed/force inherited from controller.', flush=True)
         else:

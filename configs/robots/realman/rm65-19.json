@@ -9,10 +9,10 @@
   "timeout_s": 0.3,
   "control_hz": 25,
   "stale_s": 0.3,
-  "linear_speed_m_s": 0.02,
-  "angular_speed_rad_s": 0.1,
-  "translation_radius_m": 0.05,
-  "rotation_radius_rad": 0.25,
-  "position_scale": 0.3,
+  "linear_speed_m_s": 0.04,
+  "angular_speed_rad_s": 0.2,
+  "translation_radius_m": 0.15,
+  "rotation_radius_rad": 0.5,
+  "position_scale": 0.6,
   "xr_to_robot_basis": [[0, 0, 1], [1, 0, 0], [0, 1, 0]]
 }

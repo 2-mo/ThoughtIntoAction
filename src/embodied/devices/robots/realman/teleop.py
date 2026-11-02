@@ -11,8 +11,9 @@ def vector(value, count):
 
 
 class RelativeTarget:
-    def __init__(self, config):
+    def __init__(self, config, *, position_only=False):
         self.config = config
+        self.position_only = position_only
         self.basis = np.asarray(config['xr_to_robot_basis'])
         self.reference = None
         self.robot_reference = None
@@ -34,23 +35,24 @@ class RelativeTarget:
         self.limits = []
         target = self.robot_reference.copy()
         delta = self.basis @ (controller[:3] - self.reference[:3]) * self.config['position_scale']
-        if np.linalg.norm(delta) > self.config['translation_radius_m']:
-            self.limits.append('translation_boundary')
-        delta *= min(1., self.config['translation_radius_m'] / max(np.linalg.norm(delta), 1e-12))
         target[:3] += delta
-        rotation = self.basis @ matrix(controller[3:]) @ matrix(self.reference[3:]).T @ self.basis.T
-        desired = quaternion(rotation @ matrix(self.robot_reference[3:]))
-        if np.linalg.norm(rotation_vector(desired, self.robot_reference[3:])) > self.config['rotation_radius_rad']:
-            self.limits.append('rotation_boundary')
-        target[3:] = limited_rotation(desired, self.robot_reference[3:], self.config['rotation_radius_rad'])
+        if not self.position_only:
+            rotation = self.basis @ matrix(controller[3:]) @ matrix(self.reference[3:]).T @ self.basis.T
+            target[3:] = quaternion(rotation @ matrix(self.robot_reference[3:]))
         offset = target[:3] - self.origin[:3]
         radius = self.config['translation_radius_m']
         if np.linalg.norm(offset) > radius:
             self.limits.append('translation_boundary')
             target[:3] = self.origin[:3] + offset * radius / np.linalg.norm(offset)
+            # Discard only the clipped translation, so reversing the hand moves
+            # inward immediately. Rotation keeps its independent reference.
+            self.reference[:3] = controller[:3]
+            self.robot_reference[:3] = target[:3]
         if np.linalg.norm(rotation_vector(target[3:], self.origin[3:])) > self.config['rotation_radius_rad']:
             self.limits.append('rotation_boundary')
-        target[3:] = limited_rotation(target[3:], self.origin[3:], self.config['rotation_radius_rad'])
+            target[3:] = limited_rotation(target[3:], self.origin[3:], self.config['rotation_radius_rad'])
+            self.reference[3:] = controller[3:]
+            self.robot_reference[3:] = target[3:]
         return target
 
 
