@@ -6,6 +6,7 @@ import time
 
 
 READS = {
+    'get_gripper_state': 'get_gripper_state',
     'get_DH_data': 'get_DH_data',
     'get_joint_min_pos': 'joint_min_pos',
     'get_joint_max_pos': 'joint_max_pos',
@@ -51,7 +52,7 @@ class Client:
                         raise ValueError('Oversized RealMan JSON frame')
                 line, self.buffer = self.buffer.split(b'\n', 1)
                 reply = json.loads(line)
-                if reply.get('state', reply.get('command')) == READS[command]:
+                if reply.get('command') == READS[command] or reply.get('state') == READS[command]:
                     return reply
                 # Motion acknowledgements and asynchronous notifications are not feedback.
             raise TimeoutError(f'No matching reply to {command}')

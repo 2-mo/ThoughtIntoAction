@@ -89,7 +89,7 @@ class XRClock:
 
 def run():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['status', 'quest', 'check-kinematics'])
+    parser.add_argument('action', choices=['status', 'quest', 'check-kinematics', 'gripper-status'])
     parser.add_argument('--config', default=str(DEFAULT_CONFIG))
     parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
     parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
@@ -102,6 +102,16 @@ def run():
     with ExitStack() as stack:
         backend = Backend(config, allow_motion=args.execute)
         stack.callback(backend.close)
+        if args.action == 'gripper-status':
+            raw = backend.client.query('get_gripper_state')
+            fields = ('enable', 'status', 'error', 'mode', 'current_force', 'temperature', 'actpos')
+            if any(type(raw.get(key)) is not int for key in fields):
+                raise ValueError(f'Incomplete EG2-4C2 status response: {raw}')
+            print(json.dumps({'model': 'EG2-4C2', 'feedback': {key: raw[key] for key in fields},
+                              'online': raw['status'] == 1, 'enabled': raw['enable'] == 1,
+                              'opening_unit': 'controller raw value; not calibrated to mm',
+                              'motion_sent': False, 'configuration_changed': False}, ensure_ascii=False, indent=2))
+            return
         if args.action == 'status':
             state = backend.read_state(time.monotonic())
             print(json.dumps({'identity': backend.info, 'joint_rad': state.q.tolist(),

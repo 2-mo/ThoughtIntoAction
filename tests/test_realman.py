@@ -390,3 +390,23 @@ def test_joint_command_baseline_commits_only_after_send_and_resets_on_stop(setup
         assert backend.last_joint_target is None
     finally:
         backend.close()
+
+
+def test_gripper_status_query_is_readonly_and_matches_command_with_numeric_status():
+    listener = socket.socket(); listener.bind(('127.0.0.1', 0)); listener.listen()
+    def server():
+        with listener.accept()[0] as conn:
+            request = b''
+            while not request.endswith(b'\r\n'):
+                request += conn.recv(4096)
+            assert json.loads(request) == {'command': 'get_gripper_state'}
+            conn.sendall(b'{"command":"get_gripper_state","state":false,"enable":0,"status":0,"error":0,"mode":0,"current_force":0,"temperature":0,"actpos":0}\r\n')
+        listener.close()
+    thread = threading.Thread(target=server); thread.start()
+    client = Client('127.0.0.1', listener.getsockname()[1])
+    try:
+        assert client.query('get_gripper_state')['status'] == 0
+        with pytest.raises(PermissionError):
+            client.send({'command': 'set_gripper_release', 'speed': 100})
+    finally:
+        client.close(); thread.join(timeout=1)
