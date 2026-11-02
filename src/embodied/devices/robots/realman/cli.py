@@ -20,6 +20,8 @@ def run():
     parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
     parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
     parser.add_argument('--gripper', action='store_true', help='Hold A to open or Trigger to close in small position segments; release Grip first')
+    parser.add_argument('--xr-startup-timeout', type=float, default=15.,
+                        help='Seconds to wait for the first XR frame; live stale limit is unchanged')
     args = parser.parse_args()
     if args.execute and args.action not in ('quest', 'gripper-open', 'gripper-close'):
         parser.error('--execute requires quest or gripper-open/close')
@@ -29,6 +31,8 @@ def run():
         parser.error('--gripper requires quest --execute')
     if not np.isfinite(args.duration) or args.duration < 0:
         parser.error('--duration must be finite and nonnegative')
+    if not np.isfinite(args.xr_startup_timeout) or args.xr_startup_timeout <= 0:
+        parser.error('--xr-startup-timeout must be finite and positive')
     config = load_config(args.config)
     with ExitStack() as stack:
         backend = Backend(config, allow_motion=args.execute and args.action == 'quest')
@@ -81,7 +85,7 @@ def run():
         clock = XRClock(config["stale_s"])
         last_update = time.monotonic()
         last_print = 0.
-        startup_deadline = last_update + 5.
+        startup_deadline = last_update + args.xr_startup_timeout
         seen_xr = False
         next_identity_check = last_update + 1.
         next_status = last_update
@@ -108,7 +112,9 @@ def run():
             following = gate.update(grip, fresh)
             if started >= next_status:
                 print(json.dumps({'xr_fresh': fresh, 'right_grip': grip, 'robot_fault': state.fault,
-                                  'armed': gate.armed, 'following': gate.following, 'preview': not args.execute}), flush=True)
+                                  'armed': gate.armed, 'following': gate.following, 'preview': not args.execute,
+                                  'xr_timestamp_ns': timestamp,
+                                  'waiting_for_first_xr': not seen_xr and not fresh}), flush=True)
                 next_status = started + 1.
             if xr.get_B_button():
                 break
@@ -119,8 +125,10 @@ def run():
             if not fresh:
                 backend.stop()
                 tracker.reset()
-                if args.execute and (seen_xr or started > startup_deadline):
-                    raise RuntimeError('XR timestamp stalled, missing or rolled back; restart session')
+                if args.execute and seen_xr:
+                    raise RuntimeError('XR data stalled or timestamp rolled back after connection; restart session')
+                if args.execute and started > startup_deadline:
+                    raise RuntimeError(f'No first XR frame within {args.xr_startup_timeout:g} s; check Toolkit connection')
             elif not following:
                 backend.stop()
                 tracker.reset()
