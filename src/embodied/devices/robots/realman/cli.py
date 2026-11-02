@@ -9,7 +9,7 @@ import numpy as np
 
 from embodied.contracts.control import ControlCommand, Mode
 from .backend import Backend, DEFAULT_CONFIG, load_config, vector
-from .gripper import status as gripper_status, move as gripper_move, Buttons
+from .gripper import status as gripper_status, move as gripper_move, Buttons, Jog
 from .geometry import matrix, quaternion, limited_rotation, rotation_vector
 
 
@@ -94,7 +94,7 @@ def run():
     parser.add_argument('--config', default=str(DEFAULT_CONFIG))
     parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
     parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
-    parser.add_argument('--gripper', action='store_true', help='Enable Quest A=open, right Trigger=close; Grip must be released')
+    parser.add_argument('--gripper', action='store_true', help='Hold A to open or Trigger to close in small position segments; release Grip first')
     args = parser.parse_args()
     if args.execute and args.action not in ('quest', 'gripper-open', 'gripper-close'):
         parser.error('--execute requires quest or gripper-open/close')
@@ -144,10 +144,12 @@ def run():
               'READ-ONLY PREVIEW: hold right Grip to preview relative targets; B exits.', flush=True)
         print('Release Grip first. No automatic enable/home.', flush=True)
         if args.gripper:
-            print('Gripper: release Grip, then A opens; right Trigger closes once (speed=100, force=50). B/exit stops arm only; gripper action may continue.', flush=True)
+            print('Gripper: release Grip; HOLD A=open, HOLD Trigger=close in 10/1000 position segments. Release ends scheduling; current segment may finish. Speed/force inherited from controller.', flush=True)
         else:
             print('Gripper control disabled.', flush=True)
         buttons = Buttons()
+        jog = Jog()
+        last_gripper_report = None
         last_gripper_input = None
         gripper_actions = 0
         gate = GripGate()
@@ -220,14 +222,18 @@ def run():
                     print(json.dumps({'gripper_input': {
                         'right_A': a, 'right_trigger': trigger, 'xr_fresh': fresh,
                         'grip_released': grip < .2, 'buttons_armed': buttons.ready,
-                        'cooldown_remaining_s': max(0., 1. - (started - buttons.last_action)),
                         'requested_action': action}}), flush=True)
                     last_gripper_input = input_state
-                if action:
-                    gripper_actions += 1
-                    backend.stop()
-                    tracker.reset()
-                    print(json.dumps({'gripper': gripper_move(backend.client, action)}), flush=True)
+                # No gripper TCP transactions while the arm is following.
+                # Release/Grip/B never queues another position segment.
+                if not following:
+                    report = jog.update(backend.client, action, time.monotonic())
+                    if report is not None:
+                        gripper_actions += int(report.get('accepted', False))
+                        report_key = (report.get('reason'), report.get('position_target_raw'))
+                        if report_key != last_gripper_report:
+                            print(json.dumps({'gripper': report}), flush=True)
+                            last_gripper_report = report_key
             time.sleep(max(0, 1/config['control_hz'] - (time.monotonic() - started)))
         print(json.dumps({'samples': samples, 'fresh_xr_samples': fresh_samples, 'target_samples': previews,
                           'execute_requested': args.execute, 'gripper_actions': gripper_actions}), flush=True)
