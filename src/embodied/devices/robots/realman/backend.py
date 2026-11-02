@@ -15,6 +15,7 @@ from .geometry import rotation_vector, limited_rotation
 from embodied.contracts.control import Mode, RobotState
 from embodied.contracts.device_lease import DeviceLease
 from .protocol import Client
+from .kinematics import MotionCheck
 
 DEFAULT_CONFIG = Path(__file__).resolve().parents[5] / 'configs/robots/realman/rm65-19.json'
 
@@ -76,6 +77,7 @@ class Backend:
         self.command_diagnostics = {}
         self.done = threading.Event()
         self.watchdog = None
+        self.motion_check = None
         try:
             self.info = {k: self.client.query(k) for k in
                          ('get_arm_software_info', 'get_current_tool_frame', 'get_current_work_frame')}
@@ -83,12 +85,20 @@ class Backend:
             self.read_state(time.monotonic())
             self.origin = self.state.pose.copy()
             if allow_motion:
+                self.prepare_motion_check()
                 self.watchdog = threading.Thread(target=self._watch, daemon=True)
                 self.watchdog.start()
         except BaseException:
             self.client.close()
             self.lease.close()
             raise
+
+    def prepare_motion_check(self):
+        if self.motion_check is None:
+            for key in ('get_DH_data', 'get_joint_min_pos', 'get_joint_max_pos'):
+                self.info[key] = self.client.query(key)
+            self.motion_check = MotionCheck(self.info, self.state)
+        return self.motion_check
 
     def _check_identity(self):
         c = self.config
@@ -200,9 +210,15 @@ class Backend:
                     raise RuntimeError('Following lag persisted for 1 s; stopped instead of advancing target')
             else:
                 self.lead_hold_since = None
-            self.command_diagnostics['sent_m_xyzw'] = target.tolist()
+            # Check exactly the quantized pose sent on the wire, after rate/lead limits.
+            wire_pose = encode_pose(target)
+            checked_target = decode_pose(wire_pose)
+            self.command_diagnostics['precheck'] = self.motion_check.check(checked_target, self.state)
+            self.command_diagnostics['sent_m_xyzw'] = checked_target.tolist()
+            if time.monotonic() - self.feedback_at > self.config['stale_s']:
+                raise RuntimeError('Feedback expired during offline motion precheck')
             self.active = True  # A failed send may still have delivered bytes; close must attempt stop.
-            self.client.send({'command': 'movep_canfd', 'pose': encode_pose(target), 'follow': False})
+            self.client.send({'command': 'movep_canfd', 'pose': wire_pose, 'follow': False})
             self.last_target = target.copy()
             self.last_command = time.monotonic()
             self.active = True

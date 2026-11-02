@@ -89,7 +89,7 @@ class XRClock:
 
 def run():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['status', 'quest'])
+    parser.add_argument('action', choices=['status', 'quest', 'check-kinematics'])
     parser.add_argument('--config', default=str(DEFAULT_CONFIG))
     parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
     parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
@@ -107,6 +107,12 @@ def run():
             print(json.dumps({'identity': backend.info, 'joint_rad': state.q.tolist(),
                               'tcp_m_xyzw': state.pose.tolist(), 'fault': state.fault,
                               'gripper': 'unknown; not configured', 'motion_sent': False}, ensure_ascii=False, indent=2))
+            return
+        if args.action == 'check-kinematics':
+            checker = backend.prepare_motion_check()
+            print(json.dumps({'model_fit': checker.fit,
+                              'current_pose_ik': checker.check(backend.state.pose, backend.state),
+                              'motion_sent': False}, indent=2))
             return
         import xrobotoolkit_sdk as xr
         xr.init()

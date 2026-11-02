@@ -154,3 +154,11 @@ url = "https://github.com/XR-Robotics/XRoboToolkit-Teleop-Sample-Python"
 commit = "79e5cb8a56e3455515ce1b476e993c764ec58739"
 manifest = "src/embodied/devices/inputs/quest/_vendor/PROVENANCE.json"
 snapshot = "Nine maintained Quest/IK/logging/camera helper modules; namespace-only edits; MIT license retained"
+
+[[managed]]
+name = "realman-api"
+url = "https://github.com/RealManRobot/RM_API2.git"
+commit = "a810b9fdea29e3567c5e9155794e6ef9cc17be62"
+path = "outputs/dependencies/realman-api-a810b9fdea29"
+required = false
+purpose = "Optional RealMan offline FK/IK and singularity analysis; no RoboticArm network handle is created."

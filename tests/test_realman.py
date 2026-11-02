@@ -20,6 +20,9 @@ class FakeClient:
         self.sent = []
         self.closed = False
         self.responses = {
+            'get_DH_data': {},
+            'get_joint_min_pos': {'min_pos': [-178000]*6},
+            'get_joint_max_pos': {'max_pos': [178000]*6},
             'get_arm_software_info': {'Product_version': 'RM65-BI'},
             'get_current_tool_frame': {'tool_name': config['expected_tool'], 'pose': config['expected_tool_pose']},
             'get_current_work_frame': {'frame_name': config['expected_work_frame'], 'pose': config['expected_work_pose']},
@@ -38,7 +41,13 @@ class FakeClient:
 
 
 @pytest.fixture
-def setup():
+def setup(monkeypatch):
+    class FakeCheck:
+        def __init__(self, info, state):
+            self.fit = {}
+        def check(self, target, state):
+            return {'singularity_code': 0}
+    monkeypatch.setattr('embodied.devices.robots.realman.backend.MotionCheck', FakeCheck)
     config = load_config()
     config['host'] = 'test-realman'
     return config, FakeClient(config)
@@ -332,5 +341,21 @@ def test_persistent_following_lag_stops_without_widening_limits(setup):
             backend.step(command(goal), time.monotonic())
         assert client.sent == [{'command': 'set_arm_stop'}]
         assert backend.command_diagnostics['candidate_lead_m'] > .01
+    finally:
+        backend.close()
+
+
+def test_offline_rejection_stops_before_transmitting_candidate(setup):
+    config, client = setup
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        backend.step(command(backend.state.pose), time.monotonic())
+        client.sent.clear()
+        def reject(target, state):
+            raise RuntimeError('Offline IK rejected candidate')
+        backend.motion_check.check = reject
+        with pytest.raises(RuntimeError, match='Offline IK rejected'):
+            backend.step(command(backend.state.pose), time.monotonic())
+        assert client.sent == [{'command': 'set_arm_stop'}]
     finally:
         backend.close()

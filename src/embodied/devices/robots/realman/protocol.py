@@ -6,6 +6,9 @@ import time
 
 
 READS = {
+    'get_DH_data': 'get_DH_data',
+    'get_joint_min_pos': 'joint_min_pos',
+    'get_joint_max_pos': 'joint_max_pos',
     'get_arm_software_info': 'arm_software_info',
     'get_current_arm_state': 'current_arm_state',
     'get_current_tool_frame': 'current_tool_frame',
