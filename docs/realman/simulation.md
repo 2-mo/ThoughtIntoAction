@@ -86,7 +86,7 @@ outputs/envs/control/bin/python scripts/realman/build_model.py
 ./run.sh examples realman --quest --headless --duration 0
 ```
 
-XRoboToolkit 的主机服务、USB 转发和头显客户端仍沿用现有准备流程。先松开 Grip/A/Trigger；Grip 按住跟随，松开 Grip 后按住 A 张开、Trigger 闭合，B 退出。重用真机入口的相对位姿映射、松手解锁和 XR 新鲜度规则；从 `.19` 配置仅读取映射/限速字段，不建立机器人连接。
+XRoboToolkit 的主机服务、USB 转发和头显客户端仍沿用现有准备流程。先松开 Grip/A/Trigger；Grip 按住跟随，松开 Grip 后按住 A 张开、Trigger 闭合，B 退出。重用真机入口的相对位姿映射、松手解锁和 XR 新鲜度规则；从 `.19` 配置仅读取映射字段，仿真输入速度显式使用 `sim.json` 的 `teleop_linear_speed_m_s=0.125`、`teleop_angular_speed_rad_s=0.30`，不查询或连接真实机器人。
 
 Quest 输入持有统一 gateway 的显式控制租约，数据过期或异常会进入保持并释放租约。这里验证的是映射和平台输入链路；没有复刻真机的 `movep_canfd`、控制器 IK、网络延迟或真实 EG2 分段执行。
 

@@ -110,8 +110,14 @@ def kernel_rows():
         if saved:
             realman = saved == bench.REALMAN
     if realman:
+        from embodied.devices.robots.realman.telemetry import latest_state
+        feedback = latest_state()
         if state == 'failed':
             status = Status('双臂会话失败；查看原始日志', 'error')
+        elif feedback is not None:
+            label = ('XR 数据未更新，已暂停' if not feedback['xr_fresh'] else
+                     '手柄待机，松键后按 B 开始' if feedback['paused'] else '双臂手柄控制已开始')
+            status = Status(label, 'waiting' if feedback['paused'] else 'ready')
         elif state == 'kernel':
             status = Status('双臂进程运行；实时连接与故障见原始日志', 'waiting')
         else:
@@ -120,7 +126,7 @@ def kernel_rows():
             '松开全部控制键，按 B 开始 / 暂停，Y 暂停；首次开始会完全张开两只夹爪（50%）。',
             'Grip 跟随；左 X / 右 A 张开，各侧 Trigger 闭合，可同时操作。',
             '断流自动暂停，重新连接后松键再按 B；设备故障退出后需修复并在总控按 6 重试。',
-            '此进程独立于 ARX 内核；统一网页、采集、策略网关尚未接入双臂。',
+            '网页显示双臂实测姿态，底座位置为示意；采集、策略网关尚未接入双臂。',
             'Ctrl+B z 查看原始日志；进程运行不代表设备已在线或运动已验收。']
     config = load_config().get('robot', {})
     can_port = load_robot_profile()['robot'].get('can_interface')
@@ -354,6 +360,14 @@ def vr_control_rows(found):
 
     hints = ['在总控选择带 Quest 的配置后，跟踪状态会自动更新。']
     if not found:
+        from embodied.devices.robots.realman.telemetry import latest_state
+        feedback = latest_state()
+        if feedback is not None:
+            fresh = feedback['xr_fresh']
+            return [('遥操接入', Status('RealMan 双臂 · XR 新鲜' if fresh else
+                'RealMan 双臂 · XR 数据中断', 'ready' if fresh else 'waiting')),
+                ('控制状态', '已暂停，松键再按 B' if feedback['paused'] else '已开始 · Grip 跟随')], [
+                'B 开始 / 暂停，Y 暂停；SDK 断流会在暂停中重新订阅，恢复后仍需按 B。']
         return [('遥操接入', Status('robot 尚未运行', 'disabled'))], hints
     run, identity = found
     native = identity.get('native') or {}

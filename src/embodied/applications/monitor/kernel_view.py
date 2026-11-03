@@ -170,6 +170,8 @@ class KernelMonitor:
         self.discovery_at = self.collection_at = 0.
         self.display_at = 0.
         self.collection = collection_snapshot(None, [])
+        from .realman_view import RealManView
+        self.realman = RealManView()
 
     def _disconnect(self):
         if self.diagnostics is not None:
@@ -200,6 +202,8 @@ class KernelMonitor:
             if candidate is None:
                 self.error = '等待运行中的统一内核；监看不会启动或控制机械臂。'
         if self.directory is None:
+            if self.pinned is None and self.realman.step(self.scene):
+                return
             if self.scene:
                 self.scene.set_stream_error(self.error)
             return
@@ -254,6 +258,10 @@ class KernelMonitor:
                        state_age_s=age, input_age_s=None, input_error='当前内核未提供手柄监看帧',
                        monitor_message=error, connections={})
         payload['collection']['control_enabled'] = False
+        if directory is None:
+            realman = self.realman.monitor()
+            if realman is not None:
+                payload.update(realman)
         if directory:
             try:
                 inp = json.loads((directory / 'workbench-input.json').read_text())
@@ -274,7 +282,7 @@ class KernelMonitor:
                 # accumulate old ticks in the transport even in latest mode.
                 # Only scene/FK work is limited to 30 Hz in step().
                 if self.reader is None:
-                    self.closed.wait(.5)
+                    self.closed.wait(.05 if self.realman.latest is not None else .5)
         self.thread = threading.Thread(target=observe, name='kernel-monitor-observer', daemon=True)
         self.thread.start()
 

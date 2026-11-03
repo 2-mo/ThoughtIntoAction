@@ -10,6 +10,7 @@ import numpy as np
 from .backend import Backend, DEFAULT_CONFIG, load_config
 from .gripper import status as gripper_status, move as gripper_move, DEFAULT_STEP, DEFAULT_SPEED
 from .quest_control import run_quest
+from .telemetry import StateMirror
 
 
 def run():
@@ -116,11 +117,13 @@ def run():
             stack.callback(left_backend.close)
             bindings.insert(0, ('left', left_backend))
         import xrobotoolkit_sdk as xr
+        mirror = StateMirror()
+        stack.callback(mirror.close)
         run_quest(bindings, xr, execute=args.execute, duration=args.duration,
             startup_timeout=args.xr_startup_timeout, position_only=args.position_only,
             gripper=args.gripper, gripper_step=gripper_step,
             initialize_open=args.gripper_initialize_open, gripper_speed=gripper_speed,
-            standby=args.standby)
+            standby=args.standby, mirror=mirror)
 
 
 def main():

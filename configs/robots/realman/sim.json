@@ -3,6 +3,8 @@
   "name": "RM65 nominal + Lq 140 mm + simplified gripper (simulation only)",
   "model_path": "../../../assets/robots/realman/runtime/rm65.xml",
   "control_hz": 100,
+  "teleop_linear_speed_m_s": 0.125,
+  "teleop_angular_speed_rad_s": 0.30,
   "park_q": [
     0.247174511,
     0.26075219,

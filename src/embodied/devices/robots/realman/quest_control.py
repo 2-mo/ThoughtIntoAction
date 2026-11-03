@@ -9,6 +9,7 @@ import numpy as np
 from embodied.contracts.control import ControlCommand, Mode
 from .gripper import Buttons, SessionJog, GripperNotReady, require_ready, status, move, DEFAULT_SPEED
 from .teleop import RelativeTarget, GripGate, XRClock
+from .kinematics import CandidateRejected
 
 
 def stop_arms(controls):
@@ -45,6 +46,7 @@ class ArmControl:
         self.last_input = self.last_gripper_report = None
         self.last_print = float('-inf')
         self.previews = self.gripper_actions = 0
+        self.latest_gripper = None
 
     def emit(self, fields):
         print(json.dumps({'hand': self.hand, 'host': self.config['host'], **fields}), flush=True)
@@ -60,9 +62,11 @@ class ArmControl:
                 raise RuntimeError(f'{self.hand}: Initial gripper open not accepted; speed was not applied')
         try:
             feedback = status(self.backend.client)
+            self.latest_gripper = feedback
             require_ready(feedback)
             self.emit({'gripper': {'enabled_for_session': True, 'feedback': feedback}})
         except GripperNotReady as exc:
+            self.latest_gripper = exc.feedback
             self.jog.unavailable = exc.feedback
             self.emit({'gripper': {'enabled_for_session': False,
                 'reason': 'not ready; release open button/Trigger for read-only recovery checks',
@@ -120,6 +124,7 @@ class ArmControl:
         report = self.jog.update(self.backend.client, self.action, time.monotonic(),
             controls_neutral=fresh and not self.open_down and self.trigger < .2)
         if report is not None:
+            self.latest_gripper = report.get('feedback', self.latest_gripper)
             self.gripper_actions += int(report.get('accepted', False))
             key = (report.get('reason'), report.get('position_target_raw'))
             if key != self.last_gripper_report:
@@ -129,7 +134,7 @@ class ArmControl:
 
 def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only,
               gripper, gripper_step, initialize_open=False, gripper_speed=DEFAULT_SPEED,
-              standby=False):
+              standby=False, mirror=None):
     """Backends are already leased; any exit attempts every arm stop before XR close."""
     controls = [ArmControl(hand, backend, xr, position_only=position_only,
         gripper=gripper, gripper_step=gripper_step) for hand, backend in bindings]
@@ -159,6 +164,8 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
                 **{key: c[key] for key in ('position_scale', 'linear_speed_m_s', 'angular_speed_rad_s',
                     'translation_radius_m', 'rotation_radius_rad', 'xr_to_robot_basis')},
                 'speed_percent': c.get('speed_percent'),
+                'linear_speed_percent': c.get('linear_speed_percent'),
+                'joint_speed_deg_s': c.get('joint_speed_deg_s'),
                 'controller_speed_limits': {key: control.backend.info[key] for key in
                     ('get_arm_max_line_speed', 'get_arm_max_angular_speed') if key in control.backend.info},
                 'workspace_center_m_xyzw': control.tracker.origin.tolist()}})
@@ -178,6 +185,9 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
         paused = standby
         buttons_released = False
         initialized = not initialize_open or not standby
+        last_xr = started
+        next_reconnect = started + 3.
+        reason = 'waiting_for_B' if standby else 'active'
         samples = fresh_samples = 0
         hz = controls[0].config['control_hz']
         while time.monotonic() < deadline:
@@ -199,6 +209,9 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
                 next_identity = tick + 1.
             timestamp = int(xr.get_time_stamp_ns())
             fresh = clock.fresh(timestamp, time.monotonic())
+            if fresh:
+                last_xr = time.monotonic()
+                next_reconnect = last_xr + 3.
             if standby:
                 neutral = all(float(c.get_grip()) < .2 and
                     (not gripper or (not c.get_open() and float(c.get_trigger()) < .2)) for c in controls)
@@ -207,10 +220,12 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
                         stop_arms(controls)
                     paused = True
                     buttons_released = False
+                    reason = 'xr_stale'
                 elif y or (b and buttons_released and not paused):
                     paused = True
                     buttons_released = False
                     stop_arms(controls)
+                    reason = 'paused_by_button'
                 elif b and buttons_released and paused:
                     buttons_released = False
                     if neutral:
@@ -219,7 +234,11 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
                                 control.prepare_gripper(True, gripper_speed)
                             initialized = True
                         paused = False
+                        reason = 'active'
                         print('手柄会话已开始；先松开再握住 Grip 跟随。', flush=True)
+                    else:
+                        reason = 'release_grip_and_gripper_buttons'
+                        print('未开始：请松开两侧 Grip、X/A 与 Trigger，再按 B。', flush=True)
                 elif not b and not y:
                     buttons_released = True
                 if paused:
@@ -227,10 +246,28 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
                     for control in controls:
                         control.plan(False)
                         control.backend.stop()
+                    if mirror is not None:
+                        mirror.update(controls, fresh=fresh, timestamp=timestamp, paused=True, reason=reason)
                     if tick >= next_status:
                         print(json.dumps({'standby': True, 'xr_fresh': fresh,
-                            'waiting_for_first_xr': not seen_xr and not fresh}), flush=True)
+                            'waiting_for_first_xr': not seen_xr and not fresh,
+                            'reason': reason, 'xr_timestamp_ns': timestamp,
+                            'controls': [{ 'hand': c.hand, 'grip': c.grip,
+                                'trigger': getattr(c, 'trigger', 0.), 'open': getattr(c, 'open_down', False)}
+                                for c in controls]}), flush=True)
                         next_status = tick + 1.
+                    if not fresh and time.monotonic() >= next_reconnect:
+                        # Only one SDK reader owns this session. Re-subscribe while
+                        # paused; stale buttons can never restart arm motion.
+                        print('XR 数据未更新，暂停中重新订阅 SDK；恢复后请松键再按 B。', flush=True)
+                        xr.close()
+                        xr.init()
+                        clock = XRClock(min(c.config['stale_s'] for c in controls))
+                        # A reinitialized binding may retain its cached last timestamp.
+                        # Require a newer callback, not merely a nonzero cached value.
+                        clock.previous = int(xr.get_time_stamp_ns())
+                        buttons_released = False
+                        next_reconnect = time.monotonic() + 3.
                     seen_xr = seen_xr or fresh
                     time.sleep(max(0, 1/hz - (time.monotonic() - tick)))
                     continue
@@ -257,10 +294,25 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
                     raise RuntimeError(f'No first XR frame within {startup_timeout:g} s; check Toolkit connection')
             else:
                 seen_xr = True
-                for control in controls:
-                    control.send_target(execute, tick)
+                try:
+                    for control in controls:
+                        control.send_target(execute, tick)
+                except CandidateRejected as exc:
+                    if not standby:
+                        raise
+                    stop_arms(controls)
+                    paused, buttons_released, reason = True, False, 'target_rejected'
+                    print(f'候选目标被拒绝，双臂已暂停：{exc}。松键后按 B 重新接续。', flush=True)
+                    for control in controls:
+                        control.plan(False)
+                    if mirror is not None:
+                        mirror.update(controls, fresh=fresh, timestamp=timestamp, paused=True, reason=reason)
+                    time.sleep(max(0, 1/hz - (time.monotonic() - tick)))
+                    continue
             for control in controls:
                 control.update_gripper(fresh)
+            if mirror is not None:
+                mirror.update(controls, fresh=fresh, timestamp=timestamp, paused=False, reason='active')
             time.sleep(max(0, 1/hz - (time.monotonic() - tick)))
         for control in controls:
             control.emit({'samples': samples, 'fresh_xr_samples': fresh_samples,

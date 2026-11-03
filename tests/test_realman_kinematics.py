@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from embodied.contracts.control import RobotState
-from embodied.devices.robots.realman.kinematics import MotionCheck
+from embodied.devices.robots.realman.kinematics import MotionCheck, CandidateRejected
 
 
 class Model:
@@ -76,3 +76,23 @@ def test_accumulated_feedback_lag_is_not_adjacent_command_jump(inputs):
     # Releasing Grip removes the command baseline; first command is conservative.
     with pytest.raises(RuntimeError, match='joint 1'):
         check.check(target, state)
+
+
+def test_controller_joint_speed_budget_replaces_fixed_one_degree_guard(inputs):
+    model, state, target = inputs
+    check = MotionCheck({}, state, model=model)
+    target[0] = .302  # 2 degrees in this synthetic model: exceeds the old 1-degree guard.
+    out = check.check(target, state, max_joint_step_deg=[3.6, 3.6, 4.5, 4.5, 4.5, 4.5])
+    assert out['max_joint_change_deg'] == pytest.approx(2.)
+    with pytest.raises(RuntimeError, match='joint 1'):
+        check.check(target, state, max_joint_step_deg=[1., 3.6, 4.5, 4.5, 4.5, 4.5])
+
+
+@pytest.mark.parametrize('code,recoverable', [(1, True), (-1, False), (-2, False)])
+def test_only_vendor_no_solution_is_a_recoverable_candidate_rejection(inputs, code, recoverable):
+    model, state, target = inputs
+    check = MotionCheck({}, state, model=model)
+    model.code = code
+    with pytest.raises(RuntimeError) as error:
+        check.check(target, state)
+    assert isinstance(error.value, CandidateRejected) is recoverable

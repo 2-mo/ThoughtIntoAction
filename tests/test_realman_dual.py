@@ -34,6 +34,7 @@ class Session:
         monkeypatch.setattr(quest_control, 'time', SimpleNamespace(
             monotonic=lambda: 1. + self.index * .04, sleep=self.advance))
         monkeypatch.setattr(cli, 'Backend', self.backend)
+        monkeypatch.setattr(cli, 'StateMirror', lambda: SimpleNamespace(update=lambda *a, **k: None, close=lambda: None))
         monkeypatch.setitem(sys.modules, 'xrobotoolkit_sdk', self.xr)
 
     def value(self, key, default):
@@ -287,6 +288,33 @@ def test_standby_XR_loss_requires_neutral_and_new_B_before_resuming(monkeypatch)
     session.xr.get_time_stamp_ns = lambda: 0 if session.index == 3 else (1 + session.index) * 40_000_000
     session.run(monkeypatch, '--standby', '--duration', '.28')
     assert {e[0] for e in session.targets(LEFT)} == {2, 6}
+    assert {e[1] for e in session.events if e[0] == 3 and e[2] == 'stop'} == {LEFT, RIGHT}
+
+
+def test_standby_resubscribes_after_stall_without_replaying_motion(monkeypatch):
+    session = Session(monkeypatch, [{}] * 90, gripper=True)
+    session.xr.get_time_stamp_ns = lambda: 123  # Cached nonzero SDK state never changes.
+    session.run(monkeypatch, '--standby', '--duration', '3.60')
+    assert len([e for e in session.events if e[1:3] == ('xr', 'init')]) == 2
+    assert not any(e[2] in ('target', 'gripper') for e in session.events)
+
+
+def test_standby_singular_target_pauses_both_and_can_resume_without_process_restart(monkeypatch):
+    from embodied.devices.robots.realman.kinematics import CandidateRejected
+    session = Session(monkeypatch, [{}, {'B': True}, BOTH, BOTH, {}, {'B': True}, BOTH])
+    original = session.backend
+    def connect(config, allow_motion):
+        backend = original(config, allow_motion)
+        send = backend.step
+        def step(command, now):
+            if config['host'] == RIGHT and session.index == 3:
+                raise CandidateRejected('Candidate near vendor singularity region: code=-3')
+            send(command, now)
+        backend.step = step
+        return backend
+    monkeypatch.setattr(cli, 'Backend', connect)
+    session.run(monkeypatch, '--standby', '--duration', '.28')
+    assert {e[0] for e in session.targets(RIGHT)} == {2, 6}
     assert {e[1] for e in session.events if e[0] == 3 and e[2] == 'stop'} == {LEFT, RIGHT}
 
 

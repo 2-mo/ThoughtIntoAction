@@ -89,6 +89,10 @@ class JointStepTooLarge(RuntimeError):
     """Valid local IK candidate exceeds the adjacent command step bound."""
 
 
+class CandidateRejected(RuntimeError):
+    """A particular target cannot be sent; the feedback/model itself is valid."""
+
+
 class MotionCheck:
     def __init__(self, info, state, *, model=None):
         self.model = model if model is not None else OfflineModel(info)
@@ -109,11 +113,13 @@ class MotionCheck:
                 'singularity_code': singularity, 'shoulder_distance_m': distance,
                 'offline_algorithm_version': self.model.version}
 
-    def check(self, target, state, *, previous_joint_deg=None):
+    def check(self, target, state, *, previous_joint_deg=None, max_joint_step_deg=None):
         self.diagnostics = {}
         self.validate_feedback(state)
         seed = np.rad2deg(state.q)
         code, solution = self.model.solve(target, seed)
+        if code == 1:
+            raise CandidateRejected('Offline IK rejected candidate: result=1 (no solution)')
         if code != 0 or solution.shape != (6,) or not np.isfinite(solution).all():
             raise RuntimeError(f'Offline IK rejected candidate: result={code}')
         if np.any(solution < self.model.lower) or np.any(solution > self.model.upper):
@@ -122,26 +128,34 @@ class MotionCheck:
         if position > .001 or angle > .005:
             raise RuntimeError(f'Offline IK residual too large: {position:.6f} m, {angle:.6f} rad')
         code, distance = self.model.singularity(solution)
-        if code != 0 or not np.isfinite(distance):
-            raise RuntimeError(f'Candidate near vendor singularity region: code={code}, shoulder_m={distance}')
+        if not np.isfinite(distance):
+            raise RuntimeError('Invalid vendor singularity feedback')
+        if code != 0:
+            raise CandidateRejected(f'Candidate near vendor singularity region: code={code}, shoulder_m={distance}')
         # Conservative continuity guard, not a guarantee on actual joint velocity.
         previous = seed if previous_joint_deg is None else np.asarray(previous_joint_deg, dtype=float)
         if previous.shape != (6,) or not np.isfinite(previous).all():
             raise ValueError('Invalid previous commanded joints')
         delta = solution - previous
         step = float(np.max(np.abs(delta)))
+        limits = np.ones(6) if max_joint_step_deg is None else np.asarray(max_joint_step_deg, dtype=float)
+        if limits.shape != (6,) or not np.isfinite(limits).all() or np.any(limits <= 0):
+            raise ValueError('Invalid per-joint command step limits')
         self.diagnostics = {
             'feedback_joint_deg': seed.tolist(),
             'previous_command_joint_deg': previous.tolist(),
             'command_delta_deg': delta.tolist(),
             'feedback_lead_deg': (solution - seed).tolist(),
             'max_change_joint': int(np.argmax(np.abs(delta))) + 1,
-            'joint_step_limit_deg': 1.,
+            'joint_step_limit_deg': limits.tolist(),
             'baseline': 'feedback' if previous_joint_deg is None else 'previous_sent_command',
             'ik_joint_deg': solution.tolist(), 'max_joint_change_deg': step,
         }
-        if step > 1.:
-            raise JointStepTooLarge(f'Offline IK adjacent command joint change too large: joint {self.diagnostics["max_change_joint"]}, {step:.3f} deg (limit 1 deg)')
+        exceeded = np.abs(delta) > limits + 1e-9
+        if np.any(exceeded):
+            joint = int(np.argmax(np.abs(delta) / limits))
+            raise JointStepTooLarge(f'Offline IK adjacent command joint change too large: joint {joint + 1}, '
+                                   f'{abs(delta[joint]):.3f} deg (limit {limits[joint]:.3f} deg)')
         return {**self.diagnostics,
                 'fk_position_error_m': position, 'fk_angle_error_rad': angle,
                 'singularity_code': code, 'shoulder_distance_m': distance}

@@ -16,8 +16,11 @@ def mapping_config():
     # Reuse the deployed input conventions, without importing/opening its TCP backend.
     raw = json.loads((PROJECT_ROOT / 'configs/robots/realman/rm65-19.json').read_text())
     keys = ('control_hz', 'stale_s', 'position_scale', 'xr_to_robot_basis',
-            'translation_radius_m', 'rotation_radius_rad', 'linear_speed_m_s', 'angular_speed_rad_s')
+            'translation_radius_m', 'rotation_radius_rad')
     config = {key: raw[key] for key in keys}
+    # Simulation has its own explicit speeds; never query hardware to resolve a percentage.
+    sim = json.loads((PROJECT_ROOT / 'configs/robots/realman/sim.json').read_text())
+    config.update(linear_speed_m_s=sim['teleop_linear_speed_m_s'], angular_speed_rad_s=sim['teleop_angular_speed_rad_s'])
     basis = np.asarray(config['xr_to_robot_basis'])
     if basis.shape != (3, 3) or not np.allclose(basis.T @ basis, np.eye(3)) or not np.isclose(np.linalg.det(basis), 1):
         raise ValueError('XR basis must be a proper rotation')

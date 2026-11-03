@@ -15,7 +15,7 @@ from .geometry import rotation_vector, limited_rotation
 from embodied.contracts.control import Mode, RobotState
 from embodied.contracts.device_lease import DeviceLease
 from .protocol import Client
-from .kinematics import MotionCheck, JointStepTooLarge
+from .kinematics import MotionCheck, JointStepTooLarge, CandidateRejected
 
 DEFAULT_CONFIG = Path(__file__).resolve().parents[5] / 'configs/robots/realman/rm65-19.json'
 
@@ -48,6 +48,9 @@ def load_config(path=DEFAULT_CONFIG):
             raise ValueError(f'{name} must be finite and positive')
     if 'speed_percent' in config and (type(config['speed_percent']) is not int or config['speed_percent'] > 100):
         raise ValueError('speed_percent must be an integer in 1..100')
+    if 'linear_speed_percent' in config and (type(config['linear_speed_percent']) is not int or
+            not 1 <= config['linear_speed_percent'] <= 100 or 'speed_percent' not in config):
+        raise ValueError('linear_speed_percent requires speed_percent and must be in 1..100')
     if config['control_hz'] > 50 or config['stale_s'] > .5:
         raise ValueError('This low-follow driver supports <=50 Hz and <=0.5 s timeout')
     basis = np.asarray(config['xr_to_robot_basis'], dtype=float)
@@ -96,7 +99,15 @@ class Backend:
                     if type(raw) is not int or raw <= 0:
                         raise ValueError(f'Invalid controller speed feedback: {reply}')
                     self.info[command] = reply
-                    self.config[effective] = raw / 1000 * ratio
+                    effective_ratio = self.config.get('linear_speed_percent', self.config['speed_percent']) / 100 if effective == 'linear_speed_m_s' else ratio
+                    self.config[effective] = raw / 1000 * effective_ratio
+                reply = self.client.query('get_joint_max_speed')
+                # JSON: 0.001 RPM; convert to degrees/second, then apply the session ratio.
+                raw = vector(reply.get('joint_speed'), 6)
+                if np.any(raw <= 0):
+                    raise ValueError(f'Invalid controller joint speeds: {reply}')
+                self.info['get_joint_max_speed'] = reply
+                self.config['joint_speed_deg_s'] = (raw * .006 * ratio).tolist()
             self.read_state(time.monotonic())
             self.origin = self.state.pose.copy()
             if allow_motion:
@@ -165,6 +176,11 @@ class Backend:
     def step(self, command, now, **options):
         try:
             self._step(command, now, **options)
+        except CandidateRejected:
+            # A rejected target is never sent. Keep a usable connection for
+            # explicit operator re-engagement after stopping.
+            self.stop()
+            raise
         except Exception as exc:
             self.fault = self.fault or 'Command rejected; reopen session to recover'
             try:
@@ -204,21 +220,24 @@ class Backend:
             dp = target[:3] - previous[:3]
             target[:3] = previous[:3] + dp * min(1., c['linear_speed_m_s'] * elapsed / max(np.linalg.norm(dp), 1e-12))
             target[3:] = limited_rotation(target[3:], previous[3:], c['angular_speed_rad_s'] * elapsed)
-            # Pause advance at the existing lead limits; do not widen the envelope.
+            # Bound feedback lag by the configured speed and timeout in percentage mode.
             position_lead = float(np.linalg.norm(target[:3] - self.state.pose[:3]))
             angle_lead = float(np.linalg.norm(rotation_vector(target[3:], self.state.pose[3:])))
-            limited = position_lead > .01 or angle_lead > .1
+            position_limit = c['linear_speed_m_s'] * c['stale_s'] if 'speed_percent' in c else .01
+            angle_limit = c['angular_speed_rad_s'] * c['stale_s'] if 'speed_percent' in c else .1
+            limited = position_lead > position_limit or angle_lead > angle_limit
             self.command_diagnostics = {
                 'requested_m_xyzw': vector(command.pose_target, 7).tolist(),
                 'feedback_m_xyzw': self.state.pose.tolist(),
                 'candidate_lead_m': position_lead, 'candidate_lead_rad': angle_lead,
                 'lead_limited': limited, 'feedback_age_s': time.monotonic() - self.feedback_at,
+                'position_lead_limit_m': position_limit, 'angle_lead_limit_rad': angle_limit,
             }
             if limited:
                 # Retaining the previous command preserves command speed continuity.
                 target = previous.copy()
-                if (np.linalg.norm(target[:3] - self.state.pose[:3]) > .01 or
-                        np.linalg.norm(rotation_vector(target[3:], self.state.pose[3:])) > .1):
+                if (np.linalg.norm(target[:3] - self.state.pose[:3]) > position_limit or
+                        np.linalg.norm(rotation_vector(target[3:], self.state.pose[3:])) > angle_limit):
                     raise RuntimeError('Previous command already exceeds feedback lead limits')
                 if self.lead_hold_since is None:
                     self.lead_hold_since = time.monotonic()
@@ -228,7 +247,8 @@ class Backend:
                 self.lead_hold_since = None
             # A fixed Cartesian speed can require larger joint steps in a
             # sensitive posture. Back off only a valid IK continuity rejection;
-            # all model, limit, residual and singularity failures remain terminal.
+            # Other failures stop this command; the session decides whether
+            # a rejected candidate can be resumed explicitly by the operator.
             candidate = target.copy()
             reductions = []
             for attempt in range(5):
@@ -242,8 +262,12 @@ class Backend:
                 if time.monotonic() - self.feedback_at > c['stale_s']:
                     raise RuntimeError('Feedback expired during offline motion precheck')
                 try:
+                    joint_options = ({'max_joint_step_deg': np.maximum(
+                        np.asarray(c['joint_speed_deg_s']) * elapsed, 1e-6)}
+                        if 'joint_speed_deg_s' in c else {})
                     precheck = self.motion_check.check(
-                        checked_target, self.state, previous_joint_deg=self.last_joint_target)
+                        checked_target, self.state, previous_joint_deg=self.last_joint_target,
+                        **joint_options)
                     break
                 except JointStepTooLarge:
                     diagnostic = dict(getattr(self.motion_check, 'diagnostics', {}))

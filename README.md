@@ -16,7 +16,7 @@
 | 学习如何写运动与采集程序 | `./run.sh examples` · [Python 示例](src/examples/README.md) · [Robot 接口](docs/reference/robot-primitives.md) |
 | 编写分阶段任务、重复仿真测试 | `./run.sh examples approach_retreat`、`./run.sh examples sim_task` |
 | 使用 RealMan RM65 仿真（无需 VR） | `./run.sh examples realman` · [模型与验证边界](docs/realman/simulation.md) |
-| RealMan 双臂 Quest 预览（左 `.19`、右 `.18`） | `./run.sh realman quest-dual --position-only --duration 30` · [接入与按键](docs/realman/robot18.md#双臂遥操) |
+| RealMan 双臂 Quest 预览（左 `.19`、右 `.18`） | `./run.sh realman quest-dual --duration 30` · [接入与按键](docs/realman/robot18.md#双臂遥操) |
 | 验证七轴无夹爪模型 | `./run.sh examples reference7` |
 | 用反馈评估速度与跟踪质量 | `./run.sh examples benchmark --degrees 10 --speed 0` |
 | 连续路径、任务与相机一起录制 | `./run.sh examples move_path`、`./run.sh examples record_task` |
@@ -37,7 +37,7 @@ uv sync --locked           # 平台环境（Python 3.12）
 
 ## 使用
 
-RealMan 双臂部署可在 `configs/local.toml` 设置 `[workbench] robot_start = "realman-dual"`（本机已设置）。此后 `./run.sh` 自动进入双臂手柄待机：B 开始 / 暂停，Y 暂停，Grip 跟随；首次 B 会完全张开两只夹爪并设置50%速度，需空载且留足空间。双臂仍为独立控制进程，统一内核的采集和策略接口尚未接入；详见 [平台手柄操作](docs/realman/robot18.md#从平台进入只用手柄操作)。
+RealMan 双臂部署可在 `configs/local.toml` 设置 `[workbench] robot_start = "realman-dual"`（本机已设置）。此后 `./run.sh` 自动进入双臂手柄待机：B 开始 / 暂停，Y 暂停，Grip 跟随；首次 B 会完全张开两只夹爪并设置50%速度，需空载且留足空间。默认完整六自由度、映射1.0，平移上限0.25m/s、关节速度预算为控制器各轴上限50%；网页三维显示双臂真实反馈，底座位置为未标定的示意布局。双臂仍为独立控制进程，统一内核的采集和策略接口尚未接入；详见 [平台手柄操作](docs/realman/robot18.md#从平台进入只用手柄操作)。
 
 **日常只需要 `./run.sh`**：打开统一工作台（tmux）。总控窗口列出当前可用的按键——启动真机或仿真内核，之后录制、检查、导出、网页控制台、手眼标定、策略都是一个键；每个操作都会把实际命令输入“命令”窗口，可以看到、修改、重复执行。
 

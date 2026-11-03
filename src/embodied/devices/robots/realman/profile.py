@@ -25,6 +25,8 @@ class Profile:
     gripper_kd: float
     gripper_force_limit_n: float
     tool_offset_m: float
+    teleop_linear_speed_m_s: float = .125
+    teleop_angular_speed_rad_s: float = .30
     has_gripper: bool = True
     simulation_plugin: str = 'realman.sim'
     hardware_plugin: str = ''

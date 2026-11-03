@@ -22,6 +22,7 @@ class FakeClient:
         self.responses = {
             'get_arm_max_line_speed': {'state': 'arm_max_line_speed', 'arm_line_speed': 250},
             'get_arm_max_angular_speed': {'state': 'arm_max_angular_speed', 'arm_angular_speed': 600},
+            'get_joint_max_speed': {'state': 'joint_max_speed', 'joint_speed': [30000, 30000, 37500, 37500, 37500, 37500]},
             'get_DH_data': {},
             'get_joint_min_pos': {'min_pos': [-178000]*6},
             'get_joint_max_pos': {'max_pos': [178000]*6},
@@ -50,9 +51,13 @@ def setup(monkeypatch):
         def check(self, target, state, **kwargs):
             return {'singularity_code': 0, 'ik_joint_deg': [0.]*6}
     monkeypatch.setattr('embodied.devices.robots.realman.backend.MotionCheck', FakeCheck)
+    from types import SimpleNamespace
+    monkeypatch.setattr('embodied.devices.robots.realman.cli.StateMirror',
+        lambda: SimpleNamespace(update=lambda *a, **k: None, close=lambda: None))
     config = load_config()
     # Existing absolute-speed guard cases use a fixed 0.10 m/s baseline.
     config.pop('speed_percent')
+    config.pop('linear_speed_percent')
     config.update(linear_speed_m_s=.10, angular_speed_rad_s=.35)
     config['host'] = 'test-realman'
     return config, FakeClient(config)
@@ -73,10 +78,11 @@ def test_default_percentage_uses_each_controller_limits_without_writes(host_suff
     backend = Backend(config, client=client)
     try:
         assert config['speed_percent'] == 50
-        assert backend.config['linear_speed_m_s'] == pytest.approx(max_linear / 2000)
+        assert backend.config['linear_speed_m_s'] == pytest.approx(max_linear / 1000)
         assert backend.config['angular_speed_rad_s'] == pytest.approx(max_angular / 2000)
         assert 'linear_speed_m_s' not in config
         assert backend.info['get_arm_max_line_speed']['arm_line_speed'] == max_linear
+        assert backend.config['joint_speed_deg_s'] == [90., 90., 112.5, 112.5, 112.5, 112.5]
     finally:
         backend.close()
     assert client.sent == []
@@ -95,6 +101,27 @@ def test_invalid_percentage_speed_feedback_rejects_and_closes(value):
     # A failed startup released the device lease.
     client.responses['get_arm_max_line_speed']['arm_line_speed'] = 250
     Backend(config, client=client).close()
+
+
+def test_percentage_mode_sends_faster_step_with_per_axis_budget(setup):
+    _, client = setup
+    config = load_config()
+    config['host'] = 'test-realman'
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        calls = []
+        def check(target, state, **kwargs):
+            calls.append(kwargs)
+            return {'ik_joint_deg': [0.] * 6}
+        backend.motion_check.check = check
+        goal = backend.state.pose.copy(); goal[0] += .05
+        backend.step(command(goal), time.monotonic())
+        assert client.sent[-1]['pose'][0] == 310000  # 0.25 m/s * 0.04 s, formerly 0.125 m/s.
+        np.testing.assert_allclose(calls[0]['max_joint_step_deg'], [3.6, 3.6, 4.5, 4.5, 4.5, 4.5])
+        assert backend.command_diagnostics['position_lead_limit_m'] == pytest.approx(.075)
+        assert not backend.command_diagnostics['lead_limited']
+    finally:
+        backend.close()
 
 
 def test_units_and_quaternion_roundtrip():
@@ -406,6 +433,30 @@ def test_offline_rejection_stops_before_transmitting_candidate(setup):
         with pytest.raises(RuntimeError, match='Offline IK rejected'):
             backend.step(command(backend.state.pose), time.monotonic())
         assert client.sent == [{'command': 'set_arm_stop'}]
+    finally:
+        backend.close()
+
+
+def test_candidate_rejection_stops_without_latching_backend_fault(setup):
+    from embodied.devices.robots.realman.kinematics import CandidateRejected
+    config, client = setup
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        accepted = backend.motion_check.check
+        backend.step(command(backend.state.pose), time.monotonic())
+        client.sent.clear()
+        def reject(target, state, **kwargs):
+            raise CandidateRejected('no reachable solution')
+        backend.motion_check.check = reject
+        with pytest.raises(CandidateRejected):
+            backend.step(command(backend.state.pose), time.monotonic())
+        assert client.sent == [{'command': 'set_arm_stop'}]
+        assert not backend.fault
+        assert backend.last_joint_target is None
+        backend.motion_check.check = accepted
+        backend.read_state(time.monotonic())
+        backend.step(command(backend.state.pose), time.monotonic())
+        assert client.sent[-1]['command'] == 'movep_canfd'
     finally:
         backend.close()
 

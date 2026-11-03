@@ -32,11 +32,11 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传', 'phone': '手机'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传 · 8 手机'
-UI_REVISION = '15'
+UI_REVISION = '16'
 ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
-REALMAN = ('./run.sh realman quest-dual --position-only --execute --gripper '
+REALMAN = ('./run.sh realman quest-dual --execute --gripper '
            '--standby --gripper-initialize-open --gripper-speed 500 --duration 0')
 KERNELS = [  # key, label, command typed into the kernel window, real arm
     ('1', '真机 · Quest 直控（上游操控）', REAL, True),

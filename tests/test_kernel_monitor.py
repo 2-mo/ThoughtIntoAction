@@ -19,6 +19,11 @@ def tick(runtime_id='one'):
 
 
 class KernelMonitorTests(unittest.TestCase):
+    def setUp(self):
+        # Kernel fixtures must not observe a concurrently running hardware session.
+        self.realman = patch('embodied.applications.monitor.realman_view.latest_state', return_value=None)
+        self.realman.start()
+        self.addCleanup(self.realman.stop)
     def test_motor_diagnostics_reaches_web_and_closes_with_runtime(self):
         identity = {'backend': 'real', 'runtime_id': 'one', 'boot_id': 'this-boot', 'input': 'idle'}
         reader, diagnostics, scene = Mock(), Mock(), Mock()

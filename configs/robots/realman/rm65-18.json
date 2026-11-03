@@ -10,6 +10,7 @@
   "control_hz": 25,
   "stale_s": 0.3,
   "speed_percent": 50,
+  "linear_speed_percent": 100,
   "translation_radius_m": 0.15,
   "rotation_radius_rad": 0.5,
   "position_scale": 1.0,
