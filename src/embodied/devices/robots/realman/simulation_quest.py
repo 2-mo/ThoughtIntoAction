@@ -24,7 +24,8 @@ def mapping_config():
     basis = np.asarray(config['xr_to_robot_basis'])
     if basis.shape != (3, 3) or not np.allclose(basis.T @ basis, np.eye(3)) or not np.isclose(np.linalg.det(basis), 1):
         raise ValueError('XR basis must be a proper rotation')
-    if any(not np.isfinite(config[key]) or config[key] <= 0 for key in keys if key != 'xr_to_robot_basis'):
+    if any(not np.isfinite(config[key]) or config[key] <= 0 for key in keys
+           if key != 'xr_to_robot_basis' and config[key] is not None):
         raise ValueError('Invalid RM65 input timing/scale/bounds')
     return config
 

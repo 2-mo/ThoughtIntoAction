@@ -30,7 +30,10 @@ class Session:
         for hand, button in [('left', 'X'), ('right', 'A')]:
             setattr(self.xr, f'get_{hand}_grip', lambda h=hand: self.value(h+'_grip', 0.))
             setattr(self.xr, f'get_{hand}_trigger', lambda h=hand: self.value(h+'_trigger', 0.))
-            setattr(self.xr, f'get_{hand}_controller_pose', lambda h=hand: self.value(h+'_pose', POSE))
+            # Routing cases model continuous slow hand movement. Stationary
+            # hand cases below supply an explicit constant pose in every frame.
+            setattr(self.xr, f'get_{hand}_controller_pose', lambda h=hand: self.value(
+                h+'_pose', [max(self.index-1, 0)*.001, 0., 0., 0., 0., 0., 1.]))
             setattr(self.xr, f'get_{button}_button', lambda b=button: self.value(b, False))
         monkeypatch.setattr(quest_control, 'time', SimpleNamespace(
             monotonic=lambda: 1. + self.index * .04, sleep=self.advance))
@@ -61,6 +64,7 @@ class Session:
                 self.state = SimpleNamespace(pose=self.origin.copy(), fault='')
                 self.info = {'get_current_tool_frame': {}, 'get_current_work_frame': {}}
                 self.active, self.closed = False, False
+                self.last_target = None
                 self.opening = 500
                 self.client = SimpleNamespace(query=self.query, exchange=self.exchange, allow_gripper=False)
 
@@ -90,6 +94,7 @@ class Session:
                 if session.send_error == (host, session.index):
                     raise RuntimeError('IK/send rejected')
                 self.active = True
+                self.last_target = command.pose_target.copy()
                 session.event(host, 'target', command.pose_target.copy())
 
             def check_motion_ready(self):
@@ -103,6 +108,7 @@ class Session:
 
             def stop(self):
                 session.event(host, 'stop_attempt')
+                self.last_target = None
                 if self.active:
                     self.active = False
                     session.event(host, 'stop')
@@ -360,6 +366,35 @@ def test_standby_connection_retry_releases_partial_pair_and_does_not_init_XR(mon
         assert [hand for hand, _ in bindings] == ['left', 'right']
     finally:
         connections.close()
+
+
+def test_stationary_hand_stops_chasing_but_gripper_remains_available(monkeypatch):
+    moved = [.10, 0., 0., 0., 0., 0., 1.]
+    session = Session(monkeypatch, [{}, dict(BOTH, left_pose=POSE, right_pose=POSE)] +
+        [dict(left_grip=1., left_pose=moved)] * 6 +
+        [dict(left_grip=1., left_pose=[.12, 0., 0., 0., 0., 0., 1.])], gripper=True)
+    session.frames[5] = dict(session.frames[5], left_trigger=1.)
+    original = session.backend
+    def connect(config, allow_motion, **options):
+        b = original(config, allow_motion, **options)
+        send = b.step
+        def capped(command, now):
+            send(command, now)
+            if session.index == 2:
+                b.last_target = b.state.pose.copy()
+                b.last_target[1] += .004
+        b.step = capped
+        return b
+    monkeypatch.setattr(cli, 'Backend', connect)
+    session.run(monkeypatch)
+    targets = session.targets(LEFT)
+    held = next(e[3] for e in targets if e[0] == 3)
+    assert held[1] == pytest.approx(.004)  # Only the accepted step is retained.
+    assert not any(5 <= e[0] <= 7 for e in targets)
+    assert any(e[2] == 'stop' and 4 <= e[0] <= 5 for e in session.events)
+    resumed = next(e[3] for e in targets if e[0] == 8)
+    assert resumed[1] == pytest.approx(.02)  # Resume from feedback, not the old 10 cm goal.
+    assert any(e[0] == 5 and e[1:3] == (LEFT, 'gripper') for e in session.events)
 
 
 @pytest.mark.parametrize('extra', [

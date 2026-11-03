@@ -42,10 +42,12 @@ def encode_pose(pose):
 def load_config(path=DEFAULT_CONFIG):
     config = json.loads(Path(path).read_text())
     speed_fields = ('speed_percent',) if 'speed_percent' in config else ('linear_speed_m_s', 'angular_speed_rad_s')
-    for name in ('timeout_s', 'control_hz', 'stale_s',
-                 'translation_radius_m', 'rotation_radius_rad', 'position_scale', *speed_fields):
+    for name in ('timeout_s', 'control_hz', 'stale_s', 'position_scale', *speed_fields):
         if not np.isfinite(config[name]) or config[name] <= 0:
             raise ValueError(f'{name} must be finite and positive')
+    for name in ('translation_radius_m', 'rotation_radius_rad'):
+        if config[name] is not None and (not np.isfinite(config[name]) or config[name] <= 0):
+            raise ValueError(f'{name} must be null or finite and positive')
     if 'speed_percent' in config and (type(config['speed_percent']) is not int or config['speed_percent'] > 100):
         raise ValueError('speed_percent must be an integer in 1..100')
     if 'linear_speed_percent' in config and (type(config['linear_speed_percent']) is not int or
@@ -215,7 +217,8 @@ class Backend:
             c = self.config
             distance = np.linalg.norm(target[:3] - self.origin[:3])
             angle = np.linalg.norm(rotation_vector(target[3:], self.origin[3:]))
-            if distance > c['translation_radius_m'] + 1e-6 or angle > c['rotation_radius_rad'] + 1e-6:
+            if ((c['translation_radius_m'] is not None and distance > c['translation_radius_m'] + 1e-6) or
+                    (c['rotation_radius_rad'] is not None and angle > c['rotation_radius_rad'] + 1e-6)):
                 self.stop()
                 raise ValueError('Target exceeds session workspace radius')
             previous = self.last_target if self.last_target is not None else self.state.pose

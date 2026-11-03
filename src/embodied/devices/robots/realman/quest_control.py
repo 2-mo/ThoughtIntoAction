@@ -38,7 +38,7 @@ class ArmControl:
         self.open_button = 'X' if hand == 'left' else 'A'
         self.get_open = getattr(xr, f'get_{self.open_button}_button') if gripper else None
         self.get_trigger = getattr(xr, f'get_{hand}_trigger') if gripper else None
-        self.tracker = RelativeTarget(self.config, position_only=position_only)
+        self.tracker = RelativeTarget(self.config, position_only=position_only, incremental=True)
         self.tracker.origin = backend.origin.copy()
         self.gate, self.buttons = GripGate(), Buttons()
         self.jog = SessionJog(step=gripper_step)
@@ -47,6 +47,8 @@ class ArmControl:
         self.last_print = float('-inf')
         self.previews = self.gripper_actions = 0
         self.latest_gripper = None
+        self.last_hand_motion = float('-inf')
+        self.stationary_target = None
 
     def emit(self, fields):
         print(json.dumps({'hand': self.hand, 'host': self.config['host'], **fields}), flush=True)
@@ -79,9 +81,18 @@ class ArmControl:
         self.following = self.gate.update(self.grip, fresh)
         self.target = None
         if self.following:
-            self.target = self.tracker.update(self.get_pose(), self.backend.state.pose)
+            baseline = self.backend.last_target if self.backend.last_target is not None else self.backend.state.pose
+            starting = self.tracker.reference is None
+            target = self.tracker.update(self.get_pose(), baseline)
+            if starting or self.tracker.moved:
+                self.target = target
+                self.last_hand_motion = time.monotonic()
+            elif time.monotonic() - self.last_hand_motion < .08:
+                self.target = self.stationary_target
         else:
             self.tracker.reset()
+            self.last_hand_motion = float('-inf')
+            self.stationary_target = None
         if self.gripper:
             self.open_down = bool(self.get_open())
             self.trigger = float(self.get_trigger())
@@ -99,6 +110,9 @@ class ArmControl:
             try:
                 self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING,
                     pose_target=self.target, engaged=True), now)
+                # Retain only the accepted, rate-limited step during short gaps
+                # between XR frames. Never catch up to an unsent hand target.
+                self.stationary_target = self.backend.last_target.copy()
             except Exception:
                 self.emit({'command_diagnostics': self.backend.telemetry()['command']})
                 raise
@@ -297,7 +311,7 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
                 next_status = tick + 1.
             # Releases stop their arms before following targets or gripper I/O.
             for control in controls:
-                if not control.following:
+                if not control.following or control.target is None:
                     control.backend.stop()
             if not fresh:
                 if execute and seen_xr:

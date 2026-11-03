@@ -31,6 +31,7 @@ def test_rotation_mapping_uses_world_axes_from_nonzero_hand_and_pregrasp(axis):
 
 def test_translation_boundary_discards_overshoot_and_reverses_without_reclutch():
     config = load_config()
+    config.update(translation_radius_m=.15, rotation_radius_rad=.5)
     tracker = RelativeTarget(config)
     robot, hand = pose((-.21, 0., .2125), (np.pi, 0., 0.)), pose()
     tracker.update(hand, robot)
@@ -48,6 +49,7 @@ def test_translation_boundary_discards_overshoot_and_reverses_without_reclutch()
 
 def test_rotation_boundary_discards_overshoot_and_accepts_reverse_with_quaternion_sign_flip():
     config = load_config()
+    config.update(translation_radius_m=.15, rotation_radius_rad=.5)
     tracker = RelativeTarget(config)
     robot, hand = pose((-.21, 0., .2125), (np.pi, 0., 0.)), pose()
     tracker.update(hand, robot)
@@ -80,6 +82,7 @@ def test_position_only_keeps_pregrasp_orientation_through_hand_rotation_and_recl
 
 def test_translation_saturation_does_not_change_rotation_mapping():
     config = load_config()
+    config.update(translation_radius_m=.15, rotation_radius_rad=.5)
     tracker = RelativeTarget(config)
     robot = pose((-.21, 0., .2125), (np.pi, 0., 0.))
     tracker.update(pose(), robot)
@@ -87,3 +90,43 @@ def test_translation_saturation_does_not_change_rotation_mapping():
     target = tracker.update(pose((0., 0., -.79), (0., .12, 0.)), robot)
     assert np.linalg.norm(rotation_vector(target[3:], robot[3:])) == pytest.approx(.12)
     assert target[0] == pytest.approx(robot[0] - .15 + .01)
+
+
+def test_default_workspace_allows_large_translation_and_orientation_change():
+    config = load_config()
+    assert config['translation_radius_m'] is None
+    assert config['rotation_radius_rad'] is None
+    tracker = RelativeTarget(config)
+    robot = pose((-.21, 0., .2125), (np.pi, 0., 0.))
+    tracker.update(pose(), robot)
+    target = tracker.update(pose((.4, -.3, -.5), (0., 1.5, 0.)), robot)
+    np.testing.assert_allclose(target[:3] - robot[:3], [-.5, .4, -.3], atol=1e-10)
+    assert np.linalg.norm(rotation_vector(target[3:], robot[3:])) == pytest.approx(1.5)
+    assert tracker.limits == []
+
+
+def test_incremental_mapping_discards_unsent_motion_and_rebases_on_sent_step():
+    tracker = RelativeTarget(load_config(), incremental=True)
+    robot = pose((-.21, 0., .2125), (np.pi, 0., 0.))
+    tracker.update(pose(), robot)
+    requested = tracker.update(pose((.10, 0, 0)), robot)
+    assert requested[1] == pytest.approx(.10)
+    # Hardware only accepts a 1 cm step; the remaining 9 cm is never carried over.
+    accepted = robot.copy(); accepted[1] += .01
+    next_target = tracker.update(pose((.11, 0, 0)), accepted)
+    assert next_target[1] == pytest.approx(.02)
+    tracker.update(pose((.11, 0, 0)), accepted)
+    assert not tracker.moved
+    tracker.reset()
+    np.testing.assert_allclose(tracker.update(pose((.8, 0, 0)), robot), robot)
+
+
+def test_incremental_mapping_accumulates_small_motion_above_tracking_noise():
+    tracker = RelativeTarget(load_config(), incremental=True)
+    robot = pose()
+    tracker.update(pose(), robot)
+    tracker.update(pose((.0001, 0, 0)), robot)
+    assert not tracker.moved
+    target = tracker.update(pose((.0004, 0, 0)), robot)
+    assert tracker.moved
+    assert target[1] == pytest.approx(.0004)

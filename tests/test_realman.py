@@ -59,6 +59,7 @@ def setup(monkeypatch):
     config.pop('speed_percent')
     config.pop('linear_speed_percent')
     config.update(linear_speed_m_s=.10, angular_speed_rad_s=.35)
+    config.update(translation_radius_m=.15, rotation_radius_rad=.5)
     config['host'] = 'test-realman'
     return config, FakeClient(config)
 
@@ -120,6 +121,20 @@ def test_percentage_mode_sends_faster_step_with_per_axis_budget(setup):
         np.testing.assert_allclose(calls[0]['max_joint_step_deg'], [3.6, 3.6, 4.5, 4.5, 4.5, 4.5])
         assert backend.command_diagnostics['position_lead_limit_m'] == pytest.approx(.075)
         assert not backend.command_diagnostics['lead_limited']
+    finally:
+        backend.close()
+
+
+def test_unbounded_workspace_still_rate_limits_distant_target(setup):
+    _, client = setup
+    config = load_config()
+    config['host'] = 'test-realman'
+    backend = Backend(config, client=client, allow_motion=True)
+    try:
+        goal = backend.state.pose.copy(); goal[0] += .4
+        backend.step(command(goal), time.monotonic())
+        assert client.sent[-1]['command'] == 'movep_canfd'
+        assert backend.last_target[0] == pytest.approx(.31)  # 1 cm, not an unbounded jump.
     finally:
         backend.close()
 
