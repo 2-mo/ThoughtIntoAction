@@ -33,6 +33,7 @@ class StateMirror:
                 'target_q_deg': b.last_joint_target.tolist() if b.last_joint_target is not None else None,
                 'feedback_at': b.feedback_at,
                 'fault': b.state.fault, 'following': c.gate.following,
+                'arm_blocked_reason': getattr(c, 'blocked_reason', None),
                 'grip': c.grip, 'open': getattr(c, 'open_down', False),
                 'trigger': getattr(c, 'trigger', 0.),
                 'gripper': getattr(c, 'latest_gripper', None),

@@ -49,6 +49,7 @@ class ArmControl:
         self.latest_gripper = None
         self.last_hand_motion = float('-inf')
         self.stationary_target = None
+        self.blocked_reason = None
 
     def emit(self, fields):
         print(json.dumps({'hand': self.hand, 'host': self.config['host'], **fields}), flush=True)
@@ -79,11 +80,22 @@ class ArmControl:
         if not np.isfinite(self.grip) or not 0 <= self.grip <= 1:
             raise ValueError(f'{self.hand}: Invalid Grip reading')
         self.following = self.gate.update(self.grip, fresh)
+        if fresh and self.grip < .2:
+            self.blocked_reason = None
         self.target = None
         if self.following:
-            baseline = self.backend.last_target if self.backend.last_target is not None else self.backend.state.pose
             starting = self.tracker.reference is None
+            if starting:
+                # Each squeeze is a new clutch: discard any old command and
+                # anchor all six pose components to measured robot feedback.
+                self.backend.stop()
+                baseline = self.backend.state.pose
+            else:
+                baseline = self.backend.last_target if self.backend.last_target is not None else self.backend.state.pose
             target = self.tracker.update(self.get_pose(), baseline)
+            if starting:
+                self.emit({'clutch_zero': {'hand_m_xyzw': self.tracker.reference.tolist(),
+                    'robot_m_xyzw': baseline.tolist()}})
             if starting or self.tracker.moved:
                 self.target = target
                 self.last_hand_motion = time.monotonic()
@@ -101,6 +113,17 @@ class ArmControl:
                 self.buttons.ready = False
                 self.buttons.blocked_reason = 'gripper_unavailable'
                 self.action = None
+
+    def reject_target(self, error):
+        self.backend.stop()
+        self.gate = GripGate()  # A held Grip cannot automatically retry.
+        self.following = False
+        self.target = self.stationary_target = None
+        self.tracker.reset()
+        self.last_hand_motion = float('-inf')
+        self.blocked_reason = str(error)
+        self.emit({'arm_blocked_reason': self.blocked_reason,
+            'recovery': 'release this Grip, then squeeze to set a new measured zero'})
 
     def send_target(self, execute, now):
         if self.target is None:
@@ -320,21 +343,15 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
                     raise RuntimeError(f'No first XR frame within {startup_timeout:g} s; check Toolkit connection')
             else:
                 seen_xr = True
-                try:
-                    for control in controls:
+                for control in controls:
+                    try:
                         control.send_target(execute, tick)
-                except CandidateRejected as exc:
-                    if not standby:
-                        raise
-                    stop_arms(controls)
-                    paused, buttons_released, reason = True, False, 'target_rejected'
-                    print(f'候选目标被拒绝，双臂已暂停：{exc}。松键后按 B 重新接续。', flush=True)
-                    for control in controls:
-                        control.plan(False)
-                    if mirror is not None:
-                        mirror.update(controls, fresh=fresh, timestamp=timestamp, paused=True, reason=reason)
-                    time.sleep(max(0, 1/hz - (time.monotonic() - tick)))
-                    continue
+                    except CandidateRejected as exc:
+                        if not standby:
+                            raise
+                        control.reject_target(exc)
+                        print(f'{control.hand} {control.config["host"]} 候选目标被拒绝，'
+                              f'该侧停止：{exc}。松开该侧 Grip，再握下重新归零；另一侧和夹爪可继续操作。', flush=True)
             for control in controls:
                 control.update_gripper(fresh)
             if mirror is not None:

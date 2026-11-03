@@ -312,23 +312,75 @@ def test_standby_resubscribes_after_stall_without_replaying_motion(monkeypatch):
     assert not any(e[2] in ('target', 'gripper') for e in session.events)
 
 
-def test_standby_singular_target_pauses_both_and_can_resume_without_process_restart(monkeypatch):
+@pytest.mark.parametrize('rejected_hand,rejected_host,other_host', [
+    ('left', LEFT, RIGHT), ('right', RIGHT, LEFT)])
+def test_standby_rejected_arm_requires_new_grip_without_interrupting_other_arm_or_gripper(
+        monkeypatch, rejected_hand, rejected_host, other_host):
     from embodied.devices.robots.realman.kinematics import CandidateRejected
-    session = Session(monkeypatch, [{}, {'B': True}, BOTH, BOTH, {}, {'B': True}, BOTH])
+    session = Session(monkeypatch, [{}, {'B': True}, BOTH, BOTH,
+        dict(BOTH, **{rejected_hand+'_trigger': 1.}), BOTH,
+        dict(BOTH, **{rejected_hand+'_grip': 0., rejected_hand+'_pose': [2., 3., 4., 1., 0., 0., 0.]}),
+        dict(BOTH, **{rejected_hand+'_pose': [2., 3., 4., 1., 0., 0., 0.]}), BOTH], gripper=True)
     original = session.backend
+    attempts = []
     def connect(config, allow_motion, **options):
         backend = original(config, allow_motion, **options)
         send = backend.step
         def step(command, now):
-            if config['host'] == RIGHT and session.index == 3:
-                raise CandidateRejected('Candidate near vendor singularity region: code=-3')
+            if config['host'] == rejected_host:
+                attempts.append(session.index)
+                if session.index == 3:
+                    raise CandidateRejected('Candidate near vendor singularity region: code=-3')
             send(command, now)
         backend.step = step
         return backend
     monkeypatch.setattr(cli, 'Backend', connect)
-    session.run(monkeypatch, '--standby', '--duration', '.28')
-    assert {e[0] for e in session.targets(RIGHT)} == {2, 6}
-    assert {e[1] for e in session.events if e[0] == 3 and e[2] == 'stop'} == {LEFT, RIGHT}
+    session.run(monkeypatch, '--standby', '--duration', '.36')
+    assert attempts == [2, 3, 7, 8]  # No retry while the rejected Grip remains held.
+    assert {e[0] for e in session.targets(other_host)} == set(range(2, 9))
+    assert {e[1] for e in session.events if e[0] == 3 and e[2] == 'stop'} == {rejected_host}
+    resumed = next(e[3] for e in session.targets(rejected_host) if e[0] == 7)
+    np.testing.assert_allclose(resumed, session.backends[rejected_host].state.pose)
+    assert any(e[0] == 4 and e[1:3] == (rejected_host, 'gripper') for e in session.events)
+
+
+def test_each_grip_zero_uses_actual_full_pose_despite_stale_command(monkeypatch):
+    from embodied.devices.robots.realman.geometry import matrix
+    session = Session(monkeypatch, [{},
+        dict(left_grip=1., left_pose=[10., -20., 30., 1., 0., 0., 0.]),
+        dict(left_grip=1., left_pose=[10.01, -20., 30., 1., 0., 0., 0.]),
+        dict(left_pose=[-10., 2., 5., 0., 1., 0., 0.]),
+        dict(left_grip=1., left_pose=[-10., 2., 5., 0., 1., 0., 0.]),
+        dict(left_grip=1., left_pose=[-10., 2., 5., 0., np.cos(.05), 0., np.sin(.05)])])
+    backend = session.backend(load_config(), True)
+    control = quest_control.ArmControl('left', backend, session.xr,
+        position_only=False, gripper=False, gripper_step=100)
+    control.plan(True)
+    session.index = 1
+    backend.last_target = backend.state.pose.copy()
+    backend.last_target[:3] += .1
+    backend.active = True
+    control.plan(True)
+    np.testing.assert_allclose(control.target, backend.state.pose)
+    assert backend.last_target is None
+    control.send_target(True, 1.04)
+    session.index = 2
+    control.plan(True)
+    np.testing.assert_allclose(control.target[:3], backend.state.pose[:3] + [0., .01, 0.])
+    control.send_target(True, 1.08)
+    session.index = 3
+    control.plan(True)
+    assert control.target is None
+    # Robot feedback differs from both the old zero and the last command.
+    backend.state.pose = np.array([-.25, .003, .32, 0., 0., np.sin(.2), np.cos(.2)])
+    session.index = 4
+    control.plan(True)
+    np.testing.assert_allclose(control.target, backend.state.pose)
+    control.send_target(True, 1.16)
+    session.index = 5
+    control.plan(True)
+    assert not np.allclose(matrix(control.target[3:]), matrix(backend.state.pose[3:]))
+    np.testing.assert_allclose(control.target[:3], backend.state.pose[:3])
 
 
 def test_standby_checks_both_postures_before_any_gripper_or_arm_motion(monkeypatch, capsys):
