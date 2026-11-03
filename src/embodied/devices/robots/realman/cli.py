@@ -18,19 +18,22 @@ def run():
     parser.add_argument('--config', help='Robot config; in quest-dual this selects the right arm (default .18)')
     parser.add_argument('--left-config', help='Left arm config for quest-dual (default .19)')
     parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
-    parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
+    parser.add_argument('--standby', action='store_true', help='Controller session: wait for XR, B starts/pauses, Y pauses; no automatic motion')
+    parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C (standby: Ctrl+C only)')
     parser.add_argument('--gripper', action='store_true', help='Hold A (right) / X (left) to open, corresponding Trigger to close; works while following with Grip')
     parser.add_argument('--gripper-speed', type=int, metavar='1..1000',
-                        help=f'Speed for explicit full open/close or startup open only (default {DEFAULT_SPEED}, 50%); position segments inherit controller speed')
+                        help=f'Speed for explicit full open/close or startup open only (default {DEFAULT_SPEED}, 50 percent); position segments inherit controller speed')
     parser.add_argument('--gripper-step', type=int, metavar='5..100',
                         help=f'Raw opening units per segment (default {DEFAULT_STEP}); larger segments continue farther after release')
     parser.add_argument('--gripper-initialize-open', action='store_true',
-                        help=f'Explicit full open at startup (BOTH grippers in quest-dual, default speed {DEFAULT_SPEED}/1000), including all-zero feedback; requires clear empty jaws')
+                        help=f'Explicit full open at startup, or first B in standby (BOTH grippers in quest-dual, default speed {DEFAULT_SPEED}/1000); requires clear empty jaws')
     parser.add_argument('--position-only', action='store_true', help='Translate while preserving the TCP orientation at each Grip engagement')
     parser.add_argument('--xr-startup-timeout', type=float, default=15.,
                         help='Seconds to wait for the first XR frame; live stale limit is unchanged')
     args = parser.parse_args()
     quest_action = args.action in ('quest', 'quest-dual')
+    if args.standby and not (quest_action and args.execute):
+        parser.error('--standby requires quest/quest-dual --execute')
     if args.left_config is not None and args.action != 'quest-dual':
         parser.error('--left-config requires quest-dual')
     if args.execute and args.action not in ('quest', 'quest-dual', 'gripper-open', 'gripper-close', 'zero', 'pregrasp'):
@@ -116,7 +119,8 @@ def run():
         run_quest(bindings, xr, execute=args.execute, duration=args.duration,
             startup_timeout=args.xr_startup_timeout, position_only=args.position_only,
             gripper=args.gripper, gripper_step=gripper_step,
-            initialize_open=args.gripper_initialize_open, gripper_speed=gripper_speed)
+            initialize_open=args.gripper_initialize_open, gripper_speed=gripper_speed,
+            standby=args.standby)
 
 
 def main():

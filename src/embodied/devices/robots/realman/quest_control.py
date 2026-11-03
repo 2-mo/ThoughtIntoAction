@@ -54,8 +54,10 @@ class ArmControl:
             return
         self.backend.client.allow_gripper = True
         if initialize_open:
-            self.emit({'gripper_initialization': move(self.backend.client, 'open',
-                speed=speed, initialize_open=True)})
+            report = move(self.backend.client, 'open', speed=speed, initialize_open=True)
+            self.emit({'gripper_initialization': report})
+            if not report['accepted']:
+                raise RuntimeError(f'{self.hand}: Initial gripper open not accepted; speed was not applied')
         try:
             feedback = status(self.backend.client)
             require_ready(feedback)
@@ -126,7 +128,8 @@ class ArmControl:
 
 
 def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only,
-              gripper, gripper_step, initialize_open=False, gripper_speed=DEFAULT_SPEED):
+              gripper, gripper_step, initialize_open=False, gripper_speed=DEFAULT_SPEED,
+              standby=False):
     """Backends are already leased; any exit attempts every arm stop before XR close."""
     controls = [ArmControl(hand, backend, xr, position_only=position_only,
         gripper=gripper, gripper_step=gripper_step) for hand, backend in bindings]
@@ -140,11 +143,15 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
         # Both robot connections and startup states have been checked before
         # any explicitly requested full-open action is sent.
         for control in controls:
-            control.prepare_gripper(initialize_open, gripper_speed)
+            control.prepare_gripper(initialize_open and not standby, gripper_speed)
         dual = len(controls) == 2
         print(('EXECUTE' if execute else 'READ-ONLY PREVIEW') +
-              ': each Grip controls its assigned arm; B' + ('/Y' if dual else '') + ' stops and exits.', flush=True)
+              ': each Grip controls its assigned arm; ' + ('B starts/pauses; Y pauses.' if standby else
+              'B' + ('/Y' if dual else '') + ' stops and exits.'), flush=True)
         print('Release Grip first. No automatic enable/home.', flush=True)
+        if standby:
+            print('手柄待机：松开全部控制键后，B 开始/暂停，Y 暂停；Grip 跟随。'
+                  + ('首次开始会完全张开两侧夹爪并设置速度。' if initialize_open else ''), flush=True)
         for control in controls:
             c = control.config
             control.emit({'teleop': {
@@ -168,11 +175,16 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
         next_identity = started + 1.
         next_status = started
         seen_xr = False
+        paused = standby
+        buttons_released = False
+        initialized = not initialize_open or not standby
         samples = fresh_samples = 0
         hz = controls[0].config['control_hz']
         while time.monotonic() < deadline:
             tick = time.monotonic()
-            if xr.get_B_button() or (dual and xr.get_Y_button()):
+            b = bool(xr.get_B_button())
+            y = bool(xr.get_Y_button()) if dual else False
+            if not standby and (b or y):
                 break
             # Check both feedback states before either arm gets a new command.
             for control in controls:
@@ -187,6 +199,41 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
                 next_identity = tick + 1.
             timestamp = int(xr.get_time_stamp_ns())
             fresh = clock.fresh(timestamp, time.monotonic())
+            if standby:
+                neutral = all(float(c.get_grip()) < .2 and
+                    (not gripper or (not c.get_open() and float(c.get_trigger()) < .2)) for c in controls)
+                if not fresh:
+                    if not paused:
+                        stop_arms(controls)
+                    paused = True
+                    buttons_released = False
+                elif y or (b and buttons_released and not paused):
+                    paused = True
+                    buttons_released = False
+                    stop_arms(controls)
+                elif b and buttons_released and paused:
+                    buttons_released = False
+                    if neutral:
+                        if not initialized:
+                            for control in controls:
+                                control.prepare_gripper(True, gripper_speed)
+                            initialized = True
+                        paused = False
+                        print('手柄会话已开始；先松开再握住 Grip 跟随。', flush=True)
+                elif not b and not y:
+                    buttons_released = True
+                if paused:
+                    # Passing stale to input gates discards held controls and reference poses.
+                    for control in controls:
+                        control.plan(False)
+                        control.backend.stop()
+                    if tick >= next_status:
+                        print(json.dumps({'standby': True, 'xr_fresh': fresh,
+                            'waiting_for_first_xr': not seen_xr and not fresh}), flush=True)
+                        next_status = tick + 1.
+                    seen_xr = seen_xr or fresh
+                    time.sleep(max(0, 1/hz - (time.monotonic() - tick)))
+                    continue
             samples += 1
             fresh_samples += int(fresh)
             for control in controls:

@@ -23,7 +23,7 @@ import subprocess
 import sys
 import time
 
-from embodied.core.project import PROJECT_ROOT as ROOT
+from embodied.core.project import PROJECT_ROOT as ROOT, load_config
 from embodied.applications.workstation.status import Status, status_text
 
 DEFAULT_SESSION = 'emb'
@@ -32,16 +32,19 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传', 'phone': '手机'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传 · 8 手机'
-UI_REVISION = '14'
+UI_REVISION = '15'
 ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
+REALMAN = ('./run.sh realman quest-dual --position-only --execute --gripper '
+           '--standby --gripper-initialize-open --gripper-speed 500 --duration 0')
 KERNELS = [  # key, label, command typed into the kernel window, real arm
     ('1', '真机 · Quest 直控（上游操控）', REAL, True),
     ('2', '真机 · Quest + 网页 / 动作 / 标定 / 策略', REAL + ' --profile real-quest', True),
     ('3', '真机 · 无 Quest（网页 / 动作 / 标定 / 策略）', REAL + ' --profile real-manual', True),
     ('4', '仿真 · Quest', './run.sh quest-transport prepare && ./run.sh kernel profiles start --profile sim-quest', False),
     ('5', '仿真 · 无输入（网页 / 动作 / 策略）', './run.sh kernel profiles start --profile sim-manual', False),
+    ('6', '真机 · RealMan 双臂手柄待机', REALMAN, True),
 ]
 RESTART_TARGETS = {
     '1': ('interfaces', '▤', '工作台界面', '重启网页、宣传站与状态页；robot、共享相机保持运行'),
@@ -217,12 +220,15 @@ def kernel_busy():
 
 
 def prepare_robot_start(attach):
-    """An interactive open stages the normal real-manual confirmation once."""
+    """An interactive open stages the configured robot; devices arm separately."""
     if not attach or not sys.stdin.isatty() or not sys.stdout.isatty() or current_run():
         return False
     state = activity('kernel')
     if state == 'waiting':
-        start_kernel(REAL + ' --profile real-manual')
+        selected = load_config().get('workbench', {}).get('robot_start', 'real-manual')
+        if selected not in ('real-manual', 'realman-dual'):
+            raise ValueError('workbench.robot_start must be real-manual or realman-dual')
+        start_kernel(REALMAN if selected == 'realman-dual' else REAL + ' --profile real-manual')
         return True
     if state == 'kernel':
         # Reopening at an existing confirmation never submits or replaces it.
@@ -520,7 +526,7 @@ def stop_kernel():
     if not owned_run() and not kernel_busy():
         raise RuntimeError('内核不是从本工作台启动的；请在它的原终端按 Ctrl+C。')
     tmux('send-keys', '-t', target[0], 'C-c')
-    return '已向内核发送 Ctrl+C；真机进入 SDK 阻尼，请扶住机械臂。'
+    return '已向 robot 发送 Ctrl+C；请根据当前设备确认停止状态。'
 
 
 # Dashboard
@@ -690,7 +696,9 @@ def dashboard():
             for item_key, _, command, _ in KERNELS:
                 if key == item_key:
                     return start_kernel(command)
-            return '先按 1-5 启动内核。'
+            if key == 's' and kernel_busy():
+                return stop_kernel()
+            return '先按 1-6 选择机器人控制。'
         run, identity = found
         if key == 's':
             if time.monotonic() - pending_stop < 4:

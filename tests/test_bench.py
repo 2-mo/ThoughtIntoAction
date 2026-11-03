@@ -192,7 +192,7 @@ class BenchStateTests(unittest.TestCase):
         self.assertEqual(full['w'], 'web')
         self.assertIn('calib handeye capture wrist_rgb --auto --run', full['h'])
         self.assertIn('--source outputs/datasets/runtime --output outputs/datasets/lerobot/20261022-070000', full['e'])
-        self.assertEqual(sorted(key for key, *_ in bench.KERNELS), ['1', '2', '3', '4', '5'])
+        self.assertEqual(sorted(key for key, *_ in bench.KERNELS), ['1', '2', '3', '4', '5', '6'])
 
     def test_owned_run_requires_the_kernel_to_descend_from_this_pane(self):
         active = (ROOT / 'outputs/runtime/control/test-only', {'supervisor_pid': 1234})
@@ -245,6 +245,7 @@ class BenchStateTests(unittest.TestCase):
                  patch.object(sys.stdout, 'isatty', return_value=tty), \
                  patch.object(bench, 'current_run', return_value=found), \
                  patch.object(bench, 'activity', return_value=state), \
+                 patch.object(bench, 'load_config', return_value={}), \
                  patch.object(bench, 'window', return_value=('%test', 'python')), \
                  patch.object(bench, 'tmux') as tmux, \
                  patch.object(bench, 'start_kernel') as start:
@@ -258,6 +259,17 @@ class BenchStateTests(unittest.TestCase):
                     tmux.assert_called_once_with('select-window', '-t', '%test')
                 else:
                     tmux.assert_not_called()
+
+    def test_interactive_realman_selection_starts_controller_standby(self):
+        with patch.object(sys.stdin, 'isatty', return_value=True), \
+             patch.object(sys.stdout, 'isatty', return_value=True), \
+             patch.object(bench, 'current_run', return_value=None), \
+             patch.object(bench, 'activity', return_value='waiting'), \
+             patch.object(bench, 'load_config', return_value={'workbench': {'robot_start': 'realman-dual'}}), \
+             patch.object(bench, 'start_kernel') as start:
+            self.assertTrue(bench.prepare_robot_start(True))
+        start.assert_called_once_with(bench.REALMAN)
+        self.assertIn('--standby', start.call_args.args[0])
 
     def test_failed_robot_is_not_an_active_controller(self):
         with patch.object(bench, 'window', return_value=('%test', 'python')), \

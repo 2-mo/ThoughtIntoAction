@@ -103,13 +103,31 @@ def kernel_rows():
         if mode == '仿真':
             hints.append('当前反馈来自仿真，不能据此判断真机是否通电。')
         return rows, hints
+    realman = load_config().get('workbench', {}).get('robot_start') == 'realman-dual'
+    state = bench.activity('kernel') if os.environ.get('EMBODIED_BENCH_SESSION') else ''
+    if state == 'kernel' and (pane := bench.window('kernel')):
+        saved = bench.tmux('show-options', '-pqv', '-t', pane[0], '@bench_kernel_command').stdout.strip()
+        if saved:
+            realman = saved == bench.REALMAN
+    if realman:
+        if state == 'failed':
+            status = Status('双臂会话失败；查看原始日志', 'error')
+        elif state == 'kernel':
+            status = Status('双臂进程运行；实时连接与故障见原始日志', 'waiting')
+        else:
+            status = Status('等待双臂会话启动', 'waiting')
+        return [('robot', status), ('左手柄', '192.168.1.19'), ('右手柄', '192.168.1.18')], [
+            '松开全部控制键，按 B 开始 / 暂停，Y 暂停；首次开始会完全张开两只夹爪（50%）。',
+            'Grip 跟随；左 X / 右 A 张开，各侧 Trigger 闭合，可同时操作。',
+            '断流自动暂停，重新连接后松键再按 B；设备故障退出后需修复并在总控按 6 重试。',
+            '此进程独立于 ARX 内核；统一网页、采集、策略网关尚未接入双臂。',
+            'Ctrl+B z 查看原始日志；进程运行不代表设备已在线或运动已验收。']
     config = load_config().get('robot', {})
     can_port = load_robot_profile()['robot'].get('can_interface')
     if not isinstance(can_port, str) or not can_port.strip():
         raise ValueError('configs/robots/arx5/robot.json 未配置 can_interface')
     device = resolve_path(config.get('can_device', '/dev/arx_r5'))
     visible = (Path('/sys/class/net') / can_port).exists() or device.is_char_device()
-    state = bench.activity('kernel') if os.environ.get('EMBODIED_BENCH_SESSION') else ''
     if state == 'failed':
         status = Status('启动失败；Ctrl+B → 3 查看原始错误', 'error')
         hints = ['启动错误已保留在 robot 窗口；修复后在总控按 3 重新启动。']

@@ -126,6 +126,16 @@ LEFT, RIGHT = '192.168.1.19', '192.168.1.18'
 BOTH = dict(left_grip=1., right_grip=1.)
 
 
+def test_cli_help_exposes_standby_and_default_speed(monkeypatch, capsys):
+    monkeypatch.setattr(sys, 'argv', ['realman', '--help'])
+    with pytest.raises(SystemExit) as result:
+        cli.run()
+    assert result.value.code == 0
+    output = capsys.readouterr().out
+    assert '--standby' in output
+    assert 'default 500' in output
+
+
 def test_default_hosts_independent_pose_clutch_and_reanchor(monkeypatch):
     session = Session(monkeypatch, [{}, BOTH,
         dict(BOTH, left_pose=[.02, 0., 0., 0., 0., 0., 1.],
@@ -215,6 +225,69 @@ def test_dual_startup_open_defaults_to_half_gripper_speed(monkeypatch):
     assert {e[1] for e in moves} == {LEFT, RIGHT}
     assert len(moves) == 2
     assert all(e[3] == dict(command='set_gripper_release', speed=500, block=False) for e in moves)
+
+
+def test_standby_defers_open_until_B_and_supports_pause_and_resume(monkeypatch):
+    session = Session(monkeypatch, [{}, {'B': True}, BOTH, dict(BOTH, B=True),
+        BOTH, {}, {'B': True}, BOTH], gripper=True)
+    session.run(monkeypatch, '--standby', '--gripper-initialize-open', '--duration', '.32')
+    moves = [e for e in session.events if e[2] == 'gripper']
+    assert len(moves) == 2
+    assert all(e[0] == 1 and e[3]['speed'] == 500 for e in moves)
+    assert {e[0] for e in session.targets(LEFT)} == {2, 7}
+    assert {e[0] for e in session.targets(RIGHT)} == {2, 7}
+    assert {e[1] for e in session.events if e[0] == 3 and e[2] == 'stop'} == {LEFT, RIGHT}
+
+
+def test_standby_waits_for_XR_without_opening_or_moving(monkeypatch):
+    session = Session(monkeypatch, [{'B': True}, {}, {'B': True}, BOTH], gripper=True)
+    session.xr.get_time_stamp_ns = lambda: 0
+    session.run(monkeypatch, '--standby', '--gripper-initialize-open', '--duration', '.16',
+        '--xr-startup-timeout', '.01')
+    assert not any(e[2] in ('target', 'gripper') for e in session.events)
+
+
+def test_standby_held_B_at_startup_requires_release_and_new_press(monkeypatch):
+    session = Session(monkeypatch, [{'B': True}, {'B': True}, {}, {'B': True}, BOTH], gripper=True)
+    session.run(monkeypatch, '--standby', '--gripper-initialize-open', '--duration', '.20')
+    assert {e[0] for e in session.events if e[2] == 'gripper'} == {3}
+    assert {e[0] for e in session.targets(LEFT)} == {4}
+
+
+def test_standby_busy_gripper_does_not_silently_skip_speed_setting(monkeypatch):
+    session = Session(monkeypatch, [{}, {'B': True}, BOTH], gripper=True)
+    original = session.backend
+    def connect(config, allow_motion):
+        backend = original(config, allow_motion)
+        query = backend.client.query
+        def busy(key):
+            result = query(key)
+            if key == 'get_gripper_state':
+                result['mode'] = 5
+            return result
+        backend.client.query = busy
+        return backend
+    monkeypatch.setattr(cli, 'Backend', connect)
+    with pytest.raises(RuntimeError, match='speed was not applied'):
+        session.run(monkeypatch, '--standby', '--gripper-initialize-open', '--duration', '.12')
+    assert not any(e[2] in ('target', 'gripper') for e in session.events)
+    assert all(backend.closed for backend in session.backends.values())
+
+
+def test_standby_rejects_start_with_grip_held_and_Y_always_pauses(monkeypatch):
+    session = Session(monkeypatch, [{}, dict(BOTH, B=True), BOTH, {}, {'B': True},
+        BOTH, dict(BOTH, Y=True), dict(BOTH, B=True)], gripper=True)
+    session.run(monkeypatch, '--standby', '--gripper-initialize-open', '--duration', '.32')
+    assert {e[0] for e in session.targets(LEFT)} == {5}
+    assert {e[0] for e in session.events if e[2] == 'gripper'} == {4}
+
+
+def test_standby_XR_loss_requires_neutral_and_new_B_before_resuming(monkeypatch):
+    session = Session(monkeypatch, [{}, {'B': True}, BOTH, BOTH, {}, {'B': True}, BOTH])
+    session.xr.get_time_stamp_ns = lambda: 0 if session.index == 3 else (1 + session.index) * 40_000_000
+    session.run(monkeypatch, '--standby', '--duration', '.28')
+    assert {e[0] for e in session.targets(LEFT)} == {2, 6}
+    assert {e[1] for e in session.events if e[0] == 3 and e[2] == 'stop'} == {LEFT, RIGHT}
 
 
 @pytest.mark.parametrize('extra', [

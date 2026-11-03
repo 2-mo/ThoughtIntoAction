@@ -1,6 +1,10 @@
 # Portable defaults. Machine-specific overrides belong in local.toml.
 default_command = "teleop-presets-x5"
 
+[workbench]
+# Machine selection only; VR transport, cameras and web services stay independent.
+robot_start = "real-manual"
+
 [environment]
 teleop_python = ".venv/bin/python"
 arm_sdk_python = "outputs/build/arx-gripper/source/python"

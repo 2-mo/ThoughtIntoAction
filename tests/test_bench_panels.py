@@ -207,6 +207,21 @@ class BenchPanelTests(unittest.TestCase):
             self.assertIn('启动失败', str(dict(rows)['robot']))
             self.assertEqual(dict(rows)['robot'].level, 'error')
 
+    def test_realman_panel_uses_process_state_without_CAN_or_device_SDK(self):
+        result = subprocess.CompletedProcess([], 0, stdout=bench.REALMAN)
+        with patch.dict(os.environ, {'EMBODIED_BENCH_SESSION': 'test-only'}), \
+             patch.object(bench, 'current_run', return_value=None), \
+             patch.object(panels, 'load_config', return_value={'workbench': {'robot_start': 'realman-dual'}}), \
+             patch.object(panels, 'load_robot_profile') as profile, \
+             patch.object(bench, 'activity', return_value='kernel'), \
+             patch.object(bench, 'window', return_value=('%test', 'python')), \
+             patch.object(bench, 'tmux', return_value=result):
+            rows, hints = panels.kernel_rows()
+        profile.assert_not_called()
+        self.assertNotIn('USB-CAN', dict(rows))
+        self.assertEqual(dict(rows)['robot'].level, 'waiting')
+        self.assertIn('首次开始会完全张开', '\n'.join(hints))
+
     def test_shared_camera_service_retries_without_owning_or_stopping_it(self):
         with patch('embodied.devices.sensors.client.ensure_service', side_effect=[RuntimeError('startup failed'), None]) as ensure, \
              patch.object(panels, 'load_config', return_value={'paths': {'log_dir': '/tmp/camera-logs'}}), \
