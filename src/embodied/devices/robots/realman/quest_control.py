@@ -226,9 +226,21 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
                     buttons_released = False
                     stop_arms(controls)
                     reason = 'paused_by_button'
+                elif fresh and paused and reason == 'xr_stale' and not b:
+                    reason = 'waiting_for_B'
+                    buttons_released = not y
                 elif b and buttons_released and paused:
                     buttons_released = False
                     if neutral:
+                        try:
+                            for control in controls:
+                                control.backend.check_motion_ready()
+                        except CandidateRejected as exc:
+                            stop_arms(controls)
+                            reason = 'posture_rejected'
+                            print(f'{control.hand} {control.config["host"]} 当前姿态不适合遥操：{exc}。'
+                                  '保持待机显示；请用示教器调整姿态，松键后按 B 重新检查。', flush=True)
+                            continue
                         if not initialized:
                             for control in controls:
                                 control.prepare_gripper(True, gripper_speed)

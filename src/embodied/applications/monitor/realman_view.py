@@ -80,6 +80,7 @@ class RealManView:
         target = [q for arm in arms for q in
             ([math.radians(v) for v in arm['target_q_deg']] if arm['target_q_deg'] is not None else arm['q'])]
         reasons = {'xr_stale': 'XR 数据中断，等待恢复后松键并按 B',
+            'posture_rejected': '当前姿态不可遥操；用示教器调整后松键按 B 重新检查',
             'waiting_for_B': '等待按 B 开始', 'paused_by_button': '已暂停，按 B 继续',
             'target_rejected': '目标不可达或进入奇异区，双臂已暂停；松键再按 B',
             'release_grip_and_gripper_buttons': '先松开 Grip、X/A 和 Trigger，再按 B', 'active': '手柄控制已开始'}

@@ -19,6 +19,7 @@ class Session:
         self.fault = self.read_error = self.send_error = self.stop_error = None
         self.gripper_error = self.gripper_offline = None
         self.stall_at = None
+        self.readiness_error = None
         self.backends = {}
         self.xr = SimpleNamespace(init=lambda: self.event('xr', 'init'),
             close=lambda: self.event('xr', 'close'),
@@ -47,7 +48,7 @@ class Session:
         assert seconds >= 0
         self.index += 1
 
-    def backend(self, config, allow_motion):
+    def backend(self, config, allow_motion, defer_motion_check=False):
         session = self
         host = config['host']
 
@@ -90,6 +91,12 @@ class Session:
                     raise RuntimeError('IK/send rejected')
                 self.active = True
                 session.event(host, 'target', command.pose_target.copy())
+
+            def check_motion_ready(self):
+                session.event(host, 'check_ready')
+                if session.readiness_error == (host, session.index):
+                    from embodied.devices.robots.realman.kinematics import CandidateRejected
+                    raise CandidateRejected('Current posture near vendor singularity region: code=-3')
 
             def telemetry(self):
                 return {'command': {}}
@@ -258,8 +265,8 @@ def test_standby_held_B_at_startup_requires_release_and_new_press(monkeypatch):
 def test_standby_busy_gripper_does_not_silently_skip_speed_setting(monkeypatch):
     session = Session(monkeypatch, [{}, {'B': True}, BOTH], gripper=True)
     original = session.backend
-    def connect(config, allow_motion):
-        backend = original(config, allow_motion)
+    def connect(config, allow_motion, **options):
+        backend = original(config, allow_motion, **options)
         query = backend.client.query
         def busy(key):
             result = query(key)
@@ -303,8 +310,8 @@ def test_standby_singular_target_pauses_both_and_can_resume_without_process_rest
     from embodied.devices.robots.realman.kinematics import CandidateRejected
     session = Session(monkeypatch, [{}, {'B': True}, BOTH, BOTH, {}, {'B': True}, BOTH])
     original = session.backend
-    def connect(config, allow_motion):
-        backend = original(config, allow_motion)
+    def connect(config, allow_motion, **options):
+        backend = original(config, allow_motion, **options)
         send = backend.step
         def step(command, now):
             if config['host'] == RIGHT and session.index == 3:
@@ -316,6 +323,43 @@ def test_standby_singular_target_pauses_both_and_can_resume_without_process_rest
     session.run(monkeypatch, '--standby', '--duration', '.28')
     assert {e[0] for e in session.targets(RIGHT)} == {2, 6}
     assert {e[1] for e in session.events if e[0] == 3 and e[2] == 'stop'} == {LEFT, RIGHT}
+
+
+def test_standby_checks_both_postures_before_any_gripper_or_arm_motion(monkeypatch, capsys):
+    session = Session(monkeypatch, [{}, {'B': True}, BOTH, {}, {'B': True}, BOTH], gripper=True)
+    session.readiness_error = (RIGHT, 1)
+    session.run(monkeypatch, '--standby', '--gripper-initialize-open', '--duration', '.24')
+    assert '当前姿态不适合遥操' in capsys.readouterr().out
+    assert not any(e[0] < 4 and e[2] in ('target', 'gripper') for e in session.events)
+    assert {e[0] for e in session.events if e[2] == 'gripper'} == {4}
+    assert {e[0] for e in session.targets(RIGHT)} == {5}
+
+
+def test_standby_connection_retry_releases_partial_pair_and_does_not_init_XR(monkeypatch):
+    session = Session(monkeypatch, [])
+    attempts, waits, partials = [], [], []
+    def connect(config, allow_motion, **options):
+        attempts.append(config['host'])
+        if config['host'] == LEFT and len(attempts) == 2:
+            raise TimeoutError('robot not ready')
+        b = session.backend(config, allow_motion, **options)
+        if config['host'] == RIGHT:
+            partials.append(b)
+        return b
+    def wait(seconds):
+        waits.append(seconds)
+        assert partials[0].closed
+    monkeypatch.setattr(cli, 'Backend', connect)
+    monkeypatch.setattr(cli, 'time', SimpleNamespace(sleep=wait))
+    bindings, connections = cli.connect_backends(load_config(cli.DEFAULT_CONFIG.with_name('rm65-18.json')),
+        load_config(), execute=True, standby=True)
+    try:
+        assert attempts == [RIGHT, LEFT, RIGHT, LEFT]
+        assert waits == [2.]
+        assert not any(e[1] == 'xr' or e[2] in ('target', 'gripper') for e in session.events)
+        assert [hand for hand, _ in bindings] == ['left', 'right']
+    finally:
+        connections.close()
 
 
 @pytest.mark.parametrize('extra', [

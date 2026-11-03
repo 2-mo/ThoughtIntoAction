@@ -19,6 +19,12 @@ from embodied.applications.workstation import bench, bench_panels as panels
 
 
 class BenchPanelTests(unittest.TestCase):
+    def setUp(self):
+        # The operator's live hardware snapshot is unrelated to isolated UI cases.
+        self.snapshot_patch = patch('embodied.devices.robots.realman.telemetry.latest_state', return_value=None)
+        self.snapshot_patch.start()
+        self.addCleanup(self.snapshot_patch.stop)
+
     def test_transport_timeout_and_close_cancel_the_private_process_group(self):
         # These disposable Python children model a stalled CLI and its ADB child.
         # They never call adb, open devices, or touch a running workbench.
@@ -194,6 +200,7 @@ class BenchPanelTests(unittest.TestCase):
     def test_robot_distinguishes_confirmation_from_launch_failure(self):
         with patch.dict(os.environ, {'EMBODIED_BENCH_SESSION': 'test-only'}), \
              patch.object(bench, 'current_run', return_value=None), \
+             patch.object(bench, 'window', return_value=None), \
              patch.object(panels, 'load_config', return_value={'robot': {}}), \
              patch.object(panels, 'load_robot_profile', return_value={'robot': {'can_interface': 'test-can'}}), \
              patch.object(Path, 'exists', return_value=False), \

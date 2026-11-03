@@ -1,6 +1,6 @@
 # Run on Windows PowerShell, not in the Linux SSH terminal.
 $ErrorActionPreference = 'Stop'
-$SshTarget = 'guest@100.126.219.88'
+$SshTarget = 'guest@100.99.53.55'
 $RobotAddress = '192.168.1.18'
 $LocalAddress = '127.0.0.1'
 

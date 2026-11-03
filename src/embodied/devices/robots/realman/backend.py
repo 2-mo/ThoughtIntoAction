@@ -60,7 +60,7 @@ def load_config(path=DEFAULT_CONFIG):
 
 
 class Backend:
-    def __init__(self, config=None, *, allow_motion=False, client=None):
+    def __init__(self, config=None, *, allow_motion=False, client=None, defer_motion_check=False):
         self.config = dict(load_config() if config is None else config)
         self.allow_motion = allow_motion
         self.lease = DeviceLease('realman-' + self.config['host'])
@@ -111,7 +111,8 @@ class Backend:
             self.read_state(time.monotonic())
             self.origin = self.state.pose.copy()
             if allow_motion:
-                self.prepare_motion_check()
+                if not defer_motion_check:
+                    self.prepare_motion_check()
                 self.watchdog = threading.Thread(target=self._watch, daemon=True)
                 self.watchdog.start()
         except BaseException:
@@ -125,6 +126,10 @@ class Backend:
                 self.info[key] = self.client.query(key)
             self.motion_check = MotionCheck(self.info, self.state)
         return self.motion_check
+
+    def check_motion_ready(self):
+        """Recheck the current feedback before an explicit standby start."""
+        return self.prepare_motion_check().check(self.state.pose, self.state)
 
     def _check_identity(self):
         c = self.config
@@ -265,7 +270,7 @@ class Backend:
                     joint_options = ({'max_joint_step_deg': np.maximum(
                         np.asarray(c['joint_speed_deg_s']) * elapsed, 1e-6)}
                         if 'joint_speed_deg_s' in c else {})
-                    precheck = self.motion_check.check(
+                    precheck = self.prepare_motion_check().check(
                         checked_target, self.state, previous_joint_deg=self.last_joint_target,
                         **joint_options)
                     break

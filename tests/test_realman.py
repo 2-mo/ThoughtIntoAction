@@ -461,6 +461,27 @@ def test_candidate_rejection_stops_without_latching_backend_fault(setup):
         backend.close()
 
 
+def test_standby_defers_posture_check_but_never_sends_without_it(setup, monkeypatch):
+    from embodied.devices.robots.realman.kinematics import CandidateRejected
+    config, client = setup
+    class SingularCheck:
+        def __init__(self, info, state):
+            raise CandidateRejected('Current posture near vendor singularity region')
+    monkeypatch.setattr('embodied.devices.robots.realman.backend.MotionCheck', SingularCheck)
+    backend = Backend(config, client=client, allow_motion=True, defer_motion_check=True)
+    try:
+        assert backend.state.fault == ''
+        assert client.sent == []
+        with pytest.raises(CandidateRejected):
+            backend.check_motion_ready()
+        with pytest.raises(CandidateRejected):
+            backend.step(command(backend.state.pose), time.monotonic())
+        assert client.sent == []
+        assert not backend.fault
+    finally:
+        backend.close()
+
+
 def test_joint_command_baseline_commits_only_after_send_and_resets_on_stop(setup):
     config, client = setup
     backend = Backend(config, client=client, allow_motion=True)

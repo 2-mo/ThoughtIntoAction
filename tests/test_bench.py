@@ -271,6 +271,16 @@ class BenchStateTests(unittest.TestCase):
         start.assert_called_once_with(bench.REALMAN)
         self.assertIn('--standby', start.call_args.args[0])
 
+    def test_reopen_realman_workbench_explicitly_retries_failed_standby(self):
+        with patch.object(sys.stdin, 'isatty', return_value=True), \
+             patch.object(sys.stdout, 'isatty', return_value=True), \
+             patch.object(bench, 'current_run', return_value=None), \
+             patch.object(bench, 'activity', return_value='failed'), \
+             patch.object(bench, 'load_config', return_value={'workbench': {'robot_start': 'realman-dual'}}), \
+             patch.object(bench, 'start_kernel') as start:
+            self.assertTrue(bench.prepare_robot_start(True))
+        start.assert_called_once_with(bench.REALMAN)
+
     def test_failed_robot_is_not_an_active_controller(self):
         with patch.object(bench, 'window', return_value=('%test', 'python')), \
              patch.object(bench, 'activity', return_value='failed'):

@@ -1,6 +1,7 @@
 """RealMan status and Quest relative-pose preview/control; no implicit activation."""
 import argparse
 from contextlib import ExitStack
+import errno
 import json
 import time
 import sys
@@ -11,6 +12,32 @@ from .backend import Backend, DEFAULT_CONFIG, load_config
 from .gripper import status as gripper_status, move as gripper_move, DEFAULT_STEP, DEFAULT_SPEED
 from .quest_control import run_quest
 from .telemetry import StateMirror
+
+
+def connect_backends(config, left_config, *, execute, standby):
+    """Retry startup transport only; always release a partially connected pair."""
+    while True:
+        with ExitStack() as attempt:
+            options = {'defer_motion_check': True} if standby else {}
+            current = config
+            try:
+                right = Backend(config, allow_motion=execute, **options)
+                attempt.callback(right.close)
+                bindings = [('right', right)]
+                if left_config is not None:
+                    current = left_config
+                    left = Backend(left_config, allow_motion=execute, **options)
+                    attempt.callback(left.close)
+                    bindings.insert(0, ('left', left))
+            except OSError as exc:
+                if not standby or not (isinstance(exc, (TimeoutError, ConnectionError)) or
+                        exc.errno in (errno.ENETUNREACH, errno.EHOSTUNREACH, errno.ENETDOWN)):
+                    raise
+                print(f'等待机械臂 {current["host"]}:{current["port"]} 连接：{exc}。'
+                      '请检查电源、网线及主机网段地址；恢复后自动进入待机，不自动运动。', flush=True)
+            else:
+                return bindings, attempt.pop_all()
+        time.sleep(2.)
 
 
 def run():
@@ -75,8 +102,10 @@ def run():
         if left_config['control_hz'] != config['control_hz']:
             parser.error('Dual arms must use the same control_hz')
     with ExitStack() as stack:
-        backend = Backend(config, allow_motion=args.execute and quest_action)
-        stack.callback(backend.close)
+        bindings, connections = connect_backends(config, left_config,
+            execute=args.execute and quest_action, standby=args.standby)
+        stack.enter_context(connections)
+        backend = next(b for hand, b in bindings if hand == 'right')
         if args.action in ('zero', 'pregrasp'):
             from .positioning import JOINT_POSES, joint_preview, execute_joint_target
             target = JOINT_POSES[args.action]
@@ -111,11 +140,6 @@ def run():
                               'current_pose_ik': checker.check(backend.state.pose, backend.state),
                               'motion_sent': False}, indent=2))
             return
-        bindings = [('right', backend)]
-        if left_config is not None:
-            left_backend = Backend(left_config, allow_motion=args.execute)
-            stack.callback(left_backend.close)
-            bindings.insert(0, ('left', left_backend))
         import xrobotoolkit_sdk as xr
         mirror = StateMirror()
         stack.callback(mirror.close)

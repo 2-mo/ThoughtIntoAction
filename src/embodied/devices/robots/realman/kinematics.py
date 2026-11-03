@@ -90,7 +90,7 @@ class JointStepTooLarge(RuntimeError):
 
 
 class CandidateRejected(RuntimeError):
-    """A particular target cannot be sent; the feedback/model itself is valid."""
+    """No motion from this posture/target; an explicit restart may recheck it."""
 
 
 class MotionCheck:
@@ -107,8 +107,10 @@ class MotionCheck:
         if position > .002 or angle > .01:
             raise RuntimeError(f'Offline model disagrees with controller: {position:.6f} m, {angle:.6f} rad')
         singularity, distance = self.model.singularity(q)
-        if singularity != 0 or not np.isfinite(distance):
-            raise RuntimeError(f'Current posture near vendor singularity region: code={singularity}, shoulder_m={distance}')
+        if not np.isfinite(distance):
+            raise RuntimeError('Invalid current vendor singularity feedback')
+        if singularity != 0:
+            raise CandidateRejected(f'Current posture near vendor singularity region: code={singularity}, shoulder_m={distance}')
         return {'fk_position_error_m': position, 'fk_angle_error_rad': angle,
                 'singularity_code': singularity, 'shoulder_distance_m': distance,
                 'offline_algorithm_version': self.model.version}

@@ -32,7 +32,7 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传', 'phone': '手机'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传 · 8 手机'
-UI_REVISION = '16'
+UI_REVISION = '17'
 ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
@@ -219,13 +219,21 @@ def kernel_busy():
     return bool(found and found[1] and (state == 'kernel' or (found[1] not in SHELLS and state not in ('waiting', 'failed'))))
 
 
+def realman_selected(config):
+    if os.environ.get('EMBODIED_BENCH_SESSION') and activity('kernel') == 'kernel' and (pane := window('kernel')):
+        saved = tmux('show-options', '-pqv', '-t', pane[0], '@bench_kernel_command').stdout.strip()
+        if saved:
+            return saved == REALMAN
+    return config.get('workbench', {}).get('robot_start') == 'realman-dual'
+
+
 def prepare_robot_start(attach):
     """An interactive open stages the configured robot; devices arm separately."""
     if not attach or not sys.stdin.isatty() or not sys.stdout.isatty() or current_run():
         return False
     state = activity('kernel')
-    if state == 'waiting':
-        selected = load_config().get('workbench', {}).get('robot_start', 'real-manual')
+    selected = load_config().get('workbench', {}).get('robot_start', 'real-manual')
+    if state == 'waiting' or (state == 'failed' and selected == 'realman-dual'):
         if selected not in ('real-manual', 'realman-dual'):
             raise ValueError('workbench.robot_start must be real-manual or realman-dual')
         start_kernel(REALMAN if selected == 'realman-dual' else REAL + ' --profile real-manual')
@@ -554,7 +562,10 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
             if isinstance(value, Status):
                 is_robot = label != 'USB-CAN'
                 status.add_row('◇' if is_robot else '↔', Text('robot' if is_robot else label), status_text(value))
-        details.append(Text('Ctrl+B → 3 查看 robot 启动确认或错误；仿真按 5。网页自动连接就绪的 robot。', style='dim'))
+        if load_config().get('workbench', {}).get('robot_start') == 'realman-dual':
+            details.append(Text('本机默认 RealMan 双臂：总控按 6 启动待机，手柄 B 开始；仿真按 4/5 会切换到仿真机器人。', style='dim'))
+        else:
+            details.append(Text('Ctrl+B → 3 查看 robot 启动确认或错误；仿真按 5。网页自动连接就绪的 robot。', style='dim'))
         for real, section in ((False, '仿真'), (True, '真机')):
             first = True
             for key, label, _, is_real in KERNELS:
@@ -596,7 +607,6 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
             service = label == '共享服务'
             status.add_row('▤' if service else '▣', Text('相机服务' if service else label), status_text(value))
     try:
-        from embodied.core.project import load_config
         from embodied.applications.workstation.ports import summary
         text, problem = summary(load_config())
         details.append(Text('端口：' + text, style='red' if problem else 'dim'))

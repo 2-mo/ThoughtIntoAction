@@ -103,12 +103,8 @@ def kernel_rows():
         if mode == '仿真':
             hints.append('当前反馈来自仿真，不能据此判断真机是否通电。')
         return rows, hints
-    realman = load_config().get('workbench', {}).get('robot_start') == 'realman-dual'
     state = bench.activity('kernel') if os.environ.get('EMBODIED_BENCH_SESSION') else ''
-    if state == 'kernel' and (pane := bench.window('kernel')):
-        saved = bench.tmux('show-options', '-pqv', '-t', pane[0], '@bench_kernel_command').stdout.strip()
-        if saved:
-            realman = saved == bench.REALMAN
+    realman = bench.realman_selected(load_config())
     if realman:
         from embodied.devices.robots.realman.telemetry import latest_state
         feedback = latest_state()
@@ -116,16 +112,18 @@ def kernel_rows():
             status = Status('双臂会话失败；查看原始日志', 'error')
         elif feedback is not None:
             label = ('XR 数据未更新，已暂停' if not feedback['xr_fresh'] else
+                     '当前姿态不可遥操；示教器调整后按 B 重查' if feedback['reason'] == 'posture_rejected' else
                      '手柄待机，松键后按 B 开始' if feedback['paused'] else '双臂手柄控制已开始')
             status = Status(label, 'waiting' if feedback['paused'] else 'ready')
         elif state == 'kernel':
-            status = Status('双臂进程运行；实时连接与故障见原始日志', 'waiting')
+            status = Status('正在连接双臂；检查电源与主机网段地址，详情见原始日志', 'waiting')
         else:
             status = Status('等待双臂会话启动', 'waiting')
         return [('robot', status), ('左手柄', '192.168.1.19'), ('右手柄', '192.168.1.18')], [
             '松开全部控制键，按 B 开始 / 暂停，Y 暂停；首次开始会完全张开两只夹爪（50%）。',
             'Grip 跟随；左 X / 右 A 张开，各侧 Trigger 闭合，可同时操作。',
             '断流自动暂停，重新连接后松键再按 B；设备故障退出后需修复并在总控按 6 重试。',
+            '启动时等待机械臂联网；当前姿态不可遥操则保留三维反馈，示教器调整后按 B 重查。',
             '网页显示双臂实测姿态，底座位置为示意；采集、策略网关尚未接入双臂。',
             'Ctrl+B z 查看原始日志；进程运行不代表设备已在线或运动已验收。']
     config = load_config().get('robot', {})
@@ -366,7 +364,8 @@ def vr_control_rows(found):
             fresh = feedback['xr_fresh']
             return [('遥操接入', Status('RealMan 双臂 · XR 新鲜' if fresh else
                 'RealMan 双臂 · XR 数据中断', 'ready' if fresh else 'waiting')),
-                ('控制状态', '已暂停，松键再按 B' if feedback['paused'] else '已开始 · Grip 跟随')], [
+                ('控制状态', '当前姿态不可遥操；示教器调整后按 B 重查' if feedback['reason'] == 'posture_rejected'
+                 else '已暂停，松键再按 B' if feedback['paused'] else '已开始 · Grip 跟随')], [
                 'B 开始 / 暂停，Y 暂停；SDK 断流会在暂停中重新订阅，恢复后仍需按 B。']
         return [('遥操接入', Status('robot 尚未运行', 'disabled'))], hints
     run, identity = found
@@ -661,7 +660,8 @@ def render(state, service=None):
     sections.append(Text('Ctrl+B → 1 返回总控 · Ctrl+B → D 离开工作台 · R ' +
                          ('连接 / 刷新' if title == TITLES['vr'] else '重试 / 刷新' if service is not None else '刷新') +
                          (' · W 模拟佩戴 · U 取消模拟佩戴' if title == TITLES['vr'] else '') +
-                         (' · P 预抓取 · H 回零 · 空格停止 · D 阻尼' if title == TITLES['kernel'] else '') +
+                         (' · P 预抓取 · H 回零 · 空格停止 · D 阻尼' if title == TITLES['kernel'] and
+                          not any(label == '左手柄' for label, _ in rows) else '') +
                          (' · C 对齐方向 · T 手机遥操 · S / 空格停止' if title == TITLES['phone'] else '') +
                          (' · W 打开浏览器' if service is not None and service.role == 'web' else ''), style='dim'))
     return Group(*sections)
@@ -700,6 +700,7 @@ def main(argv=None):
     from embodied.applications.workstation.robot_panel import RobotControls
     robot = RobotControls() if args.role == 'kernel' else None
     focused_run = None
+    realman_panel = False
 
     def stop_requested(*_):
         nonlocal stopping
@@ -728,7 +729,9 @@ def main(argv=None):
                     if robot is not None:
                         from embodied.applications.workstation import bench
                         found = bench.current_run()
-                        state[1].extend(robot.rows(found))
+                        realman_panel = found is None and bench.realman_selected(load_config())
+                        if not realman_panel:
+                            state[1].extend(robot.rows(found))
                         if found and found[0] != focused_run:
                             if bench.focus_robot_controls(os.environ.get('TMUX_PANE')):
                                 focused_run = found[0]
@@ -751,7 +754,7 @@ def main(argv=None):
                 if vr is not None and key in ('w', 'u'):
                     vr.set_wearing(key == 'w')
                     refreshed = 0.
-                if robot is not None and key is not None:
+                if robot is not None and not realman_panel and key is not None:
                     from embodied.applications.workstation import bench
                     robot.press(key, bench.current_run())
                     refreshed = 0.
