@@ -1,6 +1,7 @@
 """EG2-4C2 controller commands; no power, serial or enable changes."""
 
 DEFAULT_STEP = 100  # Raw protocol units out of 1..1000, NOT millimetres.
+DEFAULT_SPEED = 500  # 50% of the protocol's 1..1000 speed range.
 
 
 class GripperNotReady(RuntimeError):
@@ -23,7 +24,7 @@ def status(client):
     return {key: raw[key] for key in fields}
 
 
-def move(client, action, *, speed=100, force=50, initialize_open=False):
+def move(client, action, *, speed=DEFAULT_SPEED, force=50, initialize_open=False):
     if action not in ('open', 'close') or type(speed) is not int or not 1 <= speed <= 1000:
         raise ValueError('Invalid gripper action/speed')
     if type(force) is not int or not 50 <= force <= 1000:

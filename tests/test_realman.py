@@ -20,6 +20,8 @@ class FakeClient:
         self.sent = []
         self.closed = False
         self.responses = {
+            'get_arm_max_line_speed': {'state': 'arm_max_line_speed', 'arm_line_speed': 250},
+            'get_arm_max_angular_speed': {'state': 'arm_max_angular_speed', 'arm_angular_speed': 600},
             'get_DH_data': {},
             'get_joint_min_pos': {'min_pos': [-178000]*6},
             'get_joint_max_pos': {'max_pos': [178000]*6},
@@ -49,12 +51,50 @@ def setup(monkeypatch):
             return {'singularity_code': 0, 'ik_joint_deg': [0.]*6}
     monkeypatch.setattr('embodied.devices.robots.realman.backend.MotionCheck', FakeCheck)
     config = load_config()
+    # Existing absolute-speed guard cases use a fixed 0.10 m/s baseline.
+    config.pop('speed_percent')
+    config.update(linear_speed_m_s=.10, angular_speed_rad_s=.35)
     config['host'] = 'test-realman'
     return config, FakeClient(config)
 
 
 def command(pose, **kwargs):
     return ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=pose, engaged=True, **kwargs)
+
+
+@pytest.mark.parametrize('host_suffix,max_linear,max_angular', [('18', 250, 600), ('19', 500, 1000)])
+def test_default_percentage_uses_each_controller_limits_without_writes(host_suffix, max_linear, max_angular):
+    from embodied.devices.robots.realman.backend import DEFAULT_CONFIG
+    config = load_config(DEFAULT_CONFIG.with_name(f'rm65-{host_suffix}.json'))
+    config['host'] = 'test-realman'
+    client = FakeClient(config)
+    client.responses['get_arm_max_line_speed']['arm_line_speed'] = max_linear
+    client.responses['get_arm_max_angular_speed']['arm_angular_speed'] = max_angular
+    backend = Backend(config, client=client)
+    try:
+        assert config['speed_percent'] == 50
+        assert backend.config['linear_speed_m_s'] == pytest.approx(max_linear / 2000)
+        assert backend.config['angular_speed_rad_s'] == pytest.approx(max_angular / 2000)
+        assert 'linear_speed_m_s' not in config
+        assert backend.info['get_arm_max_line_speed']['arm_line_speed'] == max_linear
+    finally:
+        backend.close()
+    assert client.sent == []
+
+
+@pytest.mark.parametrize('value', [None, 0, -1, True, 250.5, '250'])
+def test_invalid_percentage_speed_feedback_rejects_and_closes(value):
+    config = load_config()
+    config['host'] = 'test-realman'
+    client = FakeClient(config)
+    client.responses['get_arm_max_line_speed']['arm_line_speed'] = value
+    with pytest.raises(ValueError, match='speed feedback'):
+        Backend(config, client=client)
+    assert client.closed
+    assert client.sent == []
+    # A failed startup released the device lease.
+    client.responses['get_arm_max_line_speed']['arm_line_speed'] = 250
+    Backend(config, client=client).close()
 
 
 def test_units_and_quaternion_roundtrip():
@@ -536,7 +576,7 @@ def test_explicit_open_initialization_entry_from_all_zero_feedback(setup, monkey
     monkeypatch.setattr(cli, 'Backend', lambda config, allow_motion: Backend(config, client=client, allow_motion=allow_motion))
     monkeypatch.setattr(sys, 'argv', ['realman', 'gripper-open', '--execute', '--gripper-initialize-open'])
     cli.main()
-    assert client.sent == [{'command':'set_gripper_release','speed':100,'block':False}]
+    assert client.sent == [{'command':'set_gripper_release','speed':500,'block':False}]
     assert '"initializing_from_zero_feedback": true' in capsys.readouterr().out
     assert client.closed
 

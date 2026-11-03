@@ -8,7 +8,7 @@ import sys
 import numpy as np
 
 from .backend import Backend, DEFAULT_CONFIG, load_config
-from .gripper import status as gripper_status, move as gripper_move, DEFAULT_STEP
+from .gripper import status as gripper_status, move as gripper_move, DEFAULT_STEP, DEFAULT_SPEED
 from .quest_control import run_quest
 
 
@@ -21,11 +21,11 @@ def run():
     parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C')
     parser.add_argument('--gripper', action='store_true', help='Hold A (right) / X (left) to open, corresponding Trigger to close; works while following with Grip')
     parser.add_argument('--gripper-speed', type=int, metavar='1..1000',
-                        help='Speed for explicit full open/close or startup open only (default 100); position segments inherit controller speed')
+                        help=f'Speed for explicit full open/close or startup open only (default {DEFAULT_SPEED}, 50%); position segments inherit controller speed')
     parser.add_argument('--gripper-step', type=int, metavar='5..100',
                         help=f'Raw opening units per segment (default {DEFAULT_STEP}); larger segments continue farther after release')
     parser.add_argument('--gripper-initialize-open', action='store_true',
-                        help='Explicit full open at startup (BOTH grippers in quest-dual, speed 100/1000), including all-zero feedback; requires clear empty jaws')
+                        help=f'Explicit full open at startup (BOTH grippers in quest-dual, default speed {DEFAULT_SPEED}/1000), including all-zero feedback; requires clear empty jaws')
     parser.add_argument('--position-only', action='store_true', help='Translate while preserving the TCP orientation at each Grip engagement')
     parser.add_argument('--xr-startup-timeout', type=float, default=15.,
                         help='Seconds to wait for the first XR frame; live stale limit is unchanged')
@@ -55,7 +55,7 @@ def run():
             parser.error('--gripper-speed requires an explicit full open/close or --gripper-initialize-open')
         if not 1 <= args.gripper_speed <= 1000:
             parser.error('--gripper-speed must be in 1..1000')
-    gripper_speed = args.gripper_speed if args.gripper_speed is not None else 100
+    gripper_speed = args.gripper_speed if args.gripper_speed is not None else DEFAULT_SPEED
     if not np.isfinite(args.duration) or args.duration < 0:
         parser.error('--duration must be finite and nonnegative')
     if not np.isfinite(args.xr_startup_timeout) or args.xr_startup_timeout <= 0:

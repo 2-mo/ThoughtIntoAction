@@ -6,6 +6,8 @@ import time
 
 
 READS = {
+    'get_arm_max_line_speed': 'arm_max_line_speed',
+    'get_arm_max_angular_speed': 'arm_max_angular_speed',
     'get_gripper_state': 'get_gripper_state',
     'get_DH_data': 'get_DH_data',
     'get_joint_min_pos': 'joint_min_pos',

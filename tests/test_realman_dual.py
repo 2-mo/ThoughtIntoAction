@@ -52,7 +52,9 @@ class Session:
 
         class FakeBackend:
             def __init__(self):
-                self.config, self.allow_motion = config, allow_motion
+                # Fake startup supplies the same effective limits as the onsite controller.
+                self.config = {**config, 'linear_speed_m_s': .125, 'angular_speed_rad_s': .30}
+                self.allow_motion = allow_motion
                 self.origin = np.array([-.3, 0., .3, 0., 0., 0., 1.])
                 self.state = SimpleNamespace(pose=self.origin.copy(), fault='')
                 self.info = {'get_current_tool_frame': {}, 'get_current_work_frame': {}}
@@ -204,6 +206,15 @@ def test_explicit_dual_startup_open_applies_selected_speed_to_both_grippers(monk
     assert {e[1] for e in moves} == {LEFT, RIGHT}
     assert len(moves) == 2
     assert all(e[3] == dict(command='set_gripper_release', speed=300, block=False) for e in moves)
+
+
+def test_dual_startup_open_defaults_to_half_gripper_speed(monkeypatch):
+    session = Session(monkeypatch, [{}], gripper=True)
+    session.run(monkeypatch, '--gripper-initialize-open')
+    moves = [e for e in session.events if e[2] == 'gripper']
+    assert {e[1] for e in moves} == {LEFT, RIGHT}
+    assert len(moves) == 2
+    assert all(e[3] == dict(command='set_gripper_release', speed=500, block=False) for e in moves)
 
 
 @pytest.mark.parametrize('extra', [

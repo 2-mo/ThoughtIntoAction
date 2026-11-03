@@ -20,7 +20,7 @@ class Client:
 def test_gripper_requires_online_and_uses_nonpersistent_force_pick():
     c = Client()
     assert move(c, 'close')['completed'] is False
-    assert c.sent == [dict(command='set_gripper_pick', speed=100, force=50, block=False)]
+    assert c.sent == [dict(command='set_gripper_pick', speed=500, force=50, block=False)]
     c.ready = False
     with pytest.raises(RuntimeError): move(c, 'open')
     assert len(c.sent) == 1
@@ -113,7 +113,7 @@ def test_initialization_is_explicit_open_only_and_rejects_real_faults():
     with pytest.raises(ValueError):
         move(c, 'close', initialize_open=True)
     assert move(c, 'open', initialize_open=True)['initializing_from_zero_feedback']
-    assert c.sent == [dict(command='set_gripper_release',speed=100,block=False)]
+    assert c.sent == [dict(command='set_gripper_release',speed=500,block=False)]
     original = c.query
     c.query = lambda _: {**original(_), 'error': 16}
     with pytest.raises(GripperNotReady):

@@ -7,7 +7,7 @@ import time
 import numpy as np
 
 from embodied.contracts.control import ControlCommand, Mode
-from .gripper import Buttons, SessionJog, GripperNotReady, require_ready, status, move
+from .gripper import Buttons, SessionJog, GripperNotReady, require_ready, status, move, DEFAULT_SPEED
 from .teleop import RelativeTarget, GripGate, XRClock
 
 
@@ -126,7 +126,7 @@ class ArmControl:
 
 
 def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only,
-              gripper, gripper_step, initialize_open=False, gripper_speed=100):
+              gripper, gripper_step, initialize_open=False, gripper_speed=DEFAULT_SPEED):
     """Backends are already leased; any exit attempts every arm stop before XR close."""
     controls = [ArmControl(hand, backend, xr, position_only=position_only,
         gripper=gripper, gripper_step=gripper_step) for hand, backend in bindings]
@@ -151,6 +151,9 @@ def run_quest(bindings, xr, *, execute, duration, startup_timeout, position_only
                 'mode': 'position_only' if position_only else 'position_and_rotation',
                 **{key: c[key] for key in ('position_scale', 'linear_speed_m_s', 'angular_speed_rad_s',
                     'translation_radius_m', 'rotation_radius_rad', 'xr_to_robot_basis')},
+                'speed_percent': c.get('speed_percent'),
+                'controller_speed_limits': {key: control.backend.info[key] for key in
+                    ('get_arm_max_line_speed', 'get_arm_max_angular_speed') if key in control.backend.info},
                 'workspace_center_m_xyzw': control.tracker.origin.tolist()}})
             if gripper:
                 print(f'{control.hand} {c["host"]}: HOLD {control.open_button}=open, '

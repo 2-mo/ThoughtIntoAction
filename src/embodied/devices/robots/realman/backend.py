@@ -41,10 +41,13 @@ def encode_pose(pose):
 
 def load_config(path=DEFAULT_CONFIG):
     config = json.loads(Path(path).read_text())
-    for name in ('timeout_s', 'control_hz', 'stale_s', 'linear_speed_m_s',
-                 'angular_speed_rad_s', 'translation_radius_m', 'rotation_radius_rad', 'position_scale'):
+    speed_fields = ('speed_percent',) if 'speed_percent' in config else ('linear_speed_m_s', 'angular_speed_rad_s')
+    for name in ('timeout_s', 'control_hz', 'stale_s',
+                 'translation_radius_m', 'rotation_radius_rad', 'position_scale', *speed_fields):
         if not np.isfinite(config[name]) or config[name] <= 0:
             raise ValueError(f'{name} must be finite and positive')
+    if 'speed_percent' in config and (type(config['speed_percent']) is not int or config['speed_percent'] > 100):
+        raise ValueError('speed_percent must be an integer in 1..100')
     if config['control_hz'] > 50 or config['stale_s'] > .5:
         raise ValueError('This low-follow driver supports <=50 Hz and <=0.5 s timeout')
     basis = np.asarray(config['xr_to_robot_basis'], dtype=float)
@@ -55,7 +58,7 @@ def load_config(path=DEFAULT_CONFIG):
 
 class Backend:
     def __init__(self, config=None, *, allow_motion=False, client=None):
-        self.config = load_config() if config is None else config
+        self.config = dict(load_config() if config is None else config)
         self.allow_motion = allow_motion
         self.lease = DeviceLease('realman-' + self.config['host'])
         try:
@@ -83,6 +86,17 @@ class Backend:
             self.info = {k: self.client.query(k) for k in
                          ('get_arm_software_info', 'get_current_tool_frame', 'get_current_work_frame')}
             self._check_identity()
+            if 'speed_percent' in self.config:
+                ratio = self.config['speed_percent'] / 100
+                for command, field, effective in (
+                    ('get_arm_max_line_speed', 'arm_line_speed', 'linear_speed_m_s'),
+                    ('get_arm_max_angular_speed', 'arm_angular_speed', 'angular_speed_rad_s')):
+                    reply = self.client.query(command)
+                    raw = reply.get(field)
+                    if type(raw) is not int or raw <= 0:
+                        raise ValueError(f'Invalid controller speed feedback: {reply}')
+                    self.info[command] = reply
+                    self.config[effective] = raw / 1000 * ratio
             self.read_state(time.monotonic())
             self.origin = self.state.pose.copy()
             if allow_motion:
