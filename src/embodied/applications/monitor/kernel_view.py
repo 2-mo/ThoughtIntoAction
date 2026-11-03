@@ -29,6 +29,9 @@ def discover_run(directory=None):
                 continue
             if identity.get('backend') not in ('real', 'sim'):
                 continue
+            if directory is None and (path.parent/'workbench.json').exists():
+                if json.loads((path.parent/'workbench.json').read_text()).get('pair'):
+                    continue
             os.kill(identity['supervisor_pid'], 0)
             return path.parent, identity
         except (OSError, ValueError, KeyError, TypeError):
@@ -172,6 +175,8 @@ class KernelMonitor:
         self.collection = collection_snapshot(None, [])
         from .realman_view import RealManView
         self.realman = RealManView()
+        from .pair_view import PairView
+        self.pair = PairView()
 
     def _disconnect(self):
         if self.diagnostics is not None:
@@ -185,6 +190,12 @@ class KernelMonitor:
     def step(self):
         """One bounded observer read, also usable with an offline fake reader."""
         now = time.monotonic()
+        if self.pinned is None and self.pair.step(self.scene):
+            self._disconnect()
+            self.directory = self.identity = self.latest = None
+            self.model_runtime_id = None
+            self.discovery_at = 0.
+            return
         if now >= self.discovery_at:
             self.discovery_at = now + 1
             found = self.finder(self.pinned)
@@ -244,6 +255,10 @@ class KernelMonitor:
                 self.scene.set_stream_error(self.error)
 
     def monitor(self):
+        if self.pinned is None:
+            pair = self.pair.monitor()
+            if pair is not None:
+                return pair
         with self.lock:
             tick, identity, directory, error = self.latest, self.identity, self.directory, self.error
             if time.monotonic() >= self.collection_at:
@@ -291,6 +306,7 @@ class KernelMonitor:
         if self.thread:
             self.thread.join(timeout=2)
         self._disconnect()
+        self.pair.close()
 
 
 def serve(args):

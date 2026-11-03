@@ -27,16 +27,28 @@ def _toml(data: dict, section: str = "") -> str:
 
 def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk_library: str,
                          base_yaw_deg: float = 0., grip_threshold: float = .7,
-                         position_scale=(1., 1., 1.)) -> dict[str, Path]:
+                         position_scale=(1., 1., 1.), *, controller='right',
+                         input_prefix=None, feedback_hz=250.,
+                         cartesian_speed_limits=None) -> dict[str, Path]:
     """Write xrobot, coordinator, arm and gripper TOML files for one run.
 
-    ``prefix`` must be unique per concurrent run and start with ``arx5-``.
+    ``prefix`` must be unique per concurrent run and use a supported namespace.
     A zero gripper width omits that route. Base yaw rotates the XR reference
     into the robot's native base frame; the robot model itself is not rotated.
     Native coordinator and routers retain the original input/control policy.
     """
     validate_prefix(prefix)
+    if controller not in ('left', 'right') or not math.isfinite(feedback_hz) or feedback_hz <= 0:
+        raise ValueError('Invalid controller or feedback rate')
+    if input_prefix is not None:
+        validate_prefix(input_prefix)
     motion = validate_native_router(json.loads(DEFAULT_PATH.read_text())['native_router'])
+    if cartesian_speed_limits is not None:
+        for kind, value in zip(('linear', 'angular'), cartesian_speed_limits, strict=True):
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError('Cartesian speeds must be finite positive values')
+            key = 'max_'+kind+'_velocity'
+            motion['cartesian'][key] = min(motion['cartesian'][key], value)
     if not math.isfinite(gripper_width) or gripper_width < 0:
         raise ValueError("gripper_width must be nonnegative and finite")
     if not math.isfinite(base_yaw_deg):
@@ -50,8 +62,9 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
     # Rz(-base_yaw) @ the existing row-major XR-to-X5 basis.
     basis = [s, 0., -c, -c, 0., -s, 0., 1., 0.]
     basis = [0. if abs(value) < 1e-12 else value for value in basis]
-    xr_root, robot_root = f"{prefix}/xr", f"{prefix}/robot"
-    inp = f"{xr_root}/right_controller/states/input"
+    xr_root, robot_root = f"{input_prefix or prefix}/xr", f"{prefix}/robot"
+    channel = controller + '_controller'
+    inp = f"{xr_root}/{channel}/states/input"
     group = f"{prefix}/group"
     permit = f"{group}/permit"
     gate, parallel = f"{group}/arm/gate", f"{group}/gripper/parallel"
@@ -59,7 +72,7 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
     xrobot = dict(name="xrobot", driver="xrobot", id=prefix, bus_root=xr_root,
                   sdk_library=str(sdk_library),
                   xr_basis=basis,
-                  channels=[dict(channel_type="right_controller", channel_label="PICO Right Controller",
+                  channels=[dict(channel_type=channel, channel_label=f"PICO {controller.title()} Controller",
                                  kind="robot", enabled=True, mode="free-drive", dof=6,
                                  control_frequency_hz=250.0, publish_states=["pose", "input"], recorded_states=[])])
     coordinator = dict(
@@ -75,11 +88,12 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
                      grip_threshold=grip_threshold, gate_topic=gate, health_topic=arm_health),
                 dict(route_id="gripper", input_kind="trigger", controller_input_topic=inp,
                      trigger_max_width_m=float(gripper_width), parallel_topic=parallel, health_topic=grip_health)])
-    common = dict(leader_channel_id="xr.right_controller", ruckig_smoothing_enabled=motion['smoothing_enabled'],
+    common = dict(leader_channel_id=f"xr.{channel}", ruckig_smoothing_enabled=motion['smoothing_enabled'],
                   control_rate_hz=250.0, control_group_id=group,
-                  relative_hold_timeout_ms=30, relative_fault_timeout_ms=100)
+                  relative_hold_timeout_ms=max(30, 2000/feedback_hz),
+                  relative_fault_timeout_ms=max(100, 3000/feedback_hz))
     arm = dict(common, process_id=f"{prefix}.arm", follower_channel_id="robot.arm",
-               leader_state_kind="pose", leader_state_topic=f"{xr_root}/right_controller/states/pose",
+               leader_state_kind="pose", leader_state_topic=f"{xr_root}/{channel}/states/pose",
                follower_command_kind="end_pose", follower_command_topic=f"{robot_root}/arm/commands/end_pose",
                follower_state_kind="end_effector_pose", follower_state_topic=f"{robot_root}/arm/states/end_effector_pose",
                follower_mode_info_topic=f"{robot_root}/arm/info/mode", route_health_topic=arm_health,

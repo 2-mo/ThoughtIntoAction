@@ -227,7 +227,8 @@ class BenchPanelTests(unittest.TestCase):
         profile.assert_not_called()
         self.assertNotIn('USB-CAN', dict(rows))
         self.assertEqual(dict(rows)['robot'].level, 'waiting')
-        self.assertIn('首次开始会完全张开', '\n'.join(hints))
+        self.assertIn('不自动使能、回零、清错或张开', '\n'.join(hints))
+        self.assertIn('左 X / 右 A', '\n'.join(hints))
 
     def test_shared_camera_service_retries_without_owning_or_stopping_it(self):
         with patch('embodied.devices.sensors.client.ensure_service', side_effect=[RuntimeError('startup failed'), None]) as ensure, \

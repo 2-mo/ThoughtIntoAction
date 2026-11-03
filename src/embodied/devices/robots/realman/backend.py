@@ -9,7 +9,7 @@ import threading
 import time
 
 import numpy as np
-from meshcat import transformations as tf
+from scipy.spatial.transform import Rotation
 from .geometry import rotation_vector, limited_rotation
 
 from embodied.contracts.control import Mode, RobotState
@@ -29,14 +29,14 @@ def vector(value, size):
 
 def decode_pose(raw):
     a = vector(raw, 6)
-    return np.r_[a[:3] / 1e6, np.roll(tf.quaternion_from_euler(*(a[3:] / 1000)), -1)]
+    return np.r_[a[:3] / 1e6, Rotation.from_euler('xyz', a[3:]/1000).as_quat()]
 
 
 def encode_pose(pose):
     p = vector(pose, 7)
     if not np.isclose(np.linalg.norm(p[3:]), 1, atol=1e-3):
         raise ValueError('Pose quaternion must be normalized')
-    return np.rint(np.r_[p[:3] * 1e6, np.asarray(tf.euler_from_quaternion(np.roll(p[3:], 1))) * 1000]).astype(int).tolist()
+    return np.rint(np.r_[p[:3] * 1e6, Rotation.from_quat(p[3:]).as_euler('xyz') * 1000]).astype(int).tolist()
 
 
 def load_config(path=DEFAULT_CONFIG):

@@ -87,7 +87,7 @@ class RealManView:
         reason = reasons.get(state['reason'], state['reason'])
         stamp = min(state['sample_monotonic_ns'], *[int(a['feedback_at'] * 1e9) for a in arms])
         scene.accept({'schema': SCHEMA, 'robot': scene.robot.metadata(), 'stream_id': state['stream_id'],
-            'sequence': state['sequence'], 'source': {'kind': 'hardware', 'input': 'quest',
+            'sequence': state['sequence'], 'source': {'kind': state.get('source_kind', 'hardware'), 'input': 'quest',
                 'controller': 'RealMan 双臂 · ' + reason},
             'actual': actual, 'target': target, 'gripper': None,
             'sample_monotonic_ns': stamp, 'emitted_monotonic_ns': time.monotonic_ns(), 'paths': {},

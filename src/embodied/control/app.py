@@ -1,6 +1,7 @@
 """Launch the existing VR pipeline with an explicit simulation or native SDK backend."""
 
 import argparse
+import inspect
 import json
 import os
 from pathlib import Path
@@ -129,7 +130,9 @@ def run(args):
         if not native_commands or len(native_commands) > 64 or set(native_commands) & {'backend', 'observer', 'viewer'}:
             raise ValueError('Invalid native component process names/count')
         native = {'device': device_plugin, 'routing': args.routing_plugin, 'ingress': args.ingress_plugin,
-                  'channel': args.ingress_channel, 'dependencies': list(native_commands)}
+                  'channel': args.ingress_channel, 'dependencies': list(native_commands),
+                  'settings_aware': 'settings' in inspect.signature(
+                      registry.load('ingress', args.ingress_plugin, runtime='control')).parameters}
     (directory / 'runtime.json').write_text(json.dumps({
         'runtime_id': prefix, 'backend': args.backend, 'input': args.input,
         'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
@@ -154,11 +157,14 @@ def run(args):
     print(f'robot · 正在启动{mode} · {settings.robot.name} · {settings.robot.control_hz} Hz', flush=True)
     print(f'日志目录：{directory}', flush=True)
     if args.backend == 'real':
-        if args.managed:
+        if hasattr(settings.robot, 'startup_behavior'):
+            behavior = settings.robot.startup_behavior
+        elif args.managed:
             behavior = '使能电机，先保持当前位置和夹爪，随后接受所选输入控制'
         else:
             behavior = '使能电机，回 Home 并打开夹爪'
-        print(f'真机行为：{behavior}。Ctrl+C 退出后进入阻尼，退出前请支撑机械臂。', flush=True)
+        shutdown = getattr(settings.robot, 'shutdown_behavior', 'Ctrl+C 退出后进入阻尼，退出前请支撑机械臂')
+        print(f'真机行为：{behavior}。退出：{shutdown}。', flush=True)
     try:
         if telemetry:
             children.start("observer", [sys.executable, '-m', 'embodied.control.observer',

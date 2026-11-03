@@ -183,6 +183,17 @@
         "cartesian",
         "gripper"
       ]
+    },
+    "realman.real": {
+      "factory": "embodied.devices.robots.realman.hardware:Hardware",
+      "hardware": true,
+      "runtime": "control",
+      "capabilities": [
+        "feedback",
+        "joint",
+        "cartesian",
+        "gripper"
+      ]
     }
   },
   "vr": {
@@ -213,6 +224,10 @@
         "workbench-buttons",
         "native-control"
       ]
+    },
+    "quest.shared": {
+      "factory": "embodied.devices.inputs.quest.shared:SharedDevice",
+      "runtime": "control"
     }
   },
   "source": {
@@ -264,7 +279,10 @@
   "mapping": {
     "phone_calibrated": {
       "factory": "embodied.devices.inputs.phone:phone_calibrated",
-      "capabilities": ["relative-pose", "manual-calibration"]
+      "capabilities": [
+        "relative-pose",
+        "manual-calibration"
+      ]
     },
     "phone_tool": {
       "factory": "embodied.devices.inputs.phone:phone_tool",
@@ -314,6 +332,10 @@
         "workbench-buttons",
         "native-control"
       ]
+    },
+    "quest.shared": {
+      "factory": "embodied.devices.inputs.quest.shared:Routing",
+      "runtime": "control"
     }
   },
   "ingress": {
@@ -334,6 +356,10 @@
         "workbench-buttons",
         "native-control"
       ]
+    },
+    "quest.shared": {
+      "factory": "embodied.devices.inputs.quest.shared:Ingress",
+      "runtime": "control"
     }
   },
   "controller": {
@@ -632,6 +658,10 @@
     "realman": {
       "factory": "embodied.devices.robots.realman.model:Model",
       "runtime": "control"
+    },
+    "realman.hardware": {
+      "factory": "embodied.devices.robots.realman.hardware_model:planning_model",
+      "runtime": "control"
     }
   },
   "perception": {
@@ -680,6 +710,10 @@
     },
     "realman": {
       "factory": "embodied.devices.robots.realman.profile:load_profile",
+      "runtime": "control"
+    },
+    "realman.hardware": {
+      "factory": "embodied.devices.robots.realman.hardware_profile:load_profile",
       "runtime": "control"
     }
   },

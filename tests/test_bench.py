@@ -269,7 +269,7 @@ class BenchStateTests(unittest.TestCase):
              patch.object(bench, 'start_kernel') as start:
             self.assertTrue(bench.prepare_robot_start(True))
         start.assert_called_once_with(bench.REALMAN)
-        self.assertIn('--standby', start.call_args.args[0])
+        self.assertEqual(start.call_args.args[0], './run.sh robot-pair')
 
     def test_reopen_realman_workbench_explicitly_retries_failed_standby(self):
         with patch.object(sys.stdin, 'isatty', return_value=True), \

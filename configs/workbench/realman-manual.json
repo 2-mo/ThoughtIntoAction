@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "robot": "realman.real",
+  "source": "cli",
+  "camera": "none",
+  "config": "configs/robots/realman/left.json"
+}

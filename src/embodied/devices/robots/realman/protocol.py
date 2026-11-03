@@ -34,7 +34,7 @@ class Client:
     def send(self, message):
         command = message.get('command')
         if command not in READS and not (self.allow_motion and command in
-                                        {'movep_canfd', 'set_arm_stop'}) and not (self.allow_gripper and command in
+                                        {'movep_canfd', 'movej_canfd', 'set_arm_stop'}) and not (self.allow_gripper and command in
                                         {'set_gripper_release', 'set_gripper_pick', 'set_gripper_position'}):
             raise PermissionError(f'Command not permitted: {command}')
         with self.lock:

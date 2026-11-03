@@ -49,6 +49,13 @@ class UnifiedMotionLimitsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MotionLimits(**settings, joint_velocity_limits=[4., 5.], source={}, control_hz=250)
 
+    def test_driver_tcp_caps_supply_planning_defaults_without_changing_other_robots(self):
+        capabilities = {'joint_velocity_limits_rad_s': [2., 3.], 'source': {'kind': 'test'},
+                        'cartesian_velocity_limits': {'tcp_speed': .25, 'angular_speed': .3}}
+        policy = MotionLimits.load(self.config, capabilities=capabilities, backend='real')
+        self.assertEqual(policy.resolve_cartesian({}), {'tcp_speed': .25, 'angular_speed': .3})
+        self.assertEqual(MotionLimits.load(self.config).resolve_cartesian({}), {})
+
     def test_native_ingress_uses_same_step_bounds_as_rpc(self):
         engine = CommandEngine('fixture', self.config, 'test', ingress_channels=['vr'])
         state = RobotState(np.zeros(2), np.zeros(2), np.array([0., 0., .3, 0., 0., 0., 1.]), .04, 1.)

@@ -10,6 +10,7 @@ dependencies = [
     "ruckig==0.12.2",
     "mujoco==3.6.0",
     "iceoryx2==0.9.1",
+    "tomli==2.2.1",
 ]
 
 [project.optional-dependencies]

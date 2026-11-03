@@ -36,8 +36,7 @@ UI_REVISION = '17'
 ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
-REALMAN = ('./run.sh realman quest-dual --execute --gripper '
-           '--standby --gripper-initialize-open --gripper-speed 500 --duration 0')
+REALMAN = './run.sh robot-pair'
 KERNELS = [  # key, label, command typed into the kernel window, real arm
     ('1', '真机 · Quest 直控（上游操控）', REAL, True),
     ('2', '真机 · Quest + 网页 / 动作 / 标定 / 策略', REAL + ' --profile real-quest', True),
@@ -229,7 +228,8 @@ def realman_selected(config):
 
 def prepare_robot_start(attach):
     """An interactive open stages the configured robot; devices arm separately."""
-    if not attach or not sys.stdin.isatty() or not sys.stdout.isatty() or current_run():
+    from .pair_state import active_pair
+    if not attach or not sys.stdin.isatty() or not sys.stdout.isatty() or current_run() or active_pair():
         return False
     state = activity('kernel')
     selected = load_config().get('workbench', {}).get('robot_start', 'real-manual')
@@ -367,6 +367,13 @@ def current_run(root=None):
         except (OSError, ValueError, KeyError):
             continue
         if identity.get('boot_id') == boot and (path.parent / 'runtime.ready').exists():
+            # Pair operations must name a side, never silently select the
+            # newest arm for Home, recording or policy actions.
+            try:
+                if json.loads((path.parent/'workbench.json').read_text()).get('pair'):
+                    continue
+            except (OSError, ValueError):
+                pass
             return path.parent, identity
     return None
 
@@ -482,7 +489,8 @@ def type_command(command, enter=True):
 
 
 def start_kernel(command):
-    if current_run():
+    from .pair_state import active_pair
+    if current_run() or active_pair():
         raise RuntimeError('已有内核在运行；先按 S 停止（或在其原终端退出）。')
     target = window('kernel')
     if target is None or kernel_busy():
@@ -563,7 +571,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
                 is_robot = label != 'USB-CAN'
                 status.add_row('◇' if is_robot else '↔', Text('robot' if is_robot else label), status_text(value))
         if load_config().get('workbench', {}).get('robot_start') == 'realman-dual':
-            details.append(Text('本机默认 RealMan 双臂：总控按 6 启动待机，手柄 B 开始；仿真按 4/5 会切换到仿真机器人。', style='dim'))
+            details.append(Text('RealMan 双臂：左 X / 右 A 切换跟随，Grip 相对重定位；两侧采集与策略须明确指定 RUN。', style='dim'))
         else:
             details.append(Text('Ctrl+B → 3 查看 robot 启动确认或错误；仿真按 5。网页自动连接就绪的 robot。', style='dim'))
         for real, section in ((False, '仿真'), (True, '真机')):

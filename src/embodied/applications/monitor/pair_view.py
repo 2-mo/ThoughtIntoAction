@@ -1,0 +1,101 @@
+"""Combine two standard observer streams for display, never for control."""
+import select
+import time
+
+import numpy as np
+
+from embodied.contracts.runtime import RuntimeReader
+from embodied.applications.workstation.pair_state import active_pair
+from .realman_view import RealManView
+
+
+class PairView:
+    def __init__(self, *, finder=active_pair, reader_factory=RuntimeReader, model_factory=None):
+        self.finder, self.reader_factory = finder, reader_factory
+        self.identity = None
+        self.readers, self.ticks = {}, {}
+        self.discovery_at = 0.
+        self.error = None
+        self.sequence = 0
+        self.view = RealManView(reader=self.snapshot, **({'model_factory': model_factory} if model_factory else {}))
+
+    def close(self):
+        for reader in self.readers.values():
+            reader.close()
+        self.readers.clear()
+        self.ticks.clear()
+
+    def snapshot(self):
+        if self.identity is None or len(self.ticks) != 2:
+            return None
+        arms = []
+        for side in ('left', 'right'):
+            tick = self.ticks[side]
+            stamp = tick['timing']['feedback_received_ns']
+            if (time.monotonic_ns()-stamp)/1e9 > .15:
+                return None
+            feedback = tick['feedback']
+            command = tick.get('command') or {}
+            arms.append({'hand': side, 'host': side, 'q': feedback['q'],
+                'target_q_deg': np.rad2deg(command.get('q', feedback['q'])).tolist(),
+                'feedback_at': stamp/1e9, 'fault': feedback.get('fault', ''),
+                'gripper_width_m': feedback.get('gripper_width'),
+                'gripper_target_m': command.get('gripper_width'),
+                'run': self.identity['runs'][side]})
+        return {'schema': 1, 'stream_id': self.identity['runtime_id'], 'sequence': self.sequence,
+            'sample_monotonic_ns': min(int(a['feedback_at']*1e9) for a in arms),
+            'arms': arms, 'xr_fresh': None, 'paused': None,
+            'reason': '统一内核反馈；左X / 右A切换跟随，Grip相对重定位',
+            'source_kind': 'hardware' if all(r.descriptor.get('backend') == 'real' for r in self.readers.values()) else 'virtual'}
+
+    def step(self, scene):
+        if time.monotonic() >= self.discovery_at:
+            self.discovery_at = time.monotonic()+1.
+            found = self.finder()
+            if found != self.identity:
+                self.close()
+                self.identity = found
+                self.view.step(scene)
+        if self.identity is None:
+            return False
+        try:
+            for side, run in self.identity['runs'].items():
+                if side not in self.readers:
+                    self.readers[side] = self.reader_factory(run, 'latest', timeout=.1)
+            # Drain ready messages without allowing a slow arm to block the
+            # other observer. Freshness is checked separately for each side.
+            for side, reader in self.readers.items():
+                for _ in range(32):
+                    if not select.select([reader.sock], [], [], 0)[0]:
+                        break
+                    tick = reader.read()
+                    if tick.get('terminal') or tick.get('error'):
+                        raise EOFError(tick.get('error') or f'{side}内核已退出')
+                    if tick.get('feedback'):
+                        self.ticks[side] = tick
+                        self.sequence += 1
+            if not self.view.step(scene):
+                self.error = '等待双臂新鲜反馈；不会显示陈旧姿态'
+                if scene:
+                    scene.set_stream_error(self.error)
+            else:
+                self.error = None
+        except (OSError, ValueError, RuntimeError, EOFError, KeyError, TypeError) as exc:
+            self.close()
+            self.view.step(scene)
+            self.error = f'等待双臂内核反馈：{exc}'
+            if scene:
+                scene.set_stream_error(self.error)
+        return True
+
+    def monitor(self):
+        if self.identity is None:
+            return None
+        payload = self.view.monitor() or {}
+        payload.update(runtime_id=self.identity['runtime_id'], runtime_directory=None,
+            runtime_monitor=True, connections={}, collection_count=None, recording=None,
+            runtime_runs=self.identity['runs'], monitor_message=self.error or '双臂统一内核只读反馈；底座为示意布局',
+            input_error='手柄状态请查看Quest面板；不由姿态反馈推断控制权', input=None,
+            collection={'state': '按侧采集', 'task': 'collect run --run <left/right RUN> --task <任务>', 'control_enabled': False},
+            collection_hint='两侧分别使用现有采集/策略接口；尚无同步双臂策略协议。')
+        return payload

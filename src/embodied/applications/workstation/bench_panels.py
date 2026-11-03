@@ -85,9 +85,25 @@ def open_browser():
     return f'已请求浏览器打开 {url}'
 
 
+def pair_hints():
+    return ['左 X / 右 A 按住 150 ms 后松开：切换该侧跟随 / 保持；Trigger 按比例开合夹爪。',
+            'Grip 按下时，以当前手柄和机械臂姿态重新置零；松开保持，可重复重定位。映射比例 1.0。',
+            '启动只连接与读状态，不自动使能、回零、清错或张开；断流保持后需重新取得控制权。',
+            '网页只读显示两侧标准内核反馈；底座为示意布局，未标定双臂碰撞。',
+            '采集 / 策略复用现有接口，必须用 --run 指定左或右 RUN；X5 策略不能直接用于 RM65。',
+            'P/H/D 为 ARX 专用面板动作，此双臂面板不发送这些动作；Ctrl+B z 查看原始日志。']
+
+
 def kernel_rows():
     from embodied.applications.workstation import bench
 
+    from .pair_state import active_pair
+    pair = active_pair()
+    if pair:
+        rows = [('robot', Status('双臂统一内核已运行；控制权见 Quest 面板', 'ready')),
+                ('左手柄', bench.relative(pair['runs']['left'])),
+                ('右手柄', bench.relative(pair['runs']['right']))]
+        return rows, pair_hints()
     found = bench.current_run()
     if found:
         run, identity = found
@@ -104,28 +120,11 @@ def kernel_rows():
             hints.append('当前反馈来自仿真，不能据此判断真机是否通电。')
         return rows, hints
     state = bench.activity('kernel') if os.environ.get('EMBODIED_BENCH_SESSION') else ''
-    realman = bench.realman_selected(load_config())
-    if realman:
-        from embodied.devices.robots.realman.telemetry import latest_state
-        feedback = latest_state()
-        if state == 'failed':
-            status = Status('双臂会话失败；查看原始日志', 'error')
-        elif feedback is not None:
-            label = ('XR 数据未更新，已暂停' if not feedback['xr_fresh'] else
-                     '当前姿态不可遥操；示教器调整后按 B 重查' if feedback['reason'] == 'posture_rejected' else
-                     '手柄待机，松键后按 B 开始' if feedback['paused'] else '双臂手柄控制已开始')
-            status = Status(label, 'waiting' if feedback['paused'] else 'ready')
-        elif state == 'kernel':
-            status = Status('正在连接双臂；检查电源与主机网段地址，详情见原始日志', 'waiting')
-        else:
-            status = Status('等待双臂会话启动', 'waiting')
-        return [('robot', status), ('左手柄', '192.168.1.19'), ('右手柄', '192.168.1.18')], [
-            '松开全部控制键，按 B 开始 / 暂停，Y 暂停；首次开始会完全张开两只夹爪（50%）。',
-            'Grip 跟随；左 X / 右 A 张开，各侧 Trigger 闭合，可同时操作。',
-            '断流自动暂停，重新连接后松键再按 B；设备故障退出后需修复并在总控按 6 重试。',
-            '启动时等待机械臂联网；当前姿态不可遥操则保留三维反馈，示教器调整后按 B 重查。',
-            '网页显示双臂实测姿态，底座位置为示意；采集、策略网关尚未接入双臂。',
-            'Ctrl+B z 查看原始日志；进程运行不代表设备已在线或运动已验收。']
+    if bench.realman_selected(load_config()):
+        label = ('双臂会话失败；查看原始日志' if state == 'failed' else
+                 '正在连接两侧统一内核；详情见原始日志' if state == 'kernel' else '等待双臂会话启动')
+        return [('robot', Status(label, 'error' if state == 'failed' else 'waiting')),
+                ('左手柄', '192.168.1.19'), ('右手柄', '192.168.1.18')], pair_hints()
     config = load_config().get('robot', {})
     can_port = load_robot_profile()['robot'].get('can_interface')
     if not isinstance(can_port, str) or not can_port.strip():
@@ -357,16 +356,27 @@ def vr_control_rows(found):
     from embodied.applications.workstation import bench
 
     hints = ['在总控选择带 Quest 的配置后，跟踪状态会自动更新。']
+    from .pair_state import active_pair
+    pair = active_pair()
+    if pair:
+        from embodied.contracts.runtime.control import ControlClient
+        rows = []
+        for side in ('left', 'right'):
+            label = '左手柄' if side == 'left' else '右手柄'
+            try:
+                status = ControlClient(pair['runs'][side]).status()
+                ingress = status.get('ingresses', {}).get('native', {})
+                text = ('通道就绪' if ingress.get('ready') else '等待有效跟踪')
+                text += ' · 已激活' if ingress.get('armed') else ' · 待机'
+                if not status.get('owner'):
+                    text += ' · 未取得控制权；请重启RealMan会话'
+                if ingress.get('reason'):
+                    text += ' · '+str(ingress['reason'])
+                rows.append((label, Status(text, 'ready' if ingress.get('ready') else 'waiting')))
+            except (OSError, ValueError, RuntimeError, EOFError, KeyError) as exc:
+                rows.append((label, Status(f'状态读取失败：{exc}', 'error')))
+        return rows, pair_hints()[:3]
     if not found:
-        from embodied.devices.robots.realman.telemetry import latest_state
-        feedback = latest_state()
-        if feedback is not None:
-            fresh = feedback['xr_fresh']
-            return [('遥操接入', Status('RealMan 双臂 · XR 新鲜' if fresh else
-                'RealMan 双臂 · XR 数据中断', 'ready' if fresh else 'waiting')),
-                ('控制状态', '当前姿态不可遥操；示教器调整后按 B 重查' if feedback['reason'] == 'posture_rejected'
-                 else '已暂停，松键再按 B' if feedback['paused'] else '已开始 · Grip 跟随')], [
-                'B 开始 / 暂停，Y 暂停；SDK 断流会在暂停中重新订阅，恢复后仍需按 B。']
         return [('遥操接入', Status('robot 尚未运行', 'disabled'))], hints
     run, identity = found
     native = identity.get('native') or {}

@@ -59,6 +59,7 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
     error = None
     parked = False
     stop_requested = False
+    damping_requested = False
     park_error = None
     shutdown_policy = None
     shutdown_completed = False
@@ -107,7 +108,9 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
         nonlocal feedback_read_ns
         feedback_read_ns = time.monotonic_ns()
         try:
-            check_feedback(state, tick)
+            # A synchronous SDK may timestamp receipt after the tick began.
+            # Validate against the clock after the read, not its start time.
+            check_feedback(state, time.monotonic())
             count = len(settings.robot.park_q)
             if np.shape(state.q) != (count,) or np.shape(state.dq) != (count,):
                 raise RuntimeError(f"Robot feedback must contain {count} joints")
@@ -146,7 +149,8 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
             native = json.loads((directory / 'runtime.json').read_text()).get('native')
             if native:
                 ingresses[native['channel']] = registry.create('ingress', native['ingress'], runtime='control',
-                    prefix=prefix, dependencies=native['dependencies'], gripper=settings.robot.gripper_max_width > 0)
+                    prefix=prefix, dependencies=native['dependencies'], gripper=settings.robot.gripper_max_width > 0,
+                    **({'settings': settings} if native.get('settings_aware') else {}))
             gateway = Gateway(directory, prefix, settings.robot,
                               registry.load("planner", planner_plugin, runtime="control"), ingresses,
                               motion_limits=motion_limits, capabilities=capabilities,
@@ -210,6 +214,7 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
                 parked = result.get('park_completed', False)
                 park_error = result.get('park_joint_error_rad')
                 stop_requested = result.get('stop_requested', False)
+                damping_requested = result.get('damping_requested', stop_requested)
                 shutdown_policy = result['policy']
                 shutdown_completed = True
             except Exception as exc:
@@ -241,7 +246,7 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
         "shutdown_policy": shutdown_policy, "shutdown_completed": shutdown_completed,
         "stop_requested": stop_requested,
         "managed_stop": bool(gateway and gateway.engine.stopped),
-        "damping_requested": stop_requested,
+        "damping_requested": damping_requested,
         "park_joint_error_rad": park_error, "error": error,
         "ik_rejections": getattr(getattr(backend, 'controller', None), 'ik_rejections', 0),
         "ik_partial_solutions": getattr(getattr(backend, 'controller', None), 'ik_partial_solutions', 0),
