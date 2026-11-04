@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import threading
 
-from embodied.devices.robots.arx5.pinocchio_model import DEFAULT_URDF, X5PinocchioModel
 from embodied.core.telemetry import StateSubscriber, endpoint
 from embodied.contracts.registry import Registry
 from embodied.core.project import load_config, resolve_path
@@ -15,7 +14,7 @@ from embodied.core.project import load_config, resolve_path
 
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="view-arm", description=__doc__)
-    parser.add_argument("--urdf", default=str(DEFAULT_URDF))
+    parser.add_argument("--urdf", help="Explicit legacy URDF (normally selected by the runtime)")
     parser.add_argument("--eef", default="link6")
     parser.add_argument("--endpoint", help="Local state publisher endpoint; defaults to project telemetry config")
     parser.add_argument("--port", type=int, default=load_config()["viewer_service"]["port"], help="Browser HTTP port (default 18081; 0 chooses a free port)")
@@ -35,13 +34,15 @@ def main(argv=None):
     args.host = str(args.host)
     if args.viewer != 'web' and args.host != '127.0.0.1':
         parser.error('--host is supported by the web viewer only')
-    if args.kernel or args.run is not None:
+    if args.kernel or args.run is not None or (args.urdf is None and not args.managed and args.mode != 'simulation'):
         if args.viewer != 'web' or args.managed:
             parser.error('--kernel/--run supports the web viewer without --managed')
         from embodied.applications.monitor.kernel_view import serve
         return serve(args)
     address = endpoint(args.endpoint)
-    robot = X5PinocchioModel(args.urdf, args.eef)
+    from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
+    from embodied.applications.monitor.arx_preview import display_model
+    robot = X5PinocchioModel(args.urdf, args.eef) if args.urdf else display_model()
     scene = Registry().create("viewer", args.viewer, robot=robot, port=args.port,
                               **({'host': args.host} if args.viewer == 'web' else {}))
     previous = signal.getsignal(signal.SIGTERM)
@@ -67,7 +68,7 @@ def main(argv=None):
                 return
             if mode == 'simulation':
                 if simulation_model is None:
-                    simulation_model = X5PinocchioModel(PROJECT_ROOT / 'assets/robots/x5/runtime/x5_2025.urdf', 'tcp_link')
+                    simulation_model = display_model()
                 scene.set_model(simulation_model, simulation)
                 simulation.start(scene)
             else:

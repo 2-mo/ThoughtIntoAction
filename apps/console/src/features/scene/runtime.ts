@@ -5,14 +5,15 @@ import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { TargetPoseEditor, TARGET_EDIT_STATE } from "./target-pose-editor";
-import baseLinkMeshUrl from "@weights/geometry/x5/base_link.STL?url";
+import robotUrdf from "@realman/runtime/rm65.urdf?raw";
+import baseLinkMeshUrl from "@realman/meshes/base_link.STL?url";
 import d405MeshUrl from "@weights/geometry/intel-realsense-d405.stl?url";
-import link1MeshUrl from "@weights/geometry/x5/link1.STL?url";
-import link2MeshUrl from "@weights/geometry/x5/link2.STL?url";
-import link3MeshUrl from "@weights/geometry/x5/link3.STL?url";
-import link4MeshUrl from "@weights/geometry/x5/link4.STL?url";
-import link5MeshUrl from "@weights/geometry/x5/link5.STL?url";
-import link6MeshUrl from "@weights/geometry/x5/link6.STL?url";
+import link1MeshUrl from "@realman/meshes/link1.STL?url";
+import link2MeshUrl from "@realman/meshes/link2.STL?url";
+import link3MeshUrl from "@realman/meshes/link3.STL?url";
+import link4MeshUrl from "@realman/meshes/link4.STL?url";
+import link5MeshUrl from "@realman/meshes/link5.STL?url";
+import link6MeshUrl from "@realman/meshes/link6.STL?url";
 import {
   LOCAL_APPROACH_AXIS,
   cloneTargetPose,
@@ -36,7 +37,7 @@ import {
   setControlMessage,
 } from "../control/runtime";
 
-const MODEL_REVISION = "8ccbf0aa8d4288f2721c41a735e5ac4c389bb13b";
+const MODEL_REVISION = "realman-rm65-urdf-v1";
 const MODEL_URLS = [
   baseLinkMeshUrl,
   link1MeshUrl,
@@ -46,24 +47,20 @@ const MODEL_URLS = [
   link5MeshUrl,
   link6MeshUrl,
 ];
-const MODEL_CACHE_NAME = `arx5-x5-stl-${MODEL_REVISION}`;
+const MODEL_CACHE_NAME = `realman-rm65-stl-${MODEL_REVISION}`;
 const MODEL_FETCH_TIMEOUT_MS = 8_000;
 const D405_MODEL_URL = d405MeshUrl;
-const TABLE_CALIBRATION_STORAGE_KEY = "arx5-table-calibration-v7";
-const LEGACY_TABLE_CALIBRATION_STORAGE_KEYS = [
-  "arx5-table-calibration-v6",
-  "arx5-table-calibration-v5",
-  "arx5-table-calibration-v4",
-];
-const CAMERA_CALIBRATION_STORAGE_KEY = "arx5-camera-calibration-v3";
-const LEGACY_CAMERA_CALIBRATION_STORAGE_KEY = "arx5-camera-calibration-v2";
+const TABLE_CALIBRATION_STORAGE_KEY = "realman-table-calibration-v7";
+const LEGACY_TABLE_CALIBRATION_STORAGE_KEYS = [];
+const CAMERA_CALIBRATION_STORAGE_KEY = "realman-camera-calibration-v3";
+const LEGACY_CAMERA_CALIBRATION_STORAGE_KEY = "realman-camera-calibration-v2";
 const LIGHT_CALIBRATION_STORAGE_KEY = "arx5-light-calibration-v1";
 const D455_RGB_VERTICAL_FOV_DEG = 65;
 const DEFAULT_TABLE_CALIBRATION = Object.freeze({
   widthMm: 2000,
   depthMm: 1000,
   thicknessMm: 35,
-  // The X5 base mesh ends at X = -30 mm.  With the table's 1000 mm short
+  // The RM65 base mesh ends at X = -30 mm.  With the table's 1000 mm short
   // side along X (Yaw 90°), a center at +470 mm puts its long rear edge at
   // exactly that base outer edge and leaves the arm facing along the short
   // side into the tabletop.
@@ -102,7 +99,7 @@ const DEFAULT_LIGHT_CALIBRATION = Object.freeze({
 });
 const JOINT_NAMES = ["底座旋转", "肩部", "肘部", "腕部 1", "腕部 2", "末端旋转"];
 const LIMIT_MARGIN_DEG = 1;
-const EEF_OFFSET_LINK6_M = 0.145;
+const EEF_OFFSET_LINK6_M = 0.14;
 // Intel realsense2_description 4.55.1, _d405.urdf.xacro. The STL itself is
 // authored in millimetres and its origin is on the front plate between the IR
 // camera axes.
@@ -168,29 +165,16 @@ const PLASTIC_BLACK_COLOR = 0x171a1d;
 const gripperGeometryClassifications = new WeakMap();
 const gripperGeometryDeformations = new WeakMap();
 
-// Joint origins and axes come directly from the upstream X5.urdf.  Each
-// motion group is kept separate from its fixed origin transform so that the
-// green selection ring stays at the physical joint pivot.
-const JOINT_SPECS = [
-  { origin: [0, 0, 0.0603], rpy: [0, 0, 0], axis: [0, 0, 1] },
-  { origin: [0.02, 0, 0.0402], rpy: [0, 0, 0], axis: [0, 1, 0] },
-  { origin: [-0.264, 0, 0], rpy: [-Math.PI, 0, 0], axis: [0, 1, 0] },
-  { origin: [0.245, 0, -0.056], rpy: [0, 0, 0], axis: [0, 1, 0] },
-  { origin: [0.06575, -0.001, -0.0825], rpy: [0, 0, 0], axis: [0, 0, 1] },
-  { origin: [0.02845, 0, 0.0825], rpy: [-Math.PI, 0, 0], axis: [1, 0, 0] },
-];
-
-// Bounding boxes measured from the official meshes.  They provide a usable
-// low-poly fallback when a packaged mesh cannot be loaded.
-const FALLBACK_LINKS = [
-  { size: [0.060, 0.060, 0.0625], center: [0, 0, 0.03125] },
-  { size: [0.0593, 0.0785, 0.0575], center: [0.0078, 0, 0.0289] },
-  { size: [0.320, 0.0665, 0.056], center: [-0.132, 0.003, 0] },
-  { size: [0.291, 0.0765, 0.102], center: [0.128, 0, -0.0333] },
-  { size: [0.113, 0.0607, 0.102], center: [0.0392, -0.0014, -0.0335] },
-  { size: [0.060, 0.060, 0.111], center: [0, 0, 0.0553] },
-  { size: [0.147, 0.182, 0.061], center: [0.0733, 0, 0] },
-];
+// Read the same bundled URDF as the control model; joint frames are not copied.
+const robotXml = new DOMParser().parseFromString(robotUrdf, "application/xml");
+const xyz = (element, attribute) => (element?.getAttribute(attribute) || "0 0 0").split(/\s+/).map(Number);
+const JOINT_SPECS = Array.from(robotXml.querySelectorAll('joint[type="revolute"]')).map(joint => ({
+  origin: xyz(joint.querySelector("origin"), "xyz"),
+  rpy: xyz(joint.querySelector("origin"), "rpy"),
+  axis: xyz(joint.querySelector("axis"), "xyz"),
+}));
+// Loading placeholders only; the packaged RM65 meshes replace these shapes.
+const FALLBACK_LINKS = Array.from({length: 7}, () => ({size: [.06, .06, .06], center: [0, 0, 0]}));
 
 const elements = {
   canvas: document.querySelector("#robotCanvas"),
@@ -1524,7 +1508,7 @@ async function openModelCache() {
   try {
     return await globalThis.caches.open(MODEL_CACHE_NAME);
   } catch (error) {
-    console.warn("X5 model cache unavailable; using normal browser cache", error);
+    console.warn("RM65 model cache unavailable; using normal browser cache", error);
     return null;
   }
 }
@@ -1541,7 +1525,7 @@ async function loadLinkGeometry(index, cache = null) {
           cacheHit: true,
         };
       } catch (error) {
-        console.warn(`Cached X5 mesh ${filename} is invalid; downloading again`, error);
+        console.warn(`Cached RM65 mesh ${filename} is invalid; downloading again`, error);
         await cache.delete(url).catch(() => {});
       }
     }
@@ -1562,7 +1546,7 @@ async function loadLinkGeometry(index, cache = null) {
     buffer = await response.arrayBuffer();
     if (cache && cacheResponse) {
       void cache.put(url, cacheResponse).catch((error) => {
-        console.warn(`Unable to persist X5 mesh ${filename}`, error);
+        console.warn(`Unable to persist RM65 mesh ${filename}`, error);
       });
     }
   } finally {
@@ -1595,8 +1579,8 @@ async function loadGeometries(onLinkReady = () => {}) {
       if (cacheHit) cacheHits += 1;
       onLinkReady(index);
       elements.loadingText.textContent = modelCache
-        ? `正在加载官方 X5 模型… ${completed}/${total} · 缓存 ${cacheHits}`
-        : `正在加载官方 X5 模型… ${completed}/${total}`;
+        ? `正在加载官方 RM65 模型… ${completed}/${total} · 缓存 ${cacheHits}`
+        : `正在加载官方 RM65 模型… ${completed}/${total}`;
       return geometry;
     }));
   const results = await Promise.allSettled(requests);
@@ -1604,7 +1588,7 @@ async function loadGeometries(onLinkReady = () => {}) {
   const geometries = results.map((result, index) => {
     if (result.status === "fulfilled") return result.value;
     degraded = true;
-    console.warn(`X5 link ${index} mesh unavailable; using fallback`, result.reason);
+    console.warn(`RM65 link ${index} mesh unavailable; using fallback`, result.reason);
     return fallbackGeometry(index);
   });
   const [d405Result] = await d405Request;
@@ -1679,7 +1663,7 @@ function createD405Material(ghost) {
 function createD405Visual(geometry, ghost) {
   const eefRoot = new THREE.Group();
   eefRoot.name = ghost ? "preview-d405-eef-frame" : "actual-d405-eef-frame";
-  eefRoot.position.x = EEF_OFFSET_LINK6_M;
+  eefRoot.position.z = EEF_OFFSET_LINK6_M;
 
   // T_eef_camera maps D405 optical-frame points into eef_link. Keep this
   // object matrix-controlled so the calibrated SE(3) can be copied without an
@@ -1803,7 +1787,8 @@ function createTargetGripperGhost() {
   root.add(palm);
 
   const gripper = createGripperVisual(true);
-  gripper.root.position.x = -EEF_OFFSET_LINK6_M;
+  gripper.root.rotation.y = -Math.PI / 2;
+  gripper.root.position.z = -EEF_OFFSET_LINK6_M;
   root.add(gripper.root);
   root.visible = false;
   scene.add(root);
@@ -2006,7 +1991,7 @@ function initializeTargetPoseEditing() {
 
 function createRobotModel(geometries, ghost = false, d405Geometry = undefined) {
   const root = new THREE.Group();
-  root.name = ghost ? "preview-x5" : "actual-x5";
+  root.name = ghost ? "preview-rm65" : "actual-rm65";
   const origins = [];
   const motions = [];
   const meshes = [];
@@ -2026,7 +2011,7 @@ function createRobotModel(geometries, ghost = false, d405Geometry = undefined) {
     const origin = new THREE.Group();
     origin.name = `joint${index + 1}-origin`;
     origin.position.set(...spec.origin);
-    origin.rotation.set(...spec.rpy, "XYZ");
+    origin.rotation.set(...spec.rpy, "ZYX");
     parent.add(origin);
     origins.push(origin);
 
@@ -2036,9 +2021,7 @@ function createRobotModel(geometries, ghost = false, d405Geometry = undefined) {
     motions.push(motion);
 
     const sourceGeometry = geometries[index + 1];
-    const dynamicGeometry = index === 5
-      ? createDynamicGripperGeometry(sourceGeometry)
-      : { geometry: sourceGeometry, dynamic: false };
+    const dynamicGeometry = { geometry: sourceGeometry, dynamic: false };
     if (index === 5) {
       gripperGeometry = dynamicGeometry.geometry;
       officialGripperIsDynamic = dynamicGeometry.dynamic;
@@ -2061,7 +2044,10 @@ function createRobotModel(geometries, ghost = false, d405Geometry = undefined) {
   // translated directly when available; the lightweight overlay is retained
   // only for the offline fallback geometry.
   const gripper = officialGripperIsDynamic ? null : createGripperVisual(ghost);
-  if (gripper) motions[5].add(gripper.root);
+  if (gripper) {
+    gripper.root.rotation.y = -Math.PI / 2;
+    motions[5].add(gripper.root);
+  }
   // Loading skeletons omit the third argument. Actual and preview robots pass
   // either the official geometry or null to request the dimensional fallback.
   const d405 = d405Geometry === undefined
@@ -2215,7 +2201,7 @@ function createCartesianIndicators() {
     }),
   );
   eefDragHandle.name = "eef-drag-handle";
-  eefDragHandle.position.set(EEF_OFFSET_LINK6_M, 0, 0);
+  eefDragHandle.position.set(0, 0, EEF_OFFSET_LINK6_M);
   eefDragHandle.renderOrder = 8;
   eefDragHandle.userData.isEefDragHandle = true;
   actualModel.motions[5].add(eefDragHandle);
@@ -3790,7 +3776,7 @@ function modelEefWorldPosition(model) {
   const link6 = model?.motions?.[5];
   if (!link6) return null;
   model.root.updateMatrixWorld(true);
-  return link6.localToWorld(new THREE.Vector3(EEF_OFFSET_LINK6_M, 0, 0));
+  return link6.localToWorld(new THREE.Vector3(0, 0, EEF_OFFSET_LINK6_M));
 }
 
 function jointEndEffectorPathMm(startAngles, targetAngles, sampleCount = 48) {
@@ -5658,10 +5644,10 @@ async function initializeModel() {
     const modelStatus = anyDegraded
       ? "3D 模型降级可用"
       : cacheHits === FALLBACK_LINKS.length
-        ? "X5 + D405 模型已从缓存加载"
+        ? "RM65 + D405 模型已从缓存加载"
         : cacheEnabled
-          ? "X5 + D405 官方模型已加载并缓存"
-          : "X5 + D405 官方模型已加载";
+          ? "RM65 + D405 机械臂模型（夹爪示意）已加载并缓存"
+          : "RM65 + D405 机械臂模型（夹爪示意）已加载";
     setPill(modelStatus, anyDegraded ? "warning" : "ok");
     handleArmState(getArmState());
   } catch (error) {

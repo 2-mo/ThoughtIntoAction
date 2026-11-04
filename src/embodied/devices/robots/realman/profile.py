@@ -27,6 +27,7 @@ class Profile:
     tool_offset_m: float
     teleop_linear_speed_m_s: float = .125
     teleop_angular_speed_rad_s: float = .30
+    pregrasp_q: tuple = (0., 0., math.pi/2, 0., math.pi/2, 0.)
     has_gripper: bool = True
     simulation_plugin: str = 'realman.sim'
     hardware_plugin: str = ''

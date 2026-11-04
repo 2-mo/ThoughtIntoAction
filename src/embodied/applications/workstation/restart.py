@@ -68,7 +68,7 @@ def _check_robot_activity(run, identity):
 
 def _restart_robot(*, confirmed, wait_s=30):
     if not confirmed:
-        raise RuntimeError('重启 robot 需要确认；真机退出会进入阻尼，请先支撑机械臂。')
+        raise RuntimeError('重启 robot 需要确认；RealMan 会先请求停止并保持。')
     owned = bench.owned_run()
     if owned is None:
         raise RuntimeError('robot 未运行或不是本工作台启动的；请在原终端处理，未发送停止信号。')
@@ -83,7 +83,16 @@ def _restart_robot(*, confirmed, wait_s=30):
         raise RuntimeError('正在使用共享相机采集；请先结束采集，再重启 robot。') from exc
     with closing(guard):
         check_legacy_session()
-        _check_robot_activity(run, identity)
+        from .pair_state import active_pair
+        pair = active_pair()
+        if pair:
+            import json
+            from pathlib import Path
+            for directory in pair['runs'].values():
+                directory = Path(directory)
+                _check_robot_activity(directory, json.loads((directory/'runtime.json').read_text()))
+        else:
+            _check_robot_activity(run, identity)
         if bench.owned_run() != owned:
             raise RuntimeError('robot 运行实例已变化，未停止；请刷新总控后重试。')
         bench.stop_kernel()

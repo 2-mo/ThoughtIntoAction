@@ -15,10 +15,11 @@ src/features/cube/          方块姿态显示算法
 src/features/teleoperation/ 手势遥操作界面
 src/features/collection/    GR00T 采集页面
 ../../assets/arx_motion/   MediaPipe 运行库、WASM、图标和纹理
-../../assets/arx_motion/weights/browser/  MediaPipe 模型与 X5/D405 网格
+../../assets/arx_motion/weights/browser/  MediaPipe 模型与 D405 网格
+../../assets/robots/realman/  RM65 URDF 与官方机械臂网格
 ```
 
-页面包含三块功能：官方 X5 模型驱动的 3D XYZ/单关节控制、夹爪/高级关节调试，
+页面包含三块功能：RM65 URDF／网格驱动的 3D XYZ/单关节控制、夹爪/高级关节调试，
 以及连接在机械臂主机上的 Intel RealSense D455 RGB-D 画面与 MediaPipe 预览。
 主机使用一个 `librealsense` pipeline 同步采集 RGB 与 Depth，经 WebRTC 双视频轨
 送到浏览器，MediaPipe 仍只处理 RGB；关键点目前不会转换成机械臂动作。

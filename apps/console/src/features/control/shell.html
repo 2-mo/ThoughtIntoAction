@@ -29,11 +29,11 @@
         <div class="manual-main">
           <section class="robot-console card" aria-labelledby="robotConsoleTitle">
             <div class="robot-stage">
-              <canvas id="robotCanvas" tabindex="0" aria-label="ARX X5 三维姿态预览"></canvas>
+              <canvas id="robotCanvas" tabindex="0" aria-label="RealMan RM65 三维姿态预览"></canvas>
               <!-- Transparent by design: the low-poly loading skeleton behind it
                    reports progress, so this layer only blocks input and captions. -->
               <div id="robotModelLoading" class="robot-model-loading">
-                <p id="robotModelLoadingText" class="robot-model-loading-text" aria-live="polite">正在加载官方 X5 模型…</p>
+                <p id="robotModelLoadingText" class="robot-model-loading-text" aria-live="polite">正在加载RM65 模型…</p>
               </div>
               <div class="robot-stage-tools">
                 <button id="robotResetViewButton" type="button" title="重新初始化 3D 仿真渲染器，不刷新控制页面"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i><span>重载仿真</span></button>
@@ -124,7 +124,7 @@
                 <p class="eyebrow">3D motion control</p>
                 <h2 id="robotConsoleTitle">末端与关节控制</h2>
                 <p class="robot-help">末端目标使用基座坐标系；先编辑目标，再预览验证，最后明确执行。关节模式可点击连杆或圆环选择。所有预览都不会立即移动真机。外观来自
-                  <a href="https://github.com/real-stanford/arx5-sdk/tree/main/models" target="_blank" rel="noreferrer">上游 X5 模型</a>。
+                  <a href="https://github.com/RealManRobot/ros2_rm_robot" target="_blank" rel="noreferrer">RealMan 上游模型</a>。
                 </p>
               </div>
 

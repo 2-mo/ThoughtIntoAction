@@ -92,8 +92,8 @@ def pair_hints():
             'Grip 按下时，以当前手柄和机械臂姿态重新置零；松开保持，可重复重定位。映射比例 1.0。',
             '启动只连接与读状态，不自动使能、回零、清错或张开；断流保持后需重新取得控制权。',
             '网页只读显示两侧标准内核反馈；底座为示意布局，未标定双臂碰撞。',
-            '采集 / 策略复用现有接口，必须用 --run 指定左或右 RUN；X5 策略不能直接用于 RM65。',
-            'P/H/D 为 ARX 专用面板动作，此双臂面板不发送这些动作；Ctrl+B z 查看原始日志。']
+            '总控沿用 C 采集、B/X/T 动作、H/J 标定；命令自动填写当前侧 RUN；策略须使用 RM65 权重。',
+            '[ 选左 / ] 选右；P 预抓取 / H 返回配置 Home；先在总控 I 释放 Quest 控制权。Ctrl+B z 查看日志。']
 
 
 def kernel_rows():
@@ -105,6 +105,8 @@ def kernel_rows():
         rows = [('robot', Status('双臂统一内核已运行；控制权见 Quest 面板', 'ready')),
                 ('左手柄', bench.relative(pair['runs']['left'])),
                 ('右手柄', bench.relative(pair['runs']['right']))]
+        from .pair_state import selected_run
+        rows.append(('当前操作侧', selected_run(pair)[0] + ' · [ 左 / ] 右'))
         return rows, pair_hints()
     found = bench.current_run()
     if found:
@@ -777,7 +779,14 @@ def main(argv=None):
                     refreshed = 0.
                 if robot is not None and not realman_panel and key is not None:
                     from embodied.applications.workstation import bench
-                    robot.press(key, bench.current_run())
+                    if key in ('[', ']'):
+                        from .pair_state import select_side
+                        if robot.motion is not None:
+                            robot.message = Status('请先取消或等待本面板动作完成，再切换操作侧', 'waiting')
+                        else:
+                            select_side('left' if key == '[' else 'right')
+                    else:
+                        robot.press(key, bench.current_run())
                     refreshed = 0.
                 if args.role == 'phone' and key in ('c', 't', 's', ' '):
                     from embodied.applications.workstation.phone_panel import press

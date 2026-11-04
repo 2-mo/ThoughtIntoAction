@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "robot": "arx.sim",
+  "robot": "realman.sim",
   "source": "cli",
   "camera": "synthetic",
-  "controller": "arx.joint_target"
+  "config": "configs/robots/realman/sim.json"
 }

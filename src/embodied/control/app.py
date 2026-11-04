@@ -69,7 +69,7 @@ def native_components(registry, device, routing, settings, backend):
 
 def print_ready(device_plugin, routing_plugin, gripper_max_width):
     """Describe the selected input, including native plugins used by managed profiles."""
-    if device_plugin == 'arx.quest':
+    if device_plugin in ('arx.quest', 'quest.native'):
         print('robot · 已就绪，等待 Quest 控制器输入。', flush=True)
         trigger = '夹爪' if gripper_max_width > 0 else '未启用（无夹爪）'
         print(f'右手柄：长按 A 150 ms 切换模式 · Grip 跟随 · Trigger {trigger} · A+B 回 Home。', flush=True)
@@ -95,6 +95,8 @@ def component_exit_message(name, code):
 def run(args):
     validate_run(args.backend, args.input, args.headless, getattr(args, "managed", False))
     record_tuning = args.record_tuning
+    if args.config is None and args.backend == "real":
+        args.config = str(ROOT / "configs/robots/realman/left.json")
     settings = load_settings(args.config, args.vr_config)
     from embodied.contracts.registry import Registry
     registry = Registry()
@@ -107,7 +109,7 @@ def run(args):
         record_tuning = True
     native_device = native_routing = None
     device_plugin = args.input_plugin
-    device_plugin = device_plugin or {'vr': 'arx.quest', 'demo': 'arx.demo'}.get(args.input)
+    device_plugin = device_plugin or {'vr': 'quest.native', 'demo': 'arx.demo'}.get(args.input)
     if device_plugin:
         native_device, native_routing = native_components(registry, device_plugin, args.routing_plugin, settings, args.backend)
         if args.managed:
@@ -267,15 +269,15 @@ def main(argv=None):
     launch.add_argument("--managed", action="store_true", help="Enable plugin command gateway; starts in feedback hold")
     launch.add_argument("--robot-plugin")
     launch.add_argument("--input-plugin", "--vr-plugin", dest="input_plugin")
-    launch.add_argument("--routing-plugin", default="arx.native")
-    launch.add_argument("--ingress-plugin", default="arx.native")
+    launch.add_argument("--routing-plugin", default="quest.native")
+    launch.add_argument("--ingress-plugin", default="quest.native")
     launch.add_argument("--ingress-channel", default="native")
     launch.add_argument("--controller-plugin")
     launch.add_argument("--planner-plugin", default="motion.default")
     launch.add_argument("--headless", action="store_true")
     launch.add_argument("--duration", type=float, default=0)
     launch.add_argument("--report")
-    launch.add_argument("--config", help="robot profile (default: configs/robots/arx5/robot.json)")
+    launch.add_argument("--config", help="robot profile (default: configs/robots/realman/sim.json)")
     launch.add_argument("--vr-config", help="VR profile (default: configs/inputs/quest.json)")
     launch.add_argument("--record-tuning", action="store_true", help="record feedback/targets/gains (always enabled for real)")
     launch.add_argument("--telemetry", action="store_true", help="Publish RobotTickV3 and start the independent read-only observer")

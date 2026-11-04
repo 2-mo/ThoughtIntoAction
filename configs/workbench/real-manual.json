@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "robot": "arx.real",
+  "robot": "realman.real",
   "source": "cli",
   "camera": "realsense",
-  "controller": "arx.joint_target"
+  "config": "configs/robots/realman/left.json"
 }

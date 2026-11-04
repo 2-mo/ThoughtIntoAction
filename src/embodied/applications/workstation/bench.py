@@ -32,22 +32,22 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传', 'phone': '手机'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传 · 8 手机'
-UI_REVISION = '17'
+UI_REVISION = '18'
 ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
 REALMAN = './run.sh robot-pair'
 KERNELS = [  # key, label, command typed into the kernel window, real arm
-    ('1', '真机 · Quest 直控（上游操控）', REAL, True),
+    ('1', '真机 · RealMan Quest', REAL, True),
     ('2', '真机 · Quest + 网页 / 动作 / 标定 / 策略', REAL + ' --profile real-quest', True),
     ('3', '真机 · 无 Quest（网页 / 动作 / 标定 / 策略）', REAL + ' --profile real-manual', True),
-    ('4', '仿真 · Quest', './run.sh quest-transport prepare && ./run.sh kernel profiles start --profile sim-quest', False),
-    ('5', '仿真 · 无输入（网页 / 动作 / 策略）', './run.sh kernel profiles start --profile sim-manual', False),
+    ('4', '仿真 · RealMan Quest', './run.sh quest-transport prepare && ./run.sh kernel profiles start --profile sim-quest', False),
+    ('5', '仿真 · RealMan 无输入（网页 / 动作 / 策略）', './run.sh kernel profiles start --profile sim-manual', False),
     ('6', '真机 · RealMan 双臂手柄待机', REALMAN, True),
 ]
 RESTART_TARGETS = {
     '1': ('interfaces', '▤', '工作台界面', '重启网页、宣传站与状态页；robot、共享相机保持运行'),
-    '2': ('robot', '◇', 'robot', '沿用本次启动配置；真机退出会进入阻尼，执行前确认'),
+    '2': ('robot', '◇', 'robot', '沿用本次启动配置；RealMan 停止并保持，执行前确认'),
     '3': ('camera', '▣', '共享相机', '重启服务并读取配置；录制中不能重启'),
 }
 
@@ -222,8 +222,8 @@ def realman_selected(config):
     if os.environ.get('EMBODIED_BENCH_SESSION') and activity('kernel') == 'kernel' and (pane := window('kernel')):
         saved = tmux('show-options', '-pqv', '-t', pane[0], '@bench_kernel_command').stdout.strip()
         if saved:
-            return saved == REALMAN
-    return config.get('workbench', {}).get('robot_start') == 'realman-dual'
+            return saved.startswith(REALMAN) or saved.startswith(REAL) or any(saved.startswith(item[2]) for item in KERNELS)
+    return config.get('workbench', {}).get('robot_start') in ('realman-dual', 'real-manual')
 
 
 def prepare_robot_start(attach):
@@ -256,7 +256,7 @@ def refresh_panel(pane, command):
     tmux('respawn-pane', '-t', pane, '-c', str(ROOT), command)
 
 
-def start(attach=True):
+def start(attach=True, mode=None):
     if not shutil.which('tmux'):
         print(overview_text('未安装 tmux。安装后可使用多窗口工作台：sudo apt install tmux'))
         return
@@ -306,7 +306,9 @@ def start(attach=True):
             running = True
     if owned_run() or activity('kernel') == 'kernel':
         ensure_robot_controls()
-    if not prepare_robot_start(attach):
+    if mode and not current_run() and not kernel_busy():
+        start_kernel(KERNELS[3][2] if mode == 'simulation' else REALMAN)
+    elif not prepare_robot_start(attach):
         tmux('select-window', '-t', window('home')[0])
     if attach:
         if not sys.stdin.isatty():
@@ -352,13 +354,19 @@ def stop(wait_s=30):
             (found := window(role)) and found[1] and found[1] not in SHELLS for role in ('web', 'site')):
         time.sleep(.2)
     tmux('kill-session', '-t', SESSION)
-    print('工作台已关闭' + ('，内核已退出（真机进入 SDK 阻尼）。' if run else '。'))
+    print('工作台已关闭' + ('，内核已退出（RealMan 请求停止并保持）。' if run else '。'))
 
 
 # State
 
 def current_run(root=None):
     """(directory, identity) of the newest ready kernel run of this boot with a live supervisor, or None."""
+    if root is None:
+        from .pair_state import selected_run
+        selected = selected_run()
+        if selected is not None:
+            _, run = selected
+            return run, json.loads((run/'runtime.json').read_text())
     boot = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
     for path in sorted(Path(root or ROOT / 'outputs/runtime/control').glob('*/runtime.json'), reverse=True):
         try:
@@ -587,6 +595,11 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
         summary = kernel_summary(run, identity)
         status.add_row('◇', 'robot', status_text(summary[1]))
         details.extend(Text(str(line), style='dim') for line in (summary[0], *summary[2:]))
+        from .pair_state import selected_run
+        selected = selected_run()
+        if selected:
+            details.append(Text('当前操作侧：' + ('左 .19' if selected[0] == 'left' else '右 .18') + '；[ 选左 / ] 选右。动作、采集、手机与标定使用此侧。', style='bold yellow'))
+        menu.add_row('输入', 'I', Text('释放 / 恢复本侧 Quest 控制权（动作、手机接管前先释放）'))
         rows = actions(run, identity, episode)
         for section, keys in (('观察', 'wmvo'), ('测试', 'bxt'), ('数据', 'cke'), ('进阶', 'hjg')):
             first = True
@@ -598,7 +611,7 @@ def dashboard_view(found, episode, message, failed=False, show_help=False, show_
                 menu.add_row(section if first else '', Text(key.upper(), style='bold color(215)' if usable else 'dim'),
                              Text(label + note, style=None if usable else 'dim'))
                 first = False
-        menu.add_row('停止', 'S', Text('连按两次停止内核；真机进入阻尼，请先扶住', style='yellow'))
+        menu.add_row('停止', 'S', Text('连按两次停止内核；RealMan 请求停止并保持', style='yellow'))
     vr, _ = vr_rows(found, vr_transport)
     label, value = vr[0]
     status.add_row('◉', Text(label), status_text(value))
@@ -694,7 +707,14 @@ def dashboard():
             return type_command('./run.sh search ', enter=False)
         if key == 'l':
             return type_command('./run.sh help --all')
+        if key in ('[', ']'):
+            from .pair_state import select_side
+            side, _ = select_side('left' if key == '[' else 'right')
+            return '当前操作侧：' + side + '；已启动的动作与录制继续绑定原侧。'
         found = current_run()
+        if key == 'i' and found:
+            from .workbench import set_native_enabled
+            return set_native_enabled(found[0])
         if key == 'q':
             tmux('detach-client', '-s', SESSION)
             return '已离开，全部继续运行；./run.sh 回到工作台。'
@@ -723,7 +743,7 @@ def dashboard():
                 pending_stop = 0.
                 return stop_kernel()
             pending_stop = time.monotonic()
-            return '再按一次 S 停止内核' + ('；真机将进入 SDK 阻尼，先扶住机械臂。' if identity.get('backend') == 'real' else '。')
+            return '再按一次 S 停止内核' + ('；RealMan 请求停止并保持。' if identity.get('backend') == 'real' else '。')
         for item_key, label, command, enter, needs in actions(run, identity, latest_episode()):
             if key == item_key:
                 if command is None:
@@ -768,6 +788,7 @@ def dashboard():
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('action', nargs='?', default='start', choices=('start', 'stop', 'restart', 'status', '_dashboard'))
+    parser.add_argument('--mode', choices=('simulation', 'real'))
     parser.add_argument('--detach', action='store_true', help='start: create without attaching')
     parser.add_argument('--target', choices=('interfaces', 'robot', 'camera'), default='interfaces',
                         help='restart: interfaces (web/UI), robot (original launch configuration), or camera (shared service)')
@@ -782,7 +803,7 @@ def main(argv=None):
         if args.target == 'robot':
             found = owned_run()
             if found and found[1].get('backend') == 'real':
-                print('真机重启会短暂进入 SDK 阻尼。' + ('原生 Quest 模式重新启动会回 Home。' if not found[1].get('managed') else ''))
+                print('RealMan 重启会请求停止并保持。' + ('原生 Quest 模式重新启动会回 Home。' if not found[1].get('managed') else ''))
                 if not sys.stdin.isatty() or input('已支撑好机械臂，开始重启？[y/N] ').strip().lower() != 'y':
                     print('未重启 robot。')
                     return 0
@@ -793,7 +814,7 @@ def main(argv=None):
         print(f'工作台：{"运行中" if exists() else "未运行"}（tmux 会话 {SESSION}）')
         print('\n'.join(map(str, kernel_summary(*found))) if found else '没有运行中的内核。')
     else:
-        start(attach=not args.detach)
+        start(attach=not args.detach, mode=args.mode)
     return 0
 
 

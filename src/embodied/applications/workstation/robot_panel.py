@@ -4,12 +4,13 @@ P/H submit motion; space cancels this panel's operation. D then D explicitly
 requests real kernel shutdown into SDK damping; opening the panel is read-only.
 """
 import math
+import json
 import time
 
 from embodied.applications.operations.robot import Robot
 from embodied.applications.workstation.status import Status
 from embodied.contracts.runtime.control import ControlClient
-from embodied.core.presets import DEFAULT_GRASP_READY_JOINTS
+from embodied.core.presets import pregrasp_joints
 from embodied.control.homing import ReleaseThenHome
 
 
@@ -46,6 +47,8 @@ class RobotControls:
                 from embodied.applications.workstation import bench
                 if found is None or found[1].get('backend') != 'real' or bench.owned_run() != found:
                     raise RuntimeError('D 仅用于本工作台正在运行的真机内核')
+                if (found[1].get('plugins') or {}).get('robot') == 'realman.real':
+                    raise RuntimeError('RealMan 不提供 ARX 阻尼；空格取消本面板动作，总控 S 停止内核并保持')
                 if time.monotonic() >= self.damping_armed_until or self.damping_run != found[0]:
                     self.damping_run = found[0]
                     self.damping_armed_until = time.monotonic() + 5
@@ -70,15 +73,14 @@ class RobotControls:
             if found is None or not found[1].get('managed'):
                 raise RuntimeError('robot 尚未就绪；请先在总控启动')
             run, identity = found
-            if key == 'p' and (identity.get('plugins') or {}).get('robot') not in ('arx.real', 'arx.sim'):
-                raise ValueError('当前机器人未配置预抓取位姿')
             # The connection is lazy and explicit: opening the page owns no lease.
             self.run = run
+            self.identity = identity
             self.robot = Robot.connect(run).__enter__()
             state = self.robot.state
             if state.get('owner') or state.get('stopped'):
                 raise RuntimeError('robot 已被其他控制源占用或停止；未发送动作')
-            self.target = (list(DEFAULT_GRASP_READY_JOINTS) if key == 'p'
+            self.target = (pregrasp_joints(self.robot.describe()['robot']) if key == 'p'
                            else self.robot.describe()['robot']['park_q'])
             self.started = time.monotonic()
             self.motion = (self.robot.home(release_gripper=True, wait=False) if key == 'h'
@@ -106,6 +108,15 @@ class RobotControls:
         """Read feedback and preserve the kernel's actual completion/failure result."""
         rows = []
         had_motion = self.motion is not None
+        if had_motion and found is not None and self.run != found[0]:
+            try:
+                old = json.loads((self.run/'workbench.json').read_text()).get('pair', {})
+                new = json.loads((found[0]/'workbench.json').read_text()).get('pair', {})
+                if old.get('id') and old.get('id') == new.get('id'):
+                    rows.append(('动作绑定侧', old['side'] + ' · 完成后切换到当前选择侧'))
+                    found = self.run, self.identity
+            except (OSError, ValueError, KeyError):
+                pass
         try:
             if self.damping_armed_until and time.monotonic() >= self.damping_armed_until:
                 self.damping_armed_until = 0.

@@ -1,5 +1,36 @@
 # RealMan RM65-BI 平台接入与 Quest 遥操
 
+## 当前平台入口
+
+工作目录为仓库根目录。沿用现有入口，不需要改用独立 RealMan 演示程序：
+
+```bash
+./run.sh                           # 原工作台，默认 RealMan 双臂真机待机
+./run.sh sim start                 # 同一工作台，RealMan Quest 仿真
+./run.sh kernel profiles start --profile sim-manual --headless
+./run.sh examples sim_control      # 默认 RM65，普通 Robot API 不变
+```
+
+已有运行不会因改配置自动重启。先在原工作台停止旧 robot，再按 4 / 5 选择有／无 Quest 的 RealMan 仿真；重新运行 `./run.sh` 更新界面。控制台网页源码的模型已切换到仓库 RM65 URDF／网格，需使用原有网页构建入口更新静态产物。
+
+双臂总控显示当前操作侧，默认左 `.19`；`[` 选左、`]` 选右，原 C/B/X/T/H/J 菜单自动填入该侧 RUN。手机和浏览器控制台在接管时使用同一选择，已取得控制权的会话不自动迁移。总控 `I` 释放／恢复当前侧 Quest 租约，沿用内核现有独占控制规则，不抢占别的输入。原按键 6 仍启动双臂手柄待机，按键 5 仍为无输入仿真。双臂仿真使用已有 `./run.sh robot-pair --backend sim`。
+
+预抓取读取 profile 的 `pregrasp_q`；Home 读取 `park_q`，不把 ARX 零位套用给 RM65。真机速度沿用现有逐轴控制器上限的 50%，没有更改运动协议或现场连接参数。仿真夹爪仍是既有 40 mm 简化模型，真机为 70 mm 名义行程；数据契约区分两者。
+
+采集、导出和训练继续使用现有数据契约。π0.5 SFT 需使用携带 RM65 `adapter_spec` 的已训练权重，执行前核对机器人、夹爪与相机契约；既有 X5 权重和 X5 零样本映射不能直接运行于 RM65。未训练新权重，未执行 GPU 推理或真机动作验收。
+
+本次验证使用已有环境：工作台、手机服务、双臂选择与模型契约的针对性回归；控制环境中 25 项假控制器／MuJoCo 测试（含 MoveJ、MoveL、夹爪和状态恢复）；修改的前端脚本与 Shell 通过语法检查。未启动真实机械臂、Quest、GPU 推理或工作台服务，未构建／打开浏览器控制台。
+
+额外检查发现：旧 `test_component_sources.py` 手机输入用例在原 HEAD 实现下也失败；`test_plugins.py` 收集需要本机缺失的 `libPXREARobotSDK.so`。这些检查不计为通过，未扩展修改旧输入映射或安装依赖。
+
+更新控制台静态页面仍用现有命令（仓库根目录）：
+
+```bash
+./run.sh components run ui.build   # 使用项目 frontend 环境，产物 apps/console/dist
+```
+
+下面保留独立维护／诊断入口的说明；日常平台使用上面的统一入口。
+
 平台默认真机入口已迁移到 `realman.real` 设备插件和 `robot-pair` 组合入口，详见[平台手柄操作](robot18.md#从平台进入只用手柄操作)。两个标准内核复用原有Quest相对映射、控制权、规划与observer；设备模块负责厂商DH/IK、六关节透传和EG2名义宽度。启动不调用ARX使能、回零或阻尼；采集与策略须按侧明确指定RUN。
 
 EG2-4C2 已由用户确认型号，按厂商名义70mm总行程换算，最大原始读数1002按端点容差接收。宽度不是指尖实测，发送范围仍为1–1000。真机新驱动不再依赖网页的meshcat/OpenCV数学库，在独立控制环境使用已有scipy。25Hz与TCP140mm部署配置分别位于 `configs/robots/realman/left.json`、`right.json`。

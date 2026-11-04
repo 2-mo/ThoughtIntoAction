@@ -28,3 +28,32 @@ def active_pair(path=PAIR_STATE):
         return state
     except (OSError, ValueError, KeyError, TypeError):
         return None
+
+
+def selected_run(pair=None):
+    """Explicit workbench target shared by terminal, phone and console.
+
+    A new pair starts on the labelled left arm. Never infer a side from timestamps.
+    """
+    pair = active_pair() if pair is None else pair
+    if pair is None:
+        return None
+    side = 'left'
+    try:
+        selection = json.loads((Path(pair['runs']['left']).parent / (pair['runtime_id'] + '-selection.json')).read_text())
+        if selection.get('runtime_id') == pair['runtime_id'] and selection.get('side') in pair['runs']:
+            side = selection['side']
+    except (OSError, ValueError, TypeError):
+        pass
+    return side, Path(pair['runs'][side])
+
+
+def select_side(side):
+    pair = active_pair()
+    if pair is None or side not in pair['runs']:
+        raise ValueError('没有可选择的双臂运行实例')
+    path = Path(pair['runs']['left']).parent / (pair['runtime_id'] + '-selection.json')
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps({'runtime_id': pair['runtime_id'], 'side': side}))
+    temporary.replace(path)
+    return selected_run(pair)

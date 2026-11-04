@@ -24,6 +24,12 @@ LATCH = PROJECT_ROOT / 'outputs/runtime/phone-stop.json'
 CONTROL_PROTOCOL = 'tia.phone.control.v1'
 
 
+def selected_runs():
+    from embodied.applications.workstation.pair_state import selected_run
+    selected = selected_run()
+    return [selected[1]] if selected else live_runs(PROJECT_ROOT / 'outputs/runtime/control')
+
+
 def addresses():
     """Show local interface addresses; discovery never scans other devices."""
     try:
@@ -172,8 +178,8 @@ class PhoneService:
                     self.dispatch({'command': data['action'], 'runtime_id': data.get('runtime_id')})
             except (OSError, ValueError, RuntimeError) as exc:
                 error = str(exc)
-            runs = live_runs(PROJECT_ROOT / 'outputs/runtime/control')
-            runtime_id = ControlClient(runs[-1]).identity['runtime_id'] if runs else None
+            runs = selected_runs()
+            runtime_id = self.run or (ControlClient(runs[-1]).identity['runtime_id'] if runs else None)
             if self.controller.calibrated_runtime_id not in (None, runtime_id):
                 self.controller.clear_calibration()
             state = self.snapshot()
@@ -235,7 +241,7 @@ class PhoneService:
                     raise ValueError('先连接手机并等待 ARKit 正常追踪')
                 if state['clutch']:
                     raise ValueError('先松开手机 Clutch，再启用遥操')
-                runs = live_runs(PROJECT_ROOT / 'outputs/runtime/control')
+                runs = selected_runs()
                 if not runs:
                     raise ValueError('先在总控启动 robot')
                 client = ControlClient(runs[-1])
@@ -253,7 +259,7 @@ class PhoneService:
                 # acquires a robot lease and cannot start a robot or a preset.
                 client = self.controller.client
                 if client is None:
-                    runs = live_runs(PROJECT_ROOT / 'outputs/runtime/control')
+                    runs = selected_runs()
                     if not runs:
                         raise ValueError('请先启动 robot 取得当前夹爪姿态')
                     client = ControlClient(runs[-1])

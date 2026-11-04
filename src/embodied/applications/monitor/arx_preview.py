@@ -1,4 +1,4 @@
-"""Isolated arx-televr/MuJoCo web preview. This entry has no hardware backend option."""
+"""Isolated RealMan/MuJoCo web preview. This entry has no hardware backend option."""
 import argparse
 import json
 import os
@@ -7,13 +7,27 @@ import subprocess
 import threading
 import time
 
-from embodied.devices.robots.arx5.pinocchio_model import X5PinocchioModel
+from embodied.applications.monitor.model import RuntimeModel
 from embodied.core.project import PROJECT_ROOT, LOG_DIR, load_config
 from embodied.core.telemetry import SCHEMA
 from embodied.contracts.runtime import RuntimeReader
 from embodied.applications.monitor.scene import Scene
 
+SIM_CONFIG = json.loads((PROJECT_ROOT/'configs/robots/realman/sim.json').read_text())
+
 STANDBY = '待机：松开全部按键后可操作 · 右手 A 长按切换模式，Grip 跟随'
+
+
+def display_model():
+    from embodied.control.settings import load_settings
+    from dataclasses import asdict
+    from pathlib import Path
+    config = load_settings().robot
+    path = Path(config.model_path).with_suffix('.urdf')
+    return RuntimeModel({'parameters': {'effective_robot_config': asdict(config), 'model': {
+        'urdf_path': str(path), 'urdf': path.read_text(),
+        'joint_names': [f'joint{i+1}' for i in range(config.joint_count)],
+        'manifest': json.loads(path.with_suffix('.model.json').read_text())}}})
 
 
 def preview_packet(robot, tick):
@@ -21,12 +35,12 @@ def preview_packet(robot, tick):
     command = tick.get('command') or {}
     return {
         'schema': SCHEMA, 'robot': robot.metadata(), 'stream_id': tick['runtime_id'],
-        'sequence': tick['sequence'] + 1, 'source': {'kind': 'virtual', 'controller': 'arx-televr / MuJoCo', 'input': 'Quest 遥操'},
+        'sequence': tick['sequence'] + 1, 'source': {'kind': 'virtual', 'controller': 'RealMan / MuJoCo', 'input': 'Quest 遥操'},
         'actual': feedback['q'], 'target': command.get('q', feedback['q']),
         'actual_vel': feedback['dq'], 'target_vel': command.get('dq'),
         'sample_monotonic_ns': tick['timing']['feedback_received_ns'],
         'emitted_monotonic_ns': time.monotonic_ns(), 'paths': {},
-        'gripper': {'actual': feedback['gripper_width'], 'target': command.get('gripper_width'), 'max': .082},
+        'gripper': {'actual': feedback['gripper_width'], 'target': command.get('gripper_width'), 'max': SIM_CONFIG['gripper_max_width']},
         # Native RobotTick does not expose measured torque; never label feedforward as feedback.
         'actual_torque': None, 'gripper_actual_torque': None,
         'command_details': {'sdk_cmd_pos': command.get('q'), 'sdk_cmd_vel': command.get('dq'),
@@ -50,7 +64,7 @@ class Simulation:
         self.scene = None
         self.thread = None
         self.connection_process = None
-        self.state = {'state': 'waiting', 'message': '仿真未启动', 'control_hz': 250}
+        self.state = {'state': 'waiting', 'message': '仿真未启动', 'control_hz': SIM_CONFIG['control_hz']}
 
     def status(self):
         with self.lock:
@@ -105,7 +119,7 @@ class Simulation:
                     'input': {'sample_monotonic_ns': stamp, 'device_timestamp_ns': inp.get('device_timestamp_ns'),
                               'hands': inp.get('hands', {})},
                     'button_feedback': self.actions.feedback(), 'button_layout': self.actions.layout,
-                    'loop_rates': {'arm_service': {'configured_hz': 250, 'observed_hz': None}},
+                    'loop_rates': {'arm_service': {'configured_hz': self.state['control_hz'], 'observed_hz': None}},
                     'orientation_preview': {'input_ready': bool(inp.get('tracking')), 'native_basis': True,
                          'basis': [[1,0,0],[0,1,0],[0,0,1]],
                          'active': enabled and (inp.get('hands', {}).get('right') or {}).get('grip', 0) >= .7,
@@ -117,7 +131,7 @@ class Simulation:
         process = reader = None
         try:
             LOG_DIR.mkdir(parents=True, exist_ok=True)
-            with (LOG_DIR / 'arx-web-simulation.log').open('ab', buffering=0) as log:
+            with (LOG_DIR / 'realman-web-simulation.log').open('ab', buffering=0) as log:
                 # Prepare only the headset connection; never initializes CAN.
                 if load_config().get('viewer_service', {}).get('prepare_quest', True):
                     self.connection_process = subprocess.Popen([str(PROJECT_ROOT / 'run.sh'), 'quest-transport', 'prepare'],
@@ -129,7 +143,7 @@ class Simulation:
             deadline = time.monotonic() + 20
             while not self.closed.is_set() and time.monotonic() < deadline:
                 if process.poll() is not None:
-                    raise RuntimeError('MuJoCo 启动失败，见 arx-web-simulation.log')
+                    raise RuntimeError('MuJoCo 启动失败，见 realman-web-simulation.log')
                 for path in (PROJECT_ROOT / 'outputs/runtime/control').glob('*/runtime.json'):
                     try:
                         identity = json.loads(path.read_text())

@@ -10,6 +10,7 @@ export default defineConfig({
     alias: {
       vue: "vue/dist/vue.esm-bundler.js",
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      "@realman": fileURLToPath(new URL("../../assets/robots/realman", import.meta.url)),
       "@weights": fileURLToPath(new URL("../../assets/arx_motion/weights/browser", import.meta.url)),
     },
   },

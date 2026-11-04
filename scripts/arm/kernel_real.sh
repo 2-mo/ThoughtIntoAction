@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
-# Real arm on the arx kernel, after a safety confirmation (todo K-08).
-#   kernel_real.sh [--yes]                     upstream Quest control only (no command gateway)
-#   kernel_real.sh --profile real-quest [--yes] Quest plus platform clients (web console, motion, calibration, policy)
-#   kernel_real.sh --profile real-manual [--yes] platform clients only, no Quest
+# RealMan through the standard control kernel; no CAN or ARX lifecycle.
 set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
-PROFILE="" YES=0 ARGS=()
+PROFILE="real-quest" YES=0 ARGS=()
 while (($#)); do
   case "$1" in
     --profile) PROFILE="$2"; shift 2 ;;
@@ -13,37 +10,13 @@ while (($#)); do
     *) ARGS+=("$1"); shift ;;
   esac
 done
-if [[ "$PROFILE" == real-manual ]]; then
-  echo '◇ robot · 真机原位保持'
-  echo '启动后使能电机，保持当前位置和夹爪；网页自动接收反馈。'
-elif [[ -n "$PROFILE" ]]; then
-  echo "◇ robot · 真机配置 $PROFILE"
-  echo '启动后使能电机并先保持当前位置，随后按所选输入控制。'
-else
-  echo '◇ robot · Quest 原生遥操'
-  echo '启动后使能电机、回 Home 并打开夹爪；Grip 跟随，Trigger 控制夹爪。'
-fi
-echo 'Ctrl+C 退出进入阻尼，退出前请支撑机械臂。'
+echo "◇ robot · RealMan · $PROFILE"
+echo '启动只连接并读取状态，不自动使能、回零或张开；Ctrl+C 请求停止并保持。'
 if ((YES == 0)); then
   read -r -p "准备好后输入 y 启动 robot：[y/N] " answer
   [[ "$answer" == [yY] ]] || { echo "未启动。"; exit 0; }
 fi
-if [[ -z "$PROFILE" || "$PROFILE" == *quest* ]]; then
+if [[ "$PROFILE" == *quest* ]]; then
   "$ROOT/run.sh" quest-transport prepare
 fi
-mkdir -p "$ROOT/outputs/logs/bench"
-CAN_LOG=$(mktemp "$ROOT/outputs/logs/bench/can-XXXXXXXX.log")
-echo '↔ USB-CAN · 准备通信接口；若提示密码，请输入本机登录密码。'
-if "$ROOT/run.sh" can-up >"$CAN_LOG" 2>&1; then
-  echo '↔ USB-CAN · 已就绪'
-else
-  CAN_RESULT=$?
-  printf '↔ USB-CAN · 准备失败（退出码 %s）\n' "$CAN_RESULT" >&2
-  cat "$CAN_LOG" >&2
-  printf '详细日志：%s\n' "$CAN_LOG" >&2
-  exit "$CAN_RESULT"
-fi
-if [[ -n "$PROFILE" ]]; then
-  exec "$ROOT/run.sh" kernel profiles start --profile "$PROFILE" "${ARGS[@]}"
-fi
-exec "$ROOT/run.sh" control start --backend real --input quest --telemetry "${ARGS[@]}"
+exec "$ROOT/run.sh" kernel profiles start --profile "$PROFILE" "${ARGS[@]}"

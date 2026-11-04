@@ -17,8 +17,9 @@ from embodied.contracts.rpc import receive, send
 from embodied.control.commands import CommandEngine, MotionPlanner
 
 # Robot facts clients read instead of keeping their own copies (todo C-01, R-01).
-DESCRIBED_ROBOT_FIELDS = ('variant', 'control_hz', 'joint_min', 'joint_max', 'park_q', 'gripper_max_width',
-                          'torque_max', 'joint_step_limit', 'can_interface')
+DESCRIBED_ROBOT_FIELDS = ('name', 'simulation_plugin', 'hardware_plugin', 'pregrasp_q',
+                          'variant', 'control_hz', 'joint_min', 'joint_max', 'park_q',
+                          'gripper_max_width', 'torque_max', 'joint_step_limit', 'can_interface')
 ACTIONS = ('describe', 'status', 'acquire', 'source-metadata', 'heartbeat', 'release', 'hold', 'cancel', 'stop',
            'preview', 'execute', 'free-drive', 'joint', 'cartesian', 'gripper', 'grasp',
            'simulation-snapshot', 'simulation-restore', 'simulation-reset')

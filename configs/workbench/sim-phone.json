@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "robot": "arx.sim",
+  "robot": "realman.sim",
   "source": "phone.arkit",
   "camera": "synthetic",
   "phone": {
@@ -8,5 +8,5 @@
     "port": 5005,
     "mapping": "phone_calibrated"
   },
-  "controller": "arx.joint_target"
+  "config": "configs/robots/realman/sim.json"
 }

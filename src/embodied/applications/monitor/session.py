@@ -8,7 +8,7 @@ import time
 
 from embodied.data.episode.runtime_episode import RuntimeEpisodeWriter
 from embodied.devices.inputs.gestures import Press, StickAction
-from embodied.core.presets import DEFAULT_GRASP_READY_JOINTS
+from embodied.core.presets import pregrasp_joints
 from embodied.core.project import load_config, resolve_path
 from embodied.contracts.runtime import RuntimeReader
 from embodied.contracts.runtime.control import ControlSession
@@ -130,8 +130,8 @@ class SimulationSession:
             try:
                 with ControlSession(self.simulation.directory, source='simulation-preset') as session:
                     plan = session.preview('home' if home else 'movej',
-                                           q=list(DEFAULT_GRASP_READY_JOINTS), speed=.5,
-                                           gripper_width=session.status()['gripper_width'] if home else .082)
+                                           q=session.parameters['effective_robot_config']['park_q'] if home else pregrasp_joints(session.parameters['effective_robot_config']), speed=.5,
+                                           gripper_width=session.status()['gripper_width'] if home else session.parameters['effective_robot_config']['gripper_max_width'])
                     operation = session.execute(plan)['operation_id']
                     while not self.cancel.wait(.03):
                         status = session.status()

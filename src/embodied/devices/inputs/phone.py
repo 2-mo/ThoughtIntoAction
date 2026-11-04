@@ -13,7 +13,7 @@ from embodied.devices.phone.policies.relative_pose import RelativePosePolicy
 from embodied.devices.phone.transports.udp import UdpTransport, UdpTransportConfig
 from embodied.contracts.runtime.control import ControlClient, ControlSession
 from embodied.core.project import PROJECT_ROOT, port
-from embodied.core.presets import DEFAULT_GRASP_READY_JOINTS
+from embodied.core.presets import pregrasp_joints
 from embodied.control.homing import ReleaseThenHome
 
 
@@ -187,8 +187,8 @@ class PhoneController:
             raise ValueError('松开 Clutch，等待手机正常追踪后再选择预设动作')
         if self.preset_busy:
             raise ValueError('动作正在执行；停止后可重新选择，不排队重复动作')
-        if name == 'pregrasp' and self.client.identity.get('plugins', {}).get('robot') not in ('arx.real', 'arx.sim'):
-            raise ValueError('当前机器人未配置预抓取位姿')
+        if name == 'pregrasp':
+            pregrasp_joints(self.client.parameters['effective_robot_config'])
         self.last_robot = self.client.status()
         self._hold()
         self.released = self.home = False
@@ -236,7 +236,7 @@ class PhoneController:
                 return
         else:
             if self.operation_id is None:
-                plan = self.client.preview('movej', q=list(DEFAULT_GRASP_READY_JOINTS))
+                plan = self.client.preview('movej', q=pregrasp_joints(self.client.parameters['effective_robot_config']))
                 self.operation_id = self.client.execute(plan)['operation_id']
                 return
             op = next((op for op in snapshot['operations'] if op['operation_id'] == self.operation_id), None)
@@ -315,7 +315,7 @@ class PhoneController:
             self.recenter = False
         target = self.policy.update(value, robot, 0.)
         pose = [*target.target_pose.position.as_tuple(), *target.target_pose.orientation.as_tuple()]
-        width = snapshot['gripper_width'] if target.gripper is None else target.gripper * self.client.parameters['effective_robot_config']['gripper_max_width']
+        width = snapshot['gripper_width'] if target.gripper is None or snapshot['gripper_width'] is None else target.gripper * self.client.parameters['effective_robot_config']['gripper_max_width']
         self.last_target = {'pose': pose, 'gripper_width': width, 'source_sequence': value.sequence}
         if not self.ghost:
             self.client.command('cartesian', **self.last_target, ttl_ms=100)

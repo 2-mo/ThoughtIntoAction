@@ -228,6 +228,16 @@
     "quest.shared": {
       "factory": "embodied.devices.inputs.quest.shared:SharedDevice",
       "runtime": "control"
+    },
+    "quest.native": {
+      "factory": "embodied.devices.inputs.quest.composition:QuestDevice",
+      "runtime": "control",
+      "capabilities": [
+        "pose",
+        "input",
+        "tracking",
+        "xr-basis"
+      ]
     }
   },
   "source": {
@@ -336,6 +346,10 @@
     "quest.shared": {
       "factory": "embodied.devices.inputs.quest.shared:Routing",
       "runtime": "control"
+    },
+    "quest.native": {
+      "factory": "embodied.devices.inputs.quest.shared:Routing",
+      "runtime": "control"
     }
   },
   "ingress": {
@@ -358,6 +372,10 @@
       ]
     },
     "quest.shared": {
+      "factory": "embodied.devices.inputs.quest.shared:Ingress",
+      "runtime": "control"
+    },
+    "quest.native": {
       "factory": "embodied.devices.inputs.quest.shared:Ingress",
       "runtime": "control"
     }

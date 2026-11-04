@@ -196,7 +196,7 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
     if command == "teleop-dry-run":
         defaults.append("--dry-run")
     if command in MODULE_COMMANDS:
-        if command in {"view-arm", "control-arm", "handeye", "arm-service"}:
+        if command in {"control-arm", "handeye", "arm-service"}:
             defaults.extend(["--urdf", str(resolve_path(config["robot"]["urdf"]))])
         if command in {"session", "record"}:
             defaults = [command]

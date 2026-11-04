@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "robot": "arx.sim",
+  "robot": "realman.sim",
   "source": "quest",
   "camera": "none",
   "native": {
-    "device": "arx.quest",
-    "routing": "arx.native",
-    "ingress": "arx.native",
+    "device": "quest.native",
+    "routing": "quest.native",
+    "ingress": "quest.native",
     "channel": "native"
   },
-  "controller": "arx.joint_target"
+  "config": "configs/robots/realman/sim.json"
 }

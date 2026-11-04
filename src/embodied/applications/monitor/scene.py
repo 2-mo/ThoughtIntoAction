@@ -138,7 +138,11 @@ class Scene:
                     from embodied.devices.inputs.phone_service import monitor
                     payload = monitor()
                     identity = owner.runtime_monitor.identity if owner.runtime_monitor is not None else None
-                    payload['kernel_runtime_id'] = (identity or {}).get('runtime_id')
+                    if identity is None and owner.runtime_monitor is not None:
+                        from embodied.applications.workstation.bench import current_run
+                        found = current_run()
+                        identity = found[1] if found else None
+                    payload['kernel_runtime_id'] = payload.get('runtime_id') or (identity or {}).get('runtime_id')
                     payload['kernel_backend'] = (identity or {}).get('backend')
                     content, mime = json.dumps(payload, allow_nan=False).encode(), 'application/json'
                 elif path == '/api/simulation':
@@ -316,7 +320,7 @@ class Scene:
                               "joint_limits": {"lower": robot.lower.tolist(), "upper": robot.upper.tolist()},
                               "data_contract": getattr(robot, "data_contract", None)}
             if simulation is not None:
-                self._manifest['simulation'] = {'engine': 'arx-televr / MuJoCo', 'control_hz': 250}
+                self._manifest['simulation'] = {'engine': 'RealMan / MuJoCo', 'control_hz': simulation.status()['control_hz']}
             if self.runtime_monitor is not None:
                 self._manifest['runtime_monitor'] = True
             from embodied.core.project import load_config

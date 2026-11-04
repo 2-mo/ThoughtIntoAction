@@ -143,7 +143,7 @@ class ArxConsole:
         }
 
     async def startup(self) -> None:
-        print(f'网页控制台：arx 内核模式（{self.run or "连接时选择最新运行中的内核"}）。', flush=True)
+        print(f'网页控制台：统一内核模式（{self.run or "连接时选择最新运行中的内核"}）。', flush=True)
 
     async def shutdown(self) -> None:
         await self.disconnect({})
@@ -218,7 +218,7 @@ class ArxConsole:
         payload.update(
             joint_position_deg=degrees(status['q']), joint_velocity_rad_s=status['dq'],
             joint_min_deg=degrees(self.robot['joint_min']), joint_max_deg=degrees(self.robot['joint_max']),
-            gripper_position_mm=1000 * status['gripper_width'],
+            gripper_position_mm=1000 * status['gripper_width'] if status['gripper_width'] is not None else None,
             gripper_max_mm=1000 * self.robot['gripper_max_width'],
             gripper_max_speed_mm_s=1000 * self.robot['gripper_velocity_max_m_s'],
             joint_velocity_limits_rad_s=self.motion_limits['joint_velocity_limits_rad_s'],
@@ -228,7 +228,7 @@ class ArxConsole:
         )
         if self.reference is not None:
             payload.update(reference_joint_position_deg=degrees(self.reference[0]),
-                           reference_gripper_position_mm=1000 * self.reference[1])
+                           reference_gripper_position_mm=1000 * self.reference[1] if self.reference[1] is not None else None)
         return payload
 
     # WebSocket
@@ -291,7 +291,7 @@ class ArxConsole:
         if handler is None:
             legacy = next((name for prefix, name in LEGACY_ONLY.items() if str(action).startswith(prefix)), None)
             await self.reply(websocket, request_id, action, error=(
-                f'{legacy}尚未迁到 arx 内核，请暂用旧控制台。' if legacy else
+                f'{legacy}未适配当前机器人；不调用旧 ARX 控制链路。' if legacy else
                 '手眼标定在终端运行：./run.sh calib handeye capture <相机> --auto；结果保存后页面自动显示相机位姿。'
                 if str(action).startswith('handeye') else
                 '浏览器采集已由内核采集替代：./run.sh collect run --run <RUN>。' if str(action).startswith('collection')
@@ -322,7 +322,9 @@ class ArxConsole:
     async def connect(self, params, **_):
         if self.session is not None:
             return None
-        runs = [Path(self.run)] if self.run else live_runs(RUNS)
+        from embodied.applications.workstation.pair_state import selected_run
+        selected = selected_run() if self.run is None else None
+        runs = [Path(self.run)] if self.run else [selected[1]] if selected else live_runs(RUNS)
         if not runs:
             raise RuntimeError('没有运行中的内核：先运行 ./run.sh kernel sim 或 ./run.sh kernel real。')
         session = ControlSession(runs[-1], source='console', purpose='operation')
@@ -385,6 +387,8 @@ class ArxConsole:
         self.mode = 'active'
 
     async def damping(self, params=None, **_):
+        if self.robot.get('hardware_plugin') == 'realman.real':
+            raise ValueError('RealMan 未提供 ARX 阻尼模式；请使用停止并保持')
         if self.session is None or self.mode == 'fault':
             raise RuntimeError('机械臂未连接或处于故障。')
         if self.stream is not None:
@@ -546,6 +550,8 @@ class ArxConsole:
 
     async def gripper(self, params, websocket, request_id, action):
         self.require_active()
+        if action == 'gripper_force' and not self.robot.get('gripper', {}).get('grasp', False):
+            raise ValueError('当前夹爪仅支持位置控制，未提供力控抓取反馈')
         limit = 1000 * self.robot['gripper_max_width']
         if action == 'gripper_position':
             speed(params)
@@ -563,6 +569,8 @@ class ArxConsole:
             status = await self.status()
             if status is None:
                 raise RuntimeError(self.fault)
+            if status['gripper_width'] is None:
+                raise ValueError('夹爪反馈未就绪；请先初始化夹爪')
             error = abs(status['gripper_width'] - target)
             if error < .0008:
                 break

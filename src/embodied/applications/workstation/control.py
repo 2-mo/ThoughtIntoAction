@@ -128,6 +128,8 @@ def command_for(args):
                 '--config', params['config_path']]
     cmd = [str(python), "-B", "-m", "embodied.control", "run" if args.command == "start" else args.command]
     if args.command == "start":
+        if args.config is None and args.backend == "real":
+            args.config = str(ROOT / "configs/robots/realman/left.json")
         if args.backend == "real" and args.input == "demo":
             raise ValueError("Synthetic demo input is simulation only")
         if not 0 <= args.duration < float("inf"):
@@ -213,14 +215,14 @@ def main(argv=None):
     doctor.add_argument("--vr", action="store_true")
     viewer = sub.add_parser('viewer', help='Attach the upstream read-only MuJoCo viewer; closing it leaves control running')
     viewer.add_argument('--run', type=Path)
-    start = sub.add_parser("start", help="Launch arx; real startup enables and moves Home")
+    start = sub.add_parser("start", help="Launch the selected robot through the unified kernel")
     start.add_argument("--backend", choices=("sim", "real"), default="sim")
     start.add_argument("--input", choices=("quest", "demo", "idle"), default="quest")
     start.add_argument("--managed", action="store_true", help="Enable plugin command gateway")
     start.add_argument("--robot-plugin")
     start.add_argument("--input-plugin", "--vr-plugin", dest="input_plugin")
-    start.add_argument("--routing-plugin", default="arx.native")
-    start.add_argument("--ingress-plugin", default="arx.native")
+    start.add_argument("--routing-plugin", default="quest.native")
+    start.add_argument("--ingress-plugin", default="quest.native")
     start.add_argument("--ingress-channel", default="native")
     start.add_argument("--controller-plugin")
     start.add_argument("--planner-plugin", default="motion.default")
@@ -230,8 +232,8 @@ def main(argv=None):
     start.add_argument("--no-telemetry", action="store_true", help="Run without the workbench observer")
     start.add_argument("--report")
     for child in (doctor, start):
-        child.add_argument("--config", help="arx robot JSON; root launcher resolves paths from the repository")
-        child.add_argument("--vr-config", help="arx VR JSON")
+        child.add_argument("--config", help="Robot profile JSON (default: RealMan for the selected backend)")
+        child.add_argument("--vr-config", help="Quest input profile JSON")
     cleaner = sub.add_parser("clean", help="Delete old outputs/runtime/control directories; keeps the newest and running ones")
     cleaner.add_argument("--keep", type=int, default=20, help="Newest run directories to keep (default 20)")
     cleaner.add_argument("--yes", action="store_true", help="Do not ask for confirmation")
@@ -263,8 +265,8 @@ def main(argv=None):
                 if args.output:
                     output.close()
             return 0
-        result = verify_sources()
         if args.command == "verify":
+            result = verify_sources()
             print(json.dumps(result))
             return 0
         if args.command == 'build-sdk':

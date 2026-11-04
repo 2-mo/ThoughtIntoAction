@@ -44,7 +44,7 @@ class PhoneServiceTests(unittest.TestCase):
         client = Mock(identity={'runtime_id': 'test', 'plugins': {'robot': 'arx.sim'}})
         client.status.return_value = {'operations': [], 'pose': [.3, 0, .2, 0, 0, 0, 1],
             'q': [0] * 6, 'dq': [0] * 6, 'feedback_monotonic_ns': time.monotonic_ns(), 'gripper_width': .02}
-        client.parameters = {'effective_robot_config': {'gripper_max_width': .082, 'gripper_velocity_max_m_s': .04}}
+        client.parameters = {'effective_robot_config': {'gripper_max_width': .082, 'gripper_velocity_max_m_s': .04, 'simulation_plugin': 'arx.sim', 'park_q': [0.]*6, 'joint_min': [-3.14]*6, 'joint_max': [3.14]*6}}
         client.preview.return_value = {'plan_id': 'plan'}
         client.execute.return_value = {'operation_id': 'motion'}
         self.controller.client, self.controller.ghost = client, False
@@ -189,6 +189,7 @@ class PhoneServiceTests(unittest.TestCase):
             self.service.dispatch({'command': 'home', 'runtime_id': 'test'})
         self.send()
         client.identity['plugins']['robot'] = 'other.real'
+        client.parameters['effective_robot_config'].pop('simulation_plugin')
         with self.assertRaisesRegex(ValueError, '未配置预抓取'):
             self.service.dispatch({'command': 'pregrasp', 'runtime_id': 'test'})
         self.service.dispatch({'command': 'home', 'runtime_id': 'test'})

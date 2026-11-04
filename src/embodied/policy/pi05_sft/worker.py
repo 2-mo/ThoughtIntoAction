@@ -36,11 +36,15 @@ def main():
     digest=hashlib.sha256(args.stats.read_bytes()).hexdigest()
     if digest != hashlib.sha256(Path(spec['stats']).read_bytes()).hexdigest():
         raise ValueError('Selected normalization differs from checkpoint assets')
+    adapter = spec.get('adapter_spec')
+    if adapter and set(adapter['camera_roles'].values()) != {'wrist_rgb'}:
+        raise ValueError('Live worker supplies wrist_rgb only')
     if args.backend == 'jax':
         print('JAX 首次编译预热，完成后才连接机械臂…',flush=True)
-        policy.infer({'state':np.asarray(stats['state'].mean,dtype=np.float32),
-                      'wrist_image':np.zeros((480,640,3),dtype=np.uint8),
-                      'wrist_valid':True,'prompt':'Pick up the blue cube.'})
+        warmup = {'state': np.asarray(stats['state'].mean,dtype=np.float32), 'prompt': 'Pick up the blue cube.'}
+        warmup.update({'wrist_rgb': np.zeros((480,640,3),dtype=np.uint8), 'wrist_rgb_valid': True} if adapter else
+                      {'wrist_image': np.zeros((480,640,3),dtype=np.uint8), 'wrist_valid': True})
+        policy.infer(warmup)
     emit({'ready':True,'stats_sha256':digest,'checkpoint':spec})
     for line in sys.stdin:
         request=json.loads(line)
@@ -51,11 +55,16 @@ def main():
         if image is None or state.shape!=(7,) or not np.isfinite(state).all():
             raise ValueError('Invalid live observation')
         if obs['robot']['joint_names'] != ['joint1','joint2','joint3','joint4','joint5','joint6'] or obs['robot']['joint_unit'] != 'rad' or obs['robot']['length_unit'] != 'm':
-            raise ValueError('Unexpected X5 joint order or units')
+            raise ValueError('Unexpected joint order or units')
+        if adapter and obs['robot'].get('data_contract') != adapter['data_contract']:
+            raise ValueError('Observation robot/gripper contract differs from checkpoint')
         synchronize()
         began=time.perf_counter()
         with inference_context():
-            result=policy.infer({'state':state,'wrist_image':image[...,::-1].copy(),'wrist_valid':True,'prompt':request['prompt']})
+            inputs = {'state': state, 'prompt': request['prompt']}
+            inputs.update({'wrist_rgb': image[...,::-1].copy(), 'wrist_rgb_valid': True} if adapter else
+                          {'wrist_image': image[...,::-1].copy(), 'wrist_valid': True})
+            result=policy.infer(inputs)
         synchronize()
         elapsed=time.perf_counter()-began
         actions=np.asarray(result['actions'])
@@ -63,7 +72,7 @@ def main():
             raise ValueError('Invalid SFT action chunk')
         lo,hi=stats['state'].q01,stats['state'].q99
         normalized=2*(state-lo)/(hi-lo+1e-6)-1
-        np.savez_compressed(output/'prediction.npz',actions_x5=actions,state_physical=state)
+        np.savez_compressed(output/'prediction.npz', **{'actions' if adapter else 'actions_x5': actions, 'state_physical': state})
         prediction={'checkpoint':spec,'stats_sha256':digest,'prompt':request['prompt'],
                     'inference_seconds':elapsed,'first_action_x5':actions[0].tolist(),
                     'state_quantile_excess':float(np.maximum(np.abs(normalized)-1,0).max()),

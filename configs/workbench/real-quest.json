@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "robot": "arx.real",
+  "robot": "realman.real",
   "source": "quest",
   "camera": "realsense",
   "native": {
-    "device": "arx.quest",
-    "routing": "arx.native",
-    "ingress": "arx.native",
+    "device": "quest.native",
+    "routing": "quest.native",
+    "ingress": "quest.native",
     "channel": "native"
   },
-  "controller": "arx.joint_target"
+  "config": "configs/robots/realman/left.json"
 }

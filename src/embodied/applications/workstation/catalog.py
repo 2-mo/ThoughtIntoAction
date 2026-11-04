@@ -16,21 +16,21 @@ GROUPS = {
         "status": ("内核与工作台状态", ("run", ["bench", "status"])),
         "stop": ("停止工作台启动的内核与网页并关闭（真机进入阻尼）", ("run", ["bench", "stop"])),
     }),
-    "sim": ("MuJoCo 仿真工作台（Quest 遥操 + arx 内核 + 采集 + 网页）", {
-        "start": ("启动并进入工作台；--detach 后台启动", ("workspace", ["start", "--mode", "simulation"])),
-        "status": ("工作台各窗口状态", ("workspace", ["status"])),
-        "stop": ("有序退出遥操与内核，保留网页和相机", ("workspace", ["stop"])),
-        "shutdown": ("关闭工作台启动的全部服务", ("workspace", ["shutdown"])),
+    "sim": ("RealMan MuJoCo 仿真工作台（统一内核 + 采集 + 网页）", {
+        "start": ("启动并进入工作台；--detach 后台启动", ("run", ["bench", "start", "--mode", "simulation"])),
+        "status": ("工作台各窗口状态", ("run", ["bench", "status"])),
+        "stop": ("有序退出遥操与内核，保留网页和相机", ("run", ["bench", "stop"])),
+        "shutdown": ("关闭工作台启动的全部服务", ("run", ["bench", "stop"])),
     }),
-    "real": ("真机工作台（当前日常链路：机械臂服务 + 遥操 + 网页）", {
-        "start": ("启动并进入工作台；首次需要在窗口 1 输入 sudo 密码", ("workspace", ["start", "--mode", "real"])),
-        "status": ("工作台各窗口状态", ("workspace", ["status"])),
-        "stop": ("有序退出遥操与机械臂服务", ("workspace", ["stop"])),
-        "shutdown": ("关闭工作台启动的全部服务", ("workspace", ["shutdown"])),
+    "real": ("RealMan 真机工作台（统一内核 + 遥操 + 网页）", {
+        "start": ("启动并进入 RealMan 工作台", ("run", ["bench", "start", "--mode", "real"])),
+        "status": ("工作台各窗口状态", ("run", ["bench", "status"])),
+        "stop": ("有序退出遥操与机械臂服务", ("run", ["bench", "stop"])),
+        "shutdown": ("关闭工作台启动的全部服务", ("run", ["bench", "stop"])),
     }),
-    "kernel": ("arx-televr 控制内核（control/，唯一 SDK 所有者）", {
+    "kernel": ("统一控制内核（默认 RealMan）", {
         "start": ("启动内核：--backend sim|real，--input quest|demo，--managed 接受多来源", ("run", ["control", "start"])),
-        "real": ("真机 · 上游操控：准备 Quest USB 与 CAN 后启动（先确认安全，待验收）", ("bash", "scripts/arm/kernel_real.sh", [])),
+        "real": ("RealMan 真机：标准控制内核与 Quest（启动前确认）", ("bash", "scripts/arm/kernel_real.sh", [])),
         "viewer": ("附加只读 MuJoCo 窗口", ("run", ["control", "viewer"])),
         "observe": ("读取运行中内核的遥测：--run <RUN>", ("run", ["control", "observe"])),
         "verify": ("核对上游文件与本地补丁台账", ("run", ["control", "verify"])),
@@ -93,7 +93,7 @@ GROUPS = {
     }),
     "policy": ("策略推理（真机）", {
         "pi05": ("π0.5 零样本", ("bash", "scripts/inference/start_pi05_zeroshot.sh", [])),
-        "kernel": ("π0.5 经 arx 内核执行：--run <RUN> --prompt <任务> [--policy sft|zeroshot]（动作由内核统一限位）", ("run", ["policy-kernel"])),
+        "kernel": ("π0.5 经统一内核执行：--run <RUN> --prompt <任务> [--policy sft|zeroshot]（动作由内核统一限位）", ("run", ["policy-kernel"])),
         "pi05-sft": ("π0.5 微调模型（PyTorch，旧机械臂服务）", ("bash", "src/embodied/policy/pi05_sft/run.sh", [])),
         "pi05-sft-jax": ("π0.5 微调模型（JAX）", ("bash", "src/embodied/policy/pi05_sft/run_jax.sh", [])),
         "groot": ("GR00T 推理：--run <RUN> --task <任务> 经 arx 内核；不带 --run 为旧直连交互", ("component", "policy.groot")),

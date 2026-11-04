@@ -98,4 +98,21 @@ class PairView:
             input_error='手柄状态请查看Quest面板；不由姿态反馈推断控制权', input=None,
             collection={'state': '按侧采集', 'task': 'collect run --run <left/right RUN> --task <任务>', 'control_enabled': False},
             collection_hint='两侧分别使用现有采集/策略接口；尚无同步双臂策略协议。')
+        from embodied.applications.workstation.pair_state import selected_run
+        from .kernel_view import collection_snapshot
+        from embodied.core.project import PROJECT_ROOT, load_config, resolve_path
+        from pathlib import Path
+        import json
+        selected = selected_run(self.identity)
+        if selected:
+            side, directory = selected
+            try:
+                identity = json.loads((directory/'runtime.json').read_text())
+                roots = [PROJECT_ROOT/'outputs/datasets/runtime', resolve_path(load_config()['paths']['dataset_dir'])/'mujoco']
+                payload.update(collection_snapshot(identity, roots))
+                payload['selected_side'] = side
+                payload['runtime_directory'] = str(directory)
+                payload['collection_hint'] = '当前操作侧：' + side + '。总控 C 采集；[ / ] 切换。'
+            except (OSError, ValueError, KeyError):
+                pass
         return payload

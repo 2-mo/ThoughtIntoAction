@@ -21,6 +21,8 @@ class ReleaseThenHome:
         if self.result is not None:
             return self.result
         if self.phase == 'opening':
+            if state['gripper_width'] is None:
+                raise ValueError('夹爪反馈未就绪，无法确认张开；取消 Home，先初始化夹爪')
             if abs(state['gripper_width'] - self.width) > .002:
                 if time.monotonic() >= self.open_deadline:
                     raise RuntimeError('夹爪未能张开，已取消回零；请检查是否卡住')

@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "robot": "arx.sim",
-  "controller": "arx.joint_target",
+  "robot": "realman.sim",
   "source": "quest",
   "source_options": {
     "source": "quest"
   },
   "native": {
     "device": "arx.demo",
-    "routing": "arx.native",
-    "ingress": "arx.native",
+    "routing": "quest.native",
+    "ingress": "quest.native",
     "channel": "native"
   },
-  "camera": "synthetic"
+  "camera": "synthetic",
+  "config": "configs/robots/realman/sim.json"
 }

@@ -24,6 +24,7 @@ class Profile:
     joint_step_limit: float = math.radians(4.5)
     gripper_max_width: float = .07
     gripper_velocity_max_m_s: float = .035
+    pregrasp_q: tuple = (0., 0., math.pi/2, 0., math.pi/2, 0.)
     has_gripper: bool = True
     tool_offset_m: float = .14
     teleop_linear_speed_m_s: float = .25

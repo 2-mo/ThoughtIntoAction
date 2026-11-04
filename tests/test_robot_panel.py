@@ -19,7 +19,7 @@ class RobotPanelTests(unittest.TestCase):
         self.robot = Mock()
         self.robot.__enter__ = Mock(return_value=self.robot)
         self.robot.state = self.state
-        self.robot.describe.return_value = {'robot': {'park_q': [.1] * 6}}
+        self.robot.describe.return_value = {'robot': {'park_q': [.1] * 6, 'simulation_plugin': 'arx.sim', 'joint_min': [-3.14]*6, 'joint_max': [3.14]*6}}
         self.robot.movej.return_value = SimpleNamespace(operation_id='test-op', metrics={
             'duration_s': 1.9, 'peak_velocity_rad_s': 1.5})
         self.session = Mock()
@@ -181,6 +181,7 @@ class RobotPanelTests(unittest.TestCase):
         self.robot.movej.assert_not_called()
         self.assertEqual(self.controls.message.level, 'error')
         self.state['owner'] = None
+        self.robot.describe.return_value['robot'].pop('simulation_plugin')
         self.controls.press('p', (self.found[0], {'managed': True, 'plugins': {'robot': 'other.real'}}))
         self.robot.movej.assert_not_called()
 

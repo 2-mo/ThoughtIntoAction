@@ -35,11 +35,13 @@ class NativeRouting:
     @staticmethod
     def configure(directory, prefix, settings):
         from .native_config import write_native_configs
-        if settings.robot.control_hz != 250:
-            raise ValueError('Bundled native Quest routing requires a 250 Hz profile')
         return write_native_configs(directory, prefix, settings.robot.gripper_max_width,
                                     settings.sdk_library, settings.vr.base_yaw_deg,
-                                    settings.vr.grip_threshold, settings.vr.position_scale)
+                                    settings.vr.grip_threshold, settings.vr.position_scale,
+                                    feedback_hz=settings.robot.control_hz,
+                                    cartesian_speed_limits=(settings.robot.teleop_linear_speed_m_s,
+                                        settings.robot.teleop_angular_speed_rad_s)
+                                    if hasattr(settings.robot, 'teleop_linear_speed_m_s') else None)
 
     @staticmethod
     def commands(configs, prefix):

@@ -8,7 +8,7 @@ export const TARGET_EDIT_STATE = Object.freeze({
   EDIT_ORIENTATION: "edit_orientation",
 });
 
-export const LOCAL_APPROACH_AXIS = Object.freeze([1, 0, 0]);
+export const LOCAL_APPROACH_AXIS = Object.freeze([0, 0, 1]);
 
 export function normalizeQuaternion(quaternion) {
   const result = quaternion.clone();

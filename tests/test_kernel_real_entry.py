@@ -24,23 +24,19 @@ class KernelRealEntryTests(unittest.TestCase):
                                *(['--yes'] if confirm else []), '--headless'],
                               input='n\n', text=True, capture_output=True, timeout=3)
 
-    def test_can_details_go_to_log_and_arguments_reach_control(self):
-        result = self.launch('if [[ "$1" == can-up ]]; then echo low-level-can-details; '
+    def test_realman_never_prepares_can_and_forwards_arguments(self):
+        result = self.launch('if [[ "$1" == can-up ]]; then exit 99; '
                              'else printf "launched: %s\\n" "$*"; fi\n')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn('low-level-can-details', result.stdout)
-        self.assertIn('USB-CAN · 已就绪', result.stdout)
+        self.assertNotIn('USB-CAN', result.stdout)
+        self.assertIn('RealMan', result.stdout)
         self.assertIn('kernel profiles start --profile real-manual --headless', result.stdout)
-        log, = (self.root / 'outputs/logs/bench').glob('can-*.log')
-        self.assertIn('low-level-can-details', log.read_text())
+        self.assertFalse((self.root / 'outputs').exists())
 
-    def test_can_failure_preserves_reason_and_never_starts_control(self):
-        result = self.launch('if [[ "$1" == can-up ]]; then echo test-can-error >&2; '
-                             'exit 23; else echo unexpected-control-start; fi\n')
+    def test_runtime_failure_is_preserved(self):
+        result = self.launch('echo test-runtime-error >&2; exit 23\n')
         self.assertEqual(result.returncode, 23)
-        self.assertIn('test-can-error', result.stderr)
-        self.assertIn('退出码 23', result.stderr)
-        self.assertNotIn('unexpected-control-start', result.stdout)
+        self.assertIn('test-runtime-error', result.stderr)
 
     def test_declining_confirmation_does_not_prepare_devices(self):
         result = self.launch('echo unexpected-device-access; exit 99\n', confirm=False)

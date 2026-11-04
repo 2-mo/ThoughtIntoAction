@@ -1,5 +1,7 @@
 """Workbench source lifecycles. CLI leaves authority available to motion tools."""
 import time
+import json
+from pathlib import Path
 from embodied.contracts.runtime.control import ControlSession
 
 
@@ -20,12 +22,24 @@ class NativeSession(IdleSource):
         self.ingress, self.source = ingress, source
 
     def run(self, duration=0):
-        with ControlSession(self.directory, source=self.source, ingress=self.ingress, purpose='teleop') as session:
-            deadline = time.monotonic() + duration if duration else float('inf')
+        deadline = time.monotonic() + duration if duration else float('inf')
+        session = None
+        request = Path(self.directory) / 'native-source.json'
+        try:
             while time.monotonic() < deadline:
-                if session.error:
+                enabled = json.loads(request.read_text())['enabled'] if request.exists() else True
+                if enabled and session is None:
+                    session = ControlSession(self.directory, source=self.source, ingress=self.ingress, purpose='teleop')
+                    session.__enter__()
+                elif not enabled and session is not None:
+                    session.close()
+                    session = None
+                if session is not None and session.error:
                     raise RuntimeError(session.error)
                 time.sleep(.05)
+        finally:
+            if session is not None:
+                session.close()
 
 
 QuestSource = NativeSession  # Compatibility import; registry uses the explicit role.
