@@ -24,13 +24,29 @@ class NativeSession(IdleSource):
     def run(self, duration=0):
         deadline = time.monotonic() + duration if duration else float('inf')
         session = None
+        waiting = False
         request = Path(self.directory) / 'native-source.json'
         try:
             while time.monotonic() < deadline:
                 enabled = json.loads(request.read_text())['enabled'] if request.exists() else True
                 if enabled and session is None:
-                    session = ControlSession(self.directory, source=self.source, ingress=self.ingress, purpose='teleop')
-                    session.__enter__()
+                    candidate = ControlSession(self.directory, source=self.source, ingress=self.ingress, purpose='teleop')
+                    try:
+                        candidate.__enter__()
+                    except RuntimeError as exc:
+                        candidate.close()
+                        # runtime.ready precedes the continuous standstill window.
+                        # Retry only this startup condition; ownership conflicts,
+                        # stopped kernels and lost leases must still fail explicitly.
+                        if str(exc) != 'ValueError: Robot has not settled: waiting for continuous low-motion feedback':
+                            raise
+                        if not waiting:
+                            print('Quest 输入等待机械臂连续静止反馈；保持后自动完成控制权申请。', flush=True)
+                            waiting = True
+                    else:
+                        session = candidate
+                        waiting = False
+                        print('Quest 控制权已取得；等待有效跟踪，松开按键后切换跟随。', flush=True)
                 elif not enabled and session is not None:
                     session.close()
                     session = None

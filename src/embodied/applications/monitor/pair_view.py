@@ -37,15 +37,19 @@ class PairView:
             feedback = tick['feedback']
             command = tick.get('command') or {}
             arms.append({'hand': side, 'host': side, 'q': feedback['q'],
+                'dq': feedback.get('dq'), 'target_dq': command.get('dq'),
                 'target_q_deg': np.rad2deg(command.get('q', feedback['q'])).tolist(),
                 'feedback_at': stamp/1e9, 'fault': feedback.get('fault', ''),
                 'gripper_width_m': feedback.get('gripper_width'),
                 'gripper_target_m': command.get('gripper_width'),
                 'run': self.identity['runs'][side]})
+        quest = any(reader.descriptor.get('native') for reader in self.readers.values())
         return {'schema': 1, 'stream_id': self.identity['runtime_id'], 'sequence': self.sequence,
             'sample_monotonic_ns': min(int(a['feedback_at']*1e9) for a in arms),
             'arms': arms, 'xr_fresh': None, 'paused': None,
-            'reason': '统一内核反馈；左X / 右A切换跟随，Grip相对重定位',
+            'input': 'quest' if quest else 'idle',
+            'reason': ('统一内核反馈；左X / 右A切换跟随，Grip相对重定位' if quest
+                       else '统一内核反馈；无输入，使用网页 / 动作 / 策略'),
             'source_kind': 'hardware' if all(r.descriptor.get('backend') == 'real' for r in self.readers.values()) else 'virtual'}
 
     def step(self, scene):

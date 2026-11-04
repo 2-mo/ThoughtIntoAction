@@ -114,7 +114,7 @@ outputs/          数据、运行记录、安装环境、依赖工作区与构�
 
 RealMan 双臂真机与双臂仿真（`./run.sh robot-pair --backend sim`）沿用同一输入：左 X / 右 A 按住至少 150 ms 后松开，切换该侧跟随／保持；Grip 相对重定位，Trigger 比例控制夹爪。网页与终端从同一内核读取反馈。
 
-总控 `4` 启动 Quest 仿真，`5` 启动无输入仿真，`6` 启动双臂真机手柄待机；单臂 `sim-manual`、`sim-quest`、`real-manual`、`real-quest` 等配置名称保留，均选择 RealMan。`Robot.sim()` 和普通示例默认也使用 RM65。
+总控 `4`（以及 `./run.sh sim start`）启动双臂 Quest 仿真，`5` 启动双臂无输入仿真，`6` 启动双臂真机手柄待机。双臂仿真复用左右独立 MuJoCo 内核，通过工作台网页同屏显示；底座为示意布局，不提供双臂之间的物理碰撞。单臂 `sim-manual`、`sim-quest`、`real-manual`、`real-quest` 等配置名称保留，均选择 RealMan。`Robot.sim()` 和普通示例默认也使用 RM65。
 
 Quest 持有控制权时，总控 `I` 请求释放当前侧控制权，再使用原来的 P/H、动作、网页或手机操作；结束其他控制后再次按 `I` 恢复 Quest。`[` / `]` 只改变后续操作的目标，已经启动的录制、策略和动作绑定原来的运行目录。采集 C、测速 B、直线 X、路径 T、标定 H/J 等原按键保持。
 

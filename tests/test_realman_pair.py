@@ -18,7 +18,8 @@ class Reader:
         self.sock, self.sender = socket.socketpair()
         self.descriptor = {'backend': 'sim'}
         self.tick = {'terminal': False, 'error': None,
-            'feedback': {'q': ([.1]*6 if run == 'left' else [-.2]*6), 'gripper_width': .07},
+            'feedback': {'q': ([.1]*6 if run == 'left' else [-.2]*6),
+                         'dq': ([.3]*6 if run == 'left' else [-.4]*6), 'gripper_width': .07},
             'timing': {'feedback_received_ns': time.monotonic_ns()}}
         self.sender.send(b'1')
     def read(self):
@@ -69,7 +70,14 @@ class PairTests(unittest.TestCase):
         try:
             self.assertTrue(view.step(scene))
             self.assertEqual(packets[-1]['actual'], [.1]*6+[-.2]*6)
+            self.assertEqual(packets[-1]['actual_vel'], [.3]*6+[-.4]*6)
+            self.assertIsNone(packets[-1]['target_vel'])
             self.assertEqual(packets[-1]['source']['kind'], 'virtual')
+            self.assertEqual(packets[-1]['source']['input'], 'idle')
+            for reader in view.readers.values():
+                reader.descriptor['native'] = {'device': 'quest.shared'}
+            view.step(scene)
+            self.assertEqual(packets[-1]['source']['input'], 'quest')
             self.assertIn('left', view.monitor()['runtime_runs'])
             view.ticks['left']['timing']['feedback_received_ns'] -= 1_000_000_000
             view.step(scene)

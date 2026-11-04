@@ -369,11 +369,14 @@ def vr_control_rows(found):
             label = '左手柄' if side == 'left' else '右手柄'
             try:
                 status = ControlClient(pair['runs'][side]).status()
+                if 'native' not in status.get('ingresses', {}):
+                    rows.append((label, Status('当前侧为无输入模式，未接入 Quest', 'disabled')))
+                    continue
                 ingress = status.get('ingresses', {}).get('native', {})
                 text = ('通道就绪' if ingress.get('ready') else '等待有效跟踪')
                 text += ' · 已激活' if ingress.get('armed') else ' · 待机'
                 if not status.get('owner'):
-                    text += ' · 未取得控制权；请重启RealMan会话'
+                    text += ' · 控制权未就绪；详情见 robot 输入日志'
                 if ingress.get('reason'):
                     text += ' · '+str(ingress['reason'])
                 rows.append((label, Status(text, 'ready' if ingress.get('ready') else 'waiting')))

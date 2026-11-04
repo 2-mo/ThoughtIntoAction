@@ -6,14 +6,18 @@
 
 ```bash
 ./run.sh                           # 原工作台，默认 RealMan 双臂真机待机
-./run.sh sim start                 # 同一工作台，RealMan Quest 仿真
+./run.sh sim start                 # 同一工作台，RealMan 双臂 Quest 仿真
 ./run.sh kernel profiles start --profile sim-manual --headless
 ./run.sh examples sim_control      # 默认 RM65，普通 Robot API 不变
 ```
 
 已有运行不会因改配置自动重启。先在原工作台停止旧 robot，再按 4 / 5 选择有／无 Quest 的 RealMan 仿真；重新运行 `./run.sh` 更新界面。控制台网页源码的模型已切换到仓库 RM65 URDF／网格，需使用原有网页构建入口更新静态产物。
 
-双臂总控显示当前操作侧，默认左 `.19`；`[` 选左、`]` 选右，原 C/B/X/T/H/J 菜单自动填入该侧 RUN。手机和浏览器控制台在接管时使用同一选择，已取得控制权的会话不自动迁移。总控 `I` 释放／恢复当前侧 Quest 租约，沿用内核现有独占控制规则，不抢占别的输入。原按键 6 仍启动双臂手柄待机，按键 5 仍为无输入仿真。双臂仿真使用已有 `./run.sh robot-pair --backend sim`。
+双臂总控显示当前操作侧，默认左侧；真机对应左 `.19`、右 `.18`。`[` 选左、`]` 选右，原 C/B/X/T/H/J 菜单自动填入该侧 RUN。手机和浏览器控制台在接管时使用同一选择，已取得控制权的会话不自动迁移。总控 `I` 释放／恢复当前侧 Quest 租约，沿用内核现有独占控制规则，不抢占别的输入。原按键 6 仍启动双臂真机手柄待机。
+
+总控 `4` 和 `./run.sh sim start` 使用 `robot-pair --backend sim`：左右各一个 MuJoCo 内核，一个 Quest 进程发布双手输入，工作台网页同屏显示双臂。左 X / 右 A 按住至少 150 ms 后松开切换本侧模式，Grip 相对跟随，Trigger 控制本侧夹爪。总控 `5` 使用 `robot-pair --backend sim --source cli`，同样显示双臂，但不加载 Quest，控制权留给网页 / 动作 / 策略。两个仿真内核独立运行，网页底座为示意布局，不提供双臂之间的物理碰撞；单臂 `sim-manual`、`sim-quest` profile 仍可显式使用。
+
+Quest 输入进程在启动时等待内核满足连续静止反馈条件，再申请控制权；不会因 `runtime.ready` 早于静止窗口而直接退出。已有控制权冲突、内核停止和运行中租约丢失仍报错，不自动抢占或恢复运动。USB/TCP 已连接后，头显仍须唤醒、客户端在前台并发送 Controller 数据；以 VR 面板左右手柄的跟踪状态为准。
 
 预抓取读取 profile 的 `pregrasp_q`；Home 读取 `park_q`，不把 ARX 零位套用给 RM65。真机速度沿用现有逐轴控制器上限的 50%，没有更改运动协议或现场连接参数。仿真夹爪仍是既有 40 mm 简化模型，真机为 70 mm 名义行程；数据契约区分两者。
 

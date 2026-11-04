@@ -32,7 +32,7 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传', 'phone': '手机'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传 · 8 手机'
-UI_REVISION = '18'
+UI_REVISION = '19'
 ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
@@ -41,8 +41,8 @@ KERNELS = [  # key, label, command typed into the kernel window, real arm
     ('1', '真机 · RealMan Quest', REAL, True),
     ('2', '真机 · Quest + 网页 / 动作 / 标定 / 策略', REAL + ' --profile real-quest', True),
     ('3', '真机 · 无 Quest（网页 / 动作 / 标定 / 策略）', REAL + ' --profile real-manual', True),
-    ('4', '仿真 · RealMan Quest', './run.sh quest-transport prepare && ./run.sh kernel profiles start --profile sim-quest', False),
-    ('5', '仿真 · RealMan 无输入（网页 / 动作 / 策略）', './run.sh kernel profiles start --profile sim-manual', False),
+    ('4', '仿真 · RealMan 双臂 Quest', './run.sh quest-transport prepare && ./run.sh robot-pair --backend sim', False),
+    ('5', '仿真 · RealMan 双臂无输入（网页 / 动作 / 策略）', REALMAN + ' --backend sim --source cli', False),
     ('6', '真机 · RealMan 双臂手柄待机', REALMAN, True),
 ]
 RESTART_TARGETS = {

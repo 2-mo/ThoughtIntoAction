@@ -16,24 +16,27 @@ from embodied.applications.workstation.pair_state import PAIR_STATE, active_pair
 from embodied.contracts.device_lease import DeviceLease
 
 
-def prepare(directory, *, backend='real'):
+def prepare(directory, *, backend='real', source='quest'):
     """Resolve static deployments and input topics without opening devices."""
-    from embodied.devices.inputs.quest.native_config import write_native_configs
-    from embodied.devices.inputs.quest.settings import load_profile
     directory = Path(directory).resolve()
     prefix = 'robot-pair-'+uuid.uuid4().hex[:12]
-    vr_path = ROOT/'configs/inputs/quest.json'
-    vr = load_profile(vr_path)
-    paths = write_native_configs(directory, prefix, .07, vr.sdk_library,
-        vr.base_yaw_deg, vr.grip_threshold, vr.position_scale)
-    # Exactly one native SDK reader publishes both controllers. Both kernels
-    # subscribe to these topics; routers/feedback stay in their own namespaces.
-    raw = json.loads(vr_path.read_text())
-    raw['sdk_library'] = vr.sdk_library
-    text = paths['xrobot'].read_text()
-    channel = text.split('[[channels]]', 1)[1]
-    text += '\n[[channels]]'+channel.replace('right_controller', 'left_controller').replace('Right Controller','Left Controller')
-    paths['xrobot'].write_text(text)
+    xr_config = None
+    if source == 'quest':
+        from embodied.devices.inputs.quest.native_config import write_native_configs
+        from embodied.devices.inputs.quest.settings import load_profile
+        vr_path = ROOT/'configs/inputs/quest.json'
+        vr = load_profile(vr_path)
+        paths = write_native_configs(directory, prefix, .07, vr.sdk_library,
+            vr.base_yaw_deg, vr.grip_threshold, vr.position_scale)
+        # Exactly one native SDK reader publishes both controllers. Both kernels
+        # subscribe to these topics; routers/feedback stay in their own namespaces.
+        raw = json.loads(vr_path.read_text())
+        raw['sdk_library'] = vr.sdk_library
+        xr_config = paths['xrobot']
+        text = xr_config.read_text()
+        channel = text.split('[[channels]]', 1)[1]
+        text += '\n[[channels]]'+channel.replace('right_controller', 'left_controller').replace('Right Controller','Left Controller')
+        xr_config.write_text(text)
     deployments = {}
     for side in ('left','right'):
         config, _ = profile('realman-'+side)
@@ -41,13 +44,18 @@ def prepare(directory, *, backend='real'):
             config['robot'] = 'realman.sim'
             config['config'] = 'configs/robots/realman/sim.json'
         config['pair'] = {'id': prefix, 'side': side, 'manifest': str(PAIR_STATE)}
-        vp = directory/(side+'-quest.json')
-        vp.write_text(json.dumps({**raw, 'controller': side, 'input_prefix': prefix}))
-        config['vr_config'] = str(vp)
+        if source == 'quest':
+            vp = directory/(side+'-quest.json')
+            vp.write_text(json.dumps({**raw, 'controller': side, 'input_prefix': prefix}))
+            config['vr_config'] = str(vp)
+        else:
+            config['source'] = source
+            config.pop('native')
+            config.pop('source_options', None)
         cp = directory/(side+'-workbench.json')
         cp.write_text(json.dumps(config))
         deployments[side] = cp
-    return prefix, paths['xrobot'], deployments
+    return prefix, xr_config, deployments
 
 
 def publish_manifest(prefix, runs):
@@ -78,12 +86,13 @@ def find_runs(prefix):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--backend', choices=('real','sim'), default='real')
+    parser.add_argument('--source', choices=('quest','cli'), default='quest')
     args = parser.parse_args(argv)
     if active_pair() is not None:
         raise RuntimeError('双臂会话已运行；保留现有会话，不重复打开Quest或机械臂')
     directory = ROOT/'outputs/runtime/realman'/('pair-'+time.strftime('%Y%m%d-%H%M%S'))
     directory.mkdir(parents=True, exist_ok=False)
-    prefix, xr_config, deployments = prepare(directory, backend=args.backend)
+    prefix, xr_config, deployments = prepare(directory, backend=args.backend, source=args.source)
     stopped = False
     def stop(*_):
         nonlocal stopped
@@ -114,12 +123,17 @@ def main(argv=None):
                 time.sleep(.1)
             if not stopped:
                 publish_manifest(prefix, runs)
-                stream = resources.enter_context((directory/'quest.log').open('w'))
-                binary = ROOT/'src/embodied/devices/inputs/quest/native/bin/rollio-device-xrobot'
-                children['quest'] = subprocess.Popen([str(binary), 'run', '--config', str(xr_config)],
-                    cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
-                print('双臂已接入统一内核；原生Quest相对映射：左X / 右A按住150ms后松开切换跟随/保持，'
-                      'Grip跟随，Trigger控制夹爪。启动不自动使能、回零或张开。', flush=True)
+                if xr_config is not None:
+                    stream = resources.enter_context((directory/'quest.log').open('w'))
+                    binary = ROOT/'src/embodied/devices/inputs/quest/native/bin/rollio-device-xrobot'
+                    children['quest'] = subprocess.Popen([str(binary), 'run', '--config', str(xr_config)],
+                        cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
+                    print('双臂已接入统一内核；原生Quest相对映射：左X / 右A按住150ms后松开切换跟随/保持，'
+                          'Grip跟随，Trigger控制夹爪。启动不自动使能、回零或张开。', flush=True)
+                else:
+                    print('双臂已接入统一内核；无输入，控制权留给网页 / 动作 / 策略。', flush=True)
+                if args.backend == 'sim':
+                    print('双臂 MuJoCo 仿真通过工作台网页同屏显示；[ / ] 选择操作侧。', flush=True)
                 for side,path in runs.items():
                     print(f'{side} run: {path}', flush=True)
                 print(f'日志：{directory}', flush=True)

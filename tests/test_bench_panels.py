@@ -40,6 +40,16 @@ class BenchPanelTests(unittest.TestCase):
                     self.assertIn(text, str(rows[side]))
                     self.assertEqual(rows[side].level, level)
 
+    def test_manual_pair_does_not_report_missing_quest_tracking(self):
+        pair = {'runs': {'left': '/unused/left', 'right': '/unused/right'}}
+        with patch('embodied.applications.workstation.pair_state.active_pair', return_value=pair), \
+             patch('embodied.contracts.runtime.control.ControlClient') as client:
+            client.return_value.status.return_value = {'owner': None, 'ingresses': {}}
+            rows = dict(panels.vr_control_rows(None)[0])
+        for side in ('左手柄', '右手柄'):
+            self.assertEqual(rows[side].level, 'disabled')
+            self.assertIn('无输入模式', str(rows[side]))
+
     def test_transport_timeout_and_close_cancel_the_private_process_group(self):
         # These disposable Python children model a stalled CLI and its ADB child.
         # They never call adb, open devices, or touch a running workbench.

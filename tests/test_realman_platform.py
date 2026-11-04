@@ -40,12 +40,38 @@ def test_single_quest_routing_uses_robot_rate_and_own_input_namespace(tmp_path):
 
 
 def test_pair_sim_uses_standard_realman_profiles(tmp_path):
-    _, _, deployments = prepare(tmp_path, backend='sim')
+    prefix, xr_config, deployments = prepare(tmp_path, backend='sim')
+    from embodied.devices.inputs.quest.shared import tomllib
+    xr = tomllib.loads(xr_config.read_text())
+    assert {c['channel_type'] for c in xr['channels']} == {'left_controller', 'right_controller'}
     for side, path in deployments.items():
         config, plugin = profile(path)
         assert config['robot'] == 'realman.sim' and not plugin.hardware
         assert config['source'] == 'quest' and config['native']['device'] == 'quest.shared'
         assert config['pair']['side'] == side
+        settings = load_settings(config['config'], config['vr_config'])
+        routing = Routing.configure(tmp_path/side, 'robot-test-'+side, settings)
+        arm = tomllib.loads(routing['arm'].read_text())
+        assert arm['leader_state_topic'] == f'{prefix}/xr/{side}_controller/states/pose'
+        assert arm['follower_command_topic'] == f'robot-test-{side}/robot/arm/commands/end_pose'
+        assert config['source_options']['ingress'] == 'native'
+
+
+def test_pair_manual_sim_does_not_load_quest_or_hardware(tmp_path):
+    with patch('embodied.devices.inputs.quest.settings.load_profile', side_effect=AssertionError('Quest loaded')):
+        _, xr_config, deployments = prepare(tmp_path, backend='sim', source='cli')
+    assert xr_config is None
+    assert set(deployments) == {'left', 'right'}
+    for path in deployments.values():
+        config, plugin = profile(path)
+        assert not plugin.hardware and config['source'] == 'cli'
+        assert not {'native', 'vr_config', 'source_options'} & config.keys()
+
+
+def test_simulation_menu_composes_both_arms_with_and_without_quest():
+    modes = {key: (command, real) for key, _, command, real in bench.KERNELS}
+    assert modes['4'] == ('./run.sh quest-transport prepare && ./run.sh robot-pair --backend sim', False)
+    assert modes['5'] == ('./run.sh robot-pair --backend sim --source cli', False)
 
 
 def test_pair_selection_is_shared_and_commands_pin_the_selected_run(tmp_path):

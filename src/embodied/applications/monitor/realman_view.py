@@ -87,9 +87,13 @@ class RealManView:
         reason = reasons.get(state['reason'], state['reason'])
         stamp = min(state['sample_monotonic_ns'], *[int(a['feedback_at'] * 1e9) for a in arms])
         scene.accept({'schema': SCHEMA, 'robot': scene.robot.metadata(), 'stream_id': state['stream_id'],
-            'sequence': state['sequence'], 'source': {'kind': state.get('source_kind', 'hardware'), 'input': 'quest',
+            'sequence': state['sequence'], 'source': {'kind': state.get('source_kind', 'hardware'), 'input': state.get('input', 'quest'),
                 'controller': 'RealMan 双臂 · ' + reason},
             'actual': actual, 'target': target, 'gripper': None,
+            'actual_vel': [v for arm in arms for v in arm['dq']]
+                if all(arm.get('dq') is not None for arm in arms) else None,
+            'target_vel': [v for arm in arms for v in arm['target_dq']]
+                if all(arm.get('target_dq') is not None for arm in arms) else None,
             'sample_monotonic_ns': stamp, 'emitted_monotonic_ns': time.monotonic_ns(), 'paths': {},
             'command_details': {'realman': deepcopy(arms), 'xr_fresh': state['xr_fresh'],
                 'paused': state['paused'], 'reason': reason}})
