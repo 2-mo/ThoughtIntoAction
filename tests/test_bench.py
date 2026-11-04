@@ -31,6 +31,23 @@ def run(root, name, *, pid=999_999_999, ready=True, managed=False):
 
 
 class BenchStateTests(unittest.TestCase):
+    def test_summary_keeps_arm_feedback_when_gripper_is_unavailable_and_recovers(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = run(root, 'realman', managed=True)
+            identity = {'backend': 'real', 'managed': True}
+            state = {'owner': None, 'q': [0.] * 6, 'phase': 'hold',
+                     'stopped': False, 'gripper_width': None}
+            with patch('embodied.contracts.runtime.control.ControlClient') as client:
+                client.return_value.status.return_value = state
+                lines = bench.kernel_summary(directory, identity)
+                self.assertEqual(lines[1].level, 'ready')
+                self.assertIn('真机反馈已收到', str(lines[1]))
+                self.assertIn('关节 °', lines[2])
+                self.assertIn('夹爪 反馈未就绪', lines[2])
+                for width, label in ((.07, '70.0 mm'), (0., '0.0 mm')):
+                    state['gripper_width'] = width
+                    self.assertIn('夹爪 ' + label, bench.kernel_summary(directory, identity)[2])
+
     def test_real_restart_requires_one_explicit_confirmation(self):
         found = (Path('/run/test-only'), {'backend': 'real', 'managed': True})
         with patch.object(bench, 'owned_run', return_value=found), \

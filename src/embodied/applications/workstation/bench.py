@@ -470,10 +470,12 @@ def kernel_summary(run, identity):
             import math
             owner = (status['owner'] or {}).get('source', '无')
             q = ' '.join(f'{math.degrees(v):6.1f}' for v in status['q'])
+            width = status['gripper_width']
+            gripper = '反馈未就绪' if width is None else f'{1000 * width:.1f} mm'
             lines += [Status(f'{mode}反馈已收到 · 控制权 {owner} · 阶段 {status["phase"]}'
                              + (' · 已停止（stop 锁存）' if status['stopped'] else ''),
                              'waiting' if status['stopped'] else 'ready'),
-                      f'关节 ° {q} · 夹爪 {1000 * status["gripper_width"]:.1f} mm']
+                      f'关节 ° {q} · 夹爪 {gripper}']
     else:
         lines.append(Status(f'{mode}内核已启动 · 反馈待确认（无命令网关）', 'waiting'))
         lines.append('关节状态见 MuJoCo 视图（V）或遥测（O）')
