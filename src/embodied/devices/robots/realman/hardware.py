@@ -360,9 +360,13 @@ class Backend:
             return  # Never replay a target that was held across an outage.
         if width is None:
             return
-        if not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width:
+        maximum = self.config.gripper_max_width
+        # Native ParallelMit uses float32: 70 mm becomes 0.070000000298 m.
+        # Admit that encoded endpoint only, then return to the exact range.
+        encoded_maximum = float(np.float32(maximum))
+        if not np.isfinite(width) or not 0 <= width <= max(maximum, encoded_maximum):
             raise ValueError('Invalid EG2 nominal width target')
-        raw = round(width/self.config.gripper_max_width*1000)
+        raw = round(min(width, maximum)/maximum*1000)
         if self.gripper['mode'] not in (1, 2, 3, 4, 5, 6):
             raise RuntimeError(f'Unknown EG2 mode: {self.gripper}')
         if self.gripper['mode'] == 6:

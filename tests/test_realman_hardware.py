@@ -199,6 +199,18 @@ class HardwareTests(unittest.TestCase):
             self.assertEqual(len(c.client.sent[0]['joint']), 6)
             self.assertIsNone(b.telemetry()['gripper_target'])
 
+    def test_gripper_accepts_native_float32_endpoint_but_rejects_real_overflow(self):
+        self.connection.client.gripper['actpos'] = 950
+        self.backend.gripper['actpos'] = 950
+        maximum = np.float32(self.config.gripper_max_width)
+        self.step(hold=True, gripper_target=float(maximum))
+        commands = [m for m in self.connection.client.sent if m['command'] == 'set_gripper_position']
+        self.assertEqual(commands, [{'command': 'set_gripper_position', 'position': 1000, 'block': False}])
+        for invalid in (float(np.nextafter(maximum, np.float32(np.inf))), -.001, float('nan')):
+            with self.subTest(target=invalid):
+                with self.assertRaisesRegex(ValueError, 'Invalid EG2 nominal width'):
+                    self.backend._gripper_target(invalid, time.monotonic())
+
     def test_loss_and_readonly_recovery_drop_old_target_until_release(self):
         self.backend._gripper_target(0., time.monotonic())
         self.assertIsNotNone(self.backend.pending_gripper)
