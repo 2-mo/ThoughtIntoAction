@@ -211,6 +211,22 @@ class HardwareTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'Invalid EG2 nominal width'):
                     self.backend._gripper_target(invalid, time.monotonic())
 
+    def test_gripper_uses_controller_clamped_target_without_replaying_missing_input(self):
+        self.connection.client.gripper['actpos'] = 191
+        self.backend.gripper['actpos'] = 191
+        # Captured native route target when approaching the closed endpoint.
+        self.step(hold=True, gripper_target=-1.1084925771790271e-6)
+        self.assertEqual(self.backend.telemetry()['gripper_target'], 0.)
+        self.assertEqual(self.connection.client.sent[-1],
+                         {'command': 'set_gripper_position', 'position': 91, 'block': False})
+        count = len(self.connection.client.sent)
+        self.backend.pending_gripper = None
+        self.step(hold=True, gripper_target=None)
+        self.assertEqual(len(self.connection.client.sent), count)
+        for value in (float('nan'), float('inf')):
+            with self.assertRaisesRegex(ValueError, 'non-finite gripper target'):
+                self.step(hold=True, gripper_target=value)
+
     def test_loss_and_readonly_recovery_drop_old_target_until_release(self):
         self.backend._gripper_target(0., time.monotonic())
         self.assertIsNotNone(self.backend.pending_gripper)

@@ -328,7 +328,10 @@ class Backend:
                 raise InterruptedError('RealMan stopped before gripper initialization')
             self._initialize_gripper(command)
         else:
-            self._gripper_target(effective.gripper_target, now)
+            # Reuse the target controller's finite/range handling, as for the
+            # arm. No fresh gripper command must stay None, not replay cache.
+            width = self.controller.gripper_target if effective.gripper_target is not None else None
+            self._gripper_target(width, now)
         self._telemetry = {'sent_q': q.tolist(), 'sent_dq': self.controller.dq_target.tolist(),
             'applied_kp': [0.]*6, 'applied_kd': [0.]*6, 'user_feedforward_torque': [0.]*6,
             'gripper_target': self.controller.gripper_target if self.gripper_ready and not self.gripper_needs_release else None,
@@ -360,13 +363,9 @@ class Backend:
             return  # Never replay a target that was held across an outage.
         if width is None:
             return
-        maximum = self.config.gripper_max_width
-        # Native ParallelMit uses float32: 70 mm becomes 0.070000000298 m.
-        # Admit that encoded endpoint only, then return to the exact range.
-        encoded_maximum = float(np.float32(maximum))
-        if not np.isfinite(width) or not 0 <= width <= max(maximum, encoded_maximum):
+        if not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width:
             raise ValueError('Invalid EG2 nominal width target')
-        raw = round(min(width, maximum)/maximum*1000)
+        raw = round(width/self.config.gripper_max_width*1000)
         if self.gripper['mode'] not in (1, 2, 3, 4, 5, 6):
             raise RuntimeError(f'Unknown EG2 mode: {self.gripper}')
         if self.gripper['mode'] == 6:
