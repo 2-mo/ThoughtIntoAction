@@ -179,7 +179,10 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
             if command is not None:
                 command.joint_step_limit = native_step_limits
             if gateway is not None:
-                command = gateway.tick(state, tick)
+                # Synchronous hardware stamps feedback after the read starts.
+                # Arbitration/standstill must use the post-read host clock, just
+                # like check_and_record_feedback, rather than the tick start.
+                command = gateway.tick(state, time.monotonic())
                 if state is not gateway.feedback:
                     state = gateway.feedback
                     check_and_record_feedback(state, time.monotonic(), 'simulation-state-change')

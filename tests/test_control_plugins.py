@@ -1,5 +1,6 @@
 """Offline checks of the common runtime against a non-ARX seven-axis model."""
 import unittest
+import json
 import tempfile
 from pathlib import Path
 from dataclasses import dataclass
@@ -35,6 +36,62 @@ class TestProfile:
 
 
 class ControlPluginTests(unittest.TestCase):
+    def test_managed_worker_uses_post_read_time_for_standstill_and_acquisition(self):
+        from embodied.control import worker
+        from embodied.control.commands import CommandEngine
+        from embodied.contracts.control import RobotState
+        settings = load_settings('configs/robots/realman/sim.json')
+        config = settings.robot
+        clock = [100.]
+        acquired = []
+        observed = []
+
+        def read_state(now):
+            clock[0] += .006  # Model a synchronous hardware query finishing after tick start.
+            return RobotState(np.asarray(config.park_q), np.zeros(6),
+                              np.array([0., 0., .3, 0., 0., 0., 1.]), None, clock[0])
+
+        class Gateway:
+            def __init__(self, directory, runtime_id, config, planner_factory, ingresses, **options):
+                self.engine = CommandEngine(runtime_id, config, config.model_id,
+                    motion_limits=options['motion_limits'], capabilities=options['capabilities'])
+
+            def tick(self, state, now):
+                observed.append(now-state.received_at)
+                command = self.engine.next(state, now)
+                if self.engine.stationary and not acquired:
+                    acquired.append(self.engine.request({'version': 1, 'runtime_id': 'robot-clock-test',
+                        'action': 'acquire', 'source': 'quest', 'purpose': 'teleop'}, state, now))
+                self.feedback = state
+                if len(observed) >= 15:
+                    self.engine.stopped = True
+                return command
+
+            def close(self):
+                pass
+
+        backend = SimpleNamespace(read_state=read_state, step=lambda *a: None, close=lambda: None)
+        driver = SimpleNamespace(preflight=lambda config: {'ready': True}, resources=lambda config: (),
+            open=lambda *a, **kw: backend,
+            capabilities=lambda *a: {'joint_velocity_limits_rad_s': [1.]*6, 'source': {'kind': 'test'}},
+            shutdown=lambda *a, **kw: {'policy': 'test-hold'})
+        registry = SimpleNamespace(spec=lambda *a, **kw: SimpleNamespace(hardware=False),
+            create=lambda *a, **kw: driver, load=lambda *a, **kw: None)
+        bridge = SimpleNamespace(publish_state=lambda *a: None, close=lambda: None)
+        with tempfile.TemporaryDirectory() as folder, \
+             patch.object(worker, 'load_settings', return_value=settings), \
+             patch.object(worker, 'write_parameter_snapshot'), \
+             patch.object(worker, 'RobotBridge', return_value=bridge), \
+             patch.object(worker.time, 'monotonic', side_effect=lambda: clock[0]), \
+             patch.object(worker, 'PeriodicClock', return_value=SimpleNamespace(
+                 wait=lambda: clock.__setitem__(0, clock[0]+.04))), \
+             patch('embodied.contracts.registry.Registry', return_value=registry), \
+             patch('embodied.control.gateway.Gateway', Gateway):
+            (Path(folder)/'runtime.json').write_text(json.dumps({'native': None}))
+            worker.run('sim', 'robot-clock-test', None, Path(folder), managed=True)
+        self.assertTrue(all(age >= 0 for age in observed))
+        self.assertEqual(len(acquired), 1)
+
     def test_profile_does_not_read_unselected_input(self):
         settings = load_settings(vr_path='/nonexistent/unselected-input.json')
         self.assertEqual(settings.robot.joint_count, 6)
