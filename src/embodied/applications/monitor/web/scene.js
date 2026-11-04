@@ -1,5 +1,5 @@
 import {mode, displayedState} from './display-state.js';
-import {splitGripperGeometry, attachGripper} from './gripper.js';
+import {splitGripperGeometry, attachGripper, parallelGripperGeometry} from './gripper.js';
 // Display treatment adapted from arx5_test's scene; no desktop kinematics or controls.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -178,7 +178,8 @@ async function initialize() {
     } else geometry = await loader.loadAsync(spec.url);
     geometry.scale(...spec.scale);
     geometry.computeVertexNormals();
-    const parts = digest ? splitGripperGeometry(digest, geometry, spec.scale) : null;
+    const parts = spec.gripper ? parallelGripperGeometry(geometry, spec.gripper)
+      : digest ? splitGripperGeometry(digest, geometry, spec.scale) : null;
     // The Desktop scene uses black housings and a brushed-metal link3.
     const metal = spec.link === 'link3';
     const material = new THREE.MeshStandardMaterial({
@@ -192,9 +193,9 @@ async function initialize() {
     actual.matrixAutoUpdate = target.matrixAutoUpdate = false;
     actual.castShadow = actual.receiveShadow = true;
     if (parts) {
-      grippers.push({index, actual: attachGripper(actual, parts), target: attachGripper(target, parts)});
+      grippers.push({index, side: spec.gripper?.side, actual: attachGripper(actual, parts), target: attachGripper(target, parts)});
       target.material = target.material.clone();
-      geometry.dispose();
+      if (parts.body !== geometry) geometry.dispose();
     }
     actual.userData.online = { color: material.color.clone(), metalness: material.metalness, roughness: material.roughness };
     actualMeshes[index] = actual;
@@ -257,7 +258,9 @@ async function initialize() {
     actualMeshes.forEach((mesh, index) => mesh.matrix.fromArray(state.actual.meshes[index]));
     gripperTargetVisible = false;
     for (const gripper of grippers) {
-      const feedback = state.gripper;
+      const arm = gripper.side ? state.command_details?.realman?.find(arm => arm.hand === gripper.side) : null;
+      const feedback = gripper.side ? {actual: arm?.gripper_width_m,
+        target: arm?.gripper_target_m, max: arm?.gripper_max_width_m} : state.gripper;
       gripper.actual.setOpening(feedback?.actual, feedback?.max);
       gripper.target.setOpening(feedback?.target ?? feedback?.actual, feedback?.max);
       const actual = actualMeshes[gripper.index].userData.gripperOpening;

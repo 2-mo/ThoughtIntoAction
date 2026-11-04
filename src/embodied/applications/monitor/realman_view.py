@@ -50,7 +50,13 @@ def display_model(hands, directory=None):
         'robot_type': 'realman_hardware_display_uncalibrated_layout'},
         'parameters': {'model': {'urdf_path': str(path), 'urdf': content,
             'manifest': {'tcp_link': hands[0] + '_tcp_link'}}}}
-    return RuntimeModel(descriptor)
+    model = RuntimeModel(descriptor)
+    # The URDF palm has no moving jaws. Keep the six arm joints per side and
+    # describe separate visual fingers driven by measured opening in metres.
+    model.display_grippers = {hand + '_tool_palm': {
+        'side': hand, 'finger_size': [.01, .016, .04],
+        'center': [0., 0., .065]} for hand in hands}
+    return model
 
 
 class RealManView:

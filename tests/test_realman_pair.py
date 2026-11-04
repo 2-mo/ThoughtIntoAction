@@ -16,7 +16,7 @@ from embodied.applications.monitor.pair_view import PairView
 class Reader:
     def __init__(self, run, mode, timeout):
         self.sock, self.sender = socket.socketpair()
-        self.descriptor = {'backend': 'sim'}
+        self.descriptor = {'backend': 'sim', 'parameters': {'effective_robot_config': {'gripper_max_width': .04}}}
         self.tick = {'terminal': False, 'error': None,
             'feedback': {'q': ([.1]*6 if run == 'left' else [-.2]*6),
                          'dq': ([.3]*6 if run == 'left' else [-.4]*6), 'gripper_width': .07},
@@ -109,6 +109,41 @@ class PairTests(unittest.TestCase):
             self.assertEqual(payload['input']['hands']['right']['trigger'], .2)
             view.ticks['right']['input']['sample_monotonic_ns'] -= 1_000_000_000
             self.assertIsNone(view.monitor()['input'])
+
+    def test_pair_gripper_feedback_reaches_scene_with_independent_widths(self):
+        from embodied.applications.monitor.realman_view import display_model
+        from embodied.applications.monitor.scene import Scene
+        state = {'runtime_id': 'pair-gripper-test', 'runs': {'left': 'left', 'right': 'right'}}
+        with tempfile.TemporaryDirectory() as folder:
+            view = PairView(finder=lambda: state, reader_factory=Reader,
+                            model_factory=lambda hands: display_model(hands, folder))
+            scene = Scene(None)
+            try:
+                view.step(scene)
+                for side, width in (('left', .01), ('right', .03)):
+                    view.ticks[side]['feedback']['gripper_width'] = width
+                    view.ticks[side]['command'] = {'gripper_width': .02}
+                    view.ticks[side]['timing']['feedback_received_ns'] = time.monotonic_ns()
+                view.sequence += 1
+                view.step(scene)
+                arms = {a['hand']: a for a in scene.snapshot()['command_details']['realman']}
+                self.assertEqual(arms['left']['gripper_width_m'], .01)
+                self.assertEqual(arms['right']['gripper_width_m'], .03)
+                self.assertEqual(arms['right']['gripper_max_width_m'], .04)
+                grips = {m['gripper']['side']: m for m in scene._manifest['meshes'] if 'gripper' in m}
+                self.assertEqual(set(grips), {'left', 'right'})
+                self.assertEqual(grips['left']['link'], 'left_tool_palm')
+                self.assertEqual(scene.robot.model.nq, 12)  # Arm joint contract is unchanged.
+                view.ticks['right']['feedback']['gripper_width'] = None
+                for tick in view.ticks.values():
+                    tick['timing']['feedback_received_ns'] = time.monotonic_ns()
+                view.sequence += 1
+                view.step(scene)
+                arms = {a['hand']: a for a in scene.snapshot()['command_details']['realman']}
+                self.assertIsNone(arms['right']['gripper_width_m'])
+            finally:
+                scene.close()
+                view.close()
 
 
 if __name__ == '__main__': unittest.main()

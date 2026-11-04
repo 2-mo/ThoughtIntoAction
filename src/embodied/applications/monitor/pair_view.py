@@ -36,12 +36,14 @@ class PairView:
                 return None
             feedback = tick['feedback']
             command = tick.get('command') or {}
+            robot = self.readers[side].descriptor.get('parameters', {}).get('effective_robot_config', {})
             arms.append({'hand': side, 'host': side, 'q': feedback['q'],
                 'dq': feedback.get('dq'), 'target_dq': command.get('dq'),
                 'target_q_deg': np.rad2deg(command.get('q', feedback['q'])).tolist(),
                 'feedback_at': stamp/1e9, 'fault': feedback.get('fault', ''),
                 'gripper_width_m': feedback.get('gripper_width'),
                 'gripper_target_m': command.get('gripper_width'),
+                'gripper_max_width_m': robot.get('gripper_max_width'),
                 'run': self.identity['runs'][side]})
         quest = any(reader.descriptor.get('native') for reader in self.readers.values())
         return {'schema': 1, 'stream_id': self.identity['runtime_id'], 'sequence': self.sequence,

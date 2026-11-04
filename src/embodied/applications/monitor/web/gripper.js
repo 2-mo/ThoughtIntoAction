@@ -51,10 +51,25 @@ export function attachGripper(mesh, parts) {
       const valid = Number.isFinite(width) && Number.isFinite(maximum) && maximum > 0;
       const opening = valid ? Math.min(maximum, Math.max(0, width)) : parts.referenceWidth;
       const offset = parts.direction * (opening - parts.referenceWidth) / 2;
-      fingers[0].position.y = offset;
-      fingers[1].position.y = -offset;
+      const axis = parts.axis || 'y';
+      fingers[0].position[axis] = offset;
+      fingers[1].position[axis] = -offset;
+      if (parts.hideWithoutFeedback) fingers.forEach(finger => { finger.visible = valid; });
       // Missing feedback uses the reference geometry, never a fabricated zero.
       mesh.userData.gripperOpening = valid ? opening : null;
     },
   };
+}
+
+// Simplified fingers for models whose URDF contains only the fixed palm.
+// Reuse the same opening/ghost rendering as the existing mesh gripper.
+export function parallelGripperGeometry(body, spec) {
+  const fingers = [-1, 1].map(sign => {
+    const geometry = new THREE.BoxGeometry(...spec.finger_size);
+    geometry.translate(spec.center[0] + sign * spec.finger_size[0] / 2,
+      spec.center[1], spec.center[2]);
+    return geometry;
+  });
+  return {body, positive: fingers[1], negative: fingers[0], referenceWidth: 0,
+    direction: 1, axis: 'x', hideWithoutFeedback: true};
 }

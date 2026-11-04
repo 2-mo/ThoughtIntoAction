@@ -296,6 +296,9 @@ class Scene:
             for index, geometry in enumerate(self._visual.geometryObjects):
                 spec = {'name': geometry.name, 'link': robot.model.frames[geometry.parentFrame].name,
                         'scale': geometry.meshScale.tolist()}
+                gripper = getattr(robot, 'display_grippers', {}).get(spec['link'])
+                if gripper is not None:
+                    spec['gripper'] = gripper
                 mesh = Path(geometry.meshPath).resolve()
                 if mesh.is_file() and mesh.suffix.lower() == '.stl':
                     spec['url'] = f'/meshes/{index}.stl'
