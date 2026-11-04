@@ -22,7 +22,7 @@ def feedback():
             for h, host, v in [('left', '192.168.1.19', .2), ('right', '192.168.1.18', -.3)]]}
 
 
-def test_both_measured_arms_render_and_disappear_when_feedback_is_lost(tmp_path):
+def test_both_measured_arms_keep_geometry_but_go_offline_when_feedback_is_lost(tmp_path):
     state = feedback()
     view = RealManView(reader=lambda: state, model_factory=lambda hands: display_model(hands, tmp_path))
     scene = Scene(None)
@@ -36,9 +36,21 @@ def test_both_measured_arms_render_and_disappear_when_feedback_is_lost(tmp_path)
         np.testing.assert_allclose(snapshot['actual']['q'], [.2, 0, 0, 0, 0, 0, -.3, 0, 0, 0, 0, 0])
         assert snapshot['gripper'] is None  # Uncalibrated raw position never becomes millimetres.
         assert view.monitor()['input']['control_enabled'] is False
+        saved = state
+        viewer_id = scene.snapshot()['viewer_id']
         state = None
         assert not view.step(scene)
-        assert scene.robot is None
+        assert scene.robot is not None
+        assert scene.snapshot()['viewer_id'] == viewer_id
+        assert scene.snapshot()['stream']['status'] == 'error'
+        state = saved
+        state['sequence'] += 1
+        state['sample_monotonic_ns'] = time.monotonic_ns()
+        for arm in state['arms']:
+            arm['feedback_at'] = time.monotonic()
+        assert view.step(scene)
+        assert scene.snapshot()['viewer_id'] == viewer_id
+        assert scene.snapshot()['stream']['status'] == 'live'
     finally:
         scene.close()
 

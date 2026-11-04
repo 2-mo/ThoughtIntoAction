@@ -59,7 +59,7 @@ class PairTests(unittest.TestCase):
             (root/'left/runtime.ready').unlink()
             self.assertIsNone(active_pair(manifest))
 
-    def test_two_standard_streams_render_together_and_stale_side_is_withdrawn(self):
+    def test_two_standard_streams_keep_model_identity_across_a_feedback_gap(self):
         state = {'runtime_id': 'pair-test', 'runs': {'left': 'left', 'right': 'right'}}
         packets = []
         model = SimpleNamespace(metadata=lambda: {})
@@ -81,10 +81,34 @@ class PairTests(unittest.TestCase):
             self.assertIn('left', view.monitor()['runtime_runs'])
             view.ticks['left']['timing']['feedback_received_ns'] -= 1_000_000_000
             view.step(scene)
-            self.assertIsNone(scene.robot)
+            self.assertIs(scene.robot, model)
             self.assertIsNone(view.view.latest)
+            for tick in view.ticks.values():
+                tick['timing']['feedback_received_ns'] = time.monotonic_ns()
+            view.step(scene)
+            self.assertIs(scene.robot, model)
+            self.assertIsNotNone(view.view.latest)
         finally:
             view.close()
+
+    def test_pair_monitor_uses_each_hands_actual_input_and_expires_independently(self):
+        from unittest.mock import patch
+        view = PairView()
+        view.identity = {'runtime_id': 'pair-test', 'runs': {'left': 'left', 'right': 'right'}}
+        stamp = time.monotonic_ns()
+        for side in ('left', 'right'):
+            view.ticks[side] = {'input': {'sample_monotonic_ns': stamp,
+                'device_timestamp_ns': 123, 'hands': {side: {'grip': .4, 'trigger': .2}}}}
+        with patch('embodied.applications.workstation.pair_state.selected_run', return_value=None):
+            payload = view.monitor()
+            self.assertEqual(set(payload['input']['hands']), {'left', 'right'})
+            self.assertIsNone(payload['input_error'])
+            view.ticks['left']['input']['sample_monotonic_ns'] -= 1_000_000_000
+            payload = view.monitor()
+            self.assertIsNone(payload['input']['hands']['left'])
+            self.assertEqual(payload['input']['hands']['right']['trigger'], .2)
+            view.ticks['right']['input']['sample_monotonic_ns'] -= 1_000_000_000
+            self.assertIsNone(view.monitor()['input'])
 
 
 if __name__ == '__main__': unittest.main()

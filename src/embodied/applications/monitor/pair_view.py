@@ -59,7 +59,10 @@ class PairView:
             if found != self.identity:
                 self.close()
                 self.identity = found
-                self.view.step(scene)
+                self.view.latest = None
+                self.view.stream_id = None
+                if scene:
+                    scene.set_model(None)
         if self.identity is None:
             return False
         try:
@@ -100,8 +103,25 @@ class PairView:
             runtime_monitor=True, connections={}, collection_count=None, recording=None,
             runtime_runs=self.identity['runs'], monitor_message=self.error or '双臂统一内核只读反馈；底座为示意布局',
             input_error='手柄状态请查看Quest面板；不由姿态反馈推断控制权', input=None,
+            button_layout={
+                'left': {'stick': 'L3', 'holds': [], 'keys': {'X': '跟随 / 保持', 'Y': '长按初始化张开'}},
+                'right': {'stick': 'R3', 'holds': [], 'keys': {'A': '跟随 / 保持', 'B': '长按初始化张开'}}},
             collection={'state': '按侧采集', 'task': 'collect run --run <left/right RUN> --task <任务>', 'control_enabled': False},
             collection_hint='两侧分别使用现有采集/策略接口；尚无同步双臂策略协议。')
+        hands, stamps, device_stamps = {}, [], []
+        now = time.monotonic_ns()
+        for side, tick in dict(self.ticks).items():
+            inp = tick.get('input') or {}
+            stamp = inp.get('sample_monotonic_ns')
+            valid = stamp is not None and 0 <= now-stamp < 150_000_000 and not inp.get('error')
+            hands[side] = inp.get('hands', {}).get(side) if valid else None
+            if hands[side] is not None:
+                stamps.append(stamp)
+                device_stamps.append(inp.get('device_timestamp_ns', 0))
+        if stamps:
+            payload.update(input={'hands': hands, 'sample_monotonic_ns': min(stamps),
+                'device_timestamp_ns': max(device_stamps)}, input_age_s=(now-min(stamps))/1e9,
+                input_error=None)
         from embodied.applications.workstation.pair_state import selected_run
         from .kernel_view import collection_snapshot
         from embodied.core.project import PROJECT_ROOT, load_config, resolve_path

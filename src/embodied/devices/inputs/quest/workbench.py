@@ -107,6 +107,37 @@ def hand(side, sample, pose, wall):
             'buttons': {k: bool(sample.buttons_bitset & v) for k, v in BUTTONS[side]}}
 
 
+class InputObserver:
+    """Read native hand frames for the existing observer stream; no SDK or commands."""
+    def __init__(self, prefix):
+        self.node = create_node()
+        self.inputs = {s: make_subscriber(open_service(self.node,
+            f'{prefix}/xr/{s}_controller/states/input', XrControllerInput)) for s in ('left', 'right')}
+        self.poses = {s: make_subscriber(open_service(self.node,
+            f'{prefix}/xr/{s}_controller/states/pose', Pose7)) for s in self.inputs}
+        self.samples, self.positions = {}, {}
+        self.latest = None
+        self.next_sample = 0.
+
+    def snapshot(self):
+        now, wall = time.monotonic(), time.time()
+        if now < self.next_sample:
+            return self.latest
+        for side in self.inputs:
+            self.samples[side] = drain_latest(self.inputs[side]) or self.samples.get(side)
+            self.positions[side] = drain_latest(self.poses[side]) or self.positions.get(side)
+        self.latest = {'sample_monotonic_ns': time.monotonic_ns(),
+            'device_timestamp_ns': max((s.timestamp_us * 1000 for s in self.samples.values() if s), default=0),
+            'hands': {s: hand(s, self.samples.get(s), self.positions.get(s), wall) for s in self.inputs}}
+        self.next_sample = now + .05
+        return self.latest
+
+    def close(self):
+        self.inputs.clear()
+        self.poses.clear()
+        self.node = None
+
+
 def run(prefix, directory):
     stopped = False
     def stop(*_):

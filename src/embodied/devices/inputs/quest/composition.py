@@ -7,6 +7,11 @@ from embodied.control.settings import ROOT
 
 class QuestDevice:
     @staticmethod
+    def open_observer(prefix, config):
+        from .workbench import InputObserver
+        return InputObserver(config.get('input_prefix') or prefix)
+
+    @staticmethod
     def validate(settings):
         if not Path(settings.sdk_library).is_file():
             raise ValueError(f'XRoboToolkit PC Service SDK not found: {settings.sdk_library}')

@@ -24,6 +24,29 @@ class KernelMonitorTests(unittest.TestCase):
         self.realman = patch('embodied.applications.monitor.realman_view.latest_state', return_value=None)
         self.realman.start()
         self.addCleanup(self.realman.stop)
+
+    def test_pair_observer_does_not_use_the_idle_half_second_poll_interval(self):
+        monitor = KernelMonitor(finder=Mock(return_value=None), episode_roots=[])
+        monitor.pair.identity = {'runtime_id': 'pair-test'}
+        monitor.step = Mock()
+        monitor.closed = Mock()
+        monitor.closed.is_set.side_effect = [False, False, True]
+        with patch('embodied.applications.monitor.kernel_view.threading.Thread') as thread:
+            monitor.start(Mock())
+            thread.call_args.kwargs['target']()
+        self.assertEqual(monitor.step.call_count, 2)
+        self.assertTrue(all(call.args[0] < .15 for call in monitor.closed.wait.call_args_list))
+
+    def test_native_hand_snapshot_is_forwarded_without_a_workbench_json_file(self):
+        monitor = KernelMonitor(episode_roots=[])
+        monitor.latest = tick()
+        monitor.latest['input'] = {'sample_monotonic_ns': time.monotonic_ns(),
+            'hands': {'left': {'grip': .5}, 'right': None}}
+        monitor.identity = {'runtime_id': 'one'}
+        payload = monitor.monitor()
+        self.assertEqual(payload['input']['hands']['left']['grip'], .5)
+        self.assertIsNone(payload['input_error'])
+        self.assertLess(payload['input_age_s'], .15)
     def test_motor_diagnostics_reaches_web_and_closes_with_runtime(self):
         identity = {'backend': 'real', 'runtime_id': 'one', 'boot_id': 'this-boot', 'input': 'idle'}
         reader, diagnostics, scene = Mock(), Mock(), Mock()

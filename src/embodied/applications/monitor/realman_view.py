@@ -63,9 +63,10 @@ class RealManView:
         state = self.reader()
         if state is None:
             if self.latest is not None and scene:
-                scene.set_model(None)
+                # Keep geometry identity across a feedback gap. The browser marks
+                # the last pose offline; replacing the model would reload the page.
+                scene.set_stream_error('双臂反馈已中断；保留最后画面，等待新鲜反馈')
             self.latest = None
-            self.stream_id = None
             return False
         self.latest = state
         if scene is None:

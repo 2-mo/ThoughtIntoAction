@@ -273,11 +273,16 @@ class KernelMonitor:
                        state_age_s=age, input_age_s=None, input_error='当前内核未提供手柄监看帧',
                        monitor_message=error, connections={})
         payload['collection']['control_enabled'] = False
+        inp = (tick or {}).get('input')
+        if inp:
+            stamp = inp.get('sample_monotonic_ns')
+            payload.update(input=inp, input_error=inp.get('error'),
+                input_age_s=max(0., (time.monotonic_ns()-stamp)/1e9) if stamp else None)
         if directory is None:
             realman = self.realman.monitor()
             if realman is not None:
                 payload.update(realman)
-        if directory:
+        if directory and not inp:
             try:
                 inp = json.loads((directory / 'workbench-input.json').read_text())
                 input_stamp = inp.get('sample_monotonic_ns')
@@ -297,7 +302,8 @@ class KernelMonitor:
                 # accumulate old ticks in the transport even in latest mode.
                 # Only scene/FK work is limited to 30 Hz in step().
                 if self.reader is None:
-                    self.closed.wait(.05 if self.realman.latest is not None else .5)
+                    self.closed.wait(.02 if self.pair.identity is not None else
+                                     .05 if self.realman.latest is not None else .5)
         self.thread = threading.Thread(target=observe, name='kernel-monitor-observer', daemon=True)
         self.thread.start()
 
