@@ -87,6 +87,8 @@ def open_browser():
 
 def pair_hints():
     return ['左 X / 右 A 按住 150 ms 后松开：切换该侧跟随 / 保持；Trigger 按比例开合夹爪。',
+            '夹爪未就绪时机械臂仍可用；松开Grip/Trigger后长按左Y / 右B 1秒，显式初始化张开本侧夹爪（50%）。',
+            '初始化前确认夹爪空载且有张开空间；反馈恢复后松开Trigger，再重新按下，不接续旧夹爪目标。',
             'Grip 按下时，以当前手柄和机械臂姿态重新置零；松开保持，可重复重定位。映射比例 1.0。',
             '启动只连接与读状态，不自动使能、回零、清错或张开；断流保持后需重新取得控制权。',
             '网页只读显示两侧标准内核反馈；底座为示意布局，未标定双臂碰撞。',
@@ -373,9 +375,18 @@ def vr_control_rows(found):
                 if ingress.get('reason'):
                     text += ' · '+str(ingress['reason'])
                 rows.append((label, Status(text, 'ready' if ingress.get('ready') else 'waiting')))
+                if 'gripper_ready' in status:
+                    available = status['gripper_ready'] and status.get('gripper_mode') in (None, 'command-following')
+                    text = ('反馈就绪' if available else
+                        '反馈就绪，当前保持；用本侧X/A切到跟随'
+                        if status['gripper_ready'] and status.get('gripper_mode') == 'free-drive' else
+                        '反馈已恢复，控制待启用；松Grip，用本侧X/A切到保持、再切回跟随'
+                        if status['gripper_ready'] else
+                        '反馈未就绪，宽度未知；全零时可长按本侧Y/B 1秒初始化张开，非零故障先处理')
+                    rows.append((label+'夹爪', Status(text, 'ready' if available else 'waiting')))
             except (OSError, ValueError, RuntimeError, EOFError, KeyError) as exc:
                 rows.append((label, Status(f'状态读取失败：{exc}', 'error')))
-        return rows, pair_hints()[:3]
+        return rows, pair_hints()[:4]
     if not found:
         return [('遥操接入', Status('robot 尚未运行', 'disabled'))], hints
     run, identity = found

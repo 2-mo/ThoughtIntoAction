@@ -90,8 +90,8 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
                      trigger_max_width_m=float(gripper_width), parallel_topic=parallel, health_topic=grip_health)])
     common = dict(leader_channel_id=f"xr.{channel}", ruckig_smoothing_enabled=motion['smoothing_enabled'],
                   control_rate_hz=250.0, control_group_id=group,
-                  relative_hold_timeout_ms=max(30, 2000/feedback_hz),
-                  relative_fault_timeout_ms=max(100, 3000/feedback_hz))
+                  relative_hold_timeout_ms=math.ceil(max(30, 2000/feedback_hz)),
+                  relative_fault_timeout_ms=math.ceil(max(100, 3000/feedback_hz)))
     arm = dict(common, process_id=f"{prefix}.arm", follower_channel_id="robot.arm",
                leader_state_kind="pose", leader_state_topic=f"{xr_root}/{channel}/states/pose",
                follower_command_kind="end_pose", follower_command_topic=f"{robot_root}/arm/commands/end_pose",

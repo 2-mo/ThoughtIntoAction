@@ -39,6 +39,37 @@ class ControlPrimitiveTests(unittest.TestCase):
     def plan(self, **request):
         return self.planner.plan({'speed': 0, **request}, self.snapshot, 1.)
 
+    def test_missing_gripper_feedback_keeps_arm_planning_and_streaming_available(self):
+        from embodied.control.worker import check_feedback
+        self.snapshot['gripper_width'] = None
+        for request in (dict(kind='movej', q=[.01]*6),
+                        dict(kind='movel', pose=[.01, 0., .3, 0., 0., 0., 1.])):
+            self.assertIsNone(self.plan(**request)['gripper_width'])
+        with self.assertRaisesRegex(ValueError, 'feedback unavailable'):
+            self.plan(kind='movej', q=[.01]*6, gripper_width=.02)
+        engine = CommandEngine('r', self.config, 'fixture')
+        engine.config.joint_min, engine.config.joint_max = [-3.]*6, [3.]*6
+        state = self.state(1., width=None)
+        check_feedback(state, 1.)
+        state.gripper_width = float('nan')
+        with self.assertRaisesRegex(RuntimeError, 'non-finite'): check_feedback(state, 1.)
+        state.gripper_width = None
+        for stamp in np.linspace(.74, 1., 66):
+            state.received_at = float(stamp)
+            engine.next(state, float(stamp))
+        lease = engine.request({'version': 1, 'runtime_id': 'r', 'action': 'acquire', 'source': 'test'}, state, 1.)
+        engine.next(state, 1.)
+        request = {'version': 1, 'runtime_id': 'r', **{k: lease[k] for k in ('token', 'epoch')},
+                   'sequence': 1, 'sent_monotonic_ns': 1_000_000_000, 'action': 'joint', 'q': [.01]*6}
+        self.assertEqual(engine.request(request, state, 1.)['status'], 'applied')
+        self.assertIsNone(engine.next(state, 1.).gripper_target)
+        status = engine.status(state, 1.)
+        self.assertFalse(status['gripper_ready'])
+        json.dumps(status, allow_nan=False)
+        for sequence, action in enumerate(('gripper', 'joint', 'free-drive'), 2):
+            with self.assertRaisesRegex(ValueError, 'feedback unavailable'):
+                engine.request({**request, 'sequence': sequence, 'action': action, 'gripper_width': .02}, state, 1.)
+
     def test_tcp_units_bound_actual_trajectory_and_change_identity(self):
         base = dict(kind='movel', pose=[.1, 0., .3, 0., 0., 0., 1.])
         original = self.plan(**base)

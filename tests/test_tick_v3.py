@@ -77,6 +77,21 @@ def test_layout_has_its_own_versioned_fixture():
     assert ticks.RobotTickV3.type_name() == 'QuestRobotTickV3'
 
 
+def test_missing_gripper_feedback_is_null_without_dropping_arm_ticks(publisher):
+    writer, packets = publisher
+    state, command, backend = inputs()
+    state.gripper_width = None
+    info = backend.telemetry()
+    info['gripper_target'] = None
+    writer.publish(state, command, backend, 1., 1, 'control', True)
+    assert writer.dropped == 0
+    row = ticks.to_dict(packets[-1])
+    assert row['feedback']['q'] == [.1] * 7
+    assert row['feedback']['gripper_width'] is None
+    assert row['command']['gripper_width'] is None
+    json.dumps(row, allow_nan=False)
+
+
 @pytest.mark.parametrize('count', [0, 16, True, 7.0])
 def test_invalid_capacity_fails_before_creating_any_ipc_resource(count):
     with patch.object(ticks, 'create_node') as create:

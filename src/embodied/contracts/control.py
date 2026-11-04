@@ -31,7 +31,7 @@ class RobotState:
     q: np.ndarray
     dq: np.ndarray
     pose: np.ndarray
-    gripper_width: float
+    gripper_width: float | None  # None: installed gripper has no valid position feedback.
     received_at: float
     mode: Mode = Mode.DISABLED
     fault: str = ""
@@ -57,3 +57,4 @@ class ControlCommand:
     planned: bool = False
     gripper_effort: float | None = None  # Positive closing magnitude; units declared by the driver.
     joint_acceleration_target: np.ndarray | None = None  # rad/s², from the same planned q/dq curve.
+    gripper_initialize_open: bool = False  # Explicit operator request; never inferred from missing feedback.

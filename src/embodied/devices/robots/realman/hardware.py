@@ -11,7 +11,7 @@ import numpy as np
 
 from embodied.contracts.control import Mode
 from .backend import Backend as Connection, load_config, vector
-from .gripper import status, require_ready
+from .gripper import status, require_ready, GripperNotReady, move
 from .kinematics import OfflineModel, CandidateRejected, pose_error
 
 
@@ -96,6 +96,13 @@ class Backend:
         self.last_gripper_poll = float('-inf')
         self.pending_gripper = None
         self.gripper_contact = False
+        self.gripper_ready = False
+        self.gripper_ready_samples = 0
+        self.gripper_needs_release = False
+        self.gripper_initializing = False
+        self.gripper_initialize_requested = False
+        self.gripper_initialization_at = None
+        self.gripper_notice = None
         self.stopped = False
         # Coordinator mode acknowledgements are logical states. FreeDrive and
         # Disabled acknowledge a hold; neither enables a physical drag/Home mode.
@@ -117,8 +124,7 @@ class Backend:
             self.linear_speed = min(config.teleop_linear_speed_m_s, self.connection.config['linear_speed_m_s'])
             self.angular_speed = min(config.teleop_angular_speed_rad_s, self.connection.config['angular_speed_rad_s'])
             self.connection.client.allow_gripper = True
-            self.gripper = status(self.connection.client)
-            require_ready(self.gripper)
+            self._poll_gripper(time.monotonic(), startup=True)
             # Reuse the existing target controller's hold, joint slew and IK
             # cache. RM-specific mode conversion prevents ARX Home/damping.
             from embodied.devices.robots.arx5.kinematics import JointTargetController
@@ -138,10 +144,67 @@ class Backend:
             raise
 
     def width(self):
+        if not self.gripper_ready:
+            return None
         pos = self.gripper['actpos']
         if not -5 <= pos <= 1005:
             raise ValueError(f'EG2 opening outside endpoint tolerance: {pos}')
         return float(np.clip(pos, 0, 1000)/1000*self.config.gripper_max_width)
+
+    def _poll_gripper(self, now, *, startup=False):
+        self.gripper = status(self.connection.client)
+        self.last_gripper_poll = now
+        try:
+            require_ready(self.gripper)
+        except GripperNotReady:
+            self.gripper_ready = False
+            self.gripper_ready_samples = 0
+            self.gripper_needs_release = True
+            self.pending_gripper = None
+            self.gripper_contact = False
+        else:
+            if self.gripper['mode'] not in (1, 2, 3, 4, 5, 6):
+                raise ValueError(f'Unknown EG2 mode: {self.gripper}')
+            if not -5 <= self.gripper['actpos'] <= 1005:
+                raise ValueError(f'EG2 opening outside endpoint tolerance: {self.gripper["actpos"]}')
+            if startup or self.gripper_ready:
+                self.gripper_ready = True
+            elif self.gripper['mode'] in (1, 2, 3, 6):
+                self.gripper_ready_samples += 1
+                self.gripper_ready = self.gripper_ready_samples >= 2
+            else:
+                self.gripper_ready_samples = 0
+            if self.gripper_ready:
+                self.gripper_initializing = False
+        notice = ('ready' if self.gripper_ready else 'unavailable')
+        if notice != self.gripper_notice:
+            print(f'{self.config.name}: EG2 {notice}; feedback={self.gripper}. '
+                  + ('需松开夹爪控制，再重新操作。' if self.gripper_ready and self.gripper_needs_release else
+                     '机械臂保持可用；夹爪宽度未知。仅全零状态可松Grip/Trigger后长按左Y/右B 1秒初始化张开；非零故障需先处理。'
+                     if not self.gripper_ready else ''), flush=True)
+            self.gripper_notice = notice
+
+    def _initialize_gripper(self, command):
+        if not command.hold or command.engaged:
+            raise ValueError('Gripper initialization requires an explicit arm hold')
+        if self.gripper_initializing:
+            return
+        try:
+            reply = move(self.connection.client, 'open', speed=500, initialize_open=True)
+        except GripperNotReady as exc:
+            print(f'{self.config.name}: 初始化未执行；夹爪返回非零未就绪/故障状态 {exc.feedback}', flush=True)
+            return
+        if not reply['accepted']:
+            return
+        self.gripper_initializing = True
+        self.gripper_initialization_at = time.monotonic()
+        self.gripper_ready = False
+        self.gripper_ready_samples = 0
+        self.gripper_needs_release = True
+        self.pending_gripper = None
+        self.gripper_contact = False
+        self.last_gripper_poll = float('-inf')
+        print(f'{self.config.name}: 已接受操作者的EG2初始化张开请求；等待有效反馈，不自动闭合。', flush=True)
 
     def runtime_parameters(self):
         return {'backend': 'real', 'robot_config': self.config.__dict__,
@@ -149,6 +212,7 @@ class Backend:
             'joint_velocity_limits_rad_s': self.velocity_limits.tolist(),
             'cartesian_velocity_limits': {'tcp_speed': self.linear_speed, 'angular_speed': self.angular_speed},
             'velocity_feedback': 'finite_difference_of_encoder_positions',
+            'gripper_startup_ready': self.gripper_ready,
             'gripper_width': {'source': 'manufacturer_nominal_stroke', 'raw_range': [0, 1000],
                 'endpoint_tolerance_raw': 5, 'stroke_m': .07, 'fingertip_calibrated': False,
                 'source_url': 'https://www.inspire-robots.com/dexterous%20hands/eg2-4c-series/'}}
@@ -161,10 +225,16 @@ class Backend:
             raise RuntimeError('Encoder finite difference requires two increasing feedback timestamps')
         dq = (state.q-previous.q)/dt
         self.previous_feedback = state
-        if now-self.last_gripper_poll >= .08:
-            self.gripper = status(self.connection.client)
-            require_ready(self.gripper)
-            self.last_gripper_poll = now
+        interval = .08 if self.gripper_ready or self.gripper_initializing else 1.
+        if now-self.last_gripper_poll >= interval:
+            was_ready = self.gripper_ready
+            self._poll_gripper(now)
+            if self.gripper_ready and not was_ready:
+                self.controller.gripper_target = self.width()
+        if (self.gripper_initializing and self.gripper_initialization_at is not None
+                and now-self.gripper_initialization_at > 5.):
+            self.gripper_initializing = False
+            print(f'{self.config.name}: 初始化后5秒未确认就绪；停止自动等待，只读复查，需操作者重新请求。', flush=True)
         self.state = replace(state, dq=dq, gripper_width=self.width(),
             mode=self.mode, gripper_mode=self.gripper_mode)
         return self.state
@@ -181,6 +251,10 @@ class Backend:
         started = time.monotonic_ns()
         if command.gripper_effort is not None:
             raise ValueError('EG2 calibrated force control is not available')
+        if command.gripper_initialize_open and (not command.hold or command.engaged):
+            raise ValueError('Gripper initialization requires an explicit arm hold')
+        initialize = command.gripper_initialize_open and not self.gripper_initialize_requested
+        self.gripper_initialize_requested = command.gripper_initialize_open
         # ARX Disabled means Home and FreeDrive means damping. Neither is an
         # implicit RealMan action: both become a measured hold here.
         holding = command.hold or command.reset_reference or command.mode != Mode.COMMAND_FOLLOWING
@@ -188,6 +262,11 @@ class Backend:
         effective = replace(command, mode=Mode.COMMAND_FOLLOWING,
             gripper_mode=Mode.COMMAND_FOLLOWING, hold=holding, reset_reference=holding,
             gripper_target=command.gripper_target if self.gripper_mode == Mode.COMMAND_FOLLOWING else None)
+        if not self.gripper_ready or command.gripper_initialize_open:
+            effective = replace(effective, gripper_target=None)
+        elif (self.gripper_needs_release and command.hold
+              and command.gripper_target == state.gripper_width):
+            effective = replace(effective, gripper_target=None)
         if not holding and command.joint_target is not None:
             requested = vector(command.joint_target, 6)
             if np.any(requested < self.kinematics.lower) or np.any(requested > self.kinematics.upper):
@@ -243,13 +322,20 @@ class Backend:
                 self.connection.client.send({'command': 'movej_canfd', 'joint': wire, 'follow': False})
                 self.connection.last_command = time.monotonic()
                 self.connection.last_joint_target = np.rad2deg(q)
-        self._gripper_target(effective.gripper_target, now)
+        if initialize:
+            if (self.stopped or (cancel_requested and cancel_requested()) or
+                    (self.cancel_requested and self.cancel_requested())):
+                raise InterruptedError('RealMan stopped before gripper initialization')
+            self._initialize_gripper(command)
+        else:
+            self._gripper_target(effective.gripper_target, now)
         self._telemetry = {'sent_q': q.tolist(), 'sent_dq': self.controller.dq_target.tolist(),
             'applied_kp': [0.]*6, 'applied_kd': [0.]*6, 'user_feedforward_torque': [0.]*6,
-            'gripper_target': self.controller.gripper_target,
+            'gripper_target': self.controller.gripper_target if self.gripper_ready and not self.gripper_needs_release else None,
             'gripper_applied_kp': 0., 'gripper_applied_kd': 0.,
             'command_started_ns': started, 'command_submitted_ns': time.monotonic_ns(),
-            'feedback_velocity_source': 'encoder_finite_difference', 'gripper_raw': dict(self.gripper)}
+            'feedback_velocity_source': 'encoder_finite_difference', 'gripper_raw': dict(self.gripper),
+            'gripper_ready': self.gripper_ready, 'gripper_needs_release': self.gripper_needs_release}
 
     def _tcp_speed_bound(self, q, previous, *, planned):
         origin = self.kinematics.fk(previous)
@@ -266,6 +352,12 @@ class Backend:
         raise CandidateRejected('TCP speed bound could not resolve joint step')
 
     def _gripper_target(self, width, now):
+        if not self.gripper_ready:
+            return
+        if self.gripper_needs_release:
+            if width is None:
+                self.gripper_needs_release = False
+            return  # Never replay a target that was held across an outage.
         if width is None:
             return
         if not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width:

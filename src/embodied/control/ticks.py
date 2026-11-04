@@ -131,7 +131,7 @@ class TickPublisher:
             self._copy_joint(packet, 'q', state.q)
             self._copy_joint(packet, 'dq', state.dq)
             packet.pose[:] = state.pose
-            packet.gripper_width = state.gripper_width
+            packet.gripper_width = state.gripper_width if state.gripper_width is not None else float('nan')
             packet.mode, packet.gripper_mode = _mode(state.mode), _mode(state.gripper_mode or state.mode)
             packet.command_mode = _mode(command.mode)
             packet.command_gripper_mode = _mode(command.gripper_mode or command.mode)
@@ -157,7 +157,7 @@ class TickPublisher:
                                          ("kp", "applied_kp"), ("kd", "applied_kd"),
                                          ("feedforward", "user_feedforward_torque")):
                     self._copy_joint(packet, destination, info[key])
-                packet.gripper_target = info["gripper_target"]
+                packet.gripper_target = info["gripper_target"] if info["gripper_target"] is not None else float('nan')
                 packet.gripper_kp, packet.gripper_kd = info["gripper_applied_kp"], info["gripper_applied_kd"]
                 packet.command_started_ns = info["command_started_ns"]
                 packet.command_submitted_ns = info["command_submitted_ns"]
@@ -215,6 +215,8 @@ def to_dict(packet):
         return [float(x) if math.isfinite(x) else None for x in value]
     def joints(value):
         return array(value[:packet.joint_count])
+    def scalar(value):
+        return value if math.isfinite(value) else None
     result = {"type": "tick", "version": VERSION, "runtime_id": packet.runtime_id.decode(),
               "sequence": packet.sequence, "producer_dropped": packet.dropped,
               "joint_count": packet.joint_count,
@@ -228,7 +230,7 @@ def to_dict(packet):
               "owner_epoch": packet.owner_epoch, "operation_id": packet.operation_id.decode() or None}
     if packet.flags & FEEDBACK:
         result["feedback"] = {"q": joints(packet.q), "dq": joints(packet.dq), "pose": array(packet.pose),
-                              "gripper_width": packet.gripper_width,
+                              "gripper_width": scalar(packet.gripper_width),
                               "mode": packet.mode, "gripper_mode": packet.gripper_mode}
         result["target"] = {"pose": array(packet.pose_target) if packet.flags & POSE_TARGET else None,
                             "joint_goal": joints(packet.joint_goal) if packet.flags & IK_GOAL else None,
@@ -239,7 +241,7 @@ def to_dict(packet):
     if packet.flags & COMMAND:
         result["command"] = {"q": joints(packet.sent_q), "dq": joints(packet.sent_dq),
                              "kp": joints(packet.kp), "kd": joints(packet.kd),
-                             "feedforward": joints(packet.feedforward), "gripper_width": packet.gripper_target,
+                             "feedforward": joints(packet.feedforward), "gripper_width": scalar(packet.gripper_target),
                              "gripper_kp": packet.gripper_kp, "gripper_kd": packet.gripper_kd,
                              "mode": packet.command_mode, "gripper_mode": packet.command_gripper_mode,
                              "submitted": True}

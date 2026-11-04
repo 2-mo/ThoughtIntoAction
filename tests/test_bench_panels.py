@@ -25,6 +25,21 @@ class BenchPanelTests(unittest.TestCase):
         self.snapshot_patch.start()
         self.addCleanup(self.snapshot_patch.stop)
 
+    def test_pair_reports_gripper_feedback_and_mode_separately(self):
+        pair = {'runs': {'left': '/unused/left', 'right': '/unused/right'}}
+        status = {'owner': {'source': 'quest'}, 'ingresses': {'native': {'ready': True}}}
+        with patch('embodied.applications.workstation.pair_state.active_pair', return_value=pair), \
+             patch('embodied.contracts.runtime.control.ControlClient') as client:
+            for ready, mode, text, level in ((False, 'command-following', '宽度未知', 'waiting'),
+                    (True, 'disabled', '控制待启用', 'waiting'),
+                    (True, 'free-drive', '当前保持', 'waiting'),
+                    (True, 'command-following', '反馈就绪', 'ready')):
+                client.return_value.status.return_value = dict(status, gripper_ready=ready, gripper_mode=mode)
+                rows = dict(panels.vr_control_rows(None)[0])
+                for side in ('左手柄夹爪', '右手柄夹爪'):
+                    self.assertIn(text, str(rows[side]))
+                    self.assertEqual(rows[side].level, level)
+
     def test_transport_timeout_and_close_cancel_the_private_process_group(self):
         # These disposable Python children model a stalled CLI and its ADB child.
         # They never call adb, open devices, or touch a running workbench.

@@ -1,5 +1,6 @@
 """Fake-controller checks; no robot, Quest SDK or live service is opened."""
 from types import SimpleNamespace
+from contextlib import closing
 import json
 from pathlib import Path
 import tempfile
@@ -177,9 +178,75 @@ class HardwareTests(unittest.TestCase):
 
     def test_partial_initialization_closes_connection(self):
         c = Connection(self.vendor)
-        c.client.gripper['error'] = 1
-        with self.assertRaises(RuntimeError): Backend(self.config, connection=c, vendor=self.vendor)
+        del c.client.gripper['actpos']
+        with self.assertRaisesRegex(ValueError, 'Incomplete'): Backend(self.config, connection=c, vendor=self.vendor)
         self.assertTrue(c.closed)
+
+    def offline(self):
+        self.connection.client.gripper = dict.fromkeys(self.connection.client.gripper, 0)
+        self.backend.last_gripper_poll = float('-inf')
+        return self.backend.read_state(time.monotonic())
+
+    def test_startup_offline_keeps_six_axis_arm_available_without_auto_open(self):
+        c = Connection(self.vendor)
+        c.client.gripper = dict.fromkeys(c.client.gripper, 0)
+        with closing(Backend(self.config, connection=c, vendor=self.vendor)) as b:
+            self.assertIsNone(b.state.gripper_width)
+            self.assertEqual(c.client.sent, [])
+            b.step(ControlCommand(Mode.COMMAND_FOLLOWING, joint_target=np.full(6, .01),
+                gripper_target=0.), time.monotonic())
+            self.assertEqual(len(c.client.sent), 1)
+            self.assertEqual(len(c.client.sent[0]['joint']), 6)
+            self.assertIsNone(b.telemetry()['gripper_target'])
+
+    def test_loss_and_readonly_recovery_drop_old_target_until_release(self):
+        self.backend._gripper_target(0., time.monotonic())
+        self.assertIsNotNone(self.backend.pending_gripper)
+        self.offline()
+        self.assertIsNone(self.backend.pending_gripper)
+        self.step(joint_target=np.full(6, .01), gripper_target=0.)
+        before = len(self.connection.client.sent)
+        self.connection.client.gripper.update(enable=1, status=1, mode=1, actpos=500)
+        for i in range(2):
+            self.backend.last_gripper_poll = float('-inf')
+            state = self.backend.read_state(time.monotonic())
+            self.assertEqual(state.gripper_width is not None, i == 1)
+        self.backend._gripper_target(0., time.monotonic())
+        self.assertEqual(len(self.connection.client.sent), before)
+        self.backend._gripper_target(None, time.monotonic())
+        self.backend._gripper_target(0., time.monotonic())
+        self.assertEqual(self.connection.client.sent[-1]['position'], 400)
+
+    def test_initialization_requires_explicit_idle_request_and_sends_only_once(self):
+        self.offline()
+        for fields in ({'hold': False}, {'hold': True, 'engaged': True}):
+            with self.assertRaisesRegex(ValueError, 'explicit arm hold'):
+                self.step(gripper_initialize_open=True, **fields)
+        self.assertEqual(self.connection.client.sent, [])
+        self.step(hold=True, gripper_initialize_open=True)
+        self.step(hold=True, gripper_initialize_open=True)
+        self.assertEqual(self.connection.client.sent, [dict(command='set_gripper_release', speed=500, block=False)])
+        self.assertIsNone(self.backend.width())
+        self.connection.client.gripper.update(enable=1, status=1, mode=1, actpos=1000)
+        for _ in range(2):
+            self.backend.last_gripper_poll = float('-inf')
+            self.step(hold=True, gripper_initialize_open=True)
+        self.assertTrue(self.backend.gripper_ready)
+        self.assertEqual(len(self.connection.client.sent), 1)
+
+    def test_nonzero_gripper_fault_is_isolated_but_not_cleared_or_initialized(self):
+        self.connection.client.gripper['error'] = 1
+        self.backend.last_gripper_poll = float('-inf')
+        self.step(hold=True, gripper_initialize_open=True)
+        self.assertEqual(self.connection.client.sent, [])
+        self.assertIsNone(self.backend.state.gripper_width)
+        self.step(joint_target=np.full(6, .01))
+        self.assertTrue(self.motions())
+
+    def test_transport_failure_is_not_masked_as_offline(self):
+        self.backend.last_gripper_poll = float('-inf')
+        with patch.object(self.connection.client, 'query', side_effect=TimeoutError('no reply')):
+            with self.assertRaises(TimeoutError): self.backend.read_state(time.monotonic())
 
     def test_common_worker_records_standard_feedback_and_stops_without_damping(self):
         from embodied.control import worker
@@ -187,6 +254,7 @@ class HardwareTests(unittest.TestCase):
         config = PROJECT_ROOT/'configs/robots/realman/left.json'
         connection = Connection(self.vendor)
         clock = SimpleNamespace(wait=lambda: (_ for _ in ()).throw(InterruptedError('test-finished')))
+        connection.client.gripper = dict.fromkeys(connection.client.gripper, 0)
         with tempfile.TemporaryDirectory() as folder, \
                 patch('embodied.devices.robots.realman.hardware.Connection', return_value=connection), \
                 patch('embodied.devices.robots.realman.hardware.OfflineModel', return_value=self.vendor), \
@@ -198,6 +266,7 @@ class HardwareTests(unittest.TestCase):
             self.assertFalse(report['damping_requested'])
             self.assertTrue(report['tuning_recording']['complete'])
             self.assertEqual(report['tick_telemetry']['dropped'], 0)
+            self.assertIsNone(report['gripper_min_m'])
         self.assertTrue(connection.closed)
         self.assertEqual(connection.client.sent, [])
 

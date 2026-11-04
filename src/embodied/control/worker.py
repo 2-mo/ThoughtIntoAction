@@ -20,7 +20,8 @@ def check_feedback(state, now):
         raise RuntimeError(state.fault)
     if not np.isfinite(state.received_at) or not 0 <= now - state.received_at < .1:
         raise RuntimeError("Robot feedback exceeded 100 ms or has an invalid timestamp")
-    if not all(np.isfinite(value).all() for value in (state.q, state.dq, state.pose, state.gripper_width)):
+    if (not all(np.isfinite(value).all() for value in (state.q, state.dq, state.pose))
+            or state.gripper_width is not None and not np.isfinite(state.gripper_width)):
         raise RuntimeError("Robot feedback contains non-finite values")
 
 
@@ -192,7 +193,9 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
             pose_commands += int(command.pose_target is not None)
             grip_commands += int(command.gripper_target is not None)
             step_and_record(state, command, tick, 'control')
-            width_min, width_max = min(width_min, state.gripper_width), max(width_max, state.gripper_width)
+            if state.gripper_width is not None:
+                width_min = state.gripper_width if width_min is None else min(width_min, state.gripper_width)
+                width_max = state.gripper_width if width_max is None else max(width_max, state.gripper_width)
             max_motion = max(max_motion, float(np.linalg.norm(state.pose[:3] - initial.pose[:3])))
             max_joint_delta = max(max_joint_delta, float(np.max(np.abs(state.q - prior_q))))
             prior_q = state.q.copy()

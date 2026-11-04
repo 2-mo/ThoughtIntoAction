@@ -85,7 +85,8 @@ class RobotBridge:
         send(self._publishers["pose"], Pose7.from_values(timestamp, list(state.pose)))
         send(self._publishers["q"], JointVector15.from_values(timestamp, list(state.q)))
         send(self._publishers["dq"], JointVector15.from_values(timestamp, list(state.dq)))
-        send(self._publishers["width"], ParallelVector2.from_values(timestamp, [state.gripper_width]))
+        if state.gripper_width is not None:
+            send(self._publishers["width"], ParallelVector2.from_values(timestamp, [state.gripper_width]))
 
     def close(self) -> None:
         self._subscribers.clear()

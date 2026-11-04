@@ -308,6 +308,8 @@ class CommandEngine:
             return {'operation_id': key, 'status': 'running'}
         if action == 'execute':
             plan = request['_plan']  # Added by the bounded gateway, never trusted from a client.
+            if plan['gripper_width'] is not None and state.gripper_width is None:
+                raise ValueError('Gripper feedback unavailable; preview an arm-only move again')
             expected_epoch = plan['epoch'] if plan['owner_present'] else plan['epoch'] + 1
             if expected_epoch != self.epoch or plan['model_id'] != self.model_id or now > plan['expires']:
                 raise ValueError('Preview expired or its owner/model changed')
@@ -351,6 +353,8 @@ class CommandEngine:
             self.gripper_hold_effort = None
             # Optional gripper_width keeps the gripper position-controlled while the arm is free (teaching).
             width = request.get('gripper_width')
+            if width is not None and state.gripper_width is None:
+                raise ValueError('Gripper feedback unavailable')
             if width is not None and (isinstance(width, bool) or not isinstance(width, (int, float))
                                       or not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width):
                 raise ValueError('Invalid gripper width in metres')
@@ -374,7 +378,11 @@ class CommandEngine:
                 if np.linalg.norm(pose[:3] - state.pose[:3]) > .15:
                     raise ValueError('Cartesian stream target exceeds 0.15 m lead; use a previewed move')
             width = request.get('gripper_width', state.gripper_width)
-            if not isinstance(width, (int, float)) or not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width:
+            if state.gripper_width is None and (action == 'gripper' or width is not None):
+                raise ValueError('Gripper feedback unavailable')
+            if (width is None and action == 'gripper' or width is not None and
+                    (not isinstance(width, (int, float)) or not np.isfinite(width)
+                     or not 0 <= width <= self.config.gripper_max_width)):
                 raise ValueError('Invalid gripper width in metres')
             self.command = ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=pose,
                 joint_target=q, gripper_target=width, hold=action == 'gripper',
@@ -491,7 +499,9 @@ class CommandEngine:
                 'last_revocation': self.last_revocation,
                 'lease_remaining_s': max(0, self.expires-now) if self.owner else 0., 'stopped': self.stopped, 'phase': self.phase,
                 'q': state.q.tolist(), 'dq': state.dq.tolist(), 'pose': state.pose.tolist(),
+                'mode': state.mode.value, 'gripper_mode': (state.gripper_mode or state.mode).value,
                 'gripper_width': state.gripper_width, 'gripper_velocity': state.gripper_velocity,
+                'gripper_ready': state.gripper_width is not None,
                 'gripper_effort': state.gripper_effort, 'gripper_contact': state.gripper_contact,
                 'feedback_monotonic_ns': int(state.received_at * 1e9),
                 'operations': [{k: v for k, v in op.items() if k != 'plan'} for op in self.operations.values()]}
@@ -627,8 +637,11 @@ class MotionPlanner:
                 or np.max(np.abs(acceleration)) > acceleration_limit * 1.01
                 or np.max(np.abs(jerk)) > jerk_limit * 1.01):
             raise ValueError('Planned path exceeds sampled derivative bounds')
-        width = float(request.get('gripper_width', snapshot['gripper_width']))
-        if not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width:
+        width = request.get('gripper_width', snapshot['gripper_width'])
+        if width is not None and snapshot['gripper_width'] is None:
+            raise ValueError('Gripper feedback unavailable')
+        if width is not None and (not isinstance(width, (int, float)) or not np.isfinite(width)
+                or not 0 <= width <= self.config.gripper_max_width):
             raise ValueError('Invalid gripper width')
         self.workspace.check_path(self.model.fk, qs)
         peaks = [float(np.max(np.abs(values))) for values in (velocity, acceleration, jerk)]

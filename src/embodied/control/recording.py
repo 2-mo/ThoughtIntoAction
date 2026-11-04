@@ -184,6 +184,7 @@ def tuning_row(sequence, tick, phase, state, command, backend, step_completed, e
         'command_hold': command.hold if command else None,
         'command_engaged': command.engaged if command else None,
         'command_reason': command.reason if command else None,
+        'command_gripper_initialize_open': command.gripper_initialize_open if command else None,
         'joint_goal': getattr(control, '_joint_goal', None), 'controller_mode': control.mode,
         'controller_gripper_mode': control.gripper_mode,
         'ik_converged': getattr(control, 'ik_converged', None), 'ik_residual': getattr(control, 'ik_residual', None),
