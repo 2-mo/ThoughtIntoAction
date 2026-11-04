@@ -116,9 +116,15 @@ class Backend:
             if command.joint_velocity_target is not None:
                 dq = vector(command.joint_velocity_target, 6, 'target velocity')
         elif command.pose_target is not None:
-            target, ok, _ = self.kinematics.solve_ik(command.pose_target, self.data.qpos[:6])
+            target, ok, residual = self.kinematics.solve_ik(command.pose_target, self.data.qpos[:6])
             if not ok:
-                raise ValueError('RM65 target is unreachable')
+                # A streamed Quest target may leave the reachable workspace.
+                # Keep the last submitted joint reference, as the existing
+                # teleop backend does for rejected IK, and allow the next frame.
+                target = previous
+                if now - getattr(self, '_last_ik_warning_at', float('-inf')) >= 1.:
+                    print(f'RM65 仿真目标逆解未收敛（残差 {residual:.6f}）；保持上一关节目标。', flush=True)
+                    self._last_ik_warning_at = now
         if np.any(target < self.kinematics.lower) or np.any(target > self.kinematics.upper):
             raise ValueError('Joint target exceeds model limits')
         if np.any(np.abs(dq) > np.asarray(self.config.joint_velocity_max) * 1.000001):

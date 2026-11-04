@@ -115,12 +115,9 @@ def run(directory):
     terminal = False
     input_observer = None
     input_error = None
+    input_initialized = False
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
-        try:
-            input_observer = open_input_observer(identity, json.loads((directory/'parameters.json').read_text()))
-        except Exception as exc:
-            input_error = f'手柄监看未就绪：{exc}'
         # Directory fd avoids AF_UNIX's 108-byte absolute-path limit after relocation.
         descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
         try:
@@ -137,6 +134,16 @@ def run(directory):
                 packet = subscriber.receive()
                 if packet is None:
                     break
+                if not input_initialized:
+                    # The observer starts before the backend. Its first tick
+                    # proves parameters.json has been written by that backend.
+                    input_initialized = True
+                    if identity.get('native'):
+                        try:
+                            input_observer = open_input_observer(identity,
+                                json.loads((directory/'parameters.json').read_text()))
+                        except Exception as exc:
+                            input_error = f'手柄监看未就绪：{exc}'
                 if last_sequence is not None and packet.sequence != last_sequence + 1:
                     gaps += 1
                 last_sequence = packet.sequence

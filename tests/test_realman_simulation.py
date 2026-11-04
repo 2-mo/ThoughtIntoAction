@@ -88,6 +88,23 @@ class SimulationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'position only'):
             self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, gripper_effort=1), 0)
 
+    def test_unreachable_stream_target_holds_and_later_valid_target_recovers(self):
+        state = self.backend.read_state(0.)
+        previous = self.backend.target.copy()
+        unreachable = state.pose.copy()
+        unreachable[0] = 10.
+        self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=unreachable,
+                                         gripper_target=.02), 0.)
+        np.testing.assert_array_equal(self.backend.telemetry()['sent_q'], previous)
+        self.assertLess(self.backend.telemetry()['gripper_target'], .04)
+        self.assertFalse(self.backend.closed)
+        goal = previous.copy()
+        goal[0] += .02
+        reachable = self.backend.kinematics.fk(goal)
+        for i in range(30):
+            self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=reachable), .01*(i+1))
+        self.assertGreater(self.backend.read_state(.3).q[0], previous[0]+.005)
+
 
 if __name__ == '__main__':
     unittest.main()

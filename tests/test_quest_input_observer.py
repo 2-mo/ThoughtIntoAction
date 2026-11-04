@@ -1,6 +1,9 @@
 """Read-only native hand display; no SDK, robot or control publication."""
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
 from embodied.control.observer import open_input_observer
@@ -8,6 +11,28 @@ from embodied.devices.inputs.quest.workbench import InputObserver
 
 
 class InputObserverTests(unittest.TestCase):
+    def test_observer_waits_for_first_backend_tick_before_loading_input_parameters(self):
+        from embodied.control import observer
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder)
+            (directory/'runtime.json').write_text(json.dumps({'runtime_id': 'robot-test',
+                'input': 'idle', 'native': {'device': 'quest.shared'}}))
+            parameters = {'effective_input_config': {'input_prefix': 'robot-pair-test'}}
+            def first_tick():
+                (directory/'parameters.json').write_text(json.dumps(parameters))
+                return SimpleNamespace(sequence=1)
+            hands = Mock()
+            hands.snapshot.return_value = {'hands': {'left': None, 'right': None}}
+            with patch.object(observer, 'TickSubscriber') as subscriber, \
+                 patch.object(observer, 'open_input_observer', return_value=hands) as open_input, \
+                 patch.object(observer.signal, 'signal'), \
+                 patch.object(observer, 'to_dict', return_value={'source': 'idle', 'terminal': True}):
+                subscriber.return_value.receive.side_effect = first_tick
+                observer.run(directory)
+                self.assertEqual(open_input.call_args.args[1], parameters)
+                hands.snapshot.assert_called_once()
+                hands.close.assert_called_once()
+
     def test_snapshot_keeps_per_hand_freshness_and_does_not_renew_old_frames(self):
         from embodied.devices.inputs.quest import workbench
         observer = InputObserver.__new__(InputObserver)
