@@ -63,16 +63,17 @@ def test_pair_sim_uses_standard_realman_profiles(tmp_path):
         assert config['source_options']['ingress'] == 'native'
 
 
-def test_real_pair_keeps_existing_input_basis(tmp_path):
+def test_real_pair_uses_same_input_basis_as_simulation(tmp_path):
     from embodied.devices.inputs.quest.shared import tomllib
     _, xr_config, _ = prepare(tmp_path, backend='real')
     xr = tomllib.loads(xr_config.read_text())
-    assert xr['xr_basis'] == [0., 0., -1., -1., 0., 0., 0., 1., 0.]
+    assert xr['xr_basis'] == [0., 0., 1., 1., 0., 0., 0., 1., 0.]
 
 
-def test_single_quest_sim_uses_same_basis_as_pair(tmp_path):
+@pytest.mark.parametrize('name', ['sim-quest', 'real-quest'])
+def test_single_quest_uses_same_basis_as_pair(tmp_path, name):
     from embodied.devices.inputs.quest.shared import tomllib
-    deployment, _ = profile('sim-quest')
+    deployment, _ = profile(name)
     settings = load_settings(deployment['config'], deployment['vr_config'])
     paths = Routing.configure(tmp_path, 'robot-test', settings)
     assert tomllib.loads(paths['xrobot'].read_text())['xr_basis'] == [0., 0., 1., 1., 0., 0., 0., 1., 0.]
