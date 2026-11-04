@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from pathlib import Path
 import tempfile
 import unittest
+import numpy as np
 from unittest.mock import patch
 
 from embodied.contracts.control import ControlCommand, Mode
@@ -51,8 +52,9 @@ class SharedQuestTests(unittest.TestCase):
         self.ingress.samples = {'input': sample}
         self.ingress.gripper_released = self.ingress.gripper_armed = False
         self.ingress.gripper_epoch = None
-        self.ingress.initialize_released = self.ingress.initialize_sent = False
-        self.ingress.initialize_since = None
+        self.ingress.home_q = np.array([0., 0., np.pi/2, 0., np.pi/2, 0.])
+        self.ingress.home_released = self.ingress.returning_home = self.ingress.home_blocked = False
+        self.ingress.home_since = None
         self.state = SimpleNamespace(gripper_width=.07)
         self.native = Candidate(1, ControlCommand(Mode.COMMAND_FOLLOWING,
             gripper_target=.01, pose_target=[0., 0., 0., 0., 0., 0., 1.], engaged=True), 100., 1)
@@ -79,40 +81,85 @@ class SharedQuestTests(unittest.TestCase):
         self.assertEqual(self.poll(7.).gripper_target, .01)
         self.assertIsNone(self.poll(8., epoch=2).gripper_target)
 
-    def test_initialize_requires_neutral_then_one_second_secondary_only(self):
+    def start_home(self):
+        self.poll(1.)
         self.input.buttons_bitset = 8
-        self.assertFalse(self.poll(1.).gripper_initialize_open)
-        self.assertFalse(self.poll(3.).gripper_initialize_open)
-        self.input.buttons_bitset = 0
-        self.poll(4.)
-        self.input.buttons_bitset = 8
-        self.assertFalse(self.poll(5.).gripper_initialize_open)
-        command = self.poll(6.01)
-        self.assertTrue(command.gripper_initialize_open)
-        self.assertTrue(command.hold and command.reset_reference)
-        self.assertFalse(command.engaged)
-        self.assertIsNone(command.pose_target)
-        self.assertIsNone(command.gripper_target)
-        self.assertFalse(self.poll(7.).gripper_initialize_open)
+        self.assertIsNone(self.poll(2.).joint_target)
+        self.assertIsNone(self.poll(2.99).joint_target)
+        return self.poll(3.01)
 
-    def test_initialize_does_not_fire_with_grip_trigger_primary_or_stale_input(self):
+    def test_home_requires_neutral_then_one_second_and_stops_on_release(self):
+        self.input.buttons_bitset = 8
+        self.assertIsNone(self.poll(.1).joint_target)
+        self.assertIsNone(self.poll(.9).joint_target)
+        self.input.buttons_bitset = 0
+        command = self.start_home()
+        np.testing.assert_allclose(command.joint_target, [0, 0, np.pi/2, 0, np.pi/2, 0])
+        self.assertTrue(command.reset_reference)
+        command = self.poll(3.02)
+        self.assertFalse(command.hold or command.reset_reference or command.gripper_initialize_open)
+        self.assertIsNone(command.gripper_target)
+        self.assertIsNone(command.pose_target)
+        np.testing.assert_array_equal(command.joint_target, self.ingress.home_q)
+        self.input.buttons_bitset = 0
+        command = self.poll(3.03)
+        self.assertTrue(command.hold and command.reset_reference)
+        self.assertIsNone(command.joint_target)
+        self.assertFalse(self.ingress.status['returning_home'])
+
+    def test_home_cancels_on_conflict_and_requires_all_controls_released(self):
         for field, value in [('grip', 1.), ('trigger', 1.), ('buttons_bitset', 12)]:
             with self.subTest(field=field):
-                self.input.grip = self.input.trigger = 0.
-                self.input.buttons_bitset = 0
-                self.poll(1.)
-                self.input.buttons_bitset = 8
+                self.setUp()
+                self.start_home()
                 setattr(self.input, field, value)
-                self.poll(2.)
-                self.assertFalse(self.poll(4.).gripper_initialize_open)
-        self.input.grip = self.input.trigger = 0.
-        self.input.buttons_bitset = 0
-        self.poll(5.)
-        self.input.buttons_bitset = 8
-        self.poll(6.)
-        self.assertFalse(self.poll(7.1, selected=False).gripper_initialize_open)
-        self.ingress.samples['input'].expires_at = 0.
-        self.assertFalse(self.poll(8.).gripper_initialize_open)
+                command = self.poll(3.02)
+                self.assertTrue(command.hold and command.reset_reference)
+                self.assertIsNone(command.joint_target)
+                self.input.grip = self.input.trigger = 0.
+                self.input.buttons_bitset = 8
+                self.assertIsNone(self.poll(5.).joint_target)
+                self.assertTrue(self.poll(5.).hold)
+                self.input.buttons_bitset = 0
+                self.poll(6.)
+                self.input.buttons_bitset = 8
+                self.poll(7.)
+                self.assertIsNotNone(self.poll(8.01).joint_target)
+
+    def test_home_cancels_on_tracking_or_authority_loss_without_resuming(self):
+        for kwargs in ({'selected': False}, {'epoch': 2}, {'stale': True}):
+            with self.subTest(condition=kwargs):
+                self.setUp()
+                self.start_home()
+                if kwargs.get('stale'):
+                    self.ingress.samples['input'].expires_at = 0.
+                command = self.poll(3.02, **kwargs)
+                self.assertTrue(command.hold and command.reset_reference)
+                self.assertIsNone(command.joint_target)
+                self.ingress.samples['input'].expires_at = 100.
+                self.assertIsNone(self.poll(5., epoch=kwargs.get('epoch', 1)).joint_target)
+
+    def test_home_reaches_configured_joints_in_simulation_without_opening_gripper(self):
+        from embodied.control.settings import load_settings
+        from embodied.devices.robots.realman.simulation import Backend
+        config = load_settings('configs/robots/realman/sim.json').robot
+        backend = Backend(config)
+        self.addCleanup(backend.close)
+        import mujoco
+        start = np.asarray(config.park_q) + [.2, -.15, .1, -.15, .15, -.2]
+        backend.data.qpos[:6] = start
+        backend.data.qpos[6:] = .01
+        backend.target = start.copy()
+        backend.width_target = .02
+        mujoco.mj_forward(backend.model, backend.data)
+        self.start_home()
+        for i in range(250):
+            now = 3.02 + i*.01
+            self.state = backend.read_state(now)
+            backend.step(self.poll(now), now)
+        np.testing.assert_allclose(backend.read_state(6.).q, config.park_q, atol=.001)
+        self.assertAlmostEqual(backend.read_state(6.).gripper_width, .02, places=4)
+        self.assertFalse(self.poll(6.).gripper_initialize_open)
 
 
 if __name__ == '__main__': unittest.main()

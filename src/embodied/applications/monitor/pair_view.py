@@ -104,8 +104,8 @@ class PairView:
             runtime_runs=self.identity['runs'], monitor_message=self.error or '双臂统一内核只读反馈；底座为示意布局',
             input_error='手柄状态请查看Quest面板；不由姿态反馈推断控制权', input=None,
             button_layout={
-                'left': {'stick': 'L3', 'holds': [], 'keys': {'X': '跟随 / 保持', 'Y': '长按初始化张开'}},
-                'right': {'stick': 'R3', 'holds': [], 'keys': {'A': '跟随 / 保持', 'B': '长按初始化张开'}}},
+                'left': {'stick': 'L3', 'holds': [], 'keys': {'X': '跟随 / 保持', 'Y': '按住1秒回初始位，松开停止'}},
+                'right': {'stick': 'R3', 'holds': [], 'keys': {'A': '跟随 / 保持', 'B': '按住1秒回初始位，松开停止'}}},
             collection={'state': '按侧采集', 'task': 'collect run --run <left/right RUN> --task <任务>', 'control_enabled': False},
             collection_hint='两侧分别使用现有采集/策略接口；尚无同步双臂策略协议。')
         hands, stamps, device_stamps = {}, [], []

@@ -1,6 +1,7 @@
 """Reuse native Quest routing with a single input owner and per-arm namespaces."""
 from dataclasses import replace
 import time
+import numpy as np
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -67,53 +68,59 @@ class Ingress(NativeIngress):
             f'{vr.input_prefix or prefix}/xr/{vr.controller}_controller/states/input', XrControllerInput))
         self.gripper_released = self.gripper_armed = False
         self.gripper_epoch = None
-        self.initialize_released = False
-        self.initialize_since = None
-        self.initialize_sent = False
+        self.home_q = np.asarray(settings.robot.park_q, dtype=float)
+        self.home_released = self.returning_home = self.home_blocked = False
+        self.home_since = None
 
     def poll(self, state, now, epoch, selected):
         candidate = super().poll(state, now, epoch, selected)
         now = time.monotonic()
         sample = self.samples['input']
         valid = selected and self.status['ready'] and sample.fresh(now) and not candidate.fault
+        was_returning = self.returning_home
         if epoch != self.gripper_epoch or not valid:
             self.gripper_epoch = epoch
             self.gripper_released = self.gripper_armed = False
-            self.initialize_released = self.initialize_sent = False
-            self.initialize_since = None
+            self.home_released = self.returning_home = self.home_blocked = False
+            self.home_since = None
         command = candidate.command
-        initialize = False
+        home = secondary = False
         if valid:
             inp = sample.sample
             neutral = inp.trigger < .2 and inp.grip < .2 and not (inp.buttons_bitset & 12)
             if neutral:
-                self.initialize_released = True
+                self.home_released = True
+                self.home_blocked = False
             secondary = bool(inp.buttons_bitset & 8)
-            if not secondary:
-                self.initialize_since = None
-                self.initialize_sent = False
-            elif (self.initialize_released and not self.initialize_sent and
-                  not (inp.buttons_bitset & 4) and inp.trigger < .2 and inp.grip < .2):
-                if self.initialize_since is None:
-                    self.initialize_since = now
-                if now-self.initialize_since >= 1.:
-                    initialize = True
-                    self.initialize_sent = True
-                    self.initialize_released = False
+            if (secondary and self.home_released and not self.home_blocked and
+                    not (inp.buttons_bitset & 4) and inp.trigger < .2 and inp.grip < .2):
+                if self.home_since is None:
+                    self.home_since = now
+                home = now-self.home_since >= 1.
             else:
-                self.initialize_since = None
-            if state.gripper_width is None or initialize:
+                if self.home_since is not None and not neutral:
+                    self.home_released = False
+                    self.home_blocked = True
+                self.home_since = None
+            if state.gripper_width is None or secondary or self.home_blocked or was_returning:
                 self.gripper_released = self.gripper_armed = False
-            elif inp.trigger < .2 and not secondary:
+            elif inp.trigger < .2:
                 self.gripper_released = True
-            elif self.gripper_released and inp.trigger > .2 and not secondary:
+            elif self.gripper_released and inp.trigger > .2:
                 self.gripper_armed = True
         if not valid or not self.gripper_armed:
             command = replace(command, gripper_target=None)
-        if initialize:
-            command = replace(command, mode=Mode.COMMAND_FOLLOWING, hold=True, reset_reference=True,
-                pose_target=None, joint_target=None, engaged=False, gripper_target=None,
-                gripper_initialize_open=True)
+        overriding = secondary or was_returning or self.home_blocked
+        if overriding:
+            # Use the existing bounded joint stream, not Disabled (ARX Home)
+            # or a scene reset. B/Y must stay held; release/conflict stops Home.
+            command = replace(command, mode=Mode.COMMAND_FOLLOWING, hold=not home,
+                reset_reference=was_returning != home, pose_target=None,
+                joint_target=self.home_q.copy() if home else None,
+                joint_velocity_target=None, joint_acceleration_target=None, planned=False,
+                engaged=False, gripper_target=None, gripper_initialize_open=False)
+        self.returning_home = home
         self.status.update(gripper_ready=state.gripper_width is not None,
-            gripper_armed=self.gripper_armed, gripper_initialize_open=initialize)
-        return replace(candidate, command=command)
+            gripper_armed=self.gripper_armed, returning_home=home)
+        return replace(candidate, command=command,
+                       phase='home' if home else 'hold' if overriding else candidate.phase)

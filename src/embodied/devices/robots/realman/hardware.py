@@ -180,7 +180,7 @@ class Backend:
         if notice != self.gripper_notice:
             print(f'{self.config.name}: EG2 {notice}; feedback={self.gripper}. '
                   + ('需松开夹爪控制，再重新操作。' if self.gripper_ready and self.gripper_needs_release else
-                     '机械臂保持可用；夹爪宽度未知。仅全零状态可松Grip/Trigger后长按左Y/右B 1秒初始化张开；非零故障需先处理。'
+                     '机械臂保持可用；夹爪宽度未知。初始化张开请使用独立维护命令；左Y/右B长按用于机械臂回位，非零故障需先处理。'
                      if not self.gripper_ready else ''), flush=True)
             self.gripper_notice = notice
 
