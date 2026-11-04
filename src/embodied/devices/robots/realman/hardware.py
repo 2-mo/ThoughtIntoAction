@@ -73,6 +73,7 @@ class Backend:
         self.previous_feedback = None
         self.last_gripper_poll = float('-inf')
         self.pending_gripper = None
+        self.gripper_stop_requested_at = None
         self.gripper_contact = False
         self.gripper_ready = False
         self.gripper_ready_samples = 0
@@ -124,7 +125,7 @@ class Backend:
         if not self.gripper_ready:
             return None
         pos = self.gripper['actpos']
-        if not -5 <= pos <= 1005:
+        if not -10 <= pos <= 1010:
             raise ValueError(f'EG2 opening outside endpoint tolerance: {pos}')
         return float(np.clip(pos, 0, 1000)/1000*self.config.gripper_max_width)
 
@@ -138,11 +139,12 @@ class Backend:
             self.gripper_ready_samples = 0
             self.gripper_needs_release = True
             self.pending_gripper = None
+            self.gripper_stop_requested_at = None
             self.gripper_contact = False
         else:
             if self.gripper['mode'] not in (1, 2, 3, 4, 5, 6):
                 raise ValueError(f'Unknown EG2 mode: {self.gripper}')
-            if not -5 <= self.gripper['actpos'] <= 1005:
+            if not -10 <= self.gripper['actpos'] <= 1010:
                 raise ValueError(f'EG2 opening outside endpoint tolerance: {self.gripper["actpos"]}')
             if startup or self.gripper_ready:
                 self.gripper_ready = True
@@ -179,6 +181,7 @@ class Backend:
         self.gripper_ready_samples = 0
         self.gripper_needs_release = True
         self.pending_gripper = None
+        self.gripper_stop_requested_at = None
         self.gripper_contact = False
         self.last_gripper_poll = float('-inf')
         print(f'{self.config.name}: 已接受操作者的EG2初始化张开请求；等待有效反馈，不自动闭合。', flush=True)
@@ -191,7 +194,7 @@ class Backend:
             'velocity_feedback': 'finite_difference_of_encoder_positions',
             'gripper_startup_ready': self.gripper_ready,
             'gripper_width': {'source': 'manufacturer_nominal_stroke', 'raw_range': [0, 1000],
-                'endpoint_tolerance_raw': 5, 'stroke_m': .07, 'fingertip_calibrated': False,
+                'endpoint_tolerance_raw': 10, 'stroke_m': .07, 'fingertip_calibrated': False,
                 'source_url': 'https://www.inspire-robots.com/dexterous%20hands/eg2-4c-series/'}}
 
     def read_state(self, now):
@@ -265,7 +268,10 @@ class Backend:
             q = self._tcp_speed_bound(q, previous, planned=command.planned)
             self.controller.q_target = q.copy()
         if holding:
+            stopping_gripper = self.connection.active and self.pending_gripper is not None
             self.connection.stop()
+            if stopping_gripper:
+                self.gripper_stop_requested_at = time.monotonic()
         else:
             if (self.stopped or (cancel_requested and cancel_requested()) or
                     (self.cancel_requested and self.cancel_requested())):
@@ -317,6 +323,15 @@ class Backend:
     def _gripper_target(self, width, now):
         if not self.gripper_ready:
             return
+        # set_arm_stop can also interrupt an EG2 segment (mode 3). Only
+        # discard its target after stop feedback; an old idle sample or a
+        # still-moving segment must not permit another queued move.
+        if (self.gripper_stop_requested_at is not None
+                and self.last_gripper_poll > self.gripper_stop_requested_at
+                and self.gripper['mode'] == 3):
+            self.pending_gripper = None
+            self.gripper_stop_requested_at = None
+            self.gripper_needs_release = True
         if self.gripper_needs_release:
             if width is None:
                 self.gripper_needs_release = False
@@ -326,11 +341,17 @@ class Backend:
         if not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width:
             raise ValueError('Invalid EG2 nominal width target')
         raw = round(width/self.config.gripper_max_width*1000)
+        position = int(np.clip(self.gripper['actpos'], 0, 1000))
         if self.gripper['mode'] not in (1, 2, 3, 4, 5, 6):
             raise RuntimeError(f'Unknown EG2 mode: {self.gripper}')
         if self.gripper['mode'] == 6:
             self.gripper_contact = True
-            self.pending_gripper = None
+            # A contact report ends a closing segment. It may still be the
+            # previous feedback after an opening ACK; do not resubmit that
+            # opening segment until its position feedback arrives.
+            if self.pending_gripper is not None and self.pending_gripper[0] < self.pending_gripper[2]:
+                self.pending_gripper = None
+                self.gripper_stop_requested_at = None
         if raw > self.gripper['actpos']+3:
             self.gripper_contact = False
         if self.gripper_contact and raw < self.gripper['actpos']:
@@ -340,15 +361,17 @@ class Backend:
                 raise RuntimeError('EG2 segment still moving after 5 s')
             return  # No queue: only the current owner target can schedule another segment.
         if self.pending_gripper is not None:
-            target, sent = self.pending_gripper
-            # Live EG2 segments settle up to four raw units from the target.
-            # Match the five-unit feedback tolerance used at the endpoints.
-            if abs(self.gripper['actpos']-target) > 5 and self.gripper['mode'] != 6:
+            target, sent, origin = self.pending_gripper
+            # Idle feedback can settle beyond the commanded position. A
+            # reached/crossed segment is complete, not a stalled actuator.
+            crossed = (target-origin) * (position-target) >= 0
+            if abs(position-target) > 5 and not crossed:
                 if now-sent > 5.:
                     raise RuntimeError('EG2 position feedback did not reach the accepted segment')
                 return
             self.pending_gripper = None
-        if abs(raw-self.gripper['actpos']) <= 5:
+            self.gripper_stop_requested_at = None
+        if abs(raw-position) <= 5:
             return
         target = int(np.clip(raw, self.gripper['actpos']-100, self.gripper['actpos']+100))
         target = max(1, min(1000, target))
@@ -356,7 +379,7 @@ class Backend:
             'position': target, 'block': False}, 'set_gripper')
         if reply.get('state') is not True:
             raise RuntimeError(f'EG2 position rejected: {reply}')
-        self.pending_gripper = target, now
+        self.pending_gripper = target, now, position
 
     def telemetry(self):
         return dict(self._telemetry)

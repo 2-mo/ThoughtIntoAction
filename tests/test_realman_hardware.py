@@ -79,9 +79,19 @@ class HardwareTests(unittest.TestCase):
         self.assertEqual(self.connection.client.sent, [])
         self.assertAlmostEqual(self.backend.state.gripper_width, .07)
         self.assertTrue(np.isfinite(self.backend.state.dq).all())
-        self.connection.client.gripper['actpos'] = 1006
+        self.connection.client.gripper['actpos'] = 1011
         self.backend.gripper = self.connection.client.gripper
         with self.assertRaisesRegex(ValueError, 'tolerance'): self.backend.width()
+
+    def test_observed_open_endpoint_1007_is_clamped_without_extending_commands(self):
+        self.backend.pending_gripper = (1000, time.monotonic()-6., 900)
+        self.connection.client.gripper.update(mode=1, actpos=1007)
+        self.backend.last_gripper_poll = float('-inf')
+        self.step(hold=True, gripper_target=.07)
+        self.assertEqual(self.backend.state.gripper_width, .07)
+        self.assertEqual(self.connection.client.sent, [])
+        self.step(hold=True, gripper_target=0.)
+        self.assertEqual(self.connection.client.sent[-1]['position'], 907)
 
     def test_all_six_axes_use_joint_wire_and_speed_budgets(self):
         self.step(joint_target=np.full(6, .2))
@@ -177,6 +187,101 @@ class HardwareTests(unittest.TestCase):
         b.gripper.update(mode=1, actpos=486)
         b._gripper_target(.07, 1.6)
         self.assertEqual(self.connection.client.sent[-1]['position'], 586)
+
+    def test_gripper_interrupted_by_arm_stop_drops_cancelled_segment_after_feedback(self):
+        b = self.backend
+        self.connection.client.gripper.update(mode=3, actpos=201)
+        b.gripper.update(mode=3, actpos=201)
+        self.step(gripper_target=.07)
+        self.assertEqual(b.pending_gripper[0], 301)
+        self.step(hold=True, gripper_target=None)  # Y/Home sends set_arm_stop.
+        self.assertIsNotNone(b.pending_gripper)  # Cached mode 3 is insufficient.
+        self.assertIsNotNone(b.gripper_stop_requested_at)
+        b.last_gripper_poll = float('-inf')
+        self.step(hold=True, gripper_target=None)
+        self.assertIsNone(b.pending_gripper)
+        before = len(self.connection.client.sent)
+        self.step(hold=True, gripper_target=None)
+        self.assertEqual(len(self.connection.client.sent), before)
+        self.step(gripper_target=0.)
+        self.assertEqual(b.pending_gripper[0], 101)
+
+    def test_gripper_idle_overshoot_completes_but_short_or_moving_does_not(self):
+        b = self.backend
+        b.gripper.update(mode=1, actpos=861)
+        b._gripper_target(0., 1.)
+        self.assertEqual(b.pending_gripper[0], 761)
+        b.gripper.update(mode=4, actpos=755)
+        b._gripper_target(0., 1.5)
+        self.assertEqual(b.pending_gripper[0], 761)
+        b.gripper.update(mode=2, actpos=755)
+        b._gripper_target(0., 2.)
+        self.assertEqual(b.pending_gripper[0], 655)
+        b.gripper.update(mode=2, actpos=700)
+        with self.assertRaisesRegex(RuntimeError, 'did not reach'):
+            b._gripper_target(0., 8.)
+
+    def test_gripper_open_from_contact_waits_for_feedback_without_requeue(self):
+        b = self.backend
+        b.gripper.update(mode=6, actpos=430)
+        b._gripper_target(0., 1.)
+        self.assertIsNone(b.pending_gripper)
+        b._gripper_target(.07, 2.)
+        self.assertEqual(b.pending_gripper[0], 530)
+        count = len(self.connection.client.sent)
+        for now in (2.04, 2.08, 2.12):
+            b._gripper_target(.07, now)
+        self.assertEqual(len(self.connection.client.sent), count)
+        b.gripper.update(mode=5, actpos=496)
+        b._gripper_target(.07, 2.2)
+        self.assertEqual(len(self.connection.client.sent), count)
+        b.gripper.update(mode=1, actpos=540)
+        b._gripper_target(.07, 2.5)
+        self.assertEqual(b.pending_gripper[0], 640)
+
+    def test_two_grippers_follow_simultaneously_with_independent_segments(self):
+        other_connection = Connection(self.kinematics)
+        with closing(Backend(self.config, connection=other_connection, kinematics=self.kinematics)) as other:
+            pairs = ((self.backend, self.connection), (other, other_connection))
+            for b, c in pairs:
+                b.gripper.update(mode=1, actpos=1000)
+            now = 1.
+            for width in (0., .07):
+                for _ in range(15):
+                    for b, c in pairs:
+                        b._gripper_target(width, now)
+                        if b.pending_gripper is not None:
+                            goal, _, origin = b.pending_gripper
+                            # Both units overshoot in their movement direction.
+                            actual = max(1, min(1007, goal + (7 if goal > origin else -7)))
+                            b.gripper.update(mode=1 if goal > origin else 2, actpos=actual)
+                    now += .3
+                for b, c in pairs:
+                    self.assertAlmostEqual(b.width(), width, delta=.0004)
+            for b, c in pairs:
+                sent = [m['position'] for m in c.client.sent if m['command']=='set_gripper_position']
+                self.assertTrue(sent and all(1 <= value <= 1000 for value in sent))
+
+    def test_stop_request_does_not_clear_moving_segment_or_replay_held_target(self):
+        b = self.backend
+        self.step(gripper_target=0.)
+        target = b.pending_gripper[0]
+        self.connection.client.gripper.update(mode=4, actpos=950)
+        b.last_gripper_poll = float('-inf')
+        self.step(hold=True, gripper_target=None)
+        b.last_gripper_poll = float('-inf')
+        self.step(gripper_target=.07)
+        self.assertEqual(b.pending_gripper[0], target)
+        self.connection.client.gripper.update(mode=3, actpos=950)
+        b.last_gripper_poll = float('-inf')
+        self.step(gripper_target=.07)
+        self.assertIsNone(b.pending_gripper)
+        self.assertTrue(b.gripper_needs_release)
+        self.step(gripper_target=.07)
+        self.assertIsNone(b.pending_gripper)
+        self.step(hold=True, gripper_target=None)
+        self.step(gripper_target=.07)
+        self.assertEqual(b.pending_gripper[0], 1000)
 
     def test_partial_initialization_closes_connection(self):
         c = Connection(self.kinematics)
