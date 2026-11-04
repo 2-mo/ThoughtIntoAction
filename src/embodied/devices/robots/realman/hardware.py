@@ -1,4 +1,4 @@
-"""Unified-worker driver: local vendor IK, six-joint transmission, EG2 positions.
+"""Unified-worker driver: controller-DH DLS IK, six-joint transmission, EG2 positions.
 
 No XR mapping, authority, planner or device activation lives in this module.
 """
@@ -12,7 +12,8 @@ import numpy as np
 from embodied.contracts.control import Mode
 from .backend import Backend as Connection, load_config, vector
 from .gripper import status, require_ready, GripperNotReady, move
-from .kinematics import OfflineModel, CandidateRejected, pose_error
+from .kinematics import pose_error
+from .hardware_model import JointModel
 
 
 def data_contract(config):
@@ -25,9 +26,7 @@ def data_contract(config):
 class Hardware:
     def preflight(self, config):
         from .hardware_model import planning_model
-        from .kinematics import load_sdk
         planning_model(config)
-        load_sdk()  # Dependency check only; never opens a robot.
         return {'ready': True, 'errors': []}
 
     def resources(self, config):
@@ -54,7 +53,7 @@ class Hardware:
             'manifest': json.loads(path.with_suffix('.model.json').read_text()),
             'tool': {'tcp_link': 'tcp_link', 'offset_m': [0, 0, config.tool_offset_m],
                 'gripper': 'EG2-4C2; nominal 70 mm total stroke; fingertip zero not calibrated'}},
-            'controller_policy': {'kind': 'local vendor IK then movej_canfd; no controller Cartesian IK',
+            'controller_policy': {'kind': 'controller-DH MuJoCo DLS IK then movej_canfd',
                 'startup': config.startup_behavior, 'shutdown': config.shutdown_behavior,
                 'velocity_feedback': 'encoder position finite difference; not measured drive velocity',
                 'collision_check': 'none'}}
@@ -64,29 +63,8 @@ class Hardware:
         return {'policy': 'controller-stop', 'stop_requested': True, 'damping_requested': False}
 
 
-class JointModel:
-    def __init__(self, vendor):
-        self.vendor = vendor
-        self.lower, self.upper = np.deg2rad(vendor.lower), np.deg2rad(vendor.upper)
-
-    def fk(self, q):
-        return self.vendor.fk(np.rad2deg(q))
-
-    def solve_ik(self, pose, seed, anchor=None):
-        code, q = self.vendor.solve(pose, np.rad2deg(seed))
-        q = np.deg2rad(q)
-        if code != 0 or q.shape != (6,) or not np.isfinite(q).all():
-            raise CandidateRejected(f'Local RealMan IK rejected target: result={code}')
-        if np.any(q < self.lower) or np.any(q > self.upper):
-            raise CandidateRejected('Local RealMan IK exceeds joint limits')
-        position_error, angle_error = pose_error(self.fk(q), pose)
-        if position_error > .002 or angle_error > .01:
-            raise CandidateRejected('Local RealMan IK does not reproduce requested TCP')
-        return q, True, max(position_error, angle_error)
-
-
 class Backend:
-    def __init__(self, config, *, cancel_requested=None, controller_factory=None, connection=None, vendor=None):
+    def __init__(self, config, *, cancel_requested=None, controller_factory=None, connection=None, kinematics=None):
         if controller_factory is not None:
             raise ValueError('RealMan hardware uses its joint controller, not ARX gains or lifecycle')
         self.config, self.cancel_requested = config, cancel_requested
@@ -111,8 +89,7 @@ class Backend:
         try:
             for key in ('get_DH_data', 'get_joint_min_pos', 'get_joint_max_pos'):
                 self.connection.info[key] = self.connection.client.query(key)
-            self.vendor = vendor or OfflineModel(self.connection.info)
-            self.kinematics = JointModel(self.vendor)
+            self.kinematics = kinematics or JointModel(self.connection.info)
             configured_low, configured_high = np.array(config.joint_min), np.array(config.joint_max)
             if (np.any(configured_low < self.kinematics.lower-1e-6) or
                     np.any(configured_high > self.kinematics.upper+1e-6)):
@@ -276,16 +253,7 @@ class Backend:
             step_limit = np.minimum(step_limit, np.broadcast_to(effective.joint_step_limit, (6,)))
         effective = replace(effective, joint_step_limit=step_limit)
         previous = (self.controller.q_target.copy() if self.controller.q_target is not None else state.q.copy())
-        try:
-            q = self.controller.update(effective, state.q, now)
-        except CandidateRejected:
-            self.connection.stop()
-            self.controller.update(replace(effective, hold=True, reset_reference=True), state.q, now)
-            self.controller.ik_converged = False
-            self.controller.ik_rejections += 1
-            self.controller.ik_residual = float('inf')
-            q = state.q.copy()
-            holding = True
+        q = self.controller.update(effective, state.q, now)
         if self.controller.fault:
             raise ValueError(self.controller.fault)
         q = vector(q, 6)
@@ -296,16 +264,6 @@ class Backend:
         if not holding:
             q = self._tcp_speed_bound(q, previous, planned=command.planned)
             self.controller.q_target = q.copy()
-        if not holding:
-            # Check the joint solution that will actually be sent. Never turn
-            # a local IK rejection into a controller Cartesian command.
-            code, distance = self.vendor.singularity(np.rad2deg(q))
-            if not np.isfinite(distance):
-                raise ValueError('Invalid vendor singularity result')
-            if code:
-                self.connection.stop()
-                self.controller.update(replace(effective, hold=True, reset_reference=True), state.q, now)
-                q, holding = state.q.copy(), True
         if holding:
             self.connection.stop()
         else:
@@ -352,7 +310,9 @@ class Backend:
             if planned:
                 raise ValueError('Planned curve exceeds controller TCP speed capability')
             q = previous + (q-previous)*fraction*.99
-        raise CandidateRejected('TCP speed bound could not resolve joint step')
+        # No feasible step this tick: retain the last sent reference and let
+        # the next target recover, just like a rejected ARX IK iteration.
+        return previous.copy()
 
     def _gripper_target(self, width, now):
         if not self.gripper_ready:
@@ -381,12 +341,14 @@ class Backend:
             return  # No queue: only the current owner target can schedule another segment.
         if self.pending_gripper is not None:
             target, sent = self.pending_gripper
-            if abs(self.gripper['actpos']-target) > 3 and self.gripper['mode'] != 6:
+            # Live EG2 segments settle up to four raw units from the target.
+            # Match the five-unit feedback tolerance used at the endpoints.
+            if abs(self.gripper['actpos']-target) > 5 and self.gripper['mode'] != 6:
                 if now-sent > 5.:
                     raise RuntimeError('EG2 position feedback did not reach the accepted segment')
                 return
             self.pending_gripper = None
-        if abs(raw-self.gripper['actpos']) <= 3:
+        if abs(raw-self.gripper['actpos']) <= 5:
             return
         target = int(np.clip(raw, self.gripper['actpos']-100, self.gripper['actpos']+100))
         target = max(1, min(1000, target))

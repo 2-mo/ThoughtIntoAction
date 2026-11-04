@@ -29,33 +29,16 @@ class Routing(NativeRouting):
             feedback_hz=settings.robot.control_hz,
             cartesian_speed_limits=(settings.robot.teleop_linear_speed_m_s,
                                     settings.robot.teleop_angular_speed_rad_s))
-        # Keep both native mappings but give the gripper its own readiness
-        # group. Missing gripper feedback must not withdraw the arm permit.
+        # One mode owner per hand. The EG2 driver already schedules bounded
+        # position segments; a second router/coordinator can retain an old
+        # opening target or toggle out of phase with the arm.
         if 'gripper' in paths:
             coordinator = tomllib.loads(paths['coordinator'].read_text())
-            grip_group = f'{prefix}/gripper-group'
-            grip_coordinator = {**coordinator, 'process_id': f'{prefix}.gripper-coordinator',
-                'group_id': grip_group, 'permit_topic': grip_group+'/permit',
-                'members': coordinator['members'][1:], 'routes': coordinator['routes'][1:]}
             coordinator['members'] = coordinator['members'][:1]
             coordinator['routes'] = coordinator['routes'][:1]
             paths['coordinator'].write_text(_toml(coordinator))
-            path = paths['coordinator'].with_name('gripper-coordinator.toml')
-            path.write_text(_toml(grip_coordinator))
-            paths['gripper-coordinator'] = path
-            gripper = tomllib.loads(paths['gripper'].read_text())
-            gripper['control_group_id'] = grip_group
-            gripper['group_permit_topic'] = grip_group+'/permit'
-            paths['gripper'].write_text(_toml(gripper))
+            paths.pop('gripper').unlink()
         return paths
-
-    @staticmethod
-    def commands(configs, prefix):
-        commands = NativeRouting.commands(configs, prefix)
-        if 'gripper-coordinator' in configs:
-            commands['gripper-coordinator'] = [commands['coordinator'][0], 'coordinate',
-                '--config', str(configs['gripper-coordinator'])]
-        return commands
 
 
 class Ingress(NativeIngress):
@@ -68,6 +51,7 @@ class Ingress(NativeIngress):
             f'{vr.input_prefix or prefix}/xr/{vr.controller}_controller/states/input', XrControllerInput))
         self.gripper_released = self.gripper_armed = False
         self.gripper_epoch = None
+        self.gripper_max_width = settings.robot.gripper_max_width
         self.home_q = np.asarray(settings.robot.park_q, dtype=float)
         self.home_released = self.returning_home = self.home_blocked = False
         self.home_since = None
@@ -102,14 +86,22 @@ class Ingress(NativeIngress):
                     self.home_released = False
                     self.home_blocked = True
                 self.home_since = None
-            if state.gripper_width is None or secondary or self.home_blocked or was_returning:
+            if (state.gripper_width is None or secondary or self.home_blocked or was_returning
+                    or command.mode != Mode.COMMAND_FOLLOWING or not self.status['permit']):
                 self.gripper_released = self.gripper_armed = False
             elif inp.trigger < .2:
                 self.gripper_released = True
             elif self.gripper_released and inp.trigger > .2:
                 self.gripper_armed = True
-        if not valid or not self.gripper_armed:
-            command = replace(command, gripper_target=None)
+        # Same absolute mapping as the native coordinator's parallel_target.
+        # Startup/recovery does not open a partly closed gripper: require a
+        # neutral Trigger followed by a new press, then release opens normally.
+        width = None
+        if valid and self.gripper_armed:
+            if not np.isfinite(inp.trigger) or not 0 <= inp.trigger <= 1:
+                raise ValueError('Invalid Quest trigger')
+            width = self.gripper_max_width * (1. - inp.trigger)
+        command = replace(command, gripper_target=width, gripper_mode=command.mode)
         overriding = secondary or was_returning or self.home_blocked
         if overriding:
             # Use the existing bounded joint stream, not Disabled (ARX Home)

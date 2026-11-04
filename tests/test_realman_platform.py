@@ -35,8 +35,8 @@ def test_single_quest_routing_uses_robot_rate_and_own_input_namespace(tmp_path):
     settings = load_settings('configs/robots/realman/sim.json')
     paths = Routing.configure(tmp_path, 'robot-test', settings)
     assert 'robot-test/xr/right_controller' in paths['coordinator'].read_text()
-    assert 'gripper-coordinator' in paths
-    assert 'robot-test/gripper-group' in paths['gripper'].read_text()
+    assert set(Routing.commands(paths, 'robot-test')) == {'arm', 'coordinator'}
+    assert 'gripper' not in paths and 'gripper-coordinator' not in paths
 
 
 def test_pair_sim_uses_standard_realman_profiles(tmp_path):

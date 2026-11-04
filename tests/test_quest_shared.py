@@ -13,45 +13,34 @@ from embodied.devices.inputs.quest.sources import FreshSample, NativeIngress
 
 
 class SharedQuestTests(unittest.TestCase):
-    def test_gripper_has_independent_coordinator_and_permit(self):
+    def test_one_mode_coordinator_per_hand_without_gripper_health_dependency(self):
         settings = SimpleNamespace(sdk_library='/unused/sdk',
             vr=SimpleNamespace(input_prefix='robot-test-input', controller='left', base_yaw_deg=0,
                 grip_threshold=.7, position_scale=(1., 1., 1.)),
-            robot=SimpleNamespace(gripper_max_width=.07, control_hz=50,
+            robot=SimpleNamespace(gripper_max_width=.07, control_hz=25,
                 teleop_linear_speed_m_s=.25, teleop_angular_speed_rad_s=.3))
         with tempfile.TemporaryDirectory() as folder:
             paths = Routing.configure(Path(folder), 'robot-test-left', settings)
             configs = {name: tomllib.loads(path.read_text()) for name, path in paths.items()}
-            arm, grip = configs['coordinator'], configs['gripper-coordinator']
-            self.assertEqual([m['member_id'] for m in arm['members']], ['arm'])
-            self.assertEqual([m['member_id'] for m in grip['members']], ['gripper'])
-            self.assertEqual([r['route_id'] for r in arm['routes']], ['arm'])
-            self.assertEqual([r['route_id'] for r in grip['routes']], ['gripper'])
-            self.assertNotEqual(arm['permit_topic'], grip['permit_topic'])
-            self.assertEqual(configs['gripper']['group_permit_topic'], grip['permit_topic'])
-            self.assertEqual(configs['gripper']['control_group_id'], grip['group_id'])
-            self.assertEqual(arm['mode_controller_input_topic'], grip['mode_controller_input_topic'])
-            self.assertEqual(configs['arm']['relative_hold_timeout_ms'], 40)
-            self.assertIs(type(configs['arm']['relative_hold_timeout_ms']), int)
-            self.assertIs(type(configs['gripper']['relative_fault_timeout_ms']), int)
-            self.assertEqual(set(Routing.commands(paths, 'robot-test-left')),
-                             {'arm', 'gripper', 'coordinator', 'gripper-coordinator'})
-            settings.robot.control_hz = 25
-            paths = Routing.configure(Path(folder), 'robot-test-left', settings)
-            arm = tomllib.loads(paths['arm'].read_text())
-            self.assertEqual(arm['relative_hold_timeout_ms'], 80)
-            self.assertEqual(arm['relative_fault_timeout_ms'], 120)
-            self.assertIs(type(arm['relative_fault_timeout_ms']), int)
+            coordinator = configs['coordinator']
+            self.assertEqual([m['member_id'] for m in coordinator['members']], ['arm'])
+            self.assertEqual([r['route_id'] for r in coordinator['routes']], ['arm'])
+            self.assertEqual(coordinator['mode_controller_input_topic'],
+                'robot-test-input/xr/left_controller/states/input')
+            self.assertEqual(set(Routing.commands(paths, 'robot-test-left')), {'arm', 'coordinator'})
+            self.assertEqual(configs['arm']['relative_hold_timeout_ms'], 80)
+            self.assertEqual(configs['arm']['relative_fault_timeout_ms'], 120)
 
     def setUp(self):
         self.ingress = Ingress.__new__(Ingress)
-        self.ingress.status = {'ready': True}
+        self.ingress.status = {'ready': True, 'permit': True}
         self.input = SimpleNamespace(trigger=0., grip=0., buttons_bitset=0)
         sample = FreshSample(.1)
         sample.sample, sample.expires_at = self.input, 100.
         self.ingress.samples = {'input': sample}
         self.ingress.gripper_released = self.ingress.gripper_armed = False
         self.ingress.gripper_epoch = None
+        self.ingress.gripper_max_width = .07
         self.ingress.home_q = np.array([0., 0., np.pi/2, 0., np.pi/2, 0.])
         self.ingress.home_released = self.ingress.returning_home = self.ingress.home_blocked = False
         self.ingress.home_since = None
@@ -70,7 +59,7 @@ class SharedQuestTests(unittest.TestCase):
         self.input.trigger = 0.
         self.assertIsNone(self.poll(2.).gripper_target)
         self.input.trigger = .5
-        self.assertEqual(self.poll(3.).gripper_target, .01)
+        self.assertEqual(self.poll(3.).gripper_target, .035)
         self.state.gripper_width = None
         self.assertIsNone(self.poll(4.).gripper_target)
         self.state.gripper_width = .05
@@ -78,7 +67,7 @@ class SharedQuestTests(unittest.TestCase):
         self.input.trigger = 0.
         self.poll(6.)
         self.input.trigger = .5
-        self.assertEqual(self.poll(7.).gripper_target, .01)
+        self.assertEqual(self.poll(7.).gripper_target, .035)
         self.assertIsNone(self.poll(8., epoch=2).gripper_target)
 
     def start_home(self):
@@ -87,6 +76,21 @@ class SharedQuestTests(unittest.TestCase):
         self.assertIsNone(self.poll(2.).joint_target)
         self.assertIsNone(self.poll(2.99).joint_target)
         return self.poll(3.01)
+
+    def test_partial_startup_trigger_close_release_open_and_mode_sync(self):
+        self.state.gripper_width = .01274
+        self.native = self.native.__class__(1, ControlCommand(Mode.COMMAND_FOLLOWING,
+            gripper_mode=Mode.FREE_DRIVE, gripper_target=.03274), 100., 1)
+        self.assertIsNone(self.poll(1.).gripper_target)
+        self.input.trigger = 1.
+        command = self.poll(2.)
+        self.assertEqual(command.gripper_target, 0.)
+        self.assertEqual(command.gripper_mode, Mode.COMMAND_FOLLOWING)
+        self.input.trigger = 0.
+        self.assertEqual(self.poll(3.).gripper_target, .07)
+        self.native = self.native.__class__(1, ControlCommand(Mode.FREE_DRIVE), 100., 1)
+        self.assertIsNone(self.poll(4.).gripper_target)
+        self.assertEqual(self.poll(4.1).gripper_mode, Mode.FREE_DRIVE)
 
     def test_home_requires_neutral_then_one_second_and_stops_on_release(self):
         self.input.buttons_bitset = 8

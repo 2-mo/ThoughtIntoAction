@@ -13,26 +13,22 @@ from unittest.mock import patch
 import numpy as np
 
 from embodied.contracts.control import ControlCommand, Mode, RobotState
-from embodied.devices.robots.realman.hardware import Backend, JointModel
+from embodied.devices.robots.realman.hardware import Backend
 from embodied.devices.robots.realman.hardware_profile import Profile
-from embodied.devices.robots.realman.kinematics import CandidateRejected
 
 
-class Vendor:
-    lower, upper = np.full(6, -360.), np.full(6, 360.)
+class Kinematics:
+    lower, upper = np.full(6, -2*np.pi), np.full(6, 2*np.pi)
     reject = False
-    singular = False
-    def fk(self, degrees):
+    def fk(self, q):
         # Test geometry in which all six joint coordinates affect the TCP.
         from scipy.spatial.transform import Rotation
-        q = np.deg2rad(degrees)
         return np.r_[q[:3]*.1, Rotation.from_rotvec(q[3:]).as_quat()]
-    def solve(self, target, seed):
+    def solve_ik(self, target, seed, anchor=None):
         from scipy.spatial.transform import Rotation
         q = np.r_[np.asarray(target)[:3]*10, Rotation.from_quat(target[3:]).as_rotvec()]
-        return int(self.reject), np.rad2deg(q)
-    def singularity(self, q):
-        return int(self.singular), .1
+        if self.reject: raise ValueError("invalid IK output")
+        return q, True, 0.
 
 
 class Client:
@@ -50,7 +46,7 @@ class Client:
 
 class Connection:
     def __init__(self, vendor):
-        self.client, self.vendor = Client(), vendor
+        self.client, self.kinematics = Client(), vendor
         self.config = {'joint_speed_deg_s': [90.]*2+[112.5]*4,
                        'linear_speed_m_s': .25, 'angular_speed_rad_s': .3}
         self.q = np.zeros(6)
@@ -58,7 +54,7 @@ class Connection:
         self.active, self.closed = False, False
         self.lock = threading.RLock()
     def read_state(self, now):
-        return RobotState(self.q.copy(), np.full(6, np.nan), self.vendor.fk(np.rad2deg(self.q)),
+        return RobotState(self.q.copy(), np.full(6, np.nan), self.kinematics.fk(self.q),
                           float('nan'), time.monotonic(), fault=self.fault)
     def stop(self):
         if self.active: self.client.send({'command': 'set_arm_stop'})
@@ -69,10 +65,10 @@ class Connection:
 @unittest.skipUnless(importlib.util.find_spec('mujoco'), 'run with outputs/envs/control/bin/python')
 class HardwareTests(unittest.TestCase):
     def setUp(self):
-        self.vendor = Vendor()
-        self.connection = Connection(self.vendor)
+        self.kinematics = Kinematics()
+        self.connection = Connection(self.kinematics)
         self.config = Profile('fake', '', '')
-        self.backend = Backend(self.config, connection=self.connection, vendor=self.vendor)
+        self.backend = Backend(self.config, connection=self.connection, kinematics=self.kinematics)
     def tearDown(self): self.backend.close()
     def step(self, **fields):
         self.backend.read_state(time.monotonic())
@@ -94,7 +90,7 @@ class HardwareTests(unittest.TestCase):
         self.assertTrue(all(v > 0 for v in wire['joint']))
         q = np.deg2rad(np.asarray(wire['joint'])/1000)
         self.assertTrue(np.all(q <= self.backend.velocity_limits/25+2e-5))
-        self.assertLessEqual(np.linalg.norm(self.vendor.fk(np.rad2deg(q))[:3]), .25/25+2e-6)
+        self.assertLessEqual(np.linalg.norm(self.kinematics.fk(q)[:3]), .25/25+2e-6)
         self.assertFalse(any(x['command'] == 'movep_canfd' for x in self.connection.client.sent))
 
     def test_hold_discards_cached_goal_and_disabled_does_not_home_or_open(self):
@@ -108,24 +104,18 @@ class HardwareTests(unittest.TestCase):
         self.assertFalse(any(x['command'].startswith(('move', 'set_gripper')) for x in messages))
         np.testing.assert_array_equal(self.backend.controller.q_target, self.connection.q)
 
-    def test_unreachable_and_singular_targets_never_send_motion(self):
-        self.vendor.reject = True
+    def test_partial_ik_and_invalid_target_keep_continuous_cached_goal(self):
+        self.kinematics.solve_ik = lambda *args: (np.full(6, .1), False, .02)
         self.step(pose_target=np.array([.01, 0, 0, 0, 0, 0, 1.]))
-        self.assertFalse(self.motions())
-        self.vendor.reject = False
-        self.vendor.singular = True
-        self.step(joint_target=np.full(6, .1))
-        self.assertFalse(self.motions())
-        self.vendor.singular = False
-        self.step(joint_target=np.full(6, .01))
         self.assertTrue(self.motions())
-
-    def test_bad_ik_residual_or_limits_rejected_before_controller_clip(self):
-        model = JointModel(self.vendor)
-        self.vendor.solve = lambda pose, seed: (0, np.full(6, 400.))
-        with self.assertRaises(CandidateRejected): model.solve_ik(np.array([0,0,0,0,0,0,1.]), np.zeros(6))
-        self.vendor.solve = lambda pose, seed: (0, np.zeros(6))
-        with self.assertRaises(CandidateRejected): model.solve_ik(np.array([.1,0,0,0,0,0,1.]), np.zeros(6))
+        self.assertEqual(self.backend.controller.ik_partial_solutions, 1)
+        goal = self.backend.controller._joint_goal.copy()
+        self.kinematics.solve_ik = lambda *args: (np.full(6, np.nan), False, float('inf'))
+        self.step(pose_target=np.array([.01, 0, 0, 0, 0, 0, 1.]))
+        np.testing.assert_array_equal(self.backend.controller._joint_goal, goal)
+        self.assertEqual(self.backend.controller.ik_rejections, 1)
+        self.step(hold=True)
+        np.testing.assert_array_equal(self.backend.controller._joint_goal, self.connection.q)
 
     def test_mode_acknowledgements_hold_without_ARX_home_or_damping(self):
         for mode in (Mode.FREE_DRIVE, Mode.DISABLED, Mode.COMMAND_FOLLOWING):
@@ -137,12 +127,12 @@ class HardwareTests(unittest.TestCase):
 
     def test_cancellation_during_ik_prevents_submission(self):
         cancelled = False
-        original = self.vendor.solve
+        original = self.kinematics.solve_ik
         def solve(*args):
             nonlocal cancelled
             cancelled = True
             return original(*args)
-        self.vendor.solve = solve
+        self.kinematics.solve_ik = solve
         with self.assertRaises(InterruptedError):
             self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING,
                 pose_target=np.array([.001,0,0,0,0,0,1.])), time.monotonic(),
@@ -176,10 +166,22 @@ class HardwareTests(unittest.TestCase):
         b.gripper['mode'] = 4
         with self.assertRaisesRegex(RuntimeError, '5 s'): b._gripper_target(.07, 11.)
 
+    def test_settled_segment_four_units_short_can_reverse_and_open(self):
+        b = self.backend
+        b.gripper.update(mode=1, actpos=486)
+        b._gripper_target(0., 1.)
+        self.assertEqual(b.pending_gripper[0], 386)
+        b.gripper.update(mode=2, actpos=382)  # Captured right EG2 feedback.
+        b._gripper_target(.07, 1.3)
+        self.assertEqual(self.connection.client.sent[-1]['position'], 482)
+        b.gripper.update(mode=1, actpos=486)
+        b._gripper_target(.07, 1.6)
+        self.assertEqual(self.connection.client.sent[-1]['position'], 586)
+
     def test_partial_initialization_closes_connection(self):
-        c = Connection(self.vendor)
+        c = Connection(self.kinematics)
         del c.client.gripper['actpos']
-        with self.assertRaisesRegex(ValueError, 'Incomplete'): Backend(self.config, connection=c, vendor=self.vendor)
+        with self.assertRaisesRegex(ValueError, 'Incomplete'): Backend(self.config, connection=c, kinematics=self.kinematics)
         self.assertTrue(c.closed)
 
     def offline(self):
@@ -188,9 +190,9 @@ class HardwareTests(unittest.TestCase):
         return self.backend.read_state(time.monotonic())
 
     def test_startup_offline_keeps_six_axis_arm_available_without_auto_open(self):
-        c = Connection(self.vendor)
+        c = Connection(self.kinematics)
         c.client.gripper = dict.fromkeys(c.client.gripper, 0)
-        with closing(Backend(self.config, connection=c, vendor=self.vendor)) as b:
+        with closing(Backend(self.config, connection=c, kinematics=self.kinematics)) as b:
             self.assertIsNone(b.state.gripper_width)
             self.assertEqual(c.client.sent, [])
             b.step(ControlCommand(Mode.COMMAND_FOLLOWING, joint_target=np.full(6, .01),
@@ -280,12 +282,12 @@ class HardwareTests(unittest.TestCase):
         from embodied.control import worker
         from embodied.contracts.paths import PROJECT_ROOT
         config = PROJECT_ROOT/'configs/robots/realman/left.json'
-        connection = Connection(self.vendor)
+        connection = Connection(self.kinematics)
         clock = SimpleNamespace(wait=lambda: (_ for _ in ()).throw(InterruptedError('test-finished')))
         connection.client.gripper = dict.fromkeys(connection.client.gripper, 0)
         with tempfile.TemporaryDirectory() as folder, \
                 patch('embodied.devices.robots.realman.hardware.Connection', return_value=connection), \
-                patch('embodied.devices.robots.realman.hardware.OfflineModel', return_value=self.vendor), \
+                patch('embodied.devices.robots.realman.hardware.JointModel', return_value=self.kinematics), \
                 patch.object(worker, 'PeriodicClock', return_value=clock):
             with self.assertRaisesRegex(RuntimeError, 'test-finished'):
                 worker.run('real', 'robot-fake-realman-worker', str(config), Path(folder), telemetry=True)

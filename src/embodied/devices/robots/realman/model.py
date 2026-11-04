@@ -2,6 +2,7 @@
 import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation
+from embodied.devices.robots.arx5.kinematics import se3_error
 
 
 def vector(value, count, name):
@@ -38,24 +39,42 @@ class Model:
         return np.r_[data.site_xpos[self.site],
                      Rotation.from_matrix(data.site_xmat[self.site].reshape(3, 3)).as_quat()]
 
-    def solve_ik(self, target, q_seed):
+    def solve_ik(self, target, q_seed, q_anchor=None):
         target = vector(target, 7, 'pose')
         if not np.isclose(np.linalg.norm(target[3:]), 1., atol=.01):
             raise ValueError('Pose quaternion must be normalized')
-        goal = Rotation.from_quat(target[3:])
+        goal = Rotation.from_quat(target[3:]).as_matrix()
         q = np.clip(vector(q_seed, 6, 'seed'), self.lower, self.upper)
-        for _ in range(150):
+        anchor = None if q_anchor is None else vector(q_anchor, 6, 'anchor')
+        mu_squared = 0. if anchor is None else .005 ** 2
+        regularizer = (.01 ** 2 + mu_squared) * np.eye(6)
+        best, best_cost, best_residual = q.copy(), float('inf'), float('inf')
+        # Same local SE(3) error, damping, measured-posture regularization and
+        # finite partial solution policy as the existing ARX solver.
+        for _ in range(50):
             current = self.fk(q)
-            error = np.r_[target[:3] - current[:3],
-                          (goal * Rotation.from_quat(current[3:]).inv()).as_rotvec()]
+            rotation = self.data.site_xmat[self.site].reshape(3, 3)
+            error = se3_error(current[:3], rotation, target[:3], goal)
             residual = float(np.linalg.norm(error))
-            if residual < 1e-6:
+            cost = residual**2 + (0. if anchor is None else mu_squared * np.sum((q-anchor)**2))
+            if cost < best_cost:
+                best, best_cost, best_residual = q.copy(), cost, residual
+            if residual < 1e-4 and anchor is None:
                 return q, True, residual
             mujoco.mj_jacSite(self.model, self.data, self.jacp, self.jacr, self.site)
-            jac = np.vstack((self.jacp[:, :6], self.jacr[:, :6]))
-            delta = jac.T @ np.linalg.solve(jac @ jac.T + 1e-6 * np.eye(6), error)
-            q = np.clip(q + np.clip(delta, -.05, .05), self.lower, self.upper)
-        current = self.fk(q)
-        residual = float(np.linalg.norm(np.r_[target[:3] - current[:3],
-            (goal * Rotation.from_quat(current[3:]).inv()).as_rotvec()]))
-        return q, residual < 1e-6, residual
+            jac = np.vstack((rotation.T @ self.jacp[:, :6], rotation.T @ self.jacr[:, :6]))
+            rhs = jac.T @ error
+            if anchor is not None:
+                rhs += mu_squared * (anchor - q)
+            try:
+                delta = np.linalg.solve(jac.T @ jac + regularizer, rhs)
+            except np.linalg.LinAlgError:
+                return best, False, best_residual
+            # A numerical trust step, not a robot velocity limit. Keep a
+            # singular iteration local and return the best evaluated partial
+            # solution if the requested pose is unreachable.
+            delta *= min(1., .1 / max(float(np.max(np.abs(delta))), 1e-12))
+            q = np.clip(q + delta, self.lower, self.upper)
+            if anchor is not None and residual < 1e-4:
+                return q, True, residual
+        return best, False, best_residual

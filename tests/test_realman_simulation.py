@@ -88,22 +88,42 @@ class SimulationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'position only'):
             self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, gripper_effort=1), 0)
 
-    def test_unreachable_stream_target_holds_and_later_valid_target_recovers(self):
+    def test_unreachable_stream_uses_finite_partial_and_later_valid_target_recovers(self):
         state = self.backend.read_state(0.)
         previous = self.backend.target.copy()
         unreachable = state.pose.copy()
-        unreachable[0] = 10.
+        unreachable[0] -= .8
         self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=unreachable,
                                          gripper_target=.02), 0.)
-        np.testing.assert_array_equal(self.backend.telemetry()['sent_q'], previous)
+        partial = np.asarray(self.backend.telemetry()['sent_q'])
+        self.assertTrue(np.isfinite(partial).all())
+        self.assertTrue(np.all(partial >= self.backend.kinematics.lower))
+        self.assertTrue(np.all(partial <= self.backend.kinematics.upper))
+        self.assertLess(np.linalg.norm(self.backend.kinematics.fk(partial)[:3]-unreachable[:3]), .8)
         self.assertLess(self.backend.telemetry()['gripper_target'], .04)
         self.assertFalse(self.backend.closed)
         goal = previous.copy()
         goal[0] += .02
         reachable = self.backend.kinematics.fk(goal)
-        for i in range(30):
+        for i in range(100):
             self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=reachable), .01*(i+1))
         self.assertGreater(self.backend.read_state(.3).q[0], previous[0]+.005)
+        self.assertLess(np.linalg.norm(self.backend.read_state(1.).pose[:3]-reachable[:3]), .001)
+
+    def test_gripper_mode_and_finite_endpoint_overshoot(self):
+        for target in (-1.1e-6, float(np.float32(self.config.gripper_max_width))):
+            self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING,
+                hold=True, gripper_target=target), 0.)
+            self.assertGreaterEqual(self.backend.width_target, 0.)
+            self.assertLessEqual(self.backend.width_target, self.config.gripper_max_width)
+        width = self.backend.width_target
+        self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, hold=True,
+            gripper_mode=Mode.FREE_DRIVE, gripper_target=0.), .01)
+        self.assertEqual(self.backend.width_target, width)
+        self.assertEqual(self.backend.read_state(.01).gripper_mode, Mode.FREE_DRIVE)
+        with self.assertRaisesRegex(ValueError, 'gripper width'):
+            self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING,
+                hold=True, gripper_target=float('nan')), .02)
 
     def test_upward_pose_stream_submits_ik_without_joint_rate_clipping(self):
         import mujoco
@@ -118,8 +138,7 @@ class SimulationTests(unittest.TestCase):
         goal = initial.copy()
         goal[2] += .05
         heights = []
-        expected, ok, _ = self.backend.kinematics.solve_ik(goal, q)
-        self.assertTrue(ok)
+        expected, _, _ = self.backend.kinematics.solve_ik(goal, q, q)
         for i in range(200):
             self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=goal), i*.01)
             if i == 0:

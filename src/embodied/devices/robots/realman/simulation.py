@@ -73,6 +73,8 @@ class Backend:
         if self.substeps < 1 or not np.isclose(ratio, self.substeps):
             raise ValueError('Model timestep must divide the configured control period')
         self.mode = Mode.COMMAND_FOLLOWING
+        self.gripper_mode = self.mode
+        self._ik_seed = None
         self.holding = True
         self.target = self.data.qpos[:6].copy()
         self.width_target = config.gripper_max_width
@@ -96,7 +98,7 @@ class Backend:
         fault = '' if np.isfinite(q).all() and np.isfinite(dq).all() else 'non-finite simulation state'
         return RobotState(q[:6].copy(), dq[:6].copy(), self.kinematics.pose(self.data),
                           float(np.sum(q[6:])), now, self.mode, fault,
-                          gripper_mode=self.mode, gripper_velocity=float(np.sum(dq[6:])))
+                          gripper_mode=self.gripper_mode, gripper_velocity=float(np.sum(dq[6:])))
 
     def step(self, command, now):
         if self.closed:
@@ -110,22 +112,25 @@ class Backend:
         transition = self.mode != command.mode
         holding = command.hold or command.reset_reference or command.mode in (Mode.DISABLED, Mode.FREE_DRIVE)
         if holding:
+            self._ik_seed = None
             if not self.holding or transition or command.reset_reference:
                 target = self.data.qpos[:6].copy()
         elif command.joint_target is not None:
+            self._ik_seed = None
             target = vector(command.joint_target, 6, 'target').copy()
             if command.joint_velocity_target is not None:
                 dq = vector(command.joint_velocity_target, 6, 'target velocity')
         elif command.pose_target is not None:
-            target, ok, residual = self.kinematics.solve_ik(command.pose_target, self.data.qpos[:6])
-            if not ok:
-                # A streamed Quest target may leave the reachable workspace.
-                # Keep the last submitted joint reference, as the existing
-                # teleop backend does for rejected IK, and allow the next frame.
-                target = previous
-                if now - getattr(self, '_last_ik_warning_at', float('-inf')) >= 1.:
-                    print(f'RM65 仿真目标逆解未收敛（残差 {residual:.6f}）；保持上一关节目标。', flush=True)
-                    self._last_ik_warning_at = now
+            try:
+                target, ok, residual = self.kinematics.solve_ik(command.pose_target,
+                    self.data.qpos[:6] if self._ik_seed is None else self._ik_seed, self.data.qpos[:6])
+                target = np.clip(vector(target, 6, 'IK output'), self.kinematics.lower, self.kinematics.upper)
+                self._ik_seed = target.copy()
+            except (ValueError, np.linalg.LinAlgError):
+                target, ok, residual = previous, False, float('inf')
+            if not ok and now - getattr(self, '_last_ik_warning_at', float('-inf')) >= 1.:
+                print(f'RM65 仿真逆解残差 {residual:.6f}；沿用ARX有限部分解／有效目标缓存。', flush=True)
+                self._last_ik_warning_at = now
         if np.any(target < self.kinematics.lower) or np.any(target > self.kinematics.upper):
             raise ValueError('Joint target exceeds model limits')
         if np.any(np.abs(dq) > np.asarray(self.config.joint_velocity_max) * 1.000001):
@@ -141,10 +146,12 @@ class Backend:
             step = np.minimum(step, np.asarray(self.config.joint_velocity_max) / self.config.control_hz)
             target = previous + np.clip(target - previous, -step, step)
         width = self.width_target
-        if command.gripper_target is not None:
+        self.gripper_mode = command.gripper_mode or command.mode
+        if self.gripper_mode == Mode.COMMAND_FOLLOWING and command.gripper_target is not None:
             requested = float(command.gripper_target)
-            if not np.isfinite(requested) or not 0 <= requested <= self.config.gripper_max_width:
+            if not np.isfinite(requested):
                 raise ValueError('Invalid simplified gripper width')
+            requested = float(np.clip(requested, 0, self.config.gripper_max_width))
             bound = self.config.gripper_velocity_max_m_s / self.config.control_hz
             width += float(np.clip(requested - width, -bound, bound))
         self.target, self.width_target = target, width
@@ -199,6 +206,8 @@ class Backend:
         self.target = self.data.qpos[:6].copy()
         self.width_target = float(np.clip(np.sum(self.data.qpos[6:]), 0, self.config.gripper_max_width))
         self.holding, self.mode = True, Mode.COMMAND_FOLLOWING
+        self.gripper_mode = self.mode
+        self._ik_seed = None
         self._telemetry = {}
         return self.simulation_snapshot()
 
