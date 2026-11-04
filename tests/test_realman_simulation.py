@@ -105,6 +105,29 @@ class SimulationTests(unittest.TestCase):
             self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=reachable), .01*(i+1))
         self.assertGreater(self.backend.read_state(.3).q[0], previous[0]+.005)
 
+    def test_upward_pose_stream_preserves_joint_direction_under_rate_limit(self):
+        import mujoco
+        # Captured Quest posture: independent joint clipping moves the TCP down
+        # even for an upward target with unchanged orientation.
+        q = np.array([.2846434944, .0987155586, 1.1136884228,
+                      -.9803576667, 1.0650679170, 1.3575574727])
+        self.backend.data.qpos[:6] = q
+        self.backend.target = q.copy()
+        mujoco.mj_forward(self.backend.model, self.backend.data)
+        initial = self.backend.read_state(0.).pose.copy()
+        goal = initial.copy()
+        goal[2] += .05
+        heights = []
+        bound = np.minimum(self.config.joint_step_limit,
+                           np.asarray(self.config.joint_velocity_max) / self.config.control_hz)
+        for i in range(200):
+            previous = self.backend.target.copy()
+            self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=goal), i*.01)
+            self.assertTrue(np.all(abs(self.backend.target-previous) <= bound+1e-12))
+            heights.append(self.backend.read_state(i*.01).pose[2])
+        self.assertGreaterEqual(min(heights), initial[2]-1e-5)
+        self.assertAlmostEqual(heights[-1], goal[2], delta=.001)
+
 
 if __name__ == '__main__':
     unittest.main()

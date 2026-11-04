@@ -135,7 +135,13 @@ class Backend:
             if not np.isfinite(step).all() or np.any(step <= 0):
                 raise ValueError('Stream step limits must be positive')
             step = np.minimum(step, np.asarray(self.config.joint_velocity_max) / self.config.control_hz)
-            target = previous + np.clip(target - previous, -step, step)
+            delta = target - previous
+            if command.pose_target is not None:
+                # Preserve the IK joint direction. Clipping each axis separately
+                # can turn an upward TCP request into a downward first motion.
+                target = previous + delta / max(1., float(np.max(np.abs(delta) / step)))
+            else:
+                target = previous + np.clip(delta, -step, step)
         width = self.width_target
         if command.gripper_target is not None:
             requested = float(command.gripper_target)
