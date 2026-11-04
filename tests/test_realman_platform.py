@@ -44,6 +44,10 @@ def test_pair_sim_uses_standard_realman_profiles(tmp_path):
     from embodied.devices.inputs.quest.shared import tomllib
     xr = tomllib.loads(xr_config.read_text())
     assert {c['channel_type'] for c in xr['channels']} == {'left_controller', 'right_controller'}
+    # Operator behind the RM65 faces -X: XR forward (-Z) -> -X,
+    # XR right (+X) -> +Y, XR up (+Y) -> +Z. A proper rotation also
+    # maps wrist rotations without mirroring them.
+    assert xr['xr_basis'] == [0., 0., 1., 1., 0., 0., 0., 1., 0.]
     for side, path in deployments.items():
         config, plugin = profile(path)
         assert config['robot'] == 'realman.sim' and not plugin.hardware
@@ -52,9 +56,26 @@ def test_pair_sim_uses_standard_realman_profiles(tmp_path):
         settings = load_settings(config['config'], config['vr_config'])
         routing = Routing.configure(tmp_path/side, 'robot-test-'+side, settings)
         arm = tomllib.loads(routing['arm'].read_text())
+        assert arm['cartesian_relative'] and arm['cartesian_orientation_frame'] == 'base'
+        assert arm['cartesian_position_scales'] == [1., 1., 1.]
         assert arm['leader_state_topic'] == f'{prefix}/xr/{side}_controller/states/pose'
         assert arm['follower_command_topic'] == f'robot-test-{side}/robot/arm/commands/end_pose'
         assert config['source_options']['ingress'] == 'native'
+
+
+def test_real_pair_keeps_existing_input_basis(tmp_path):
+    from embodied.devices.inputs.quest.shared import tomllib
+    _, xr_config, _ = prepare(tmp_path, backend='real')
+    xr = tomllib.loads(xr_config.read_text())
+    assert xr['xr_basis'] == [0., 0., -1., -1., 0., 0., 0., 1., 0.]
+
+
+def test_single_quest_sim_uses_same_basis_as_pair(tmp_path):
+    from embodied.devices.inputs.quest.shared import tomllib
+    deployment, _ = profile('sim-quest')
+    settings = load_settings(deployment['config'], deployment['vr_config'])
+    paths = Routing.configure(tmp_path, 'robot-test', settings)
+    assert tomllib.loads(paths['xrobot'].read_text())['xr_basis'] == [0., 0., 1., 1., 0., 0., 0., 1., 0.]
 
 
 def test_pair_manual_sim_does_not_load_quest_or_hardware(tmp_path):

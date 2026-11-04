@@ -9,5 +9,6 @@
     "ingress": "quest.native",
     "channel": "native"
   },
-  "config": "configs/robots/realman/sim.json"
+  "config": "configs/robots/realman/sim.json",
+  "vr_config": "configs/inputs/quest-realman-sim.json"
 }

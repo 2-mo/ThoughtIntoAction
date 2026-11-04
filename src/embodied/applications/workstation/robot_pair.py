@@ -24,7 +24,7 @@ def prepare(directory, *, backend='real', source='quest'):
     if source == 'quest':
         from embodied.devices.inputs.quest.native_config import write_native_configs
         from embodied.devices.inputs.quest.settings import load_profile
-        vr_path = ROOT/'configs/inputs/quest.json'
+        vr_path = ROOT/'configs/inputs'/('quest-realman-sim.json' if backend == 'sim' else 'quest.json')
         vr = load_profile(vr_path)
         paths = write_native_configs(directory, prefix, .07, vr.sdk_library,
             vr.base_yaw_deg, vr.grip_threshold, vr.position_scale)

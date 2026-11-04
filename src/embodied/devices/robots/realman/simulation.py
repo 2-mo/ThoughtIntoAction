@@ -30,6 +30,7 @@ class Simulation:
             'tool': {'tcp_link': 'tcp_link', 'offset_m': [0, 0, config.tool_offset_m],
                      'gripper': 'simplified parallel jaws; assumed range, no EG2 calibration'}},
             'controller_policy': {'kind': 'torque PD with model bias compensation',
+                                  'cartesian_stream': 'direct IK target without software rate clipping; physical dynamics apply',
                                   'collision_check': 'none; robot contacts disabled',
                                   'hardware_equivalence': False,
                                   'gripper': 'position only; no calibrated force or grasp feedback'}}
@@ -47,7 +48,7 @@ class Simulation:
                 'gripper': {'present': True, 'position': True, 'grasp': False,
                             'contact_detection': 'unavailable'},
                 'source': {'kind': 'simulation_configuration',
-                           'description': 'Conservative simulation limits; not controller readback'}}
+                           'description': 'Planning and joint-stream limits; Cartesian teleop has no software rate clipping'}}
 
     def open(self, config, *, cancel_requested=None, **options):
         if options:
@@ -129,19 +130,16 @@ class Backend:
             raise ValueError('Joint target exceeds model limits')
         if np.any(np.abs(dq) > np.asarray(self.config.joint_velocity_max) * 1.000001):
             raise ValueError('Joint velocity target exceeds configured limits')
-        if not command.planned and not holding:
+        # Cartesian teleop supplies a 1:1 relative target. Submit its IK directly
+        # in simulation; physics still applies torque, inertia and joint bounds.
+        # Joint streams and planned motions retain their existing limits.
+        if not command.planned and not holding and command.pose_target is None:
             step = command.joint_step_limit if command.joint_step_limit is not None else self.config.joint_step_limit
             step = np.broadcast_to(np.asarray(step, dtype=float), (6,))
             if not np.isfinite(step).all() or np.any(step <= 0):
                 raise ValueError('Stream step limits must be positive')
             step = np.minimum(step, np.asarray(self.config.joint_velocity_max) / self.config.control_hz)
-            delta = target - previous
-            if command.pose_target is not None:
-                # Preserve the IK joint direction. Clipping each axis separately
-                # can turn an upward TCP request into a downward first motion.
-                target = previous + delta / max(1., float(np.max(np.abs(delta) / step)))
-            else:
-                target = previous + np.clip(delta, -step, step)
+            target = previous + np.clip(target - previous, -step, step)
         width = self.width_target
         if command.gripper_target is not None:
             requested = float(command.gripper_target)

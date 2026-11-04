@@ -105,7 +105,7 @@ class SimulationTests(unittest.TestCase):
             self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=reachable), .01*(i+1))
         self.assertGreater(self.backend.read_state(.3).q[0], previous[0]+.005)
 
-    def test_upward_pose_stream_preserves_joint_direction_under_rate_limit(self):
+    def test_upward_pose_stream_submits_ik_without_joint_rate_clipping(self):
         import mujoco
         # Captured Quest posture: independent joint clipping moves the TCP down
         # even for an upward target with unchanged orientation.
@@ -118,15 +118,41 @@ class SimulationTests(unittest.TestCase):
         goal = initial.copy()
         goal[2] += .05
         heights = []
-        bound = np.minimum(self.config.joint_step_limit,
-                           np.asarray(self.config.joint_velocity_max) / self.config.control_hz)
+        expected, ok, _ = self.backend.kinematics.solve_ik(goal, q)
+        self.assertTrue(ok)
         for i in range(200):
-            previous = self.backend.target.copy()
             self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=goal), i*.01)
-            self.assertTrue(np.all(abs(self.backend.target-previous) <= bound+1e-12))
+            if i == 0:
+                np.testing.assert_allclose(self.backend.target, expected, atol=1e-8)
             heights.append(self.backend.read_state(i*.01).pose[2])
         self.assertGreaterEqual(min(heights), initial[2]-1e-5)
         self.assertAlmostEqual(heights[-1], goal[2], delta=.001)
+
+    def test_fast_pose_stream_follows_all_translation_and_rotation_directions(self):
+        from scipy.spatial.transform import Rotation
+        for axis in range(6):
+            for sign in (-1, 1):
+                with self.subTest(axis=axis, sign=sign):
+                    self.backend.simulation_reset()
+                    initial = self.backend.read_state(0.).pose.copy()
+                    progress = []
+                    for i in range(80):
+                        goal = initial.copy()
+                        # 5 cm / 0.1 s or 0.15 rad / 0.1 s, then hold.
+                        amount = min((i+1)/10, 1.) * sign
+                        if axis < 3:
+                            goal[axis] += .05 * amount
+                        else:
+                            rotation = Rotation.from_rotvec(np.eye(3)[axis-3] * .15 * amount)
+                            goal[3:] = (rotation * Rotation.from_quat(initial[3:])).as_quat()
+                        self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=goal), i*.01)
+                        actual = self.backend.read_state(i*.01).pose
+                        displacement = (actual[axis]-initial[axis] if axis < 3 else
+                            (Rotation.from_quat(actual[3:]) * Rotation.from_quat(initial[3:]).inv()).as_rotvec()[axis-3])
+                        progress.append(displacement * sign)
+                    self.assertGreaterEqual(min(progress), -1e-5)
+                    self.assertLess(np.linalg.norm(actual[:3]-goal[:3]), .001)
+                    self.assertLess((Rotation.from_quat(actual[3:]) * Rotation.from_quat(goal[3:]).inv()).magnitude(), .005)
 
 
 if __name__ == '__main__':
