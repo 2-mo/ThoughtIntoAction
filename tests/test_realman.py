@@ -78,12 +78,12 @@ def test_default_percentage_uses_each_controller_limits_without_writes(host_suff
     client.responses['get_arm_max_angular_speed']['arm_angular_speed'] = max_angular
     backend = Backend(config, client=client)
     try:
-        assert config['speed_percent'] == 50
+        assert config['speed_percent'] == 100
         assert backend.config['linear_speed_m_s'] == pytest.approx(max_linear / 1000)
-        assert backend.config['angular_speed_rad_s'] == pytest.approx(max_angular / 2000)
+        assert backend.config['angular_speed_rad_s'] == pytest.approx(max_angular / 1000)
         assert 'linear_speed_m_s' not in config
         assert backend.info['get_arm_max_line_speed']['arm_line_speed'] == max_linear
-        assert backend.config['joint_speed_deg_s'] == [90., 90., 112.5, 112.5, 112.5, 112.5]
+        assert backend.config['joint_speed_deg_s'] == [180.] * 6
     finally:
         backend.close()
     assert client.sent == []
@@ -118,7 +118,7 @@ def test_percentage_mode_sends_faster_step_with_per_axis_budget(setup):
         goal = backend.state.pose.copy(); goal[0] += .05
         backend.step(command(goal), time.monotonic())
         assert client.sent[-1]['pose'][0] == 310000  # 0.25 m/s * 0.04 s, formerly 0.125 m/s.
-        np.testing.assert_allclose(calls[0]['max_joint_step_deg'], [3.6, 3.6, 4.5, 4.5, 4.5, 4.5])
+        np.testing.assert_allclose(calls[0]['max_joint_step_deg'], [7.2] * 6)
         assert backend.command_diagnostics['position_lead_limit_m'] == pytest.approx(.075)
         assert not backend.command_diagnostics['lead_limited']
     finally:

@@ -109,7 +109,9 @@ class Backend:
                 if np.any(raw <= 0):
                     raise ValueError(f'Invalid controller joint speeds: {reply}')
                 self.info['get_joint_max_speed'] = reply
-                self.config['joint_speed_deg_s'] = (raw * .006 * ratio).tolist()
+                # CANFD transmission documents a 180 degrees/s ceiling even
+                # when the controller reports faster wrist joint limits.
+                self.config['joint_speed_deg_s'] = np.minimum(raw * .006 * ratio, 180.).tolist()
             self.read_state(time.monotonic())
             self.origin = self.state.pose.copy()
             if allow_motion:

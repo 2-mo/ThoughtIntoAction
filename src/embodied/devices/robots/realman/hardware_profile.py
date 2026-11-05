@@ -17,11 +17,11 @@ class Profile:
     park_q: tuple = (0., 0., math.pi/2, 0., math.pi/2, 0.)
     joint_min: tuple = (-3.106, -2.2689, -2.356, -3.106, -2.234, -6.28)
     joint_max: tuple = (3.106, 2.2689, 2.356, 3.106, 2.234, 6.28)
-    joint_velocity_max: tuple = tuple(math.radians(v) for v in (90, 90, 112.5, 112.5, 112.5, 112.5))
+    joint_velocity_max: tuple = (math.pi,) * 6  # movej_canfd: at most 180 degrees/s.
     torque_max: tuple = (60., 60., 30., 10., 10., 10.)
     kp: tuple = (0.,) * 6
     kd: tuple = (0.,) * 6
-    joint_step_limit: float = math.radians(4.5)
+    joint_step_limit: float = math.radians(7.2)
     gripper_max_width: float = .07
     gripper_velocity_max_m_s: float = .035
     pregrasp_q: tuple = (0., 0., math.pi/2, 0., math.pi/2, 0.)

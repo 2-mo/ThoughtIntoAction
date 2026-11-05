@@ -29,8 +29,8 @@ class Routing(NativeRouting):
             feedback_hz=settings.robot.control_hz,
             cartesian_speed_limits=(settings.robot.teleop_linear_speed_m_s,
                                     settings.robot.teleop_angular_speed_rad_s))
-        # One mode owner per hand. The EG2 driver already schedules bounded
-        # position segments; a second router/coordinator can retain an old
+        # One mode owner per hand. The EG2 driver already handles absolute
+        # opening targets; a second router/coordinator can retain an old
         # opening target or toggle out of phase with the arm.
         if 'gripper' in paths:
             coordinator = tomllib.loads(paths['coordinator'].read_text())

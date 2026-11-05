@@ -9,7 +9,7 @@
   "timeout_s": 0.3,
   "control_hz": 25,
   "stale_s": 0.3,
-  "speed_percent": 50,
+  "speed_percent": 100,
   "linear_speed_percent": 100,
   "translation_radius_m": null,
   "rotation_radius_rad": null,

@@ -42,7 +42,7 @@ class Hardware:
             'gripper': {'present': True, 'position': True, 'grasp': False,
                 'contact_detection': 'unavailable', 'width_calibration': 'nominal 70 mm stroke; uncalibrated fingertips'},
             'source': {'kind': 'controller_readback',
-                'description': 'Per-axis controller speed at 50%; EG2 stroke from manufacturer specification'}}
+                'description': 'Controller readback bounded by deployment and CANFD limits; EG2 nominal stroke'}}
 
     def snapshot(self, config):
         path = Path(config.model_path)
@@ -191,6 +191,7 @@ class Backend:
             'data_contract': data_contract(self.config), 'controller': self.connection.info,
             'joint_velocity_limits_rad_s': self.velocity_limits.tolist(),
             'cartesian_velocity_limits': {'tcp_speed': self.linear_speed, 'angular_speed': self.angular_speed},
+            'streaming_cartesian_speed_limits': None,
             'velocity_feedback': 'finite_difference_of_encoder_positions',
             'gripper_startup_ready': self.gripper_ready,
             'gripper_width': {'source': 'manufacturer_nominal_stroke', 'raw_range': [0, 1000],
@@ -251,7 +252,7 @@ class Backend:
             requested = vector(command.joint_target, 6)
             if np.any(requested < self.kinematics.lower) or np.any(requested > self.kinematics.upper):
                 raise ValueError('Requested joint target exceeds controller limits')
-        step_limit = self.velocity_limits/self.config.control_hz
+        step_limit = np.minimum(self.velocity_limits/self.config.control_hz, np.deg2rad(10.))
         if effective.joint_step_limit is not None:
             step_limit = np.minimum(step_limit, np.broadcast_to(effective.joint_step_limit, (6,)))
         effective = replace(effective, joint_step_limit=step_limit)
@@ -264,9 +265,8 @@ class Backend:
             raise ValueError('Joint target outside controller limits')
         if not holding and np.any(np.abs(q-previous) > step_limit+2e-5):
             raise ValueError('Joint command exceeds per-axis cycle speed budget')
-        if not holding:
-            q = self._tcp_speed_bound(q, previous, planned=command.planned)
-            self.controller.q_target = q.copy()
+        if not holding and command.planned:
+            self._check_planned_tcp_speed(q, previous)
         if holding:
             stopping_gripper = self.connection.active and self.pending_gripper is not None
             self.connection.stop()
@@ -304,21 +304,13 @@ class Backend:
             'feedback_velocity_source': 'encoder_finite_difference', 'gripper_raw': dict(self.gripper),
             'gripper_ready': self.gripper_ready, 'gripper_needs_release': self.gripper_needs_release}
 
-    def _tcp_speed_bound(self, q, previous, *, planned):
-        origin = self.kinematics.fk(previous)
-        linear = self.linear_speed/self.config.control_hz
-        angular = self.angular_speed/self.config.control_hz
-        for _ in range(8):
-            distance, angle = pose_error(self.kinematics.fk(q), origin)
-            fraction = min(1., linear/max(distance, 1e-12), angular/max(angle, 1e-12))
-            if fraction >= 1.-1e-9:
-                return q
-            if planned:
-                raise ValueError('Planned curve exceeds controller TCP speed capability')
-            q = previous + (q-previous)*fraction*.99
-        # No feasible step this tick: retain the last sent reference and let
-        # the next target recover, just like a rejected ARX IK iteration.
-        return previous.copy()
+    def _check_planned_tcp_speed(self, q, previous):
+        # Live targets use joint/controller transmission bounds only. Planned
+        # curves must still satisfy the Cartesian limits given to the planner.
+        distance, angle = pose_error(self.kinematics.fk(q), self.kinematics.fk(previous))
+        if (distance > self.linear_speed/self.config.control_hz*(1.+1e-9) or
+                angle > self.angular_speed/self.config.control_hz*(1.+1e-9)):
+            raise ValueError('Planned curve exceeds controller TCP speed capability')
 
     def _gripper_target(self, width, now):
         if not self.gripper_ready:
@@ -373,8 +365,9 @@ class Backend:
             self.gripper_stop_requested_at = None
         if abs(raw-position) <= 5:
             return
-        target = int(np.clip(raw, self.gripper['actpos']-100, self.gripper['actpos']+100))
-        target = max(1, min(1000, target))
+        # Send the requested opening once; 100-unit subgoals made the EG2
+        # brake and wait for a feedback round trip every 7 mm.
+        target = max(1, min(1000, raw))
         reply = self.connection.client.exchange({'command': 'set_gripper_position',
             'position': target, 'block': False}, 'set_gripper')
         if reply.get('state') is not True:

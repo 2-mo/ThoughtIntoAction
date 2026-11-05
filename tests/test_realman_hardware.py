@@ -91,7 +91,7 @@ class HardwareTests(unittest.TestCase):
         self.assertEqual(self.backend.state.gripper_width, .07)
         self.assertEqual(self.connection.client.sent, [])
         self.step(hold=True, gripper_target=0.)
-        self.assertEqual(self.connection.client.sent[-1]['position'], 907)
+        self.assertEqual(self.connection.client.sent[-1]['position'], 1)
 
     def test_all_six_axes_use_joint_wire_and_speed_budgets(self):
         self.step(joint_target=np.full(6, .2))
@@ -100,8 +100,59 @@ class HardwareTests(unittest.TestCase):
         self.assertTrue(all(v > 0 for v in wire['joint']))
         q = np.deg2rad(np.asarray(wire['joint'])/1000)
         self.assertTrue(np.all(q <= self.backend.velocity_limits/25+2e-5))
-        self.assertLessEqual(np.linalg.norm(self.kinematics.fk(q)[:3]), .25/25+2e-6)
+        np.testing.assert_allclose(q, self.backend.velocity_limits/25, atol=2e-5)
         self.assertFalse(any(x['command'] == 'movep_canfd' for x in self.connection.client.sent))
+
+    def test_full_speed_profile_removes_half_speed_but_respects_lower_readback(self):
+        self.backend.close()
+        self.connection = Connection(self.kinematics)
+        self.connection.config.update(joint_speed_deg_s=[180.]*6, angular_speed_rad_s=.6)
+        self.backend = Backend(self.config, connection=self.connection, kinematics=self.kinematics)
+        self.step(joint_target=np.array([.2, 0, 0, 0, 0, 0]))
+        q = np.deg2rad(np.asarray(self.motions()[-1]['joint'])/1000)
+        self.assertAlmostEqual(q[0], np.pi/25, places=5)
+        self.assertGreater(.1*q[0], .25/25)
+        self.step(hold=True)
+        self.step(joint_target=np.array([0, 0, 0, .2, 0, 0]))
+        q = np.deg2rad(np.asarray(self.motions()[-1]['joint'])/1000)
+        self.assertAlmostEqual(q[3], np.pi/25, places=5)
+        self.assertGreater(q[3], .6/25)
+        lower = Connection(self.kinematics)
+        lower.config.update(joint_speed_deg_s=[30.]*6, linear_speed_m_s=.1, angular_speed_rad_s=.2)
+        with closing(Backend(self.config, connection=lower, kinematics=self.kinematics)) as b:
+            np.testing.assert_allclose(b.velocity_limits, np.deg2rad([30.]*6))
+            self.assertEqual((b.linear_speed, b.angular_speed), (.1, .2))
+
+    def test_pose_stream_skips_tcp_slowdown_but_planned_curves_keep_checks(self):
+        self.step(pose_target=np.array([.01, .01, .01, 0, 0, 0, 1.]))
+        q = self.backend.controller.q_target.copy()
+        np.testing.assert_allclose(q[:3], self.backend.velocity_limits[:3]/25)
+        self.assertGreater(np.linalg.norm(self.kinematics.fk(q)[:3]), .25/25)
+        self.step(hold=True)
+        count = len(self.motions())
+        with self.assertRaisesRegex(ValueError, 'Planned curve exceeds'):
+            self.step(joint_target=np.array([0, 0, 0, .02, 0, 0]),
+                      joint_velocity_target=np.zeros(6), planned=True)
+        self.assertEqual(len(self.motions()), count)
+
+    def test_gripper_single_sweep_and_linear_intermediate_opening(self):
+        b = self.backend
+        b.gripper.update(actpos=1000)
+        b._gripper_target(0., 1.)
+        self.assertEqual(self.connection.client.sent, [
+            {'command': 'set_gripper_position', 'position': 1, 'block': False}])
+        for index, pos in enumerate((900, 700, 500, 300, 100)):
+            b.gripper.update(mode=4, actpos=pos)
+            # A changing request is not queued while the accepted move runs.
+            b._gripper_target(.035 if index < 4 else .0525, 1.1 + index*.1)
+        self.assertEqual(len(self.connection.client.sent), 1)
+        b.gripper.update(mode=2, actpos=1)
+        b._gripper_target(.0525, 2.)
+        self.assertEqual(self.connection.client.sent[-1]['position'], 750)
+        b.gripper.update(mode=1, actpos=752)
+        b._gripper_target(.0525, 3.)
+        self.assertIsNone(b.pending_gripper)
+        self.assertEqual(len(self.connection.client.sent), 2)
 
     def test_hold_discards_cached_goal_and_disabled_does_not_home_or_open(self):
         self.step(joint_target=np.full(6, .1))
@@ -158,10 +209,10 @@ class HardwareTests(unittest.TestCase):
             self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING), time.monotonic(), cancel_requested=lambda: True)
         self.assertFalse(self.motions())
 
-    def test_gripper_segments_contact_and_timeout(self):
+    def test_gripper_absolute_goal_contact_and_timeout(self):
         b = self.backend
         b._gripper_target(0., 1.)
-        self.assertEqual(self.connection.client.sent[-1]['position'], 902)
+        self.assertEqual(self.connection.client.sent[-1]['position'], 1)
         count = len(self.connection.client.sent)
         b._gripper_target(0., 2.)
         self.assertEqual(len(self.connection.client.sent), count)
@@ -179,21 +230,22 @@ class HardwareTests(unittest.TestCase):
     def test_settled_segment_four_units_short_can_reverse_and_open(self):
         b = self.backend
         b.gripper.update(mode=1, actpos=486)
-        b._gripper_target(0., 1.)
+        b._gripper_target(.07 * .386, 1.)
         self.assertEqual(b.pending_gripper[0], 386)
         b.gripper.update(mode=2, actpos=382)  # Captured right EG2 feedback.
         b._gripper_target(.07, 1.3)
-        self.assertEqual(self.connection.client.sent[-1]['position'], 482)
-        b.gripper.update(mode=1, actpos=486)
+        self.assertEqual(self.connection.client.sent[-1]['position'], 1000)
+        count = len(self.connection.client.sent)
+        b.gripper.update(mode=5, actpos=486)
         b._gripper_target(.07, 1.6)
-        self.assertEqual(self.connection.client.sent[-1]['position'], 586)
+        self.assertEqual(len(self.connection.client.sent), count)
 
     def test_gripper_interrupted_by_arm_stop_drops_cancelled_segment_after_feedback(self):
         b = self.backend
         self.connection.client.gripper.update(mode=3, actpos=201)
         b.gripper.update(mode=3, actpos=201)
         self.step(gripper_target=.07)
-        self.assertEqual(b.pending_gripper[0], 301)
+        self.assertEqual(b.pending_gripper[0], 1000)
         self.step(hold=True, gripper_target=None)  # Y/Home sends set_arm_stop.
         self.assertIsNotNone(b.pending_gripper)  # Cached mode 3 is insufficient.
         self.assertIsNotNone(b.gripper_stop_requested_at)
@@ -204,18 +256,18 @@ class HardwareTests(unittest.TestCase):
         self.step(hold=True, gripper_target=None)
         self.assertEqual(len(self.connection.client.sent), before)
         self.step(gripper_target=0.)
-        self.assertEqual(b.pending_gripper[0], 101)
+        self.assertEqual(b.pending_gripper[0], 1)
 
     def test_gripper_idle_overshoot_completes_but_short_or_moving_does_not(self):
         b = self.backend
         b.gripper.update(mode=1, actpos=861)
-        b._gripper_target(0., 1.)
+        b._gripper_target(.07 * .761, 1.)
         self.assertEqual(b.pending_gripper[0], 761)
         b.gripper.update(mode=4, actpos=755)
         b._gripper_target(0., 1.5)
         self.assertEqual(b.pending_gripper[0], 761)
         b.gripper.update(mode=2, actpos=755)
-        b._gripper_target(0., 2.)
+        b._gripper_target(.07 * .655, 2.)
         self.assertEqual(b.pending_gripper[0], 655)
         b.gripper.update(mode=2, actpos=700)
         with self.assertRaisesRegex(RuntimeError, 'did not reach'):
@@ -227,7 +279,7 @@ class HardwareTests(unittest.TestCase):
         b._gripper_target(0., 1.)
         self.assertIsNone(b.pending_gripper)
         b._gripper_target(.07, 2.)
-        self.assertEqual(b.pending_gripper[0], 530)
+        self.assertEqual(b.pending_gripper[0], 1000)
         count = len(self.connection.client.sent)
         for now in (2.04, 2.08, 2.12):
             b._gripper_target(.07, now)
@@ -235,9 +287,10 @@ class HardwareTests(unittest.TestCase):
         b.gripper.update(mode=5, actpos=496)
         b._gripper_target(.07, 2.2)
         self.assertEqual(len(self.connection.client.sent), count)
-        b.gripper.update(mode=1, actpos=540)
+        b.gripper.update(mode=1, actpos=1007)
         b._gripper_target(.07, 2.5)
-        self.assertEqual(b.pending_gripper[0], 640)
+        self.assertIsNone(b.pending_gripper)
+        self.assertEqual(len(self.connection.client.sent), count)
 
     def test_two_grippers_follow_simultaneously_with_independent_segments(self):
         other_connection = Connection(self.kinematics)
@@ -325,7 +378,7 @@ class HardwareTests(unittest.TestCase):
         self.step(hold=True, gripper_target=-1.1084925771790271e-6)
         self.assertEqual(self.backend.telemetry()['gripper_target'], 0.)
         self.assertEqual(self.connection.client.sent[-1],
-                         {'command': 'set_gripper_position', 'position': 91, 'block': False})
+                         {'command': 'set_gripper_position', 'position': 1, 'block': False})
         count = len(self.connection.client.sent)
         self.backend.pending_gripper = None
         self.step(hold=True, gripper_target=None)
@@ -350,7 +403,7 @@ class HardwareTests(unittest.TestCase):
         self.assertEqual(len(self.connection.client.sent), before)
         self.backend._gripper_target(None, time.monotonic())
         self.backend._gripper_target(0., time.monotonic())
-        self.assertEqual(self.connection.client.sent[-1]['position'], 400)
+        self.assertEqual(self.connection.client.sent[-1]['position'], 1)
 
     def test_initialization_requires_explicit_idle_request_and_sends_only_once(self):
         self.offline()
