@@ -1,0 +1,155 @@
+<main class="overview">
+  <header class="overview-head">
+    <div class="overview-head-copy">
+      <p class="overview-eyebrow">知行有灵 · Thought Into Action</p>
+      <h1>系统总览</h1>
+      <p class="overview-sub">只读监看 · 不占用控制权</p>
+    </div>
+    <div class="overview-head-status">
+      <span id="overviewConnection" class="overview-pill" data-state="waiting" role="status">正在读取内核</span>
+      <span id="overviewAge" class="overview-age">反馈延迟 —</span>
+    </div>
+  </header>
+
+  <section class="overview-grid">
+    <section class="overview-card overview-arm" aria-labelledby="overviewArmTitle">
+      <div class="overview-card-head">
+        <h2 id="overviewArmTitle">机械臂</h2>
+        <span id="overviewPhase" class="overview-phase">—</span>
+      </div>
+      <div id="overviewJoints" class="overview-joints"></div>
+      <figure class="overview-trend">
+        <figcaption>关节趋势 · 最近 60 秒 <span id="overviewTrendHint">等待反馈</span></figcaption>
+        <canvas id="overviewTrend" aria-label="六个关节角随时间的变化"></canvas>
+      </figure>
+      <div class="overview-arm-foot">
+        <div class="overview-metric">
+          <span>夹爪开度</span>
+          <strong id="overviewGripper">—</strong>
+        </div>
+        <div class="overview-metric">
+          <span>末端位姿</span>
+          <strong id="overviewPose">—</strong>
+        </div>
+      </div>
+    </section>
+
+    <aside class="overview-side">
+      <section class="overview-card overview-wizard" aria-labelledby="overviewWizardTitle">
+        <div class="overview-card-head">
+          <h2 id="overviewWizardTitle">遥操准备</h2>
+          <span id="wizardProgress" class="overview-phase">0 / 5</span>
+        </div>
+        <ol class="wizard-steps">
+          <li class="wizard-step" id="wizardCan" data-state="waiting">
+            <span class="wizard-index">1</span>
+            <div class="wizard-body">
+              <strong>CAN 接口</strong>
+              <small id="wizardCanDetail">can0</small>
+            </div>
+            <span id="wizardCanBadge" class="wizard-badge">检查中</span>
+            <button id="wizardCanAction" type="button" hidden>建立接口</button>
+          </li>
+          <li class="wizard-step" id="wizardQuest" data-state="waiting">
+            <span class="wizard-index">2</span>
+            <div class="wizard-body">
+              <strong>Quest 头显</strong>
+              <small id="wizardQuestDetail">读取中…</small>
+            </div>
+            <span id="wizardQuestBadge" class="wizard-badge">检查中</span>
+            <button id="wizardQuestAction" type="button" hidden>准备 ADB 转发</button>
+          </li>
+          <li class="wizard-step" id="wizardKernel" data-state="waiting">
+            <span class="wizard-index">3</span>
+            <div class="wizard-body">
+              <strong>控制内核</strong>
+              <small id="wizardKernelDetail">real-quest</small>
+            </div>
+            <span id="wizardKernelBadge" class="wizard-badge">未运行</span>
+            <button id="wizardKernelAction" type="button" hidden>启动 real-quest</button>
+          </li>
+          <li class="wizard-step" id="wizardTeleop" data-state="waiting">
+            <span class="wizard-index">4</span>
+            <div class="wizard-body">
+              <strong>遥操通道</strong>
+              <small id="wizardTeleopDetail">ready / armed / permit</small>
+            </div>
+            <span id="wizardTeleopBadge" class="wizard-badge">等待内核</span>
+          </li>
+          <li class="wizard-step" id="wizardCamera" data-state="waiting">
+            <span class="wizard-index">5</span>
+            <div class="wizard-body">
+              <strong>相机服务</strong>
+              <small id="wizardCameraDetail">采集与预览</small>
+            </div>
+            <span id="wizardCameraBadge" class="wizard-badge">未启动</span>
+            <button id="wizardCameraAction" type="button" hidden>启动相机</button>
+          </li>
+        </ol>
+        <p id="wizardMessage" class="op-message" role="status"></p>
+      </section>
+      <section class="overview-card" aria-labelledby="overviewRuntimeTitle">
+        <h2 id="overviewRuntimeTitle">运行状态</h2>
+        <dl class="overview-list">
+          <div><dt>内核</dt><dd id="overviewRuntime">—</dd></div>
+          <div><dt>控制源</dt><dd id="overviewOwner">—</dd></div>
+          <div><dt>租约</dt><dd id="overviewLease">—</dd></div>
+          <div><dt>任务</dt><dd id="overviewOperations">—</dd></div>
+        </dl>
+      </section>
+      <section class="overview-card" aria-labelledby="overviewPowerTitle">
+        <h2 id="overviewPowerTitle">系统电源</h2>
+        <div class="op-row">
+          <div class="op-info">
+            <strong>控制内核</strong>
+            <span id="overviewKernelState" data-state="off">未运行</span>
+          </div>
+          <div class="op-actions">
+            <button id="overviewKernelStart" type="button" class="primary">启动</button>
+            <button id="overviewKernelStop" type="button">停止</button>
+          </div>
+        </div>
+        <label class="op-field"><span>运行配置</span>
+          <select id="overviewKernelProfile">
+            <option value="sim-manual">仿真 · 无输入</option>
+            <option value="real-manual">真机 · 无 Quest</option>
+            <option value="real-quest">真机 · Quest（单臂）</option>
+            <option value="real-dual-quest" selected>真机 · 双臂 Quest</option>
+          </select>
+        </label>
+        <div id="overviewKernelConfirm" class="op-confirm" hidden>
+          <p>真机启动会使能电机并保持当前位置，请先扶好机械臂。</p>
+          <div class="op-actions">
+            <button id="overviewKernelConfirmStart" type="button" class="danger">确认启动</button>
+            <button id="overviewKernelCancel" type="button">取消</button>
+          </div>
+        </div>
+        <p class="op-message" id="overviewKernelMessage" role="status"></p>
+      </section>
+
+      <section class="overview-card" aria-labelledby="overviewDeviceTitle">
+        <h2 id="overviewDeviceTitle">设备</h2>
+        <div class="op-row">
+          <div class="op-info">
+            <strong>相机服务</strong>
+            <span id="overviewCameraState" data-state="off">未启动</span>
+          </div>
+          <div class="op-actions">
+            <button id="overviewCameraStart" type="button" class="primary">启动</button>
+            <button id="overviewCameraStop" type="button">停止</button>
+          </div>
+        </div>
+        <p class="op-hint" id="overviewCameraHint">腕部相机 · WebRTC</p>
+        <p class="op-message" id="overviewCameraMessage" role="status"></p>
+      </section>
+      <section class="overview-card" aria-labelledby="overviewEntryTitle">
+        <h2 id="overviewEntryTitle">入口</h2>
+        <div class="overview-links">
+          <a href="/control">控制台 <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+          <a href="/collection">数据采集 <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+        </div>
+      </section>
+      <p id="overviewMessage" class="overview-message" role="status">正在读取内核状态…</p>
+    </aside>
+  </section>
+</main>

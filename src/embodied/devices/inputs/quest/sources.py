@@ -36,16 +36,22 @@ class FreshSample:
 
 
 class NativeIngress:
-    def __init__(self, prefix, dependencies, gripper=True):
-        self.bridge = RobotBridge(prefix, feedback=False)
+    def __init__(self, prefix, dependencies, gripper=True, *, dual=False):
+        self.dual = bool(dual)
+        self.bridge = RobotBridge(prefix, feedback=False, arms=2 if self.dual else 1)
         self.node = create_node()
         topics = {
             'input': (f'{prefix}/xr/right_controller/states/input', XrControllerInput, .1),
             'permit': (f'{prefix}/group/permit', TeleopGate, .1),
             'arm': (f'{prefix}/group/arm/health', TeleopRouteHealth, .5),
         }
+        if self.dual:
+            topics['input_left'] = (f'{prefix}/xr/left_controller/states/input', XrControllerInput, .1)
+            topics['arm2'] = (f'{prefix}/group/arm2/health', TeleopRouteHealth, .5)
         if gripper:
             topics['gripper'] = (f'{prefix}/group/gripper/health', TeleopRouteHealth, .5)
+            if self.dual:
+                topics['gripper2'] = (f'{prefix}/group/gripper2/health', TeleopRouteHealth, .5)
         topics['dependencies'] = (f'{prefix}/managed/dependencies', DependencyHealth, .2)
         self.subscribers = {key: make_subscriber(open_service(self.node, topic, kind))
                             for key, (topic, kind, _) in topics.items()}
@@ -86,6 +92,9 @@ class NativeIngress:
                 reason = reason or f'native {name} route fault'
         valid = (inp.fresh(now) and inp.sample.connection_state == 1 and inp.sample.tracking_valid
                  and math.isfinite(inp.sample.grip))
+        if self.dual:
+            left = self.samples['input_left']
+            valid = valid and left.fresh(now) and left.sample.connection_state == 1 and left.sample.tracking_valid
         if not valid:
             reason = reason or 'native tracking invalid'
         ready = reason is None
@@ -115,7 +124,13 @@ class NativeIngress:
         elif native.mode != Mode.DISABLED:
             self.home_active = False
         self.home_requested = self.home_active or now < self.home_deadline
-        command = ControlCommand(Mode.COMMAND_FOLLOWING, hold=True, gripper_target=state.gripper_width)
+        # Mirror the coordinator's group mode while disengaged so members can
+        # report Disabled/FreeDrive; A can only toggle out of Disabled once
+        # every member has acknowledged Disabled for the settle interval.
+        seen = getattr(self.bridge, 'modes_seen', lambda *_: False)(0)
+        base_mode = (native.mode if seen and native.mode in (Mode.DISABLED, Mode.FREE_DRIVE)
+                     else Mode.COMMAND_FOLLOWING)
+        command = ControlCommand(base_mode, hold=True, gripper_target=state.gripper_width)
         if selected and self.armed and ready:
             # An inactive coordinator may have requested Disabled after a fault.
             # Only an operator A+B in this ownership epoch can start native Home.
@@ -124,6 +139,17 @@ class NativeIngress:
                 if native.mode == Mode.COMMAND_FOLLOWING and not permit.sample.filter_valid:
                     command = ControlCommand(Mode.COMMAND_FOLLOWING, hold=True,
                                              gripper_target=state.gripper_width)
+                if self.dual:
+                    # arm1 follows the left controller, arm2 the right one.
+                    second = self.bridge.poll_commands(now, arm=1)
+                    command = ControlCommand(
+                        mode=command.mode,
+                        pose_targets=(command.pose_target, second.pose_target),
+                        gripper_targets=(command.gripper_target, second.gripper_target),
+                        hold=command.hold,
+                        engaged=command.engaged and second.engaged,
+                        gripper_mode=command.gripper_mode,
+                        reason=command.reason)
         phase = 'teleop' if command.mode == Mode.COMMAND_FOLLOWING and not command.hold else 'hold'
         return Candidate(epoch, command, min(t.expires_at for t in self.samples.values()),
                          inp.sequence, phase, fatal)

@@ -24,7 +24,7 @@ from urllib.parse import parse_qs, urlsplit
 import numpy as np
 
 from embodied.applications import calibration
-from embodied.contracts.runtime.control import ControlSession, live_runs
+from embodied.contracts.runtime.control import ControlClient, ControlSession, live_runs
 from embodied.devices.robots.arx5.paths import CONFIG_ROOT, PROJECT_ROOT
 from legacy.arx5_control.teleoperation import load_teleoperation_config
 
@@ -124,6 +124,7 @@ class ArxConsole:
         self.started_at = time.time()
         self.owner = None
         self.session: ControlSession | None = None
+        self.client: ControlClient | None = None  # Read-only attach while another source (VR) owns the lease.
         self.robot: dict[str, Any] = {}
         self.motion_limits: dict[str, Any] = {}
         self.mode, self.fault, self.busy = 'disconnected', None, False
@@ -157,11 +158,12 @@ class ArxConsole:
         return self.session.command(action, ttl_ms=TTL_MS, sent_monotonic_ns=time.monotonic_ns(), **fields)
 
     async def status(self):
-        if self.session is None:
+        client = self.session if self.session is not None else self.client
+        if client is None:
             return None
         try:
-            status = await self.call(self.session.status)
-            if self.session.error:
+            status = await self.call(client.status)
+            if self.session is not None and self.session.error:
                 raise RuntimeError(f'控制租约已失效：{self.session.error}')
             if status['stopped']:
                 raise RuntimeError('内核已执行 stop 并锁存，需要重启内核。')
@@ -179,6 +181,11 @@ class ArxConsole:
             self.free_drive.cancel()
             self.free_drive = None
 
+    def lease_owner_name(self):
+        status = self.last_status or {}
+        owner = status.get('owner') or {}
+        return {'quest': 'VR 遥操', 'console': '网页控制台'}.get(owner.get('source'), owner.get('source') or '其他来源')
+
     def require_active(self):
         if self.session is None:
             raise RuntimeError('机械臂未连接。')
@@ -192,13 +199,16 @@ class ArxConsole:
     def state_payload(self, status=None) -> dict[str, Any]:
         stream = self.stream
         teleoperation = stream is not None and stream['kind'] == 'teleoperation'
+        client = self.session if self.session is not None else self.client
         payload: dict[str, Any] = {
-            'connected': self.session is not None, 'mode': self.mode, 'busy': self.busy,
+            'connected': client is not None, 'mode': self.mode, 'busy': self.busy,
             'servo_active': stream is not None and not stream.get('preview_only'), 'servo_stopping': False,
             'servo_kind': None if stream is None else
             'teleoperation_preview' if stream.get('preview_only') else stream['kind'],
             'fault_reason': self.fault, 'control_stack': 'arx',
-            'kernel_runtime_id': self.session.identity['runtime_id'] if self.session else None,
+            'kernel_runtime_id': client.identity['runtime_id'] if client else None,
+            'lease_owner': None if status is None or not status.get('owner')
+            else status['owner'].get('source'),
             'teleoperation_config': self.teleoperation_config,
             'teleoperation': {
                 'active': teleoperation and not stream.get('preview_only'),
@@ -212,7 +222,7 @@ class ArxConsole:
             'cube_manipulation': {'stage': 'idle'}, 'collection': COLLECTION,
         }
         status = status if status is not None else self.last_status
-        if self.session is None or status is None:
+        if client is None or status is None:
             return payload
         pose = status['pose']
         payload.update(
@@ -226,6 +236,12 @@ class ArxConsole:
             state_age_ms=(time.monotonic_ns() - status['feedback_monotonic_ns']) / 1e6,
             kernel_phase=status['phase'],
         )
+        widths = status.get('gripper_widths')
+        if widths:
+            payload['gripper_widths_mm'] = [1000 * width for width in widths]
+        poses = status.get('eef_poses')
+        if poses:
+            payload['eef_poses_6d'] = [[*entry[:3], *rpy(entry[3:])] for entry in poses]
         if self.reference is not None:
             payload.update(reference_joint_position_deg=degrees(self.reference[0]),
                            reference_gripper_position_mm=1000 * self.reference[1])
@@ -280,6 +296,11 @@ class ArxConsole:
             'state': self.state_payload(await self.status())})
 
     async def command(self, websocket, request_id, action, params):
+        if self.mode == 'observe' and action not in ('state', 'disconnect'):
+            await self.reply(websocket, request_id, action, error=(
+                f'内核控制权由 {self.lease_owner_name()} 持有（VR 遥操中），页面只读：'
+                '可以观察 3D 与关节反馈，不能下发运动。先断开 VR 遥操或在内核侧释放控制权。'))
+            return
         if action == 'state':
             await self.send(websocket, {'type': 'state', 'id': request_id, 'state': self.state_payload(await self.status())})
             return
@@ -320,36 +341,47 @@ class ArxConsole:
     # Session and modes
 
     async def connect(self, params, **_):
-        if self.session is not None:
+        """Attach read-only first; the lease (only needed to command) is taken when it is free."""
+        if self.session is not None or self.client is not None:
             return None
         runs = [Path(self.run)] if self.run else live_runs(RUNS)
         if not runs:
             raise RuntimeError('没有运行中的内核：先运行 ./run.sh kernel sim 或 ./run.sh kernel real。')
-        session = ControlSession(runs[-1], source='console', purpose='operation')
-        await self.call(session.__enter__)
-        try:
-            description = await self.call(session.describe)
-            robot, limits = description['robot'], description['motion_limits']
-            velocity = vector(limits['joint_velocity_limits_rad_s'], len(robot['joint_min']), '关节速度能力')
-            if np.any(velocity <= 0):
-                raise ValueError('内核必须报告正值关节速度能力。')
-            for key in ('gripper_max_width', 'gripper_velocity_max_m_s'):
-                value = robot[key]
-                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
-                    raise ValueError(f'内核必须报告正值 {key}。')
-        except BaseException:
-            await self.call(session.close)
-            raise
-        self.session, self.mode, self.fault, self.preview = session, 'active', None, None
-        self.robot, self.motion_limits = robot, limits
+        run = runs[-1]
+        client = ControlClient(run)
+        robot, limits = await self.read_description(client)
+        self.client, self.robot, self.motion_limits = client, robot, limits
         status = await self.status()
         if status is None:
             reason = self.fault
             await self.disconnect({})
             raise RuntimeError(reason)
+        self.mode, self.fault, self.preview = 'observe', None, None
         self.reference = (status['q'], status['gripper_width'])
-        print(f'已接入内核 {session.identity["runtime_id"]}（{session.identity["backend"]}）。', flush=True)
+        session = ControlSession(run, source='console', purpose='operation')
+        try:
+            await self.call(session.__enter__)
+        except RuntimeError as exc:
+            if 'already owned' not in str(exc):
+                raise
+            print(f'已接入内核 {client.identity["runtime_id"]}（只读）：'
+                  f'{self.lease_owner_name()}持有控制权。', flush=True)
+            return None
+        self.session, self.mode = session, 'active'
+        print(f'已接入内核 {session.identity["runtime_id"]}（{session.identity["backend"]}，可控制）。', flush=True)
         return None
+
+    async def read_description(self, client):
+        description = await self.call(client.describe)
+        robot, limits = description['robot'], description['motion_limits']
+        velocity = vector(limits['joint_velocity_limits_rad_s'], len(robot['joint_min']), '关节速度能力')
+        if np.any(velocity <= 0):
+            raise ValueError('内核必须报告正值关节速度能力。')
+        for key in ('gripper_max_width', 'gripper_velocity_max_m_s'):
+            value = robot[key]
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+                raise ValueError(f'内核必须报告正值 {key}。')
+        return robot, limits
 
     async def disconnect(self, params, **_):
         if self.task is not None and self.task is not asyncio.current_task():
@@ -359,6 +391,7 @@ class ArxConsole:
         if self.session is not None:
             session, self.session = self.session, None
             await self.call(session.close)  # Release; the kernel holds position.
+        self.client = None
         self.mode, self.fault, self.last_status = 'disconnected', None, None
         self.robot, self.motion_limits, self.reference = {}, {}, None
         return None
@@ -460,9 +493,25 @@ class ArxConsole:
         await self.settle(params)
         return {'kind': 'joint_motion', 'final_error_deg': degrees(np.abs(np.subtract(status['q'], q)))}
 
+    def arm_offset(self, params):
+        """A dual-arm kernel addresses each arm's six joints from an arm id."""
+        arms = self.robot.get('arms') or []
+        if not arms:
+            return 0
+        requested = params.get('arm')
+        if requested is None:
+            return 0
+        for offset, arm in enumerate(arms):
+            if arm.get('id') == requested:
+                return offset * int(arm.get('joint_count') or 6)
+        raise ValueError(f'未知机械臂：{requested}')
+
     async def move_joint(self, params, **context):
         self.require_active()
-        index = joint_index(params, len(self.robot['joint_min']))
+        arms = self.robot.get('arms') or []
+        offset = self.arm_offset(params)
+        per_arm = int(arms[0].get('joint_count') or 6) if arms else len(self.robot['joint_min'])
+        index = offset + joint_index(params, per_arm)
         status = await self.status()
         q = list(status['q'])
         if context['action'] == 'move_joint':

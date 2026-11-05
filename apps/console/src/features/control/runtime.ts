@@ -4,6 +4,7 @@ import {
   decodeControlEvent,
   encodeCommand,
   encodeStream,
+  withToken,
 } from "../../api/control-protocol";
 
 const jointLabels = [
@@ -19,6 +20,7 @@ const ui = {
   armStatus: document.querySelector("#armConnectButton"),
   controlUrl: document.querySelector("#controlUrl"),
   armConnectButton: document.querySelector("#armConnectButton"),
+  sceneConnectPrompt: document.querySelector("#sceneConnectPrompt"),
   armModeSwitch: document.querySelector("#armModeSwitch"),
   armModeButtons: [...document.querySelectorAll("[data-arm-mode]")],
   setReferenceButton: document.querySelector("#setReferenceButton"),
@@ -29,6 +31,7 @@ const ui = {
   motionSpeedValue: document.querySelector("#motionSpeedValue"),
   jointStep: document.querySelector("#jointStep"),
   jointGrid: document.querySelector("#jointGrid"),
+  armSelector: document.querySelector("#armSelector"),
   controlMode: document.querySelector("#controlMode"),
   controlBusy: document.querySelector("#controlBusy"),
   feedbackAge: document.querySelector("#feedbackAge"),
@@ -188,6 +191,7 @@ if (window.location.protocol === "https:") {
 
 const modeNames = {
   disconnected: "未连接",
+  observe: "只读 · VR 遥操",
   damping: "自由阻尼",
   active: "关节位置",
   fault: "故障阻尼",
@@ -246,6 +250,19 @@ let lastMotionStateUiUpdateAt = -Infinity;
 let connectionTransition = null;
 let connectionTransitionRequestId = null;
 let connectionFailed = false;
+let controlTakeoverOffered = false;
+let controlTakeoverAttempted = false;
+let reconnectTimer = null;
+
+function scheduleReconnect(delayMs = 1500) {
+  if (reconnectTimer !== null) return;
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = null;
+    if (!socketIsOpen() && controlSocket?.readyState !== WebSocket.CONNECTING) {
+      connectControl();
+    }
+  }, delayMs);
+}
 let requestSequence = 0;
 let servoSequence = 0;
 let selectedArmMode = "damping";
@@ -604,6 +621,79 @@ window.arx5RequestControlState = async () => {
   }
 };
 
+// Dual-arm: the console renders the selected arm; a single arm keeps index 0.
+const JOINTS_PER_ARM = 6;
+let armCount = 1;
+let selectedArmIndex = 0;
+let armLabels = [];
+
+function armSlice(values) {
+  if (!Array.isArray(values) || armCount <= 1) return values;
+  const start = selectedArmIndex * JOINTS_PER_ARM;
+  return values.slice(start, start + JOINTS_PER_ARM);
+}
+
+function armView(state) {
+  if (!state || armCount <= 1) return state;
+  return {
+    ...state,
+    joint_position_deg: armSlice(state.joint_position_deg),
+    joint_min_deg: armSlice(state.joint_min_deg),
+    joint_max_deg: armSlice(state.joint_max_deg),
+    joint_torque_nm: armSlice(state.joint_torque_nm),
+    reference_joint_position_deg: armSlice(state.reference_joint_position_deg),
+  };
+}
+
+function activeArmId() {
+  return `arm${selectedArmIndex + 1}`;
+}
+
+function armFields() {
+  return armCount > 1 ? { arm: activeArmId() } : {};
+}
+
+function renderArmSelector() {
+  if (!ui.armSelector) return;
+  if (armCount <= 1) {
+    ui.armSelector.hidden = true;
+    return;
+  }
+  ui.armSelector.hidden = false;
+  ui.armSelector.innerHTML = Array.from({ length: armCount }, (_, index) => {
+    const label = armLabels[index] || `机械臂 ${index + 1}`;
+    return `<button type="button" data-arm-index="${index}" aria-pressed="${index === selectedArmIndex}">${label}</button>`;
+  }).join("");
+}
+
+async function refreshArmLabels() {
+  try {
+    const response = await fetch(withToken("/api/v1/system/status"), { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (Array.isArray(data.arms) && data.arms.length) {
+      armLabels = data.arms.map((arm, index) => arm.label || `机械臂 ${index + 1}`);
+      if (data.arms.length !== armCount) {
+        armCount = data.arms.length;
+        if (selectedArmIndex >= armCount) selectedArmIndex = 0;
+        renderArmSelector();
+      }
+    }
+  } catch {
+    // Backend unavailable: keep the current labels.
+  }
+}
+
+ui.armSelector?.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-arm-index]");
+  if (!button) return;
+  selectedArmIndex = Number(button.dataset.armIndex) || 0;
+  renderArmSelector();
+  updateState(armState);
+});
+window.setInterval(refreshArmLabels, 5000);
+void refreshArmLabels();
+
 function createJointCards() {
   jointLabels.forEach(([joint, description], index) => {
     const card = document.createElement("article");
@@ -643,6 +733,7 @@ function createJointCards() {
         const direction = Number(button.dataset.direction);
         const step = Number(ui.jointStep.value);
         sendMotionCommand("move_joint", {
+          ...armFields(),
           joint: index + 1,
           delta_deg: direction * step,
         });
@@ -650,6 +741,7 @@ function createJointCards() {
     }
     item.resetButton.addEventListener("click", () => {
       sendMotionCommand("reset_joint", {
+        ...armFields(),
         joint: index + 1,
       });
     });
@@ -667,6 +759,7 @@ function createJointCards() {
       }
       item.commandPending = true;
       if (sendMotionCommand("move_joint_target", {
+        ...armFields(),
         joint: index + 1,
         target_deg: target,
       }) === null) {
@@ -962,10 +1055,15 @@ function ensureControlSocket() {
         return;
       }
       controlProfileCompatible = true;
+      controlTakeoverOffered = false;
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       resolve();
     });
     socket.addEventListener("message", handleControlMessage);
-    socket.addEventListener("close", () => {
+    socket.addEventListener("close", (event) => {
       const profileMismatch = controlProfileMismatch;
       connectionFailed = true;
       controlProfileCompatible = false;
@@ -1017,11 +1115,21 @@ function ensureControlSocket() {
       if (profileMismatch) {
         setPill("配置错误", "bad");
         setMessage(profileMismatch, "error");
+      } else if (controlTakeoverOffered) {
+        setPill("服务占用", "bad");
+        setMessage("已有一个网页客户端占用控制服务；点击左下角「接管控制」可接管。", "error");
       } else {
         setPill("未连接", "pending");
         setMessage("网页控制连接已断开；服务端会安全释放机械臂。", "info");
       }
       reject(new Error(profileMismatch ?? "控制服务连接已断开"));
+      const handedOver = event.code === 1012;
+      if (!profileMismatch && !handedOver && !(controlTakeoverOffered && controlTakeoverAttempted)) {
+        // The console is a long-lived operator view: reconnect by itself when
+        // the socket drops (service restart, network blip). A hand-over to
+        // another tab (1012) stays disconnected so two tabs cannot ping-pong.
+        scheduleReconnect();
+      }
     });
     socket.addEventListener("error", () => {
       controlSocketReadyPromise = null;
@@ -1132,10 +1240,31 @@ function handleControlMessage(event) {
   }
   if (message.type === "fatal") {
     connectionFailed = true;
+    controlTakeoverOffered = String(message.message || "").includes("占用");
     connectionTransition = null;
     connectionTransitionRequestId = null;
     updateControls();
-    setMessage(message.message, "error");
+    if (controlTakeoverOffered && !controlTakeoverAttempted) {
+      // The operator expects the page they are looking at to win; take over
+      // once automatically, then leave the explicit button as the fallback.
+      controlTakeoverAttempted = true;
+      try {
+        const url = new URL(ui.controlUrl.value);
+        url.searchParams.set("takeover", "1");
+        ui.controlUrl.value = url.toString();
+      } catch {
+        // Keep the endpoint; the retry will report the conflict again.
+      }
+      setMessage("已有一个网页客户端占用控制服务，正在接管…", "info");
+      setPill("接管中", "pending");
+      window.setTimeout(() => {
+        if (!socketIsOpen() && controlSocket?.readyState !== WebSocket.CONNECTING) connectControl();
+      }, 400);
+      return;
+    }
+    setMessage(controlTakeoverOffered
+      ? "已有一个网页客户端占用控制服务；点击左下角「接管控制」可接管。"
+      : message.message, "error");
     setPill("服务占用", "bad");
     return;
   }
@@ -1391,7 +1520,10 @@ function handleControlMessage(event) {
       } else if (message.result?.kind === "cartesian_motion") {
         detail = `，末端位置误差 ${message.result.final_position_error_mm.toFixed(2)} mm`;
       }
-      setMessage(`${action}完成${detail}。`, "success");
+      setMessage(message.action === "connect" && armState.mode === "observe"
+        ? "内核控制权在 VR 遥操一侧：本页只读，可以观察 3D 与关节反馈，不能下发运动。停止遥操后重新连接即可控制。"
+        : `${action}完成${detail}。`,
+        message.action === "connect" && armState.mode === "observe" ? "info" : "success");
     } else {
       if (message.action === "activate") {
         const canceledPark = queuedMotion?.action === "park";
@@ -1869,17 +2001,29 @@ function updateState(nextState, { renderUi = true } = {}) {
     if (armState.fault_reason) {
       setMessage(`故障阻尼：${armState.fault_reason}`, "error");
     }
+  } else if (mode === "observe") {
+    setPill(armState.lease_owner === "quest" ? "只读 · VR 遥操" : "只读观察", "warning");
   } else if (mode === "active") {
     setPill(armState.servo_active ? "实时伺服" : "关节位置", "ok");
   } else {
     setPill("自由阻尼", "ok");
   }
 
-  const positions = armState.joint_position_deg;
-  const minimums = armState.joint_min_deg;
-  const maximums = armState.joint_max_deg;
-  const torques = armState.joint_torque_nm;
-  const references = armState.reference_joint_position_deg;
+  const totalJoints = Array.isArray(armState.joint_position_deg)
+    ? armState.joint_position_deg.length : 0;
+  const derivedCount = totalJoints >= JOINTS_PER_ARM * 2 && totalJoints % JOINTS_PER_ARM === 0
+    ? totalJoints / JOINTS_PER_ARM : null;
+  if (derivedCount !== null && derivedCount !== armCount) {
+    armCount = derivedCount;
+    if (selectedArmIndex >= armCount) selectedArmIndex = 0;
+    renderArmSelector();
+  }
+  const view = armView(armState);
+  const positions = view.joint_position_deg;
+  const minimums = view.joint_min_deg;
+  const maximums = view.joint_max_deg;
+  const torques = view.joint_torque_nm;
+  const references = view.reference_joint_position_deg;
   jointCards.forEach((item, index) => {
     const position = positions?.[index];
     const minimum = minimums?.[index];
@@ -1912,7 +2056,11 @@ function updateState(nextState, { renderUi = true } = {}) {
     }
   });
 
-  const gripper = armState.gripper_position_mm;
+  const gripperWidths = armState.gripper_widths_mm;
+  const gripper = armCount > 1 && Array.isArray(gripperWidths)
+    && Number.isFinite(gripperWidths[selectedArmIndex])
+    ? gripperWidths[selectedArmIndex]
+    : armState.gripper_position_mm;
   ui.gripperActual.textContent = Number.isFinite(gripper) ? `${gripper.toFixed(1)} mm` : "— mm";
   if (Number.isFinite(gripper) && document.activeElement !== ui.gripperWidth
       && ui.gripperWidth.dataset.previewDirty !== "true" && !armState.busy) {
@@ -1947,26 +2095,42 @@ function updateControls() {
   const socketConnecting = controlSocket?.readyState === WebSocket.CONNECTING;
   const connectionBusy = socketConnecting || Boolean(connectionTransition);
   const disconnecting = connected && connectionTransition === "disconnect";
+  const takeover = !connected && controlTakeoverOffered;
   const connectionLabel = disconnecting
     ? "断开中"
     : (connected
       ? "断开"
-      : (connectionBusy ? "连接中" : (connectionFailed ? "重新连接" : "连接")));
+      : (connectionBusy ? "连接中" : (takeover ? "接管控制" : (connectionFailed ? "重新连接" : "连接"))));
   const connectionTitle = connected
     ? "断开机械臂"
-    : (connectionFailed ? "重新连接机械臂" : "连接机械臂");
+    : (takeover
+      ? "接管控制（会断开另一个网页客户端）"
+      : (connectionFailed ? "重新连接机械臂" : "连接机械臂"));
   ui.armModeSwitch.hidden = !connected;
   ui.armConnectButton.disabled = busy || connectionBusy || calibrationActive
     || gripperCalibrationActive || handeyeActive;
   ui.armConnectButton.classList.toggle("primary", !connected && !connectionBusy);
+  if (ui.sceneConnectPrompt) {
+    const promptLabel = connectionBusy
+      ? "连接中…"
+      : (takeover ? "接管控制" : (connectionFailed ? "重新连接机械臂" : "连接机械臂"));
+    ui.sceneConnectPrompt.hidden = connected;
+    ui.sceneConnectPrompt.disabled = busy || connectionBusy || calibrationActive
+      || gripperCalibrationActive || handeyeActive;
+    ui.sceneConnectPrompt.innerHTML = connectionBusy
+      ? `<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><span>${promptLabel}</span>`
+      : `<i class="fa-solid ${takeover ? "fa-right-to-bracket" : "fa-robot"}" aria-hidden="true"></i><span>${promptLabel}</span>`;
+  }
   ui.armConnectButton.classList.toggle("connected", connected && !disconnecting);
   ui.armConnectButton.classList.toggle(
     "retry",
     !connected && !connectionBusy && connectionFailed,
   );
-  const connectionIcon = connectionFailed && !connected
-    ? "fa-solid fa-rotate-right"
-    : "fa-solid fa-robot";
+  const connectionIcon = takeover
+    ? "fa-solid fa-right-to-bracket"
+    : (connectionFailed && !connected
+      ? "fa-solid fa-rotate-right"
+      : "fa-solid fa-robot");
   ui.armConnectButton.innerHTML = connectionBusy
     ? `<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><span>${connectionLabel}</span>`
     : `<i class="${connectionIcon}" aria-hidden="true"></i><span>${connectionLabel}</span>`;
@@ -1976,7 +2140,8 @@ function updateControls() {
   ui.armModeButtons.forEach((button) => {
     const mode = button.dataset.armMode;
     const selected = selectedArmMode === mode;
-    button.disabled = !connected || fault || busy || connectionBusy;
+    button.disabled = !connected || fault || busy || connectionBusy
+      || armState.mode === "observe";
     button.classList.toggle("selected", selected);
     button.setAttribute("aria-pressed", String(selected));
     const modeLabel = mode === "active" ? "关节位置控制" : "自由阻尼";
@@ -1991,7 +2156,8 @@ function updateControls() {
     || parkPreviewRequestId !== null
     || !Array.isArray(armState.reference_joint_position_deg);
   ui.clearFaultButton.disabled = !fault || busy;
-  ui.emergencyButton.disabled = !connected && !handeyeActive && !gripperCalibrationActive;
+  ui.emergencyButton.disabled = (!connected && !handeyeActive && !gripperCalibrationActive)
+    || armState.mode === "observe";
   ui.motionSpeed.disabled = busy;
   ui.payloadFixedButton.disabled = connected || calibrationActive || gripperCalibrationActive || busy;
   ui.payloadGraspedButton.disabled = connected || calibrationActive || gripperCalibrationActive || busy;
@@ -2040,8 +2206,17 @@ function updateControls() {
 createJointCards();
 updateState(armState);
 
-ui.armConnectButton.addEventListener("click", () => {
+function toggleArmConnection() {
   if (!armState.connected) {
+    if (controlTakeoverOffered) {
+      try {
+        const url = new URL(ui.controlUrl.value);
+        url.searchParams.set("takeover", "1");
+        ui.controlUrl.value = url.toString();
+      } catch {
+        // Keep the original endpoint; the server will report the conflict again.
+      }
+    }
     connectControl();
     return;
   }
@@ -2053,7 +2228,10 @@ ui.armConnectButton.addEventListener("click", () => {
     connectionTransition = null;
     updateControls();
   }
-});
+}
+
+ui.armConnectButton.addEventListener("click", toggleArmConnection);
+ui.sceneConnectPrompt?.addEventListener("click", toggleArmConnection);
 ui.armModeButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const mode = button.dataset.armMode;

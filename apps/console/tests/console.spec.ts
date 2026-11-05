@@ -29,7 +29,7 @@ for (const viewport of [
     const pageErrors: string[] = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
     await page.setViewportSize(viewport);
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/control", { waitUntil: "domcontentloaded" });
     const canvas = page.locator("#robotCanvas");
     await expect(canvas).toBeVisible();
     await expect(page.locator("#armConnectButton")).toBeVisible();
@@ -54,49 +54,71 @@ for (const viewport of [
   });
 }
 
+test("overview lists navigation without owning the control session", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "系统总览" })).toBeVisible();
+  const nav = page.locator(".shell-nav");
+  await expect(nav.getByRole("link", { name: "总览" })).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link", { name: "控制台" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "数据采集" })).toBeVisible();
+  await expect(page.locator("#robotCanvas")).toHaveCount(0);
+  // The static test server cannot serve the JSON status endpoint: the page must
+  // report the missing backend instead of opening a control WebSocket.
+  await expect(page.locator("#overviewConnection")).toHaveAttribute("data-state", "disconnected");
+  expect(pageErrors).toEqual([]);
+});
+
+test("navigation keeps the pairing token", async ({ page }) => {
+  await page.goto("/?token=abc", { waitUntil: "domcontentloaded" });
+  const control = page.locator(".shell-nav").getByRole("link", { name: "控制台" });
+  await expect(control).toHaveAttribute("href", /\/control\?token=abc$/);
+});
+
+test("policy page renders the task form", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.goto("/policy", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "策略任务" })).toBeVisible();
+  await expect(page.locator("#policyPrompt")).toBeVisible();
+  await expect(page.locator("#policyStart")).toBeVisible();
+  await expect(page.locator("#policyConfirm")).toBeHidden();
+  expect(pageErrors).toEqual([]);
+});
+
 for (const viewport of [
   { name: "desktop", width: 1440, height: 900 },
   { name: "tablet", width: 1024, height: 768 },
   { name: "mobile", width: 390, height: 844 },
   { name: "small-phone", width: 360, height: 720 },
 ]) {
-  test(`collection view renders at ${viewport.name}`, async ({ page }) => {
+  test(`collection session renders at ${viewport.name}`, async ({ page }) => {
     const pageErrors: string[] = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
     await page.setViewportSize(viewport);
     await page.goto("/collection", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "GR00T 示教采集" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "采集会话" })).toBeVisible();
+    await expect(page.locator("#taskInput")).toBeVisible();
+    await expect(page.locator("#cameraChoices")).toBeVisible();
+    await expect(page.locator("#datasetCount")).toBeVisible();
+    await expect(page.locator(".joint-row")).toHaveCount(6);
+    await expect(page.locator("#rgbSelect")).toBeHidden();
+    await page.locator(".advanced summary").click();
+    await expect(page.locator("#rgbSelect")).toBeVisible();
     await expect(page.locator("#startButton")).toBeVisible();
-    await expect(page.locator("video")).toHaveCount(0);
-    await expect(page.locator("#stateSamples")).toHaveText("0");
-    await expect(page.locator("#cameraFrames")).toHaveText("0");
-    await expect(page.locator("#startButton")).toHaveAttribute("aria-keyshortcuts", "Space");
-    await expect(page.locator("#saveButton")).toHaveAttribute("aria-keyshortcuts", "S");
-    await expect(page.locator("#discardButton")).toHaveAttribute("aria-keyshortcuts", "X");
-    await expect(page.locator("#reviewDiscardButton")).toHaveAttribute("aria-keyshortcuts", "X");
-    await expect(page.locator("#startButton kbd")).toHaveText("Space");
-    await expect(page.locator("#stopButton kbd")).toHaveText("Space");
-    await expect(page.locator("#saveButton kbd")).toHaveText("S");
-    await expect(page.locator("#discardButton kbd")).toHaveText("X");
-    const jointCharts = page.locator(".joint-card canvas");
-    const healthHeatmap = page.locator("#healthHeatmap");
+    // No backend behind the static test server: collection cannot start.
+    await expect(page.locator("#startButton")).toBeDisabled();
+    await expect(page.locator("#stopButton")).toBeDisabled();
+    await expect(page.locator("#recordingBadge")).toBeHidden();
+    const jointCharts = page.locator(".joint-row canvas");
     await expect(jointCharts).toHaveCount(6);
     await expect(jointCharts.first()).toBeVisible();
-    await expect(healthHeatmap).toBeVisible();
-    assertRenderedCanvas(await jointCharts.first().screenshot());
-    assertRenderedCanvas(await healthHeatmap.screenshot());
-    await expect(page.getByText("ROI 未配置")).toHaveCount(0);
-    await expect(page.getByText("源方块未检测")).toHaveCount(0);
-    await expect(page.getByText("D455 视频中断")).toHaveCount(0);
-    if (["mobile", "small-phone"].includes(viewport.name)) {
-      const telemetryBox = await page.locator(".telemetry").boundingBox();
-      const controlBox = await page.locator(".control-panel").boundingBox();
-      const startBox = await page.locator("#startButton").boundingBox();
-      expect(startBox?.height ?? 0).toBeGreaterThanOrEqual(58);
-      expect((startBox?.y ?? 0) + (startBox?.height ?? 0)).toBeLessThanOrEqual(viewport.height + 1);
-      expect(controlBox?.height ?? 0).toBeGreaterThan(telemetryBox?.height ?? 0);
-      expect((await healthHeatmap.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(38);
-    }
+    const chartBox = await jointCharts.first().boundingBox();
+    expect(chartBox?.width ?? 0).toBeGreaterThan(20);
+    const startBox = await page.locator("#startButton").boundingBox();
+    expect(startBox?.height ?? 0).toBeGreaterThanOrEqual(40);
     const overflow = await page.evaluate(() => ({
       horizontal: document.documentElement.scrollWidth - window.innerWidth,
       vertical: document.documentElement.scrollHeight - window.innerHeight,
@@ -106,27 +128,6 @@ for (const viewport of [
     expect(pageErrors).toEqual([]);
     await page.screenshot({
       path: test.info().outputPath(`collection-${viewport.name}.png`),
-      fullPage: false,
-    });
-
-    await page.evaluate(() => {
-      const review = document.querySelector<HTMLElement>("#reviewPanel");
-      review?.removeAttribute("hidden");
-      review?.closest(".control-panel")?.classList.add("review-mode");
-      document.querySelector<HTMLElement>("#copyValidationButton")?.removeAttribute("hidden");
-    });
-    await expect(page.locator("#saveButton")).toBeVisible();
-    await expect(page.locator("#reviewDiscardButton")).toBeVisible();
-    await expect(page.locator("#copyValidationButton")).toBeVisible();
-    for (const selector of ["#saveButton", "#reviewDiscardButton", "#copyValidationButton", "#message"]) {
-      const control = await page.locator(selector).boundingBox();
-      expect((control?.y ?? 0) + (control?.height ?? 0)).toBeLessThanOrEqual(viewport.height + 1);
-    }
-    const reviewOverflow = await page.evaluate(() =>
-      document.documentElement.scrollHeight - window.innerHeight);
-    expect(reviewOverflow).toBeLessThanOrEqual(1);
-    await page.screenshot({
-      path: test.info().outputPath(`collection-review-${viewport.name}.png`),
       fullPage: false,
     });
   });

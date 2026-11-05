@@ -32,6 +32,10 @@
               <canvas id="robotCanvas" tabindex="0" aria-label="ARX X5 三维姿态预览"></canvas>
               <!-- Transparent by design: the low-poly loading skeleton behind it
                    reports progress, so this layer only blocks input and captions. -->
+              <button id="sceneConnectPrompt" class="scene-connect-prompt" type="button">
+                <i class="fa-solid fa-robot" aria-hidden="true"></i>
+                <span>连接机械臂</span>
+              </button>
               <div id="robotModelLoading" class="robot-model-loading">
                 <p id="robotModelLoadingText" class="robot-model-loading-text" aria-live="polite">正在加载官方 X5 模型…</p>
               </div>
@@ -343,13 +347,6 @@
 
       <aside class="vision-dock" aria-label="视觉预览">
         <section class="vision-toolbar" aria-label="视觉控制">
-          <label class="vision-pose-switch" data-mode="off" title="人体与手部姿态识别；选择要跟踪的手，中间关闭识别">
-            <span class="pose-mode-label pose-mode-left"><i class="fa-solid fa-hand" aria-hidden="true"></i>左手</span>
-            <span class="pose-mode-label pose-mode-off"><i class="fa-solid fa-person-slash" aria-hidden="true"></i><span>关闭</span></span>
-            <span class="pose-mode-label pose-mode-right"><i class="fa-solid fa-hand" aria-hidden="true"></i>右手</span>
-            <span class="pose-mode-indicator" aria-hidden="true"></span>
-            <input id="poseSideSwitch" type="range" min="-1" max="1" step="1" value="0" aria-label="人体与手部姿态识别关闭；向左选择左手，向右选择右手" />
-          </label>
           <button id="cameraToggleButton" class="primary" aria-pressed="false" title="开启相机"><i class="fa-solid fa-video" aria-hidden="true"></i><span>开启</span></button>
           <button id="cubePerceptionButton" type="button" aria-pressed="false" title="开启方块感知"><i class="fa-solid fa-cubes" aria-hidden="true"></i><span>方块</span></button>
           <button id="cubeRoiButton" type="button" aria-pressed="false" title="绘制方块识别工作区"><i class="fa-solid fa-draw-polygon" aria-hidden="true"></i><span>区域</span></button>
@@ -357,10 +354,11 @@
           <button id="tableEdgeEditButton" type="button" aria-pressed="false" title="单独标注桌面远边和右边"><i class="fa-solid fa-ruler" aria-hidden="true"></i><span>桌边</span></button>
         </section>
 
-        <div class="vision-tool-shell" data-vision-tool="gesture">
-          <div id="visionToolModes" class="vision-tool-modes binary-segment" data-selected="gesture" aria-label="视觉工具">
-            <button type="button" data-vision-tool="gesture" class="selected" aria-pressed="true"><i class="fa-solid fa-hand" aria-hidden="true"></i>手势控制</button>
-            <button type="button" data-vision-tool="handeye" aria-pressed="false"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>手眼标定</button>
+        <div class="vision-tool-shell" data-vision-tool="camera">
+          <div id="visionToolModes" class="vision-tool-modes binary-segment" data-selected="camera" aria-label="视觉工具">
+            <button type="button" data-vision-tool="camera" class="selected" aria-pressed="true"><i class="fa-solid fa-video" aria-hidden="true"></i>相机</button>
+            <button type="button" data-vision-tool="teleop" aria-pressed="false"><i class="fa-solid fa-hand" aria-hidden="true"></i>遥操</button>
+            <button type="button" data-vision-tool="handeye" aria-pressed="false"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i>标定</button>
           </div>
 
           <section class="workspace">
@@ -430,6 +428,13 @@
               </div>
             </div>
             <div class="hand-teleoperation-controls">
+              <label class="vision-pose-switch" data-mode="off" title="人体与手部姿态识别；选择要跟踪的手，中间关闭识别">
+                <span class="pose-mode-label pose-mode-left"><i class="fa-solid fa-hand" aria-hidden="true"></i>左手</span>
+                <span class="pose-mode-label pose-mode-off"><i class="fa-solid fa-person-slash" aria-hidden="true"></i><span>关闭</span></span>
+                <span class="pose-mode-label pose-mode-right"><i class="fa-solid fa-hand" aria-hidden="true"></i>右手</span>
+                <span class="pose-mode-indicator" aria-hidden="true"></span>
+                <input id="poseSideSwitch" type="range" min="-1" max="1" step="1" value="0" aria-label="人体与手部姿态识别关闭；向左选择左手，向右选择右手" />
+              </label>
               <label class="servo-toggle hand-teleoperation-toggle">
                 <input id="teleoperationEnabled" type="checkbox" />
                 <span><strong><i class="fa-solid fa-wave-square" aria-hidden="true"></i>机械臂跟随</strong><small id="teleoperationState">未启用</small></span>
@@ -519,6 +524,7 @@
             <button id="armConnectButton" type="button" class="arm-connection-status pending primary" aria-label="连接机械臂" title="连接机械臂；当前状态：未连接">
               <i class="fa-solid fa-robot" aria-hidden="true"></i><span>连接</span>
             </button>
+            <div id="armSelector" class="arm-selector" role="group" aria-label="机械臂选择" hidden></div>
             <div id="armModeSwitch" class="arm-status-mode-switch" role="group" aria-label="机械臂控制策略" hidden>
               <button id="dampingModeButton" type="button" data-arm-mode="damping" disabled><span>自由阻尼</span></button>
               <button id="activeModeButton" type="button" data-arm-mode="active" disabled><span>关节位置</span></button>

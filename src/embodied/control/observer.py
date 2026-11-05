@@ -91,6 +91,25 @@ class Peer:
         self.sock.close()
 
 
+def joint_layout(parameters):
+    """Joint count and names for a single-arm or dual-arm effective config.
+
+    A dual profile keeps one block per side (`left` / `right`), each with its
+    own `park_q`, so the run-level count is the sum and the names are prefixed
+    by side to stay unique.
+    """
+    config = parameters.get('effective_robot_config') or {}
+    park = config.get('park_q')
+    if park:
+        return len(park), parameters.get('model', {}).get('joint_names')
+    sides = [side for side in ('left', 'right') if isinstance(config.get(side), dict)]
+    if not sides:
+        return 0, None
+    names = [f'{side}_joint{index + 1}' for side in sides
+             for index in range(len(config[side].get('park_q') or []))]
+    return len(names), names
+
+
 def run(directory):
     directory = Path(directory)
     identity = json.loads((directory / "runtime.json").read_text())
@@ -152,10 +171,12 @@ def run(directory):
                         raise ValueError("Observer reader limit reached")
                     parameters = json.loads((directory / "parameters.json").read_text())
                     backend_file = directory / 'backend-parameters.json'
+                    joint_count, joint_names = joint_layout(parameters)
                     descriptor = {"type": "descriptor", "protocol_version": 1, **identity,
                                   "directory": str(directory),
                                   "layout": layout(), "parameters": parameters, "observer_gaps": gaps,
-                                  "joint_count": len(parameters["effective_robot_config"]["park_q"]),
+                                  "joint_count": joint_count,
+                                  "joint_names": joint_names,
                                   "backend_parameters": json.loads(backend_file.read_text()) if backend_file.exists() else None,
                                   "mode": request["mode"]}
                     if 'data_contract' in parameters:

@@ -17,46 +17,56 @@ _TO_WIRE = {mode: wire for wire, mode in _FROM_WIRE.items()}
 class RobotBridge:
     """Consume native commands and publish backend feedback at the caller's rate."""
 
-    def __init__(self, prefix: str, *, commands=True, feedback=True):
+    def __init__(self, prefix: str, *, commands=True, feedback=True, arms: int = 1):
         self.commands_enabled, self.feedback_enabled = commands, feedback
         self.prefix = validate_prefix(prefix)
+        self.arms = max(1, int(arms))
+        # Channel names stay "arm"/"gripper" for the first arm so single-arm
+        # topics are unchanged; further arms use arm2/gripper2.
+        self._names = [("arm" if index == 0 else f"arm{index + 1}",
+                        "gripper" if index == 0 else f"gripper{index + 1}")
+                       for index in range(self.arms)]
         self._node = create_node()
         self._publishers, self._subscribers = {}, {}
         self._last_feedback_at = float("-inf")
-        self._modes = {"arm": Mode.DISABLED, "gripper": Mode.DISABLED}
-        for channel in self._modes:
+        self._modes = {name: Mode.DISABLED for pair in self._names for name in pair}
+        self._mode_seen = {name: False for pair in self._names for name in pair}
+        for arm_name, grip_name in self._names:
+            for channel in (arm_name, grip_name):
+                if commands:
+                    self._subscribers[channel] = make_subscriber(open_service(
+                        self._node, f"{prefix}/robot/{channel}/control/mode", DeviceChannelMode, mode=True))
+                if feedback:
+                    self._publishers[channel] = make_publisher(open_service(
+                        self._node, f"{prefix}/robot/{channel}/info/mode", DeviceChannelMode, mode=True))
             if commands:
-                self._subscribers[channel] = make_subscriber(open_service(
-                    self._node, f"{prefix}/robot/{channel}/control/mode", DeviceChannelMode, mode=True))
+                self._subscribers[f"pose:{arm_name}"] = make_subscriber(open_service(
+                    self._node, f"{prefix}/robot/{arm_name}/commands/end_pose", Pose7))
+                self._subscribers[f"grip:{grip_name}"] = make_subscriber(open_service(
+                    self._node, f"{prefix}/robot/{grip_name}/commands/parallel_mit", ParallelMitCommand2))
             if feedback:
-                self._publishers[channel] = make_publisher(open_service(
-                    self._node, f"{prefix}/robot/{channel}/info/mode", DeviceChannelMode, mode=True))
-        for key, suffix, kind in [
-            ("pose", "arm/commands/end_pose", Pose7),
-            ("grip", "gripper/commands/parallel_mit", ParallelMitCommand2),
-        ]:
-            if commands:
-                self._subscribers[key] = make_subscriber(open_service(self._node, f"{prefix}/robot/{suffix}", kind))
-        for key, suffix, kind in [
-            ("pose", "arm/states/end_effector_pose", Pose7),
-            ("q", "arm/states/joint_position", JointVector15),
-            ("dq", "arm/states/joint_velocity", JointVector15),
-            ("width", "gripper/states/parallel_position", ParallelVector2),
-        ]:
-            if feedback:
-                self._publishers[key] = make_publisher(open_service(self._node, f"{prefix}/robot/{suffix}", kind))
+                for key, suffix, kind, channel in [
+                    ("pose", "states/end_effector_pose", Pose7, arm_name),
+                    ("q", "states/joint_position", JointVector15, arm_name),
+                    ("dq", "states/joint_velocity", JointVector15, arm_name),
+                    ("width", "states/parallel_position", ParallelVector2, grip_name),
+                ]:
+                    self._publishers[f"{key}:{channel}"] = make_publisher(open_service(
+                        self._node, f"{prefix}/robot/{channel}/{suffix}", kind))
 
-    def poll_commands(self, now: float) -> ControlCommand:
+    def poll_commands(self, now: float, arm: int = 0) -> ControlCommand:
         if not self.commands_enabled:
             raise RuntimeError("This bridge only publishes feedback")
-        previous_arm_mode = self._modes["arm"]
-        for channel in self._modes:
+        arm_name, grip_name = self._names[arm]
+        previous_arm_mode = self._modes[arm_name]
+        for channel in (arm_name, grip_name):
             value = drain_latest(self._subscribers[channel])
             if value is not None:
                 self._modes[channel] = _FROM_WIRE.get(value.value, Mode.DISABLED)
-        pose = drain_latest(self._subscribers["pose"])
-        grip = drain_latest(self._subscribers["grip"])
-        if previous_arm_mode is not Mode.COMMAND_FOLLOWING and self._modes["arm"] is Mode.COMMAND_FOLLOWING:
+                self._mode_seen[channel] = True
+        pose = drain_latest(self._subscribers[f"pose:{arm_name}"])
+        grip = drain_latest(self._subscribers[f"grip:{grip_name}"])
+        if previous_arm_mode is not Mode.COMMAND_FOLLOWING and self._modes[arm_name] is Mode.COMMAND_FOLLOWING:
             # NERO clears pending arm commands on CF entry before its first
             # feedback-anchored tick. The gripper has no corresponding entry
             # flush, so its independent command must remain available.
@@ -67,25 +77,39 @@ class RobotBridge:
             target = None
         if width is not None and not np.isfinite(width):
             width = None
-        return ControlCommand(mode=self._modes["arm"], pose_target=target,
-                              gripper_target=width, gripper_mode=self._modes["gripper"],
+        return ControlCommand(mode=self._modes[arm_name], pose_target=target,
+                              gripper_target=width, gripper_mode=self._modes[grip_name],
                               engaged=target is not None)
+
+    def modes_seen(self, arm: int = 0) -> bool:
+        """True once the coordinator has actually commanded this arm's mode."""
+        return all(self._mode_seen[name] for name in self._names[arm])
 
     def publish_state(self, state: RobotState, now: float) -> None:
         if not self.feedback_enabled:
             raise RuntimeError("This bridge only consumes commands")
-        for channel, mode in (("arm", state.mode), ("gripper", state.gripper_mode or state.mode)):
-            send(self._publishers[channel], DeviceChannelMode.of(_TO_WIRE[mode]))
+        poses = state.poses or (state.pose,)
+        widths = state.gripper_widths or (state.gripper_width,)
+        half = len(state.q) // max(self.arms, 1)
+        for arm, (arm_name, grip_name) in enumerate(self._names):
+            mode = state.mode
+            send(self._publishers[arm_name], DeviceChannelMode.of(_TO_WIRE[mode]))
+            send(self._publishers[grip_name], DeviceChannelMode.of(_TO_WIRE[state.gripper_mode or mode]))
         age = now - state.received_at
         if (state.fault or not np.isfinite(age) or age < 0 or age >= .100
                 or state.received_at <= self._last_feedback_at):
             return
         self._last_feedback_at = state.received_at
         timestamp = max(0, time.time_ns() // 1000 - int(age * 1_000_000))
-        send(self._publishers["pose"], Pose7.from_values(timestamp, list(state.pose)))
-        send(self._publishers["q"], JointVector15.from_values(timestamp, list(state.q)))
-        send(self._publishers["dq"], JointVector15.from_values(timestamp, list(state.dq)))
-        send(self._publishers["width"], ParallelVector2.from_values(timestamp, [state.gripper_width]))
+        for arm, (arm_name, grip_name) in enumerate(self._names):
+            pose = poses[arm] if arm < len(poses) else poses[0]
+            width = widths[arm] if arm < len(widths) else widths[0]
+            q = state.q[arm * half:(arm + 1) * half] if self.arms > 1 else state.q
+            dq = state.dq[arm * half:(arm + 1) * half] if self.arms > 1 else state.dq
+            send(self._publishers[f"pose:{arm_name}"], Pose7.from_values(timestamp, list(pose)))
+            send(self._publishers[f"q:{arm_name}"], JointVector15.from_values(timestamp, list(q)))
+            send(self._publishers[f"dq:{arm_name}"], JointVector15.from_values(timestamp, list(dq)))
+            send(self._publishers[f"width:{grip_name}"], ParallelVector2.from_values(timestamp, [float(width)]))
 
     def close(self) -> None:
         self._subscribers.clear()

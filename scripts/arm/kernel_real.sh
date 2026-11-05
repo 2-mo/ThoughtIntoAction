@@ -34,7 +34,7 @@ fi
 mkdir -p "$ROOT/outputs/logs/bench"
 CAN_LOG=$(mktemp "$ROOT/outputs/logs/bench/can-XXXXXXXX.log")
 echo '↔ USB-CAN · 准备通信接口；若提示密码，请输入本机登录密码。'
-if "$ROOT/run.sh" can-up >"$CAN_LOG" 2>&1; then
+if "$ROOT/run.sh" can-up --all >"$CAN_LOG" 2>&1; then
   echo '↔ USB-CAN · 已就绪'
 else
   CAN_RESULT=$?

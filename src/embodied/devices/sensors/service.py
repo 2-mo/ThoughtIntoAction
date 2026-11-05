@@ -13,6 +13,10 @@ from embodied.core.local_server import LocalServer
 from embodied.devices.sensors.transport import FrameServer
 from embodied.core.project import load_config
 
+# Preview encoding only: recording reads full frames over the frame transport.
+PREVIEW_INTERVAL_S = 1 / 30
+DEPTH_PREVIEW_INTERVAL_S = 0.2
+
 
 class CameraFeed:
     def __init__(self, options=None, camera_id="wrist_rgb", *, registry=None):
@@ -97,7 +101,7 @@ class CameraFeed:
         return {"imu": imu,
                 "camera": {"id": self.camera_id, "label": self.options.get("label", self.camera_id),
                            "serial": self.options.get("serial", ""), "model": self.options.get("model", ""),
-                           "preview_fps": 5, "metadata": self.metadata, "error": self.error,
+                           "preview_fps": round(1 / PREVIEW_INTERVAL_S), "metadata": self.metadata, "error": self.error,
                            "enabled": self.enabled, "switch_protocol": 1,
                            "host_received_monotonic_ns": None if frame is None else frame.get("host_received_monotonic_ns"),
                            "frame_number": None if frame is None else frame.get("frame_number"),
@@ -121,7 +125,8 @@ class CameraFeed:
                     # A reconnect starts a new stream even when device frame numbers repeat.
                     stream_id = uuid.uuid4().hex
                     metadata = {**camera.metadata, "stream_id": stream_id, "zmq_frame_protocol": 1}
-                    last_preview = 0
+                    last_preview = 0.0
+                    last_depth_preview = 0.0
                     last_number = None
                     source_missing = 0
                     preview = depth_preview = None
@@ -138,19 +143,25 @@ class CameraFeed:
                         last_number = number
                         encoded_frame = {**{k: v for k, v in frame.items() if k not in ("depth_image", "depth_scale_m")},
                                          "stream_id": stream_id, "source_missing_frames": source_missing if type(number) is int else None}
-                        if time.monotonic() - last_preview >= .2:
-                            size = (min(640, image.shape[1]), max(1, round(image.shape[0] * min(640, image.shape[1]) / image.shape[1])))
-                            ok, jpeg = cv2.imencode(".jpg", cv2.resize(image, size), [cv2.IMWRITE_JPEG_QUALITY, 75])
+                        now = time.monotonic()
+                        depth = frame.get("depth_image")
+                        size = (min(640, image.shape[1]),
+                                max(1, round(image.shape[0] * min(640, image.shape[1]) / image.shape[1])))
+                        if now - last_preview >= PREVIEW_INTERVAL_S:
+                            small = image if size == (image.shape[1], image.shape[0]) else cv2.resize(image, size)
+                            ok, jpeg = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 70])
                             if ok:
                                 preview = (frame["host_received_monotonic_ns"], base64.b64encode(jpeg).decode("ascii"))
-                            depth = frame.get("depth_image")
+                            last_preview = now
+                        if now - last_depth_preview >= DEPTH_PREVIEW_INTERVAL_S:
+                            # Colorizing depth is the expensive part; keep it at the monitor rate.
                             depth_preview = None
                             if depth is not None:
                                 visual = colorize_depth(depth, frame["depth_scale_m"])
-                                ok, jpeg = cv2.imencode(".jpg", cv2.resize(visual, size, interpolation=cv2.INTER_NEAREST), [cv2.IMWRITE_JPEG_QUALITY, 75])
+                                ok, jpeg = cv2.imencode(".jpg", cv2.resize(visual, size, interpolation=cv2.INTER_NEAREST), [cv2.IMWRITE_JPEG_QUALITY, 70])
                                 if ok:
                                     depth_preview = (frame["host_received_monotonic_ns"], base64.b64encode(jpeg).decode("ascii"))
-                            last_preview = time.monotonic()
+                            last_depth_preview = now
                         with self.data_lock:
                             self.frame, self.metadata, self.error = encoded_frame, metadata, None
                             self.preview, self.depth_preview = preview, depth_preview

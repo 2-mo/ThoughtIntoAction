@@ -18,6 +18,10 @@
 | [真机验收（arx 内核）](guides/real-arm-acceptance.md) | 切换到内核前的现场验收清单 |
 | [内核工作台](guides/plugin-workbench.md) | 内核 profile、多来源控制权、MoveJ / MoveL、手机与标定适配 |
 | [采集与监看](guides/recording.md) | 采集按键、episode、回放与校验 |
+| [控制台运行手册](guides/console-runbook.md) | 双臂 + 相机 + VR 的启动顺序、网页点击流程与排障 |
+| [VR 遥操采集运行手册](guides/vr-collection-runbook.md) | 数据流、启动前置条件、状态判定与故障对照 |
+| [双臂扩展接口](guides/dual-arm-extension.md) | 单臂/双臂切换的状态接口与接入清单 |
+| [双臂 VR 遥操链路](guides/dual-arm-vr-pipeline.md) | 拓扑、启动顺序、协议语义与故障对照 |
 | [机械臂服务与监看](guides/monitoring.md) | 旧机械臂服务、三维监看、反馈与断流 |
 | [网页与相机控制](guides/viewer-camera-controls.md) | 18081 监看页的相机与视图 |
 | [训练数据导出](guides/openpi-dataset.md) | LeRobot 导出与 π0.5 训练 |

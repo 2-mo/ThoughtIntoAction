@@ -3,6 +3,14 @@
 def model_snapshot(config):
     from pathlib import Path
     import json
+    from embodied.devices.robots.arx5.profile import DualArmProfile
+    if isinstance(config, DualArmProfile):
+        arms = [model_snapshot(arm) for arm in config.arms]
+        return {'model': {'arms': [arm['model'] for arm in arms]},
+                'gain_policy': {'command-following': {'kp': config.kp, 'kd': config.kd},
+                                'disabled': {'kp': config.kp, 'kd': config.kd},
+                                'free-drive': {'kp': [0.] * config.joint_count, 'kd': [0.] * config.joint_count}},
+                'controller_policy': arms[0]['controller_policy']}
     from xml.etree import ElementTree
     from embodied.contracts.paths import PROJECT_ROOT
     model = Path(config.model_path) if config.model_path else PROJECT_ROOT / 'assets/robots/x5/runtime/x5_2025.xml'
@@ -56,6 +64,11 @@ class Simulation:
 
     def preflight(self, config):
         from .kinematics import X5Model
+        from embodied.devices.robots.arx5.profile import DualArmProfile
+        if isinstance(config, DualArmProfile):
+            for arm in config.arms:
+                X5Model(arm)
+            return {"ready": True, "errors": []}
         X5Model(config)
         return {"ready": True, "errors": []}
 
@@ -64,9 +77,22 @@ class Simulation:
 
     def open(self, config, *, cancel_requested=None, **options):
         from .simulation import MujocoBackend
+        from .dual import DualBackend
+        from embodied.devices.robots.arx5.profile import DualArmProfile
+        if isinstance(config, DualArmProfile):
+            return DualBackend(config, [MujocoBackend(arm, **options) for arm in config.arms])
         return MujocoBackend(config, **options)
 
     def capabilities(self, config, parameters):
+        from embodied.devices.robots.arx5.profile import DualArmProfile
+        if isinstance(config, DualArmProfile):
+            return {"joint_velocity_limits_rad_s": list(config.joint_velocity_max),
+                    "gripper_velocity_max_m_s": config.gripper_velocity_max_m_s,
+                    "gripper": {"present": True, "position": True, "grasp": True, "effort_unit": "N",
+                                "effort_max": config.left.gripper_position_effort_limit_nm,
+                                "contact_detection": "physics_contact",
+                                "effort_description": "Per-arm simulated jaw actuator effort"},
+                    "source": {"kind": "simulation_configuration", "description": "Dual-arm configured capability"}}
         actuators = parameters['model_runtime']['actuators_initial'][config.joint_count:]
         effort_max = min(abs(row['force_range'][0]) for row in actuators)
         return {"joint_velocity_limits_rad_s": list(config.joint_velocity_max),
@@ -115,6 +141,15 @@ class Hardware:
     def preflight(self, config):
         from .real import preflight
         from .kinematics import X5Model
+        from embodied.devices.robots.arx5.profile import DualArmProfile
+        if isinstance(config, DualArmProfile):
+            checks = [preflight(arm) for arm in config.arms]
+            errors = [error for check in checks for error in check.get("errors", [])]
+            ready = all(check["ready"] for check in checks)
+            if ready:
+                for arm in config.arms:
+                    X5Model(arm)
+            return {"ready": ready, "errors": errors}
         checks = preflight(config)
         if checks["ready"]:
             X5Model(config)
@@ -122,13 +157,34 @@ class Hardware:
 
     def resources(self, config):
         # Same shared lease as maintenance tools and the old service.
+        from embodied.devices.robots.arx5.profile import DualArmProfile
+        if isinstance(config, DualArmProfile):
+            return tuple(config.can_interfaces)
         return (config.can_interface,)
 
     def open(self, config, **options):
         from .real import RealBackend
+        from .dual import DualBackend
+        from embodied.devices.robots.arx5.profile import DualArmProfile
+        if isinstance(config, DualArmProfile):
+            return DualBackend(config, [RealBackend(arm, **options) for arm in config.arms])
         return RealBackend(config, **options)
 
     def capabilities(self, config, parameters):
+        from embodied.devices.robots.arx5.profile import DualArmProfile
+        if isinstance(config, DualArmProfile):
+            arms = parameters.get("arms") or []
+            robots = [arm["sdk_runtime"]["robot"] for arm in arms]
+            if len(robots) != 2:
+                raise ValueError("Dual capability query requires two SDK runtimes")
+            return {"joint_velocity_limits_rad_s": [value for robot in robots for value in robot["joint_vel_max"]],
+                    "gripper_velocity_max_m_s": min(robot["gripper_vel_max"] for robot in robots),
+                    "gripper": {"present": True, "position": True, "grasp": True, "effort_unit": "motor_Nm",
+                                "position_effort_limit": config.left.gripper_position_effort_limit_nm,
+                                "effort_max": min(robot["gripper_torque_max"] for robot in robots),
+                                "contact_detection": "effort_stall",
+                                "effort_description": "Per-arm SDK current-estimated motor torque; not calibrated fingertip force"},
+                    "source": {"kind": "sdk_runtime_configuration", "description": "Two-arm SDK capability, not measured rated hardware speed"}}
         robot = parameters["sdk_runtime"]["robot"]
         return {"joint_velocity_limits_rad_s": robot["joint_vel_max"],
                 "gripper_velocity_max_m_s": robot["gripper_vel_max"],

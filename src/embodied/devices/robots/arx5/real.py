@@ -312,6 +312,11 @@ class RealBackend:
 
     def read_state(self, now: float) -> RobotState:
         hardware = self._require_open()
+        if self._received_at == float("-inf"):
+            # The background loop is off, so the SDK cache only advances on an
+            # explicit send_recv. Refresh the constructor sample before the
+            # first control read instead of rejecting it as stale.
+            hardware.recv_once()
         sample = hardware.get_joint_state()
         q = np.asarray(sample.pos(), dtype=float).copy()
         dq = np.asarray(sample.vel(), dtype=float).copy()

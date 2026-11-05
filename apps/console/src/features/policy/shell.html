@@ -1,0 +1,66 @@
+<main class="policy">
+  <header class="policy-head">
+    <div>
+      <p class="policy-eyebrow">知行有灵 · Thought Into Action</p>
+      <h1>策略任务</h1>
+      <p class="policy-sub">输入任务描述，由 π0.5 策略驱动机械臂</p>
+    </div>
+    <div class="policy-head-status">
+      <span id="policyKernel" class="policy-pill" data-state="off">内核未连接</span>
+      <span id="policyState" class="policy-pill" data-state="off">空闲</span>
+    </div>
+  </header>
+
+  <section class="policy-grid">
+    <section class="policy-card" aria-labelledby="policyFormTitle">
+      <h2 id="policyFormTitle">任务设置</h2>
+      <label class="policy-field">
+        <span>任务描述</span>
+        <textarea id="policyPrompt" rows="3" maxlength="500" placeholder="例如：place the green book neatly on top of the book stack"></textarea>
+      </label>
+      <div class="policy-row">
+        <label class="policy-field">
+          <span>策略</span>
+          <select id="policyKind">
+            <option value="sft">π0.5 SFT</option>
+            <option value="zeroshot">π0.5 Zero-shot</option>
+          </select>
+        </label>
+        <label class="policy-field">
+          <span>时长（秒）</span>
+          <input id="policySeconds" type="number" min="1" max="300" value="60" />
+        </label>
+      </div>
+      <div id="policyConfirm" class="policy-confirm" hidden>
+        <p>运行策略会接管机械臂控制权并执行动作，请确认周围安全、机械臂已扶稳。</p>
+        <div class="policy-actions">
+          <button id="policyConfirmStart" type="button" class="danger">确认运行</button>
+          <button id="policyCancel" type="button">取消</button>
+        </div>
+      </div>
+      <div class="policy-actions">
+        <button id="policyStart" type="button" class="primary">运行策略</button>
+        <button id="policyStop" type="button">停止</button>
+      </div>
+      <p id="policyMessage" class="policy-message" role="status"></p>
+    </section>
+
+    <section class="policy-card policy-monitor" aria-labelledby="policyMonitorTitle">
+      <div class="policy-monitor-head">
+        <h2 id="policyMonitorTitle">运行状态</h2>
+        <span id="policyRun" class="policy-run">—</span>
+      </div>
+      <dl class="policy-list">
+        <div><dt>内核</dt><dd id="policyRuntime">—</dd></div>
+        <div><dt>控制源</dt><dd id="policyOwner">—</dd></div>
+        <div><dt>反馈延迟</dt><dd id="policyAge">—</dd></div>
+        <div><dt>操作</dt><dd id="policyOps">—</dd></div>
+      </dl>
+      <div class="policy-log-head">
+        <span>运行日志</span>
+        <button id="policyRefreshLog" type="button">刷新</button>
+      </div>
+      <pre id="policyLog" class="policy-log" aria-live="polite"></pre>
+    </section>
+  </section>
+</main>

@@ -1,13 +1,13 @@
 <main>
   <header>
     <div>
-      <p class="eyebrow">Isaac GR00T N1.7 · ARX5</p>
-      <h1>GR00T 示教采集</h1>
-      <p id="taskText" class="task">把黑色方块放到白色方块上</p>
+      <p class="eyebrow">数据采集 · ARX5</p>
+      <h1>采集会话</h1>
+      <p id="sessionTask" class="task">尚未设置任务描述</p>
     </div>
     <div class="header-actions">
-      <span id="datasetId" class="dataset-id">数据集加载中</span>
-      <a id="manualLink" href="/">
+      <span id="kernelBadge" class="status waiting">内核未连接</span>
+      <a id="manualLink" href="/control">
         <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
         返回控制台
       </a>
@@ -16,8 +16,8 @@
 
   <section class="progress-band" aria-label="采集进度">
     <div class="progress-primary">
-      <span>有效 Episode</span>
-      <strong><span id="acceptedCount">0</span><small> / <span id="targetCount">50</span></small></strong>
+      <span>本次会话</span>
+      <strong><span id="collectedCount">0</span><small> / <span id="targetCount">50</span></small></strong>
     </div>
     <div class="progress-track">
       <progress id="episodeProgress" value="0" max="50"></progress>
@@ -25,151 +25,147 @@
         <span id="sessionLabel">尚未开始</span>
         <div id="messageBar" class="message-bar info">
           <i id="messageIcon" class="fa-solid fa-circle-info" aria-hidden="true"></i>
-          <p id="message" role="status" aria-live="polite">正在连接本机服务…</p>
-          <button id="copyMessageButton" class="copy-button" type="button" hidden title="复制错误信息">
-            <i class="fa-regular fa-copy" aria-hidden="true"></i>
-            <span>复制</span>
-          </button>
+          <p id="message" role="status" aria-live="polite">正在读取内核状态…</p>
         </div>
       </div>
     </div>
     <dl class="progress-facts">
-      <div><dt>剩余</dt><dd id="remainingCount">50</dd></div>
-      <div><dt>丢弃</dt><dd id="rejectedCount">0</dd></div>
-      <div><dt>通过率</dt><dd id="successRate">--</dd></div>
+      <div><dt>已完成</dt><dd id="finishedCount">0</dd></div>
+      <div><dt>失败</dt><dd id="failedCount">0</dd></div>
+      <div><dt>当前时长</dt><dd id="liveDuration">0.0 s</dd></div>
     </dl>
   </section>
 
   <section class="workspace">
-    <section class="telemetry" aria-label="实时采集曲线">
+    <section class="telemetry" aria-label="实时画面与关节轨迹">
       <div class="telemetry-heading">
         <div>
-          <h2>机械臂关节轨迹</h2>
-          <p>J1–J6 · 最近 60 秒</p>
+          <h2>实时画面</h2>
+          <p id="cameraTitle">腕部相机</p>
         </div>
-        <span id="jointRange">等待采集</span>
+        <span id="cameraSpec">参数由相机配置决定</span>
       </div>
 
       <div class="signal-strip">
-        <div class="camera-signal">
-          <span id="cameraStatus" class="status waiting">相机连接中</span>
-          <span id="cameraSpec">双 RGB · 1280 x 720 · 30 FPS</span>
-        </div>
-        <div id="recordingBadge" hidden><i></i> REC <span id="timer">00:00.0</span></div>
+        <span id="cameraStatus" class="status waiting">相机未连接</span>
+        <span id="recordingBadge" hidden><i></i> REC <span id="timer">00:00.0</span></span>
       </div>
 
-      <div class="camera-previews" aria-label="双相机采集预览">
-        <figure class="camera-preview loading">
-          <img id="exteriorPreview" alt="D455 眼在手外相机预览">
-          <figcaption><strong>D455 · 外部</strong><span id="exteriorPreviewStatus">连接中</span></figcaption>
-        </figure>
-        <figure class="camera-preview loading">
-          <img id="wristPreview" alt="D405 眼在手上相机预览">
-          <figcaption><strong>D405 · 腕部</strong><span id="wristPreviewStatus">连接中</span></figcaption>
-        </figure>
-      </div>
+      <div id="cameraPreviews" class="camera-previews" aria-label="相机预览"></div>
 
-      <dl class="live-metrics" aria-label="实时采集指标">
-        <div><dt>时长</dt><dd id="liveDuration">0.0 s</dd></div>
+      <dl class="live-metrics" aria-label="实时指标">
         <div><dt>机械臂状态</dt><dd><span id="stateSamples">0</span> <small id="stateRate">-- Hz</small></dd></div>
-        <div><dt>D455 / D405 帧</dt><dd><span id="cameraFrames">0 / 0</span> <small id="cameraRate">-- / -- FPS</small></dd></div>
-        <div><dt>写入质量</dt><dd><span id="dropRate">0.00%</span> <small id="cameraQueue">队列 0</small></dd></div>
+        <div><dt>相机画面</dt><dd><span id="cameraAge">—</span></dd></div>
+        <div><dt>夹爪开度</dt><dd id="gripperValue">—</dd></div>
+        <div><dt>反馈延迟</dt><dd id="feedbackAge">—</dd></div>
       </dl>
 
-      <div class="joint-grid" aria-label="六个机械臂关节角度随时间变化曲线">
-        <figure class="joint-card"><figcaption><span>J1</span><strong id="jointValue1">--</strong></figcaption><canvas id="jointChart1" width="320" height="112" role="img" aria-label="J1 关节角度曲线"></canvas></figure>
-        <figure class="joint-card"><figcaption><span>J2</span><strong id="jointValue2">--</strong></figcaption><canvas id="jointChart2" width="320" height="112" role="img" aria-label="J2 关节角度曲线"></canvas></figure>
-        <figure class="joint-card"><figcaption><span>J3</span><strong id="jointValue3">--</strong></figcaption><canvas id="jointChart3" width="320" height="112" role="img" aria-label="J3 关节角度曲线"></canvas></figure>
-        <figure class="joint-card"><figcaption><span>J4</span><strong id="jointValue4">--</strong></figcaption><canvas id="jointChart4" width="320" height="112" role="img" aria-label="J4 关节角度曲线"></canvas></figure>
-        <figure class="joint-card"><figcaption><span>J5</span><strong id="jointValue5">--</strong></figcaption><canvas id="jointChart5" width="320" height="112" role="img" aria-label="J5 关节角度曲线"></canvas></figure>
-        <figure class="joint-card"><figcaption><span>J6</span><strong id="jointValue6">--</strong></figcaption><canvas id="jointChart6" width="320" height="112" role="img" aria-label="J6 关节角度曲线"></canvas></figure>
-      </div>
+      <div class="telemetry-foot">
+        <div id="jointList" class="joint-list" aria-label="关节角随时间变化曲线"></div>
 
-      <section class="health-panel" aria-label="采集健康">
-        <header>
-          <span>采集健康</span>
-          <span id="healthStatus">等待采集</span>
-        </header>
-        <div class="health-cards">
-          <div id="healthState" class="health-card waiting"><span>状态频率</span><strong>-- Hz</strong></div>
-          <div id="healthCamera" class="health-card waiting"><span>双相机</span><strong>-- / -- FPS</strong></div>
-          <div id="healthQueue" class="health-card waiting"><span>写入队列</span><strong>0 / 0</strong></div>
-          <div id="healthDrop" class="health-card waiting"><span>丢帧 / 重复源帧</span><strong>0.00% · 重复 0</strong></div>
-        </div>
-      </section>
+        <section class="dataset-card" aria-label="已录数据">
+          <div class="dataset-head">
+            <h3>已录数据</h3>
+            <span id="datasetCount">—</span>
+          </div>
+          <p id="datasetPath" class="dataset-path">outputs/datasets/runtime</p>
+          <ol id="episodeList" class="episode-list"></ol>
+        </section>
+      </div>
     </section>
 
-    <aside class="control-panel">
-      <div class="panel-heading control-heading">
+    <aside class="setup" aria-label="采集配置">
+      <div class="panel-heading">
         <div>
-          <h2>ARX 示教控制</h2>
-          <p id="armMode">机械臂未连接</p>
+          <h2>采集配置</h2>
+          <p id="armMode">设置会话参数后开始</p>
         </div>
-        <span id="controlStatus" class="status waiting">控制服务连接中</span>
+        <span id="controlStatus" class="status waiting">内核未连接</span>
       </div>
 
-      <div id="readySummary" class="ready-summary waiting" role="status" aria-live="polite">
-        <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
-        <span>正在检查采集条件</span>
+      <div class="setup-fields">
+        <section class="teleop-card" aria-label="遥操作输入">
+          <div class="teleop-head">
+            <h2>遥操作</h2>
+            <span id="teleopBadge" class="status waiting">未知</span>
+          </div>
+          <dl class="teleop-list">
+            <div><dt>输入源</dt><dd id="teleopSource">—</dd></div>
+            <div><dt>Quest 头显</dt><dd id="teleopQuest">—</dd></div>
+            <div><dt>遥操链路</dt><dd id="teleopLink">—</dd></div>
+            <div><dt>状态</dt><dd id="teleopPhase">—</dd></div>
+            <div><dt>XR 服务</dt><dd id="teleopService">—</dd></div>
+            <div><dt>控制权</dt><dd id="teleopOwner">—</dd></div>
+          </dl>
+          <p id="teleopHint" class="teleop-hint">采集时由 VR 遥操驱动机械臂，页面只负责录制与计数。</p>
+        </section>
+        <label class="field">
+          <span>任务描述</span>
+          <textarea id="taskInput" rows="3" maxlength="200" autocomplete="off" spellcheck="false" placeholder="例如：把绿色书本叠到书堆上"></textarea>
+        </label>
+
+        <fieldset class="mode-field">
+          <legend>采集方式</legend>
+          <label><input type="radio" name="collectMode" value="fixed" checked> 固定时长</label>
+          <label><input type="radio" name="collectMode" value="manual"> 手动停止</label>
+        </fieldset>
+
+        <label class="field" id="secondsField">
+          <span>每条时长（秒）</span>
+          <input id="secondsInput" type="number" min="1" max="300" value="30">
+        </label>
+
+        <fieldset class="field camera-field">
+          <legend>相机</legend>
+          <div id="cameraChoices" class="camera-choices">正在读取相机…</div>
+        </fieldset>
+
+        <details class="advanced">
+          <summary>高级</summary>
+          <label class="field">
+            <span>目标条数</span>
+            <input id="targetInput" type="number" min="1" max="999" value="50">
+          </label>
+          <label class="field">
+            <span>图像格式</span>
+            <select id="rgbSelect">
+              <option value="mp4">MP4（体积小）</option>
+              <option value="png">PNG（逐帧无损）</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>输出目录</span>
+            <input id="outputInput" type="text" value="outputs/datasets/runtime" spellcheck="false">
+          </label>
+        </details>
       </div>
 
       <div class="actions">
-        <button id="startButton" class="primary main-action" type="button" disabled aria-keyshortcuts="Space" title="Space">
+        <button id="startButton" class="primary main-action" type="button" aria-keyshortcuts="Space" title="Space">
           <i class="fa-solid fa-circle" aria-hidden="true"></i>
           <span>开始采集</span>
           <kbd>Space</kbd>
         </button>
         <button id="stopButton" class="stop main-action" type="button" disabled aria-keyshortcuts="Space" title="Space">
-          <i class="fa-solid fa-check" aria-hidden="true"></i>
-          <span>确认保存</span>
+          <i class="fa-solid fa-square" aria-hidden="true"></i>
+          <span>停止</span>
           <kbd>Space</kbd>
-        </button>
-        <button id="discardButton" class="danger" type="button" disabled aria-keyshortcuts="X" title="X">
-          <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
-          <span>丢弃并回零位</span>
-          <kbd>X</kbd>
         </button>
       </div>
 
-      <section id="reviewPanel" class="review" hidden>
-        <div class="review-heading">
-          <h2>Episode 质量检查</h2>
-          <div class="review-heading-actions">
-            <button id="copyValidationButton" class="copy-button" type="button" hidden title="复制完整报错">
-              <i class="fa-regular fa-copy" aria-hidden="true"></i>
-              <span>复制报错</span>
-            </button>
-            <span id="validationBadge" class="status waiting">检查中</span>
-          </div>
-        </div>
-        <div id="validationSummary"></div>
-        <dl class="quality-grid">
-          <div><dt>有效时长</dt><dd id="reviewDuration">--</dd></div>
-          <div><dt>状态 / D455 / D405</dt><dd id="reviewSamples">--</dd></div>
-          <div><dt>状态 / 双相机同步</dt><dd id="reviewSync">--</dd></div>
-          <div><dt>首尾静止</dt><dd id="reviewStill">--</dd></div>
-        </dl>
-        <div class="review-actions">
-          <button id="saveButton" class="primary save-action" type="button" disabled aria-keyshortcuts="S" title="S">
-            <i class="fa-solid fa-check" aria-hidden="true"></i>
-            <span>确认保存</span>
-            <kbd>S</kbd>
-          </button>
-          <button id="reviewDiscardButton" class="danger" type="button" disabled aria-keyshortcuts="X" title="X">
-            <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
-            <span>丢弃并回零位</span>
-            <kbd>X</kbd>
-          </button>
-        </div>
-      </section>
+      <p id="collectMessage" class="collect-message" role="status"></p>
 
+      <details class="log-drawer">
+        <summary>运行日志</summary>
+        <pre id="collectLog">—</pre>
+      </details>
     </aside>
   </section>
 
-  <section class="data-band" aria-label="GR00T 数据目标">
+  <section class="data-band" aria-label="数据目标">
     <div>
       <span>输出目标</span>
-      <strong id="formatValue">GR00T-flavored LeRobot v2.1</strong>
+      <strong id="formatValue">LeRobot v2.1 · GR00T 风格</strong>
     </div>
     <div>
       <span>状态 / 动作</span>
@@ -180,8 +176,8 @@
       <strong id="horizonValue">16</strong>
     </div>
     <div class="storage-path">
-      <span>原始数据目录</span>
-      <strong id="rawRootValue">/home/r2/work/data/arx5/data-coll</strong>
+      <span>输出目录</span>
+      <strong id="rawRootValue">outputs/datasets/runtime</strong>
     </div>
   </section>
 </main>

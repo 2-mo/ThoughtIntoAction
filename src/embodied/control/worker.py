@@ -145,14 +145,18 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
             from embodied.control.gateway import Gateway
             native = json.loads((directory / 'runtime.json').read_text()).get('native')
             if native:
+                from embodied.devices.robots.arx5.profile import DualArmProfile
                 ingresses[native['channel']] = registry.create('ingress', native['ingress'], runtime='control',
-                    prefix=prefix, dependencies=native['dependencies'], gripper=settings.robot.gripper_max_width > 0)
+                    prefix=prefix, dependencies=native['dependencies'], gripper=settings.robot.gripper_max_width > 0,
+                    dual=isinstance(settings.robot, DualArmProfile))
             gateway = Gateway(directory, prefix, settings.robot,
                               registry.load("planner", planner_plugin, runtime="control"), ingresses,
                               motion_limits=motion_limits, capabilities=capabilities,
                               simulation=backend if backend_name == 'sim' and all(callable(getattr(backend, name, None))
                                   for name in ('simulation_snapshot', 'simulation_restore', 'simulation_reset')) else None)
-        bridge = RobotBridge(prefix, commands=not managed)
+        from embodied.devices.robots.arx5.profile import DualArmProfile
+        bridge = RobotBridge(prefix, commands=not managed,
+                             arms=2 if isinstance(settings.robot, DualArmProfile) else 1)
         now = time.monotonic()
         state = backend.read_state(now)
         check_and_record_feedback(state, now, 'startup')

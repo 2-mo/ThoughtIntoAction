@@ -195,9 +195,21 @@ def run(args):
                 return 130
             time.sleep(.025)
         if native:
-            native_routing.start(children, configs, prefix, lambda: stopped)
-            for name, command in native_device.commands(configs, prefix).items():
-                children.start(name, command, cwd=ROOT)
+            from embodied.devices.robots.arx5.profile import DualArmProfile
+            if isinstance(settings.robot, DualArmProfile):
+                # The coordinator disables the group on any invalid Episode
+                # controller sample, so the XR device must be publishing valid
+                # data before it starts. The relay still starts after the
+                # coordinator: it must inherit the coordinator's iceoryx
+                # capacity contract or the service refuses to open.
+                for name, command in native_device.commands(configs, prefix).items():
+                    children.start(name, command, cwd=ROOT)
+                time.sleep(1.5)
+                native_routing.start(children, configs, prefix, lambda: stopped)
+            else:
+                native_routing.start(children, configs, prefix, lambda: stopped)
+                for name, command in native_device.commands(configs, prefix).items():
+                    children.start(name, command, cwd=ROOT)
             if args.managed:
                 dependency_health = native_routing.health(prefix, native['dependencies'])
                 dependency_health.publish(children.processes)

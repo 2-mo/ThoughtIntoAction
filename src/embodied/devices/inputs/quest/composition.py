@@ -37,20 +37,25 @@ class NativeRouting:
         from .native_config import write_native_configs
         if settings.robot.control_hz != 250:
             raise ValueError('Bundled native Quest routing requires a 250 Hz profile')
+        from embodied.devices.robots.arx5.profile import DualArmProfile
         return write_native_configs(directory, prefix, settings.robot.gripper_max_width,
                                     settings.sdk_library, settings.vr.base_yaw_deg,
-                                    settings.vr.grip_threshold, settings.vr.position_scale)
+                                    settings.vr.grip_threshold, settings.vr.position_scale,
+                                    dual=isinstance(settings.robot, DualArmProfile))
 
     @staticmethod
     def commands(configs, prefix):
         router = str(ROOT / 'src/embodied/devices/inputs/quest/native/bin/rollio-teleop-router')
         commands = {name: [router, 'run', '--config', str(configs[name])]
-                    for name in ('arm', 'gripper') if name in configs}
+                    for name in ('arm', 'gripper', 'arm2', 'gripper2') if name in configs}
         commands['coordinator'] = [router, 'coordinate', '--config', str(configs['coordinator'])]
+        if 'arm2' in configs:
+            commands['relay'] = [sys.executable, '-m', 'embodied.devices.inputs.quest.input_relay',
+                                 '--prefix', prefix, '--channel', 'left_controller']
         return commands
 
     @classmethod
-    def start(cls, children, configs, prefix, stopped):
+    def start(cls, children, configs, prefix, stopped, prestarted=()):
         # Bundled routers open global control/events with library defaults if
         # they win creation. Let the coordinator establish the native 4/32/32
         # capacity contract first. A published permit proves its ports opened.
@@ -59,6 +64,8 @@ class NativeRouting:
         node = create_node()
         subscriber = make_subscriber(open_service(node, f'{prefix}/group/permit', TeleopGate))
         commands = cls.commands(configs, prefix)
+        for name in prestarted:
+            commands.pop(name, None)
         process = children.start('coordinator', commands.pop('coordinator'), cwd=ROOT)
         deadline = time.monotonic() + 5
         while drain_latest(subscriber) is None:

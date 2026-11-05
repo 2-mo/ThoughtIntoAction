@@ -1,0 +1,324 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC", sans-serif;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #000;
+  color: #fff;
+}
+
+.policy {
+  box-sizing: border-box;
+  width: 100%;
+  height: calc(100dvh - var(--shell-nav-height, 0px));
+  margin: 0;
+  padding: clamp(16px, 1.8vw, 28px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: clamp(14px, 1.4vw, 22px);
+  overflow: hidden;
+}
+
+.policy-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 24px;
+}
+
+.policy-eyebrow {
+  margin: 0 0 6px;
+  color: rgba(255, 255, 255, .4);
+  font-size: 11px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.policy-head h1 {
+  margin: 0;
+  font-size: clamp(26px, 2.6vw, 40px);
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+
+.policy-sub {
+  margin: 6px 0 0;
+  color: rgba(255, 255, 255, .45);
+  font-size: 12px;
+}
+
+.policy-head-status {
+  display: flex;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+
+.policy-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .04);
+  color: rgba(255, 255, 255, .62);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.policy-pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .35);
+}
+
+.policy-pill[data-state="on"] {
+  color: #ffbd6b;
+  border-color: rgba(255, 189, 107, .32);
+  background: rgba(255, 189, 107, .1);
+}
+
+.policy-pill[data-state="on"]::before {
+  background: #ffbd6b;
+}
+
+.policy-pill[data-state="error"] {
+  color: #ef6464;
+  border-color: rgba(239, 100, 100, .3);
+  background: rgba(239, 100, 100, .08);
+}
+
+.policy-pill[data-state="error"]::before {
+  background: #ef6464;
+}
+
+.policy-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, .9fr);
+  gap: clamp(14px, 1.4vw, 22px);
+  min-height: 0;
+}
+
+.policy-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: clamp(16px, 1.5vw, 22px);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 18px;
+  background: #0d0d0d;
+}
+
+.policy-card h2 {
+  margin: 0 0 14px;
+  color: rgba(255, 255, 255, .55);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.policy-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.policy-field span {
+  color: rgba(255, 255, 255, .45);
+  font-size: 11px;
+}
+
+.policy-field textarea,
+.policy-field input,
+.policy-field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 10px;
+  background: #151515;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.policy-field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.policy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, .5fr);
+  gap: 12px;
+}
+
+.policy-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.policy-actions button {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .04);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.policy-actions button.primary {
+  border-color: rgba(255, 189, 107, .4);
+  background: rgba(255, 189, 107, .1);
+  color: #ffbd6b;
+}
+
+.policy-actions button.danger {
+  border-color: rgba(239, 100, 100, .45);
+  background: rgba(239, 100, 100, .1);
+  color: #ef6464;
+}
+
+.policy-actions button:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+.policy-confirm {
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: 1px solid rgba(239, 100, 100, .3);
+  border-radius: 12px;
+  background: rgba(239, 100, 100, .07);
+}
+
+.policy-confirm p {
+  margin: 0 0 10px;
+  color: #ef9a9a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.policy-message {
+  min-height: 16px;
+  margin: 10px 0 0;
+  color: rgba(255, 255, 255, .5);
+  font-size: 12px;
+}
+
+.policy-message[data-tone="error"] {
+  color: #ef6464;
+}
+
+.policy-message[data-tone="success"] {
+  color: #79dfac;
+}
+
+.policy-monitor-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.policy-run {
+  color: rgba(255, 255, 255, .4);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.policy-list {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.policy-list div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+}
+
+.policy-list dt {
+  color: rgba(255, 255, 255, .4);
+  font-size: 12px;
+}
+
+.policy-list dd {
+  margin: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, .86);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.policy-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, .4);
+  font-size: 11px;
+}
+
+.policy-log-head button {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .04);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.policy-log {
+  flex: 1;
+  min-height: 160px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 12px;
+  background: #080808;
+  color: rgba(255, 255, 255, .72);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 900px) {
+  .policy {
+    height: auto;
+    min-height: calc(100dvh - var(--shell-nav-height, 0px));
+    overflow: visible;
+  }
+
+  .policy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .policy-log {
+    min-height: 220px;
+  }
+}

@@ -1,1216 +1,771 @@
 // @ts-nocheck
-import {
-  controlEndpoint,
-  decodeControlEvent,
-  encodeCommand,
-} from "../../api/control-protocol";
+// Kernel-owned collection: configure a session, record one episode per run, watch live status.
+import { withToken } from "../../api/control-protocol";
+import { listOperations, startOperation, stopOperation, operationLog } from "../../api/operations";
+import { deleteEpisode, listEpisodes } from "../../api/collection";
+
+const STATUS_MS = 500;
+const OPERATIONS_MS = 1500;
+const HISTORY_SECONDS = 60;
+const STORAGE_KEY = "tia.collect.session";
+const COUNTER_KEY = "tia.collect.counters";
+const RAD_TO_DEG = 180 / Math.PI;
+const JOINT_COLORS = ["#78f0c7", "#72b7ff", "#f2d06b", "#ff8f88", "#c8a5ff", "#93e36f"];
 
 const ui = Object.fromEntries(
   [
-    "taskText", "datasetId", "acceptedCount", "targetCount", "remainingCount",
-    "rejectedCount", "successRate", "episodeProgress", "sessionLabel", "cameraSpec",
-    "cameraStatus", "controlStatus", "armMode", "recordingBadge", "timer",
-    "liveDuration", "stateSamples", "stateRate", "cameraFrames", "cameraRate",
-    "dropRate", "cameraQueue", "readySummary", "startButton", "stopButton",
-    "discardButton", "reviewPanel",
-    "validationBadge", "validationSummary", "reviewDuration", "reviewSamples",
-    "reviewSync", "reviewStill", "saveButton", "reviewDiscardButton",
-    "copyValidationButton", "messageBar", "messageIcon", "message", "copyMessageButton", "manualLink", "formatValue",
-    "dimensionsValue", "horizonValue", "rawRootValue", "jointRange", "healthStatus",
-    "healthState", "healthCamera", "healthQueue", "healthDrop",
-    "exteriorPreview", "wristPreview", "exteriorPreviewStatus", "wristPreviewStatus",
-    "jointChart1", "jointChart2", "jointChart3", "jointChart4",
-    "jointChart5", "jointChart6", "jointValue1", "jointValue2", "jointValue3",
-    "jointValue4", "jointValue5", "jointValue6",
+    "sessionTask", "kernelBadge", "controlStatus", "manualLink",
+    "collectedCount", "targetCount", "episodeProgress", "sessionLabel",
+    "finishedCount", "failedCount", "liveDuration",
+    "messageBar", "messageIcon", "message",
+    "cameraTitle", "cameraSpec", "cameraStatus", "recordingBadge", "timer",
+    "cameraPreviews", "stateSamples", "stateRate",
+    "datasetCount", "datasetPath", "episodeList",
+    "teleopBadge", "teleopSource", "teleopQuest", "teleopService", "teleopOwner", "teleopHint",
+    "teleopLink", "teleopPhase",
+    "cameraAge", "gripperValue", "feedbackAge", "armMode",
+    "taskInput", "secondsField", "secondsInput", "targetInput",
+    "cameraChoices", "rgbSelect", "outputInput",
+    "startButton", "stopButton", "collectMessage", "collectLog",
+    "formatValue", "dimensionsValue", "horizonValue", "rawRootValue",
+    "jointList",
   ].map((id) => [id, document.getElementById(id)]),
 );
 
-let controlSocket;
-let controlSequence = 0;
-const controlRequests = new Map();
-let armState = null;
-let collectionState = null;
-let cameraReady = false;
-let cameraCollectionState = null;
-let recordingStartedAt = null;
-let timerHandle = null;
-let statusPollHandle = null;
-let reconnectHandle = null;
-let pageClosing = false;
-let busy = false;
-let statePollPending = false;
-let lastStatePollAt = 0;
-let armPreparePending = false;
-let lastArmPrepareAt = 0;
-let lastTelemetrySampleAt = 0;
-let lastTelemetryStateCount = -1;
-let renderedValidationSignature = "";
-const telemetryHistory = [];
-const JOINT_COLORS = ["#78f0c7", "#72b7ff", "#f2d06b", "#ff8f88", "#c8a5ff", "#93e36f"];
-const TELEMETRY_HISTORY_LIMIT = 240;
-const CAMERA_PREVIEWS = [
-  ["exterior_rgb", "exteriorPreview", "exteriorPreviewStatus"],
-  ["wrist_rgb", "wristPreview", "wristPreviewStatus"],
-];
+const statusUrl = withToken("/api/v1/system/status");
 
-function endpoint() {
-  return controlEndpoint();
+let status = null;
+let collectOperation = null;
+let statusTimer = undefined;
+let operationsTimer = undefined;
+let tickTimer = undefined;
+let statusPending = false;
+let operationsPending = false;
+let sampleCount = 0;
+const history = [];
+const countedOperations = new Set();
+const runningOperations = new Set();
+let counters = loadCounters();
+let lastConnected = null;
+let settings = loadSettings();
+
+function loadSettings() {
+  const fallback = { task: "", mode: "fixed", seconds: 30, target: 50, rgb: "mp4", output: "outputs/datasets/runtime" };
+  try {
+    return { ...fallback, ...JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}") };
+  } catch {
+    return fallback;
+  }
 }
 
-function withToken(href) {
-  const token = new URLSearchParams(location.search).get("token");
-  if (!token) return href;
-  const url = new URL(href, location.href);
-  url.searchParams.set("token", token);
+function saveSettings() {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    /* storage unavailable: settings stay in memory */
+  }
+}
+
+function loadCounters() {
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(COUNTER_KEY) || "{}");
+    return { collected: Number(stored.collected) || 0, failed: Number(stored.failed) || 0 };
+  } catch {
+    return { collected: 0, failed: 0 };
+  }
+}
+
+function saveCounters() {
+  try {
+    window.sessionStorage.setItem(COUNTER_KEY, JSON.stringify(counters));
+  } catch {
+    /* storage unavailable: counters stay in memory */
+  }
+}
+
+function selectedMode() {
+  return document.querySelector('input[name="collectMode"]:checked')?.value || "fixed";
+}
+
+function enabledCameras() {
+  return (status?.cameras || []).filter((camera) => camera.enabled !== false);
+}
+
+function selectedCameras() {
+  return Array.from(document.querySelectorAll('#cameraChoices input[type="checkbox"]:checked')).map(
+    (input) => input.value,
+  );
+}
+
+function setText(node, value) {
+  if (node) node.textContent = value;
+}
+
+function setBadge(node, state, label) {
+  if (!node) return;
+  if (node.classList.contains("status")) {
+    node.classList.remove("good", "bad", "waiting");
+    node.classList.add(state);
+  } else {
+    node.dataset.state = state;
+  }
+  node.textContent = label;
+}
+
+function setMessage(text, tone = "info") {
+  if (!ui.message) return;
+  ui.message.textContent = text;
+  ui.messageBar.dataset.tone = tone;
+  const icon = { info: "fa-circle-info", success: "fa-circle-check", warning: "fa-triangle-exclamation", error: "fa-circle-exclamation" };
+  ui.messageIcon.className = `fa-solid ${icon[tone] || icon.info}`;
+}
+
+function setCollectMessage(text, tone = "") {
+  if (!ui.collectMessage) return;
+  ui.collectMessage.textContent = text;
+  ui.collectMessage.dataset.tone = tone;
+}
+
+function operationRunning() {
+  return Boolean(collectOperation && ["starting", "running", "stopping"].includes(collectOperation.state));
+}
+
+function terminal(operation) {
+  return Boolean(operation && ["stopped", "failed"].includes(operation.state));
+}
+
+// Settings form
+
+function renderSettings() {
+  ui.taskInput.value = settings.task;
+  ui.secondsInput.value = String(settings.seconds);
+  ui.targetInput.value = String(settings.target);
+  ui.rgbSelect.value = settings.rgb;
+  ui.outputInput.value = settings.output;
+  const radio = document.querySelector(`input[name="collectMode"][value="${settings.mode}"]`);
+  if (radio) radio.checked = true;
+  ui.secondsField.hidden = selectedMode() !== "fixed";
+  updateTarget();
+  renderSessionTask();
+}
+
+function readSettings() {
+  settings = {
+    task: ui.taskInput.value.trim(),
+    mode: selectedMode(),
+    seconds: Number(ui.secondsInput.value) || 30,
+    target: Math.min(Math.max(Number(ui.targetInput.value) || 50, 1), 999),
+    rgb: ui.rgbSelect.value,
+    output: ui.outputInput.value.trim() || "outputs/datasets/runtime",
+  };
+  saveSettings();
+  updateTarget();
+  renderSessionTask();
+  updateControls();
+}
+
+function renderSessionTask() {
+  setText(ui.sessionTask, settings.task || "尚未设置任务描述");
+  setText(ui.rawRootValue, settings.output);
+}
+
+function updateTarget() {
+  setText(ui.targetCount, String(settings.target));
+  ui.episodeProgress.max = settings.target;
+  ui.episodeProgress.value = Math.min(counters.collected, settings.target);
+  setText(ui.collectedCount, String(counters.collected));
+  setText(ui.finishedCount, String(counters.collected));
+  setText(ui.failedCount, String(counters.failed));
+  const remaining = Math.max(settings.target - counters.collected, 0);
+  setText(
+    ui.sessionLabel,
+    counters.collected === 0 ? "尚未开始" : `已完成 ${counters.collected} 条 · 剩余 ${remaining} 条`,
+  );
+}
+
+let cameraSignature = "";
+
+function renderCameraChoices() {
+  const cameras = enabledCameras();
+  const signature = `${Boolean(status)}|${cameras.map((camera) => `${camera.id}:${camera.label}`).join(",")}`;
+  if (signature === cameraSignature) return;
+  cameraSignature = signature;
+  if (!cameras.length) {
+    ui.cameraChoices.textContent = status ? "没有启用的相机" : "内核未连接，暂无法读取相机";
+    return;
+  }
+  const only = cameras.length === 1;
+  ui.cameraChoices.innerHTML = cameras
+    .map(
+      (camera) => `<label><input type="checkbox" value="${camera.id}" ${only ? "checked disabled" : "checked"}>
+        <span>${camera.label || camera.id}<small>${camera.model || camera.id}</small></span></label>`,
+    )
+    .join("");
+  setText(
+    ui.cameraTitle,
+    cameras.length > 1 ? `${cameras.length} 路相机 · 实时预览` : `${cameras[0].label || cameras[0].id} · 实时预览`,
+  );
+}
+
+
+// Teleoperation
+
+function renderTeleop() {
+  const teleop = status?.teleop || {};
+  const source = String(teleop.source || "cli");
+  const input = String(teleop.input || "idle");
+  const vr = source === "quest" || input === "quest";
+  const owner = status?.owner?.source || null;
+  const connected = Boolean(status?.connected);
+  const teleopOk = Boolean(teleop.ready && teleop.armed && teleop.permit && status?.phase === "teleop");
+  setText(ui.teleopSource, vr ? "VR · Quest" : source === "phone" ? "手机" : "无外部输入");
+  setText(ui.teleopQuest, teleop.quest_usb ? "已连接" : "未连接");
+  setText(ui.teleopService, teleop.xr_service ? "运行中" : "未启动");
+  setText(ui.teleopOwner, owner ? `${owner} · ${status?.phase || "—"}` : "无人控制");
+  setText(
+    ui.teleopLink,
+    `就绪${teleop.ready ? "✓" : "—"} · 激活${teleop.armed ? "✓" : "—"} · 许可${teleop.permit ? "✓" : "—"}`,
+  );
+  setText(ui.teleopPhase, status?.phase || "—");
+
+  if (!connected) {
+    setBadge(ui.teleopBadge, "waiting", "内核未连接");
+  } else if (!vr) {
+    setBadge(ui.teleopBadge, "waiting", "未启用 VR");
+  } else if (teleopOk) {
+    setBadge(ui.teleopBadge, "good", "遥操中");
+  } else if (teleop.armed && !teleop.permit) {
+    setBadge(ui.teleopBadge, "bad", "协调器未开启");
+  } else if (teleop.ready) {
+    setBadge(ui.teleopBadge, "waiting", "等待握持 Grip");
+  } else {
+    setBadge(ui.teleopBadge, "waiting", String(teleop.reason || "未就绪").slice(0, 18));
+  }
+
+  setText(
+    ui.teleopHint,
+    !vr
+      ? "当前内核没有启用 Quest 输入；VR 采集需用 real-quest 配置启动内核。"
+      : teleopOk
+        ? "遥操中：Grip 跟随，Trigger 控制夹爪；采集时页面只负责录制与计数。"
+        : teleop.armed && !teleop.permit
+          ? "已激活但协调器处于停用状态：按 A 会被当成 A+B 关闭跟随，需要重启内核恢复。"
+          : "握住右手柄 Grip 接入遥操；接入后 就绪 / 激活 / 许可 三项会同时变为 ✓。",
+  );
+}
+
+
+// Dataset
+
+const EPISODES_MS = 3000;
+let episodesPending = false;
+let pendingDelete = null; // Episode the operator has armed for a second click.
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]
+  ));
+}
+
+async function refreshEpisodes() {
+  if (episodesPending) return;
+  episodesPending = true;
+  try {
+    const data = await listEpisodes(settings.output, 6);
+    setText(ui.datasetPath, data.directory);
+    setText(ui.datasetCount, data.total ? `${data.total} 条` : "暂无");
+    const rows = (data.episodes || []).map((episode) => {
+      const done = episode.lifecycle === "complete";
+      const label = episode.lifecycle === "complete" ? "完成" : (episode.lifecycle || "未知");
+      const armed = pendingDelete === episode.name;
+      return `<li class="episode-item ${done ? "" : "bad"}">
+        <strong>${escapeHtml(episode.task || episode.name)}</strong>
+        <span class="episode-meta">
+          <em>${escapeHtml(label)}</em>
+          <button type="button" class="episode-delete${armed ? " confirming" : ""}"
+            data-episode="${escapeHtml(episode.name)}"
+            title="${armed ? "再点一次确认删除，删除后不可恢复" : "删除这条录制"}">${armed ? "确认删除" : "删除"}</button>
+        </span>
+        <small>${escapeHtml(episode.name)}</small>
+        <small>${episode.ticks ?? "—"} tick · ${episode.frames ?? 0} 帧</small>
+      </li>`;
+    });
+    ui.episodeList.innerHTML = rows.length
+      ? rows.join("")
+      : '<li class="episode-empty">还没有录制的 episode</li>';
+  } catch {
+    setText(ui.datasetCount, "读取失败");
+  } finally {
+    episodesPending = false;
+  }
+}
+
+// Status polling
+
+async function pollStatus() {
+  if (statusPending) return;
+  statusPending = true;
+  try {
+    const response = await fetch(statusUrl, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    status = await response.json();
+  } catch {
+    status = null;
+  } finally {
+    statusPending = false;
+    renderStatus();
+  }
+}
+
+function renderStatus() {
+  const connected = Boolean(status?.connected);
+  setBadge(ui.kernelBadge, connected ? "good" : "waiting", connected ? "内核已连接" : "内核未连接");
+  setBadge(ui.controlStatus, connected ? "good" : "waiting", connected ? "就绪" : "内核未连接");
+  setText(ui.armMode, connected ? `运行 ${status.runtime_id || "—"} · ${status.phase || "—"}` : "内核未连接，先在总览页启动");
+
+  const q = Array.isArray(status?.q) ? status.q : [];
+  if (connected && q.length >= 6) {
+    sampleCount += 1;
+    history.push({ t: Date.now() / 1000, q });
+    const cutoff = Date.now() / 1000 - HISTORY_SECONDS;
+    while (history.length && history[0].t < cutoff) history.shift();
+    for (const row of jointRows) {
+      const value = q[row.offset];
+      setText(row.value, Number.isFinite(value) ? `${(value * RAD_TO_DEG).toFixed(1)}°` : "--");
+    }
+  }
+  renderJointRows();
+  setText(ui.stateSamples, String(sampleCount));
+  setText(ui.stateRate, rateLabel());
+  drawAllJoints();
+
+  const gripper = status?.gripper_width;
+  const widths = Array.isArray(status?.gripper_widths) ? status.gripper_widths : null;
+  const gripperText = widths && widths.length > 1
+    ? widths.map((width, index) => {
+        const label = status.arms?.[index]?.label ?? `臂${index + 1}`;
+        return Number.isFinite(width) ? `${label} ${(width * 1000).toFixed(1)}` : `${label} —`;
+      }).join(" · ") + " mm"
+    : Number.isFinite(gripper) ? `${(gripper * 1000).toFixed(1)} mm` : "—";
+  setText(ui.gripperValue, gripperText);
+  const age = status?.feedback_age_ms;
+  setText(ui.feedbackAge, Number.isFinite(age) ? `${age.toFixed(0)} ms` : "—");
+
+  const cameraOnline = Boolean(status?.shared_camera);
+  const videoOwnsCamera = Boolean(status?.camera_service);
+  setBadge(ui.cameraStatus, cameraOnline ? "good" : "waiting", cameraOnline ? "相机服务在线" : "相机服务未启动");
+  if (!cameraOnline) {
+    for (const card of previewCards) {
+      card.state.textContent = "未连接";
+      card.empty.textContent = videoOwnsCamera ? "相机被控制台视频占用" : "相机服务未启动";
+      card.figure.classList.add("loading");
+    }
+    setText(ui.cameraAge, "—");
+  }
+  renderCameraChoices();
+  renderPreviewCards();
+  ensureStreams();
+  renderTeleop();
+  updateControls();
+  renderOperation();
+}
+
+function rateLabel() {
+  if (history.length < 2) return "-- Hz";
+  const window = history.slice(-5);
+  const span = window[window.length - 1].t - window[0].t;
+  if (span <= 0) return "-- Hz";
+  return `${((window.length - 1) / span).toFixed(1)} Hz`;
+}
+
+function jointRange(index) {
+  const lower = Array.isArray(status?.limits?.joint_min) ? status.limits.joint_min : [];
+  const upper = Array.isArray(status?.limits?.joint_max) ? status.limits.joint_max : [];
+  const lo = Number.isFinite(lower[index]) ? lower[index] : -Math.PI;
+  const hi = Number.isFinite(upper[index]) ? upper[index] : Math.PI;
+  return [lo, Math.max(hi - lo, 1e-6)];
+}
+
+function renderJointRows() {
+  const arms = Array.isArray(status?.arms) && status.arms.length
+    ? status.arms
+    : [{ id: "arm1", label: "机械臂", joints: new Array(6).fill(null) }];
+  const signature = `${arms.length}|${arms.map((arm) => (arm.joints || []).length).join(",")}`;
+  if (signature === jointSignature) return;
+  jointSignature = signature;
+  const showLabel = arms.length > 1;
+  ui.jointList.innerHTML = "";
+  ui.jointList.classList.toggle("is-dual", showLabel);
+  jointRows = [];
+  arms.forEach((arm, armIndex) => {
+    const group = document.createElement("div");
+    group.className = "joint-arm";
+    if (showLabel) {
+      const heading = document.createElement("div");
+      heading.className = "joint-arm-name";
+      heading.textContent = arm.label || arm.id;
+      group.append(heading);
+    }
+    ui.jointList.append(group);
+    (arm.joints || []).forEach((_, index) => {
+      const row = document.createElement("div");
+      row.className = "joint-row";
+      const name = document.createElement("span");
+      name.className = "joint-name";
+      name.textContent = `J${index + 1}`;
+      const canvas = document.createElement("canvas");
+      canvas.width = 320;
+      canvas.height = 28;
+      canvas.setAttribute("role", "img");
+      canvas.setAttribute("aria-label", `${arm.label || arm.id} J${index + 1} 关节角度曲线`);
+      const value = document.createElement("strong");
+      value.textContent = "--";
+      row.append(name, canvas, value);
+      group.append(row);
+      jointRows.push({ canvas, value, offset: armIndex * 6 + index });
+    });
+  });
+}
+
+function drawJoint(row) {
+  const canvas = row.canvas;
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width < 10 || rect.height < 10) return;
+  const dpr = window.devicePixelRatio || 1;
+  const width = Math.round(rect.width * dpr);
+  const height = Math.round(rect.height * dpr);
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  const context = canvas.getContext("2d");
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  context.clearRect(0, 0, rect.width, rect.height);
+
+  context.strokeStyle = "rgba(255,255,255,.06)";
+  context.lineWidth = 1;
+  for (let row = 1; row < 4; row += 1) {
+    const y = (rect.height * row) / 4;
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(rect.width, y);
+    context.stroke();
+  }
+  if (history.length < 2) return;
+
+  const now = history[history.length - 1].t;
+  const span = Math.min(HISTORY_SECONDS, Math.max(10, now - history[0].t));
+  const start = now - span;
+  const [lo, range] = jointRange(row.offset);
+  context.strokeStyle = JOINT_COLORS[row.offset % JOINT_COLORS.length];
+  context.lineWidth = 1.5;
+  context.beginPath();
+  let started = false;
+  for (const sample of history) {
+    if (sample.t < start) continue;
+    const x = ((sample.t - start) / span) * rect.width;
+    const value = sample.q[row.offset];
+    if (!Number.isFinite(value)) continue;
+    const ratio = Math.min(Math.max((value - lo) / range, 0), 1);
+    const y = rect.height - ratio * rect.height;
+    if (started) context.lineTo(x, y);
+    else {
+      context.moveTo(x, y);
+      started = true;
+    }
+  }
+  context.stroke();
+}
+
+function drawAllJoints() {
+  for (const row of jointRows) drawJoint(row);
+}
+
+// Operations
+
+async function pollOperations() {
+  if (operationsPending) return;
+  operationsPending = true;
+  try {
+    const list = await listOperations();
+    collectOperation = list.find((operation) => operation.kind === "collect") || null;
+  } catch {
+    collectOperation = null;
+  } finally {
+    operationsPending = false;
+  }
+  await trackOperation();
+  renderOperation();
+}
+
+async function trackOperation() {
+  const operation = collectOperation;
+  if (!operation) return;
+  if (["starting", "running", "stopping"].includes(operation.state)) {
+    runningOperations.add(operation.started_at);
+    try {
+      const lines = await operationLog("collect", 40);
+      ui.collectLog.textContent = lines.slice(-14).join("\n") || "—";
+    } catch {
+      /* log is best effort */
+    }
+    return;
+  }
+  if (!terminal(operation) || countedOperations.has(operation.started_at)) return;
+  if (!runningOperations.has(operation.started_at)) return;
+  countedOperations.add(operation.started_at);
+  if (operation.state === "stopped" && operation.exit_code === 0) {
+    counters.collected += 1;
+    setCollectMessage(`已保存第 ${counters.collected} 条 episode`, "success");
+    setMessage(`第 ${counters.collected} 条已写入 ${settings.output}`, "success");
+  } else {
+    counters.failed += 1;
+    setCollectMessage(`采集失败（退出码 ${operation.exit_code ?? "?"}），查看运行日志`, "error");
+    setMessage("采集失败，检查内核与相机服务", "error");
+  }
+  saveCounters();
+  updateTarget();
+  void refreshEpisodes();
+}
+
+function renderOperation() {
+  const running = operationRunning();
+  ui.recordingBadge.hidden = !running;
+  if (!running) setText(ui.timer, "00:00.0");
+  if (running) {
+    setMessage(`正在采集第 ${counters.collected + 1} 条 · ${settings.mode === "fixed" ? `${settings.seconds} 秒` : "手动停止"}`);
+  } else {
+    const connected = Boolean(status?.connected);
+    if (connected !== lastConnected) {
+      lastConnected = connected;
+      setMessage(
+        connected ? "内核已就绪，填写任务描述后开始采集" : "内核未连接：先在总览页启动控制内核",
+        connected ? "info" : "warning",
+      );
+    }
+  }
+  updateControls();
+}
+
+function updateControls() {
+  const running = operationRunning();
+  const connected = Boolean(status?.connected);
+  const task = ui.taskInput.value.trim();
+  ui.startButton.disabled = running || !connected || !task;
+  ui.stopButton.disabled = !running;
+  ui.startButton.title = !connected ? "需要运行中的内核" : !task ? "先填写任务描述" : "Space";
+}
+
+// Preview
+
+let previewCards = [];
+let previewSignature = "";
+let jointRows = [];
+let jointSignature = "";
+
+function streamUrl(cameraId) {
+  const url = new URL(withToken(`/api/v1/collection/camera-stream/${cameraId}.mjpeg`), window.location.href);
+  url.searchParams.set("t", String(Date.now()));
   return url.toString();
 }
 
-function cameraPreviewPhase() {
-  if (collectionState?.active) return "采集中";
-  if (collectionState?.stage === "pending_review") return "采集后";
-  return "采集前";
-}
-
-function updateCameraPreviewLabels() {
-  const phase = cameraPreviewPhase();
-  for (const [, , statusId] of CAMERA_PREVIEWS) {
-    if (!ui[statusId].classList.contains("failed")) {
-      ui[statusId].textContent = phase;
-    }
-  }
-}
-
-async function refreshCameraPreview(videoKey, imageId, statusId) {
-  const now = Date.now();
-  const image = ui[imageId];
-  const preview = image.closest(".camera-preview");
-  const startedAt = number(image.dataset.loadingStartedAt);
-  if (image.dataset.loading === "true" && now - startedAt < 5_000) return;
-  image.dataset.loading = "true";
-  image.dataset.loadingStartedAt = String(now);
-  if (!image.dataset.objectUrl) preview?.classList.add("loading");
-  ui[statusId].classList.remove("failed");
-  let objectUrl = "";
-  try {
-    const response = await fetch(
-      withToken(`/api/v1/collection/camera-preview/${videoKey}.jpg?t=${now}`),
-      { cache: "no-store" },
-    );
-    if (!response.ok) throw new Error(`preview HTTP ${response.status}`);
-    objectUrl = URL.createObjectURL(await response.blob());
-    const preloaded = new Image();
-    await new Promise((resolve, reject) => {
-      preloaded.addEventListener("load", resolve, { once: true });
-      preloaded.addEventListener("error", reject, { once: true });
-      preloaded.src = objectUrl;
+function renderPreviewCards() {
+  const cameras = enabledCameras();
+  const signature = cameras.map((camera) => `${camera.id}:${camera.label}`).join(",");
+  if (signature === previewSignature) return;
+  previewSignature = signature;
+  ui.cameraPreviews.replaceChildren();
+  previewCards = cameras.map((camera) => {
+    const figure = document.createElement("figure");
+    figure.className = "camera-preview loading";
+    const img = document.createElement("img");
+    img.alt = `${camera.label || camera.id} 预览`;
+    img.decoding = "async";
+    const empty = document.createElement("div");
+    empty.className = "camera-empty";
+    empty.textContent = "相机服务未启动";
+    const caption = document.createElement("figcaption");
+    const name = document.createElement("strong");
+    name.textContent = camera.label || camera.id;
+    const state = document.createElement("span");
+    state.textContent = "未连接";
+    caption.append(name, state);
+    figure.append(img, empty, caption);
+    img.addEventListener("load", () => {
+      figure.classList.remove("loading");
+      state.textContent = "实时";
     });
-    const previousObjectUrl = image.dataset.objectUrl;
-    image.dataset.objectUrl = objectUrl;
-    image.src = objectUrl;
-    if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
-    image.dataset.loading = "false";
-    preview?.classList.remove("loading", "failed");
-    ui[statusId].classList.remove("failed");
-    ui[statusId].textContent = cameraPreviewPhase();
-  } catch {
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-    image.dataset.loading = "false";
-    preview?.classList.remove("loading");
-    preview?.classList.add("failed");
-    ui[statusId].classList.add("failed");
-    ui[statusId].textContent = "暂不可用";
-  }
-}
-
-function refreshCameraPreviews() {
-  for (const preview of CAMERA_PREVIEWS) void refreshCameraPreview(...preview);
-}
-
-function initializeCameraPreviews() {
-  refreshCameraPreviews();
-}
-
-ui.manualLink.href = withToken("./");
-
-function setMessage(text, error = false, requestedTone = null) {
-  const tone = requestedTone ?? (error
-    ? "error"
-    : /将以 .*速度自动回零位|正在.*回零位|正在.*回位/.test(text)
-      ? "warning"
-      : /正在采集|示教中/.test(text)
-        ? "recording"
-        : /已保存|已恢复|准备就绪|可以摆放|可以开始/.test(text)
-          ? "success"
-          : "info");
-  const signature = `${tone}\u0000${error ? "1" : "0"}\u0000${text}`;
-  if (ui.messageBar.dataset.signature === signature) return;
-  ui.messageBar.dataset.signature = signature;
-  const icons = {
-    error: "fa-solid fa-circle-exclamation",
-    warning: "fa-solid fa-triangle-exclamation",
-    recording: "fa-solid fa-circle",
-    success: "fa-solid fa-circle-check",
-    info: "fa-solid fa-circle-info",
-  };
-  ui.message.textContent = text;
-  ui.message.title = text;
-  ui.message.classList.toggle("error", error);
-  ui.messageBar.className = `message-bar ${tone}`;
-  ui.messageIcon.className = icons[tone];
-  ui.copyMessageButton.hidden = !error || !text;
-  ui.copyMessageButton.dataset.copyText = error ? text : "";
-}
-
-async function copyText(text, button) {
-  if (!text) return;
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const input = document.createElement("textarea");
-    input.value = text;
-    input.setAttribute("readonly", "");
-    input.style.position = "fixed";
-    input.style.opacity = "0";
-    document.body.append(input);
-    input.select();
-    const copied = document.execCommand("copy");
-    input.remove();
-    if (!copied) throw new Error("浏览器未允许复制");
-  }
-  const label = button.querySelector("span");
-  if (!label) return;
-  const original = label.textContent;
-  label.textContent = "已复制";
-  window.setTimeout(() => { label.textContent = original; }, 1_500);
-}
-
-function setStatus(element, text, state) {
-  element.textContent = text;
-  element.className = `${element.classList.contains("check") ? "check" : "status"} ${state}`;
-}
-
-function number(value, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function updateDatasetUi(next) {
-  const accepted = number(next.counts?.accepted);
-  const rejected = number(next.counts?.rejected);
-  const target = number(next.target_accepted_episodes ?? next.counts?.target, 50);
-  const attempted = accepted + rejected;
-  ui.acceptedCount.textContent = String(accepted);
-  ui.targetCount.textContent = String(target);
-  ui.remainingCount.textContent = String(number(next.remaining_episodes, Math.max(0, target - accepted)));
-  ui.rejectedCount.textContent = String(rejected);
-  ui.successRate.textContent = attempted ? `${(100 * accepted / attempted).toFixed(0)}%` : "--";
-  ui.episodeProgress.max = target;
-  ui.episodeProgress.value = accepted;
-  ui.taskText.textContent = next.task_display ?? ui.taskText.textContent;
-  ui.datasetId.textContent = next.dataset?.id ?? "ARX5 GR00T dataset";
-  ui.datasetId.title = next.dataset?.id ?? "";
-  ui.formatValue.textContent = next.dataset?.format ?? "GR00T-flavored LeRobot v2.1";
-  ui.dimensionsValue.textContent = `${next.dataset?.state_dimension ?? 16}D / ${next.dataset?.action_dimension ?? 16}D`;
-  ui.horizonValue.textContent = String(next.recording_spec?.action_horizon ?? 16);
-  ui.rawRootValue.textContent = next.dataset?.raw_root ?? "/home/r2/work/data/arx5/data-coll";
-  ui.rawRootValue.title = next.dataset?.raw_root ?? "";
-  const spec = next.recording_spec;
-  if (spec) {
-    const cameras = Array.isArray(spec.cameras) ? spec.cameras : [];
-    const camera = cameras[0];
-    ui.cameraSpec.textContent = camera
-      ? `双 RGB · ${camera.width}×${camera.height}@${camera.fps} · RGB8 · 自动预热后锁定`
-      : `双 RGB · ${spec.camera_fps} FPS`;
-    ui.cameraSpec.title = camera
-      ? "D455 + D405：预热约 1 秒，录制前分别锁定固定曝光、增益与白平衡"
-      : "";
-  }
-}
-
-function updateCollectionState(next) {
-  if (!next) return;
-  collectionState = next;
-  updateCameraCollectionState(next.camera_state);
-  updateDatasetUi(next);
-  const accepted = number(next.counts?.accepted);
-  const target = number(next.target_accepted_episodes, 50);
-  ui.sessionLabel.textContent = next.session_id
-    ?? (accepted >= target ? "采集目标已完成" : "等待下一条 episode");
-  const review = next.stage === "pending_review";
-  ui.reviewPanel.hidden = !review;
-  ui.reviewPanel.closest(".control-panel")?.classList.toggle("review-mode", review);
-  if (review) {
-    const signature = JSON.stringify(next.validation ?? null);
-    if (signature !== renderedValidationSignature) {
-      renderedValidationSignature = signature;
-      renderValidation(next.validation);
-    }
-  } else {
-    renderedValidationSignature = "";
-  }
-  if (next.active) {
-    beginTimer(number(next.state_summary?.duration_s));
-  } else {
-    endTimer();
-  }
-  updateLiveMetrics();
-  updateCameraPreviewLabels();
-  updateButtons();
-}
-
-function updateArmState(next) {
-  if (!next) return;
-  armState = next;
-  updateCollectionState(next.collection);
-  const modeNames = {
-    disconnected: "机械臂未连接",
-    damping: "阻尼示教模式",
-    active: "关节位置模式",
-    fault: "故障阻尼",
-  };
-  ui.armMode.textContent = modeNames[next.mode] ?? next.mode;
-  setStatus(
-    ui.controlStatus,
-    next.connected ? "控制服务正常" : "控制服务已连接",
-    next.connected ? "good" : "waiting",
-  );
-  updateButtons();
-}
-
-function readiness() {
-  const recording = collectionState?.active === true;
-  const review = collectionState?.stage === "pending_review";
-  if (recording) return {
-    ready: false,
-    state: "recording",
-    text: "正在采集 · 完成任务后点确认保存；操作失误点丢弃并回零位",
-  };
-  if (review) return {
-    ready: false,
-    state: collectionState?.validation?.ok ? "good" : "bad",
-    text: collectionState?.validation?.ok ? "质量检查通过 · 确认任务实际成功后保存" : "质量检查未通过 · 请丢弃并重新采集",
-  };
-  if (number(collectionState?.remaining_episodes, 1) <= 0) {
-    return { ready: false, state: "good", text: "采集目标已完成，可导出数据集" };
-  }
-  if (!armState?.connected) return {
-    ready: false,
-    state: "waiting",
-    text: "后台正在连接机械臂并进入阻尼示教模式",
-  };
-  if (armState.mode !== "damping") return { ready: false, state: "waiting", text: "后台正在切换阻尼示教模式" };
-  if (!cameraReady) return { ready: false, state: "waiting", text: "主机正在准备 D455 + D405" };
-  return { ready: true, state: "good", text: "可以开始 · 摆好黑色和白色方块后按开始采集" };
-}
-
-function updateButtons() {
-  const recording = collectionState?.active === true;
-  const review = collectionState?.stage === "pending_review";
-  const ready = readiness();
-  const panel = ui.reviewPanel.closest(".control-panel");
-  panel?.classList.toggle("recording-mode", recording);
-  panel?.classList.toggle("review-mode", review);
-  ui.startButton.hidden = recording || review;
-  ui.stopButton.hidden = !recording;
-  ui.discardButton.hidden = !recording;
-  ui.readySummary.className = `ready-summary ${ready.state}`;
-  ui.readySummary.querySelector("i").className = ready.state === "good"
-    ? "fa-solid fa-circle-check"
-    : ready.state === "recording"
-      ? "fa-solid fa-circle"
-      : ready.state === "bad" ? "fa-solid fa-circle-xmark" : "fa-solid fa-circle-notch fa-spin";
-  ui.readySummary.querySelector("span").textContent = ready.text;
-  ui.startButton.disabled = !ready.ready || busy || armPreparePending;
-  ui.stopButton.disabled = !recording || busy;
-  ui.discardButton.disabled = busy || (!recording && !review);
-  ui.saveButton.disabled = busy || !review || !collectionState?.validation?.ok;
-  ui.reviewDiscardButton.disabled = busy || !review;
-}
-
-function formatMetric(value, decimals, unit) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? `${parsed.toFixed(decimals)} ${unit}` : "--";
-}
-
-function validationIssueDetails(issue, warning = false) {
-  const text = String(issue);
-  if (text.includes("D455/D405 p99 alignment")) return {
-    title: "双相机时间差偏大，导出时自动对齐",
-    detail: text,
-    action: "系统会按主机时间戳为每个 D455 帧匹配最近的 D405 帧，不阻止保存。",
-  };
-  if (text.includes("maximum video gap")) return {
-    title: "相机出现瞬时帧间隔，保留有效帧",
-    detail: text,
-    action: "视频和逐帧时间戳均已保留，导出时继续按真实时间对齐，不阻止保存。",
-  };
-  if (text.includes("camera queue drop fraction")) return {
-    title: "写入队列出现丢帧",
-    detail: text,
-    action: "系统会跳过缺失帧并保持时间戳连续关系；可保存，后续关注 USB 或磁盘负载。",
-  };
-  if (text.includes("repeated source frames")) return {
-    title: "重复源帧已自动剔除",
-    detail: text,
-    action: "重复画面不会进入导出视频；系统继续按剩余真实帧计算有效帧率。",
-  };
-  if (text.includes("source camera skipped")) return {
-    title: "相机源帧序号存在跳跃",
-    detail: text,
-    action: "系统已保留真实时间戳并在导出时重采样；当前数据仍可保存。",
-  };
-  if (text.includes("source frame sequence reset")) return {
-    title: "相机源帧序列中途重置",
-    detail: text,
-    action: "相机采集链路发生重启，无法保证连续性，请丢弃当前数据。",
-  };
-  if (text.includes("state alignment")) return {
-    title: "图像与机械臂状态时间差偏大",
-    detail: text,
-    action: "导出时会在图像时间戳处插值机械臂状态，不阻止保存。",
-  };
-  if (text.includes("still window")) return {
-    title: "首尾静止时间偏短",
-    detail: text,
-    action: "这只是下一条采集的操作建议，不影响当前数据保存。",
-  };
-  if (/video is missing|recording is not complete|recorder failed|camera stop failed/.test(text)) return {
-    title: "相机视频没有完整写入",
-    detail: text,
-    action: "当前数据缺少训练必需图像，请丢弃；系统会继续检查相机服务和连接。",
-  };
-  if (/effective(?: source)? frame rate/.test(text)) return {
-    title: "相机有效帧率低于训练最低要求",
-    detail: text,
-    action: "当前图像密度不足，无法可靠训练；请丢弃，系统会继续显示具体相机和实时帧率。",
-  };
-  if (/state stream unreadable|state recorder failed|fewer than two valid state/.test(text)) return {
-    title: "机械臂状态数据不完整",
-    detail: text,
-    action: "当前数据缺少训练必需状态，请丢弃并检查 CAN 连接。",
-  };
-  if (/timestamp.*not strictly increasing|invalid host timestamp/.test(text)) return {
-    title: "时间戳异常",
-    detail: text,
-    action: "无法可靠对齐状态和图像，请丢弃当前数据并重启采集服务。",
-  };
-  if (text.includes("overlap duration")) return {
-    title: "双相机与机械臂的共同有效时长不足",
-    detail: text,
-    action: "当前数据无法形成完整训练片段，请丢弃后重新采集。",
-  };
-  if (text.includes("gripper position exceeds")) return {
-    title: "夹爪反馈超出可接受范围",
-    detail: text,
-    action: "反馈已超过校准容差，请丢弃并检查夹爪零点或反馈通道。",
-  };
-  if (text.includes("joint position exceeds")) return {
-    title: "关节反馈超出控制器记录范围",
-    detail: text,
-    action: "请丢弃当前数据并检查控制器限位元数据。",
-  };
-  return {
-    title: warning ? "质量提示" : "数据完整性异常",
-    detail: text,
-    action: warning ? "当前数据仍可保存；系统会在导出时按时间戳处理。" : "请复制详情后丢弃当前数据。",
-  };
-}
-
-function appendValidationIssues(container, issues, warning = false) {
-  if (!issues.length) return;
-  const list = document.createElement("ul");
-  list.className = `validation-list ${warning ? "warning" : "bad"}`;
-  for (const issue of issues) {
-    const explained = validationIssueDetails(issue, warning);
-    const item = document.createElement("li");
-    const title = document.createElement("strong");
-    const detail = document.createElement("span");
-    const action = document.createElement("small");
-    title.textContent = explained.title;
-    detail.textContent = explained.detail;
-    action.textContent = explained.action;
-    item.append(title, detail, action);
-    list.append(item);
-  }
-  container.append(list);
-}
-
-function renderValidation(report) {
-  ui.validationSummary.replaceChildren();
-  ui.copyValidationButton.hidden = true;
-  ui.copyValidationButton.dataset.copyText = "";
-  ui.copyValidationButton.querySelector("span").textContent = "复制原因";
-  if (!report) {
-    setStatus(ui.validationBadge, "检查中", "waiting");
-    const pending = document.createElement("span");
-    pending.className = "validation-bad";
-    pending.textContent = "等待完整性检查结果";
-    ui.validationSummary.append(pending);
-    return;
-  }
-  setStatus(ui.validationBadge, report.ok ? "自动检查通过" : "检查未通过", report.ok ? "good" : "bad");
-  const errors = Array.isArray(report.errors) ? report.errors.map(String) : [];
-  const warnings = Array.isArray(report.warnings) ? report.warnings.map(String) : [];
-  if (errors.length || warnings.length) {
-    ui.copyValidationButton.hidden = false;
-    ui.copyValidationButton.querySelector("span").textContent = errors.length ? "复制原因" : "复制提示";
-    ui.copyValidationButton.dataset.copyText = [
-      `Episode: ${collectionState?.session_id ?? "unknown"}`,
-      ...errors.map((error) => `失败：${error}`),
-      ...warnings.map((warning) => `提示：${warning}`),
-    ].join("\n");
-  }
-  const metrics = report.metrics ?? {};
-  ui.reviewDuration.textContent = formatMetric(metrics.overlap_duration_s, 1, "s");
-  const cameraFrames = metrics.camera_frames ?? {};
-  ui.reviewSamples.textContent = `${number(metrics.state_samples)} / ${number(cameraFrames.exterior_rgb)} / ${number(cameraFrames.wrist_rgb)}`;
-  ui.reviewSync.textContent = `${number(metrics.p99_state_alignment_ms).toFixed(2)} / ${number(metrics.p99_camera_alignment_ms).toFixed(2)} ms`;
-  ui.reviewStill.textContent = `${number(metrics.initial_still_s).toFixed(2)} / ${number(metrics.final_still_s).toFixed(2)} s`;
-  if (report.ok) {
-    const summary = document.createElement("span");
-    const hasStillnessAdvice = warnings.some((warning) => warning.includes("still window"));
-    summary.className = warnings.length ? "validation-warning" : "validation-good";
-    summary.textContent = hasStillnessAdvice
-      ? "数据完整，可保存；首尾静止较短仅作操作提示。"
-      : warnings.length
-        ? "数据完整，可保存；下列质量项将自动后处理。"
-      : "GR00T 原始数据完整；请根据真实场景确认任务成功。";
-    ui.validationSummary.append(summary);
-    appendValidationIssues(ui.validationSummary, warnings, true);
-  } else {
-    const summary = document.createElement("strong");
-    summary.className = "validation-bad validation-failure-heading";
-    summary.textContent = `发现 ${errors.length} 项无法自动修复的问题：`;
-    ui.validationSummary.append(summary);
-    appendValidationIssues(ui.validationSummary, errors);
-  }
-}
-
-function updateCameraCollectionState(next) {
-  if (!next) return;
-  cameraCollectionState = next;
-  cameraReady = next.ok !== false && next.ready !== false;
-  if (cameraReady) {
-    setStatus(
-      ui.cameraStatus,
-      next.active ? "D455 + D405 正在录制" : "D455 + D405 主机就绪",
-      "good",
-    );
-  } else {
-    setStatus(ui.cameraStatus, "D455 + D405 主机异常", "bad");
-  }
-  updateLiveMetrics();
-}
-
-function clamp(value, minimum = 0, maximum = 1) {
-  return Math.min(maximum, Math.max(minimum, value));
-}
-
-function currentJointDegrees(arm) {
-  const radians = arm?.latest_joint_position_rad;
-  if (Array.isArray(radians) && radians.length === 6) {
-    return radians.map((value) => number(value) * 180 / Math.PI);
-  }
-  const degrees = armState?.joint_position_deg;
-  return Array.isArray(degrees) && degrees.length === 6
-    ? degrees.map((value) => number(value))
-    : null;
-}
-
-function appendTelemetry(sample) {
-  if (!collectionState?.active || !sample.joints) return;
-  const now = performance.now();
-  if (now - lastTelemetrySampleAt < 200 || sample.stateCount === lastTelemetryStateCount) return;
-  lastTelemetrySampleAt = now;
-  lastTelemetryStateCount = sample.stateCount;
-  telemetryHistory.push(sample);
-  if (telemetryHistory.length > TELEMETRY_HISTORY_LIMIT) telemetryHistory.shift();
-}
-
-function prepareCanvas(canvas) {
-  const width = Math.max(1, canvas.clientWidth);
-  const height = Math.max(1, canvas.clientHeight);
-  const scale = Math.min(2, window.devicePixelRatio || 1);
-  const pixelWidth = Math.round(width * scale);
-  const pixelHeight = Math.round(height * scale);
-  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-    canvas.width = pixelWidth;
-    canvas.height = pixelHeight;
-  }
-  const context = canvas.getContext("2d");
-  context.setTransform(scale, 0, 0, scale, 0, 0);
-  context.clearRect(0, 0, width, height);
-  context.fillStyle = "#151918";
-  context.fillRect(0, 0, width, height);
-  context.font = "12px Inter, system-ui, sans-serif";
-  return { context, width, height };
-}
-
-function drawJointChart(canvas, jointIndex) {
-  const { context, width, height } = prepareCanvas(canvas);
-  const plot = { left: 8, right: width - 8, top: 8, bottom: height - 17 };
-  const values = telemetryHistory.map((sample) => sample.joints[jointIndex]);
-  let minimum = values.length ? Math.min(...values) : -30;
-  let maximum = values.length ? Math.max(...values) : 30;
-  const center = (minimum + maximum) / 2;
-  const span = Math.max(20, maximum - minimum);
-  minimum = center - span * 0.65;
-  maximum = center + span * 0.65;
-
-  context.strokeStyle = "rgba(255, 255, 255, .08)";
-  context.fillStyle = "rgba(238, 244, 241, .52)";
-  context.lineWidth = 1;
-  for (let index = 0; index <= 2; index += 1) {
-    const y = plot.top + (plot.bottom - plot.top) * index / 2;
-    context.beginPath();
-    context.moveTo(plot.left, y + 0.5);
-    context.lineTo(plot.right, y + 0.5);
-    context.stroke();
-  }
-  context.fillText("-60s", plot.left, height - 4);
-  context.textAlign = "right";
-  context.fillText("现在", plot.right, height - 4);
-  context.textAlign = "left";
-
-  if (telemetryHistory.length > 1) {
-    const latestTime = telemetryHistory.at(-1).elapsed;
-    const windowStart = Math.max(0, latestTime - 60);
-    const windowSpan = Math.max(1, latestTime - windowStart);
-    context.strokeStyle = JOINT_COLORS[jointIndex];
-    context.lineWidth = 2.25;
-    context.lineJoin = "round";
-    context.lineCap = "round";
-    context.beginPath();
-    telemetryHistory.forEach((sample, sampleIndex) => {
-      const x = plot.left + clamp((sample.elapsed - windowStart) / windowSpan) * (plot.right - plot.left);
-      const y = plot.bottom - clamp((sample.joints[jointIndex] - minimum) / (maximum - minimum))
-        * (plot.bottom - plot.top);
-      if (sampleIndex === 0) context.moveTo(x, y);
-      else context.lineTo(x, y);
+    img.addEventListener("error", () => {
+      figure.classList.add("loading");
+      state.textContent = "等待画面";
     });
-    context.stroke();
-  } else {
-    context.fillStyle = "rgba(238, 244, 241, .38)";
-    context.textAlign = "center";
-    context.fillText("等待轨迹", (plot.left + plot.right) / 2, (plot.top + plot.bottom) / 2 + 3);
-    context.textAlign = "left";
-  }
-}
-
-function drawJointCharts() {
-  const current = telemetryHistory.at(-1)?.joints;
-  ui.jointRange.textContent = current ? "实时更新" : "等待采集";
-  JOINT_COLORS.forEach((color, index) => {
-    drawJointChart(ui[`jointChart${index + 1}`], index);
-    const value = ui[`jointValue${index + 1}`];
-    value.textContent = current ? `${current[index].toFixed(1)}°` : "--";
-    value.style.color = color;
+    ui.cameraPreviews.append(figure);
+    return { id: camera.id, figure, img, empty, state };
   });
+  ensureStreams();
 }
 
-function healthScores(sample) {
-  const spec = collectionState?.recording_spec ?? {};
-  const targetState = number(spec.arm_rate_hz, 100);
-  const targetCamera = number(spec.camera_fps, 30);
-  const maximumDrop = number(spec.maximum_frame_drop_fraction, 0.01);
-  return [
-    clamp(1 - 2 * Math.abs(sample.stateRate / targetState - 1)),
-    clamp(1 - 2 * Math.abs(sample.cameraRate / targetCamera - 1)),
-    clamp(1 - sample.queueFraction),
-    clamp(1 - Math.max(
-      sample.dropFraction / Math.max(maximumDrop, 0.0001),
-      sample.duplicateSourceFraction / 0.05,
-    )),
-  ];
-}
-
-function healthLevel(score) {
-  if (!Number.isFinite(score)) return "waiting";
-  if (score >= 0.88) return "good";
-  if (score >= 0.68) return "warn";
-  return "bad";
-}
-
-function setHealthCard(card, value, score) {
-  card.className = `health-card ${healthLevel(score)}`;
-  card.querySelector("strong").textContent = value;
-}
-
-function renderHealthCards(sample) {
-  if (!collectionState?.active || !sample) {
-    setHealthCard(ui.healthState, "-- Hz", Number.NaN);
-    setHealthCard(ui.healthCamera, "-- / -- FPS", Number.NaN);
-    setHealthCard(ui.healthQueue, "0 / 0", Number.NaN);
-    setHealthCard(ui.healthDrop, "0.00% · 重复 0", Number.NaN);
-    ui.healthStatus.textContent = "等待采集";
-    return;
-  }
-  const scores = healthScores(sample);
-  if (!sample.cameraOk) scores[1] = 0;
-  setHealthCard(ui.healthState, `${sample.stateRate.toFixed(1)} Hz`, scores[0]);
-  setHealthCard(
-    ui.healthCamera,
-    `${sample.exteriorRate.toFixed(1)} / ${sample.wristRate.toFixed(1)} FPS`,
-    scores[1],
-  );
-  setHealthCard(ui.healthQueue, sample.queueText, scores[2]);
-  setHealthCard(
-    ui.healthDrop,
-    `${(100 * sample.dropFraction).toFixed(2)}% · 重复 ${sample.duplicateSourceFrames}`,
-    scores[3],
-  );
-  const recorderFailed = Boolean(sample.armError || sample.exteriorError || sample.wristError);
-  const worst = Math.min(...scores);
-  ui.healthStatus.textContent = recorderFailed || !sample.cameraOk
-    ? "录制异常"
-    : sample.belowUsableRate && sample.elapsed >= 3
-      ? "帧率过低，可能不可用"
-    : worst >= 0.88 ? "质量正常" : "质量提醒（可保存）";
-}
-
-function updateLiveGuidance(sample) {
-  if (!collectionState?.active || !sample) return;
-  const recorderError = sample.armError || sample.exteriorError || sample.wristError;
-  if (recorderError || !sample.cameraOk) {
-    setMessage(`录制通道异常：${recorderError || cameraCollectionState?.error || "双相机状态异常"}。当前 episode 将无法保存，请直接丢弃。`, true);
-    return;
-  }
-  if (sample.elapsed < 3) return;
-  const targetCamera = number(collectionState?.recording_spec?.camera_fps, 30);
-  const minimumUsableCameraRate = targetCamera * number(
-    collectionState?.recording_spec?.minimum_usable_camera_rate_fraction,
-    0.5,
-  );
-  if (sample.cameraRate < minimumUsableCameraRate) {
-    setMessage(`双相机最低有效写入仅 ${sample.cameraRate.toFixed(1)} FPS，低于训练最低要求 ${minimumUsableCameraRate.toFixed(1)} FPS。若持续到结束，本条将无法保存；D455 ${sample.exteriorRate.toFixed(1)}、D405 ${sample.wristRate.toFixed(1)} FPS，重复源帧已自动剔除 ${sample.duplicateSourceFrames} 张。`, true);
-    return;
-  }
-  const maximumDrop = number(collectionState?.recording_spec?.maximum_frame_drop_fraction, 0.01);
-  if (sample.queueFraction >= 0.7) {
-    setMessage(`写入队列接近满载：D455 ${sample.exteriorQueueText}，D405 ${sample.wristQueueText}。系统会保留有效帧并记录准确时间戳，本条可继续，无需人工中断。`, false, "warning");
-    return;
-  }
-  if (sample.dropFraction > maximumDrop) {
-    setMessage(`采集中检测到 ${(100 * sample.dropFraction).toFixed(2)}% 队列丢帧，超过建议值 ${(100 * maximumDrop).toFixed(2)}%。当前数据仍可保存，导出时会自动跳过缺帧并按时间戳对齐。`, false, "warning");
-    return;
-  }
-  if (sample.duplicateSourceFrames > 0) {
-    setMessage(`采集中发现 ${sample.duplicateSourceFrames} 张重复源帧，系统已在写入前自动剔除，不会混入训练视频；当前有效帧率仍满足要求。`, false, "warning");
-    return;
-  }
-  const maximumGap = number(collectionState?.recording_spec?.maximum_video_gap_ms, 67);
-  if (sample.maximumGapMs > maximumGap) {
-    setMessage(`采集中已检测到最大帧间隔 ${sample.maximumGapMs.toFixed(1)} ms，超过建议值 ${maximumGap.toFixed(1)} ms。原始帧和时间戳已保留，导出时会自动对齐；无需中断本条采集。`, false, "warning");
-    return;
-  }
-  const maximumCameraAlignment = number(collectionState?.recording_spec?.maximum_camera_alignment_p99_ms, 20);
-  if (sample.latestCameraSkewMs > maximumCameraAlignment) {
-    setMessage(`D455 与 D405 当前帧时间差约 ${sample.latestCameraSkewMs.toFixed(1)} ms。系统会在导出时按最近时间戳自动配对，当前数据仍可保存。`, false, "warning");
-    return;
-  }
-  if (sample.cameraRate < targetCamera * 0.75) {
-    setMessage(`双相机实际写入 ${sample.exteriorRate.toFixed(1)} / ${sample.wristRate.toFixed(1)} FPS，低于目标 ${targetCamera} FPS。系统已记录该质量项并保留原始时间戳，本条可继续。`, false, "warning");
-    return;
-  }
-  setMessage("正在采集 · 状态、双相机和写入队列正常；完成任务后点确认保存。");
-}
-
-function drawTelemetry() {
-  drawJointCharts();
-}
-
-function updateLiveMetrics() {
-  const arm = collectionState?.state_summary ?? {};
-  const cameras = cameraCollectionState?.cameras ?? {};
-  const exterior = cameras.exterior_rgb ?? cameraCollectionState?.summary ?? {};
-  const wrist = cameras.wrist_rgb ?? {};
-  const armDuration = number(arm.duration_s);
-  const exteriorDuration = number(exterior.duration_s);
-  const wristDuration = number(wrist.duration_s);
-  const cameraDuration = Math.max(exteriorDuration, wristDuration);
-  const elapsed = recordingStartedAt === null
-    ? Math.max(armDuration, cameraDuration)
-    : Math.max(0, (performance.now() - recordingStartedAt) / 1000);
-  const stateCount = number(arm.sample_count);
-  const exteriorFrames = number(exterior.frame_count);
-  const wristFrames = number(wrist.frame_count);
-  const stateRate = armDuration > 0 ? stateCount / armDuration : 0;
-  const exteriorRate = number(
-    exterior.recording_effective_fps ?? exterior.source_effective_fps,
-    exteriorDuration > 0 ? exteriorFrames / exteriorDuration : 0,
-  );
-  const wristRate = number(
-    wrist.recording_effective_fps ?? wrist.source_effective_fps,
-    wristDuration > 0 ? wristFrames / wristDuration : 0,
-  );
-  const cameraRate = Math.min(exteriorRate, wristRate);
-  const exteriorQueueCapacity = number(exterior.queue_capacity, 90);
-  const wristQueueCapacity = number(wrist.queue_capacity, 90);
-  const exteriorQueueDepth = number(exterior.queue_depth);
-  const wristQueueDepth = number(wrist.queue_depth);
-  const queueFraction = Math.max(
-    exteriorQueueDepth / Math.max(1, exteriorQueueCapacity),
-    wristQueueDepth / Math.max(1, wristQueueCapacity),
-  );
-  const dropFraction = Math.max(
-    number(exterior.drop_fraction),
-    number(wrist.drop_fraction),
-  );
-  const exteriorDuplicateSourceFrames = number(exterior.duplicate_source_frames);
-  const wristDuplicateSourceFrames = number(wrist.duplicate_source_frames);
-  const duplicateSourceFrames = exteriorDuplicateSourceFrames + wristDuplicateSourceFrames;
-  const duplicateSourceFraction = Math.max(
-    number(exterior.duplicate_source_fraction),
-    number(wrist.duplicate_source_fraction),
-  );
-  const maximumGapMs = Math.max(
-    number(exterior.maximum_frame_gap_ms),
-    number(wrist.maximum_frame_gap_ms),
-  );
-  const exteriorLastNs = number(exterior.last_host_monotonic_ns, Number.NaN);
-  const wristLastNs = number(wrist.last_host_monotonic_ns, Number.NaN);
-  const latestCameraSkewMs = Number.isFinite(exteriorLastNs) && Number.isFinite(wristLastNs)
-    ? Math.abs(exteriorLastNs - wristLastNs) / 1_000_000
-    : 0;
-  ui.liveDuration.textContent = `${elapsed.toFixed(1)} s`;
-  ui.stateSamples.textContent = String(stateCount);
-  ui.stateRate.textContent = armDuration > 0 ? `${stateRate.toFixed(1)} Hz` : "-- Hz";
-  ui.cameraFrames.textContent = `${exteriorFrames} / ${wristFrames}`;
-  ui.cameraRate.textContent = cameraDuration > 0
-    ? `${exteriorRate.toFixed(1)} / ${wristRate.toFixed(1)} FPS`
-    : "-- / -- FPS";
-  ui.dropRate.textContent = `${(100 * dropFraction).toFixed(2)}% · 重复 ${duplicateSourceFrames}`;
-  ui.cameraQueue.textContent = `队列 ${exteriorQueueDepth}/${exteriorQueueCapacity} · ${wristQueueDepth}/${wristQueueCapacity}`;
-  const sample = {
-    elapsed,
-    stateCount,
-    stateRate,
-    cameraRate,
-    exteriorRate,
-    wristRate,
-    queueFraction,
-    queueText: `${exteriorQueueDepth}/${exteriorQueueCapacity} · ${wristQueueDepth}/${wristQueueCapacity}`,
-    dropFraction,
-    duplicateSourceFrames,
-    duplicateSourceFraction,
-    cameraOk: cameraCollectionState?.ok !== false,
-    armError: arm.error,
-    exteriorError: exterior.error,
-    wristError: wrist.error,
-    exteriorQueueText: `${exteriorQueueDepth}/${exteriorQueueCapacity}`,
-    wristQueueText: `${wristQueueDepth}/${wristQueueCapacity}`,
-    maximumGapMs,
-    latestCameraSkewMs,
-    belowUsableRate: cameraRate < number(collectionState?.recording_spec?.camera_fps, 30) * number(
-      collectionState?.recording_spec?.minimum_usable_camera_rate_fraction,
-      0.5,
-    ),
-    joints: currentJointDegrees(arm),
-  };
-  appendTelemetry(sample);
-  renderHealthCards(sample);
-  updateLiveGuidance(sample);
-  drawTelemetry();
-}
-
-function resetLiveMetrics() {
-  cameraCollectionState = null;
-  telemetryHistory.length = 0;
-  lastTelemetrySampleAt = 0;
-  lastTelemetryStateCount = -1;
-  ui.liveDuration.textContent = "0.0 s";
-  ui.stateSamples.textContent = "0";
-  ui.stateRate.textContent = "-- Hz";
-  ui.cameraFrames.textContent = "0 / 0";
-  ui.cameraRate.textContent = "-- / -- FPS";
-  ui.dropRate.textContent = "0.00% · 重复 0";
-  ui.cameraQueue.textContent = "队列 0/90 · 0/90";
-  renderHealthCards(null);
-  drawTelemetry();
-}
-
-function controlCommand(action, params = {}, timeoutMs = 20_000) {
-  if (!controlSocket || controlSocket.readyState !== WebSocket.OPEN) {
-    return Promise.reject(new Error("控制服务未连接"));
-  }
-  const id = `groot-${++controlSequence}`;
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      controlRequests.delete(id);
-      reject(new Error(`${action} 超时`));
-    }, timeoutMs);
-    controlRequests.set(id, { resolve, reject, timer });
-    controlSocket.send(encodeCommand(action, params, id));
-  });
-}
-
-async function connectControl() {
-  const socket = new WebSocket(endpoint());
-  controlSocket = socket;
-  socket.addEventListener("open", () => {
-    setStatus(ui.controlStatus, "控制服务已连接", "waiting");
-  });
-  socket.addEventListener("message", (event) => {
-    let message;
-    try { message = decodeControlEvent(event.data); } catch { return; }
-    if (message.state) updateArmState(message.state);
-    if (message.type === "hello") updateArmState(message.state);
-    if (message.type === "fatal") setMessage(message.message, true);
-    const pending = controlRequests.get(String(message.id));
-    if (!pending || !["command_result", "state"].includes(message.type)) return;
-    controlRequests.delete(String(message.id));
-    window.clearTimeout(pending.timer);
-    if (message.ok) pending.resolve(message.result ?? message.state);
-    else pending.reject(new Error(message.error ?? "控制命令失败"));
-  });
-  socket.addEventListener("close", () => {
-    if (controlSocket === socket) controlSocket = null;
-    endTimer();
-    setStatus(ui.controlStatus, "控制服务已断开", "bad");
-    armState = null;
-    updateButtons();
-    for (const request of controlRequests.values()) {
-      window.clearTimeout(request.timer);
-      request.reject(new Error("控制服务连接已断开"));
+function ensureStreams() {
+  const online = Boolean(status?.shared_camera);
+  let live = 0;
+  for (const card of previewCards) {
+    if (!online) {
+      if (card.img.hasAttribute("src")) card.img.removeAttribute("src");
+      card.figure.classList.add("loading");
+      card.state.textContent = "未连接";
+      continue;
     }
-    controlRequests.clear();
-    scheduleControlReconnect();
-  });
-  await waitSocketOpen(socket, "控制服务");
+    if (!card.img.hasAttribute("src")) card.img.src = streamUrl(card.id);
+    if (!card.figure.classList.contains("loading")) live += 1;
+  }
+  setText(ui.cameraAge, online ? `${live} / ${previewCards.length} 路在线` : "—");
 }
 
-function scheduleControlReconnect() {
-  if (pageClosing || reconnectHandle !== null) return;
-  reconnectHandle = window.setTimeout(async () => {
-    reconnectHandle = null;
-    try {
-      await connectControl();
-      await prepareArm();
-      const status = await controlCommand("collection_status", {}, 20_000);
-      updateCollectionState(status);
-      setMessage(status.active
-        ? "手机连接已恢复，后台采集一直保持运行。"
-        : "手机连接已恢复，机械臂和双相机状态已同步。");
-    } catch {
-      scheduleControlReconnect();
-    }
-  }, 1_500);
+// Actions
+
+async function startCollection() {
+  readSettings();
+  if (!settings.task) {
+    setCollectMessage("请先填写任务描述", "error");
+    ui.taskInput.focus();
+    return;
+  }
+  if (!status?.connected) {
+    setCollectMessage("没有运行中的内核", "error");
+    return;
+  }
+  const cameras = selectedCameras();
+  if (!cameras.length) {
+    setCollectMessage("至少选择一台相机", "error");
+    return;
+  }
+  ui.startButton.disabled = true;
+  setCollectMessage("正在启动采集…");
+  try {
+    const payload = {
+      task: settings.task,
+      mode: settings.mode,
+      seconds: settings.mode === "fixed" ? settings.seconds : 0,
+      rgb: settings.rgb,
+      output: settings.output,
+      cameras,
+    };
+    collectOperation = await startOperation("collect", payload);
+    setCollectMessage("采集中…");
+    setMessage(`正在采集第 ${counters.collected + 1} 条`);
+  } catch (error) {
+    setCollectMessage(String(error.message || error), "error");
+  } finally {
+    updateControls();
+    renderOperation();
+  }
 }
 
-function waitSocketOpen(socket, label) {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error(`${label}连接超时`)), 6_000);
-    socket.addEventListener("open", () => { window.clearTimeout(timer); resolve(); }, { once: true });
-    socket.addEventListener("error", () => { window.clearTimeout(timer); reject(new Error(`${label}连接失败`)); }, { once: true });
-  });
+async function stopCollection() {
+  ui.stopButton.disabled = true;
+  setCollectMessage("正在停止并写入…");
+  try {
+    collectOperation = await stopOperation("collect");
+  } catch (error) {
+    setCollectMessage(String(error.message || error), "error");
+  } finally {
+    updateControls();
+    renderOperation();
+  }
 }
 
-function maximumEpisodeMs() {
-  const configured = number(collectionState?.recording_spec?.maximum_episode_seconds, 60);
-  return Math.max(1_000, (configured - 0.75) * 1_000);
-}
-
-function beginTimer(initialSeconds = 0) {
-  if (timerHandle !== null) return;
-  recordingStartedAt = performance.now() - initialSeconds * 1_000;
-  ui.recordingBadge.hidden = false;
-  timerHandle = window.setInterval(() => {
-    const elapsed = performance.now() - recordingStartedAt;
-    const seconds = elapsed / 1_000;
-    ui.timer.textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
-    updateLiveMetrics();
-    if (elapsed >= maximumEpisodeMs() && collectionState?.active && !busy) {
-      setMessage("已接近时长上限，正在自动停止并检查。", true);
-      stopEpisode(false);
-    }
+function startTimer() {
+  window.clearInterval(tickTimer);
+  tickTimer = window.setInterval(() => {
+    if (!operationRunning()) return;
+    const elapsed = Math.max(0, Date.now() / 1000 - collectOperation.started_at);
+    setText(ui.liveDuration, `${elapsed.toFixed(1)} s`);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = Math.floor(elapsed % 60);
+    const tenths = Math.floor((elapsed * 10) % 10);
+    setText(
+      ui.timer,
+      `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`,
+    );
   }, 100);
 }
 
-function endTimer() {
-  if (timerHandle !== null) window.clearInterval(timerHandle);
-  timerHandle = null;
-  recordingStartedAt = null;
-  ui.recordingBadge.hidden = true;
+// Wiring
+
+for (const link of document.querySelectorAll(".header-actions a")) {
+  link.href = withToken(link.getAttribute("href") || "/");
+}
+for (const link of document.querySelectorAll('a[href="/control"]')) {
+  link.href = withToken("/control");
 }
 
-async function guarded(task) {
-  if (busy) return;
-  busy = true;
-  updateButtons();
-  try {
-    return await task();
-  } catch (error) {
-    setMessage(error.message ?? String(error), true);
-  } finally {
-    busy = false;
-    updateButtons();
-  }
+for (const input of [ui.taskInput, ui.secondsInput, ui.targetInput, ui.rgbSelect, ui.outputInput]) {
+  input.addEventListener("change", readSettings);
 }
-
-async function startEpisode() {
-  return guarded(async () => {
-    resetLiveMetrics();
-    setMessage("正在创建原始 episode 并启动状态与图像记录…");
-    const result = await controlCommand("collection_start");
-    updateCollectionState(result);
-    refreshCameraPreviews();
-    setMessage("正在采集：开头保持约 0.5 秒静止；任务成功后点“确认保存”，失误点“丢弃并回零位”。");
+ui.taskInput.addEventListener("input", () => {
+  settings.task = ui.taskInput.value.trim();
+  saveSettings();
+  renderSessionTask();
+  updateControls();
+});
+ui.targetInput.addEventListener("input", readSettings);
+for (const radio of document.querySelectorAll('input[name="collectMode"]')) {
+  radio.addEventListener("change", () => {
+    ui.secondsField.hidden = selectedMode() !== "fixed";
+    readSettings();
   });
 }
+ui.cameraChoices.addEventListener("change", updateControls);
+ui.startButton.addEventListener("click", startCollection);
+ui.stopButton.addEventListener("click", stopCollection);
 
-async function stopEpisodeTask() {
-  const sessionId = collectionState?.session_id;
-  if (!sessionId) throw new Error("缺少当前 session_id");
-  setMessage("主机正在停止状态与双相机记录，并执行 GR00T 完整性检查…");
-  const result = await controlCommand("collection_stop", {}, 25_000);
-  endTimer();
-  updateCollectionState(result);
-  refreshCameraPreviews();
-  const cameraError = result.camera_state?.ok === false
-    ? new Error(result.camera_state.error ?? "双相机停止异常")
-    : null;
-  if (cameraError) {
-    setMessage(`相机停止异常（${cameraError.message}）；请丢弃当前 episode。`, true);
-  }
-  return { result, cameraError };
-}
-
-async function stopEpisode(saveAfterValidation = false, forcedMessage = null) {
-  return guarded(async () => {
-    const { result, cameraError } = await stopEpisodeTask();
-    if (saveAfterValidation && !cameraError && result.validation?.ok) {
-      await acceptAndReturn(result.session_id);
-      return;
-    }
-    if (saveAfterValidation) {
-      const errors = Array.isArray(result.validation?.errors)
-        ? result.validation.errors.map(String)
-        : [];
-      const reason = cameraError
-        ? `camera stop failed: ${cameraError.message}`
-        : `automatic integrity check failed: ${errors.join("; ") || "unknown error"}`;
-      const rejected = await rejectStoppedEpisode(result.session_id, reason);
-      try {
-        await returnToReferenceAfterDecision("当前数据已自动归档到 discarded");
-      } catch (error) {
-        setMessage(`当前数据已自动丢弃，但自动回位未完成：${error.message}`, true);
-        return;
-      }
-      updateCollectionState(rejected);
-      setMessage("自动检查未通过，当前数据已丢弃并回到零位；可以摆放下一组。", true);
-      return;
-    }
-    if (forcedMessage) {
-      setMessage(forcedMessage, true);
-    } else if (saveAfterValidation && !result.validation?.ok) {
-      setMessage("自动检查未通过，未保存；请查看原因后丢弃。", true);
-    } else if (!cameraError) {
-      setMessage(result.validation?.ok
-        ? "自动检查通过。确认真实任务成功后保存，否则丢弃。"
-        : "自动检查未通过，请查看原因并丢弃。", !result.validation?.ok);
-    }
-  });
-}
-
-async function returnToReferenceAfterDecision(decisionMessage) {
-  if (!armState?.connected) {
-    throw new Error(`${decisionMessage}；机械臂未连接，无法自动回零位`);
-  }
-  if (!Array.isArray(armState.reference_joint_position_deg)) {
-    throw new Error(`${decisionMessage}；当前没有参考姿态，无法自动回位`);
-  }
-  setMessage(`${decisionMessage}。机械臂将以 75% 速度自动回零位，请保持工作区无人和无遮挡物…`);
-  await new Promise((resolve) => window.setTimeout(resolve, 1_000));
-  if (armState.mode === "damping") {
-    await controlCommand("activate", {}, 20_000);
-  }
-  const motionParams = { speed_percent: 75 };
-  await controlCommand("preview_park", motionParams, 30_000);
-  await controlCommand("park", motionParams, 90_000);
-  await controlCommand("damping", {}, 20_000);
-}
-
-async function acceptAndReturn(sessionId) {
-  const accepted = await controlCommand("collection_accept", { session_id: sessionId });
-  updateCollectionState(accepted);
-  const progress = `${accepted.counts?.accepted ?? 0} / ${accepted.target_accepted_episodes ?? 50}`;
-  try {
-    await returnToReferenceAfterDecision("成功数据已保存");
-  } catch (error) {
-    setMessage(`成功数据已保存（${progress}），但自动回位未完成：${error.message}`, true);
-    return;
-  }
-  setMessage(`成功数据已保存并回到零位（${progress}）。摆好下一组后继续采集。`);
-}
-
-async function rejectStoppedEpisode(sessionId, reason) {
-  const rejectParams = { session_id: sessionId, reason };
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    try {
-      return await controlCommand("collection_reject", rejectParams);
-    } catch (error) {
-      if (!String(error.message).includes("相机录制仍在写入") || attempt === 9) {
-        throw error;
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, 250));
-    }
-  }
-  throw new Error("自动归档失败");
-}
-
-async function discardEpisode() {
-  return guarded(async () => {
-    const sessionId = collectionState?.session_id;
-    if (!sessionId) throw new Error("没有可丢弃的 episode");
-    if (collectionState?.active) {
-      setMessage("正在结束并归档当前 episode…");
-      await controlCommand("collection_stop", {}, 25_000);
-      endTimer();
-    }
-    const result = await rejectStoppedEpisode(sessionId, "operator discarded episode");
-    updateCollectionState(result);
-    resetLiveMetrics();
-    try {
-      await returnToReferenceAfterDecision("当前 episode 已丢弃");
-    } catch (error) {
-      setMessage(`当前 episode 已归档，但自动回位未完成：${error.message}`, true);
-      return;
-    }
-    setMessage("当前 episode 已丢弃并回到零位，可以摆放下一组。");
-  });
-}
-
-async function saveEpisode() {
-  return guarded(async () => {
-    if (!collectionState?.validation?.ok) throw new Error("数据完整性检查未通过，不能保存");
-    await acceptAndReturn(collectionState?.session_id);
-  });
-}
-
-ui.startButton.addEventListener("click", startEpisode);
-ui.stopButton.addEventListener("click", () => stopEpisode(true));
-ui.discardButton.addEventListener("click", discardEpisode);
-ui.reviewDiscardButton.addEventListener("click", discardEpisode);
-ui.saveButton.addEventListener("click", saveEpisode);
-ui.copyValidationButton.addEventListener("click", () => guarded(async () => {
-  await copyText(ui.copyValidationButton.dataset.copyText, ui.copyValidationButton);
-}));
-ui.copyMessageButton.addEventListener("click", () => guarded(async () => {
-  await copyText(ui.copyMessageButton.dataset.copyText, ui.copyMessageButton);
-}));
-
-window.addEventListener("keydown", (event) => {
+document.addEventListener("keydown", (event) => {
+  if (event.code !== "Space") return;
   const target = event.target;
-  if (event.repeat || event.ctrlKey || event.altKey || event.metaKey
-    || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
-    || target instanceof HTMLSelectElement || target?.isContentEditable) return;
-  if (event.code === "Space") {
-    if (!ui.stopButton.disabled) {
-      event.preventDefault();
-      stopEpisode(true);
-    } else if (!ui.startButton.disabled) {
-      event.preventDefault();
-      startEpisode();
-    }
-  } else if (event.key.toLowerCase() === "s") {
-    if (collectionState?.active && !busy) {
-      event.preventDefault();
-      stopEpisode(true);
-    } else if (!ui.saveButton.disabled) {
-      event.preventDefault();
-      saveEpisode();
-    }
-  } else if (event.key.toLowerCase() === "x" && (
-    !ui.discardButton.disabled || !ui.reviewDiscardButton.disabled
-  )) {
-    event.preventDefault();
-    discardEpisode();
-  }
+  if (target instanceof HTMLElement && ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName)) return;
+  event.preventDefault();
+  if (operationRunning()) stopCollection();
+  else if (!ui.startButton.disabled) startCollection();
 });
 
-window.addEventListener("resize", drawTelemetry);
+window.addEventListener("resize", drawAllJoints);
 
-window.addEventListener("beforeunload", () => {
-  pageClosing = true;
-  if (reconnectHandle !== null) window.clearTimeout(reconnectHandle);
-  if (statusPollHandle !== null) window.clearInterval(statusPollHandle);
-  for (const [, imageId] of CAMERA_PREVIEWS) {
-    const objectUrl = ui[imageId].dataset.objectUrl;
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
+
+renderSettings();
+renderStatus();
+setCollectMessage("填写任务描述后开始采集");
+startTimer();
+pollStatus();
+pollOperations();
+statusTimer = window.setInterval(pollStatus, STATUS_MS);
+operationsTimer = window.setInterval(pollOperations, OPERATIONS_MS);
+window.setInterval(refreshEpisodes, EPISODES_MS);
+refreshEpisodes();
+
+// Two-step delete: the first click arms the row, the second one removes it.
+ui.episodeList?.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-episode]");
+  if (!button) return;
+  const name = button.dataset.episode;
+  if (!name) return;
+  if (operationRunning()) {
+    setMessage("采集中，先停止采集再删除", "warning");
+    return;
   }
-  window.removeEventListener("resize", drawTelemetry);
-  controlSocket?.close();
-});
-
-async function prepareArm() {
-  if (
-    armPreparePending
-    || busy
-    || collectionState?.active
-    || controlSocket?.readyState !== WebSocket.OPEN
-    || (
-      armState?.connected
-      && armState.mode === "damping"
-      && collectionState?.home_calibration?.fixed
-    )
-  ) return Boolean(armState?.connected && armState.mode === "damping");
-  armPreparePending = true;
-  lastArmPrepareAt = performance.now();
-  updateButtons();
+  if (pendingDelete !== name) {
+    pendingDelete = name;
+    void refreshEpisodes();
+    return;
+  }
+  pendingDelete = null;
+  button.disabled = true;
   try {
-    setMessage("后台正在准备固定采集零位和阻尼示教模式…");
-    const prepared = await controlCommand("collection_prepare", {}, 35_000);
-    updateCollectionState(prepared);
-    return true;
+    await deleteEpisode(settings.output, name);
+    setMessage(`已删除 ${name}`, "success");
   } catch (error) {
-    setMessage(`机械臂自动准备失败：${error.message ?? String(error)}`, true);
-    return false;
+    setMessage(`删除失败：${error.message || error}`, "error");
   } finally {
-    armPreparePending = false;
-    updateButtons();
+    await refreshEpisodes();
   }
-}
-
-async function initialize() {
-  updateButtons();
-  resetLiveMetrics();
-  initializeCameraPreviews();
-  try {
-    await connectControl();
-    const armReady = await prepareArm();
-    const status = await controlCommand("collection_status", {}, 20_000);
-    updateCollectionState(status);
-    if (armReady && cameraReady) {
-      setMessage("机械臂和双相机已由主机准备完成，摆好方块后开始采集。");
-    } else if (!cameraReady) {
-      setMessage(status.camera_state?.error ?? "主机双相机尚未就绪", true);
-    }
-  } catch (error) {
-    if (!cameraReady) setStatus(ui.cameraStatus, "D455 + D405 未连接", "bad");
-    setMessage(error.message ?? String(error), true);
-  }
-  statusPollHandle = window.setInterval(() => {
-    const now = performance.now();
-    const stateInterval = collectionState?.active ? 200 : 1_000;
-    if (
-      controlSocket?.readyState === WebSocket.OPEN
-      && !statePollPending
-      && now - lastStatePollAt >= stateInterval
-    ) {
-      lastStatePollAt = now;
-      statePollPending = true;
-      controlCommand("state", {}, 3_000)
-        .catch(() => {})
-        .finally(() => { statePollPending = false; });
-    }
-    if (
-      !collectionState?.active
-      && (!armState?.connected || armState.mode !== "damping")
-      && now - lastArmPrepareAt >= 5_000
-    ) {
-      prepareArm();
-    }
-  }, 100);
-}
-
-initialize();
+});

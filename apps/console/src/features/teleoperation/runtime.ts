@@ -171,7 +171,7 @@ class HandTeleoperationController {
   }
 
   showVisionTool(tool) {
-    if (!this.visionTools || !["gesture", "handeye"].includes(tool)) return;
+    if (!this.visionTools || !["camera", "teleop", "handeye"].includes(tool)) return;
     this.visionTools.dataset.selected = tool;
     if (this.visionShell) this.visionShell.dataset.visionTool = tool;
     for (const button of this.visionTools.querySelectorAll("[data-vision-tool]")) {
@@ -179,7 +179,7 @@ class HandTeleoperationController {
       button.classList.toggle("selected", selected);
       button.setAttribute("aria-pressed", String(selected));
     }
-    this.panel.hidden = tool !== "gesture";
+    this.panel.hidden = tool !== "teleop";
     const calibration = document.querySelector("#handeyeCalibrationPanel");
     if (calibration) calibration.hidden = tool !== "handeye";
     window.dispatchEvent(new CustomEvent("arx5-vision-tool", {
@@ -203,17 +203,17 @@ class HandTeleoperationController {
   }
 
   async selectVisionTool(tool) {
-    if (!this.visionTools || !["gesture", "handeye"].includes(tool)) return;
+    if (!this.visionTools || !["camera", "teleop", "handeye"].includes(tool)) return;
     const switchSequence = ++this.toolSwitchSequence;
-    if (tool === "handeye") {
+    if (tool !== "teleop") {
       const needsStopWait = Boolean(this.sessionId || this.pendingStartSequence);
       this.deactivate("视觉工具已切换");
-      if (needsStopWait) await this.waitForStop();
+      if (tool === "handeye" && needsStopWait) await this.waitForStop();
       if (switchSequence !== this.toolSwitchSequence) return;
-      this.showVisionTool("handeye");
+      this.showVisionTool(tool);
       return;
     }
-    this.showVisionTool("gesture");
+    this.showVisionTool("teleop");
     if (this.handModeActive) this.startCamera();
     else this.deactivate("Hand 模式未启用");
   }
@@ -224,12 +224,12 @@ class HandTeleoperationController {
       this.deactivate("已离开 Hand 模式");
       return;
     }
-    this.selectVisionTool("gesture");
+    this.selectVisionTool("teleop");
   }
 
   handleArmState(armState) {
     const calibrationActive = Boolean(armState?.handeye_calibration?.active);
-    const gestureButton = this.visionTools?.querySelector('[data-vision-tool="gesture"]');
+    const gestureButton = this.visionTools?.querySelector('[data-vision-tool="teleop"]');
     if (gestureButton) gestureButton.disabled = calibrationActive;
     if (calibrationActive && this.visionTools?.dataset.selected !== "handeye") {
       this.selectVisionTool("handeye");

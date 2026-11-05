@@ -12,6 +12,6 @@ fi
 DIST="$(frontend_dist_dir "$ROOT")"
 PORT="$(PYTHONPATH="$ROOT/src" "$PYTHON" -B -c "from embodied.core.project import port; print(port('console'))")"
 cd "$ROOT"
-echo "控制台：http://127.0.0.1:$PORT   内核：先运行 ./run.sh kernel sim 或 ./run.sh kernel real，页面上点“连接”接入"
+echo "总览：http://127.0.0.1:$PORT   控制台：http://127.0.0.1:$PORT/control   内核：先运行 ./run.sh kernel sim 或 ./run.sh kernel real，控制页点“连接”接入"
 echo "相机与手势另开：./run.sh camera rgbd、./run.sh web vision；负载 / 夹爪标定与方块任务暂用 ./run.sh web legacy"
 exec env PYTHONPATH="$ROOT/src" "$PYTHON" -B -m embodied.applications.console --kernel --port "$PORT" --frontend-directory "$DIST" "$@"

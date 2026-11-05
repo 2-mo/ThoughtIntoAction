@@ -39,6 +39,9 @@ class RobotState:
     gripper_velocity: float | None = None
     gripper_effort: float | None = None
     gripper_contact: bool | None = None
+    # Dual-arm feedback. None means a single arm; q/dq then belong to that arm.
+    poses: tuple[np.ndarray, ...] | None = None
+    gripper_widths: tuple[float, ...] | None = None
 
 
 @dataclass
@@ -57,3 +60,6 @@ class ControlCommand:
     planned: bool = False
     gripper_effort: float | None = None  # Positive closing magnitude; units declared by the driver.
     joint_acceleration_target: np.ndarray | None = None  # rad/s², from the same planned q/dq curve.
+    # Dual-arm commands. None means a single arm; the scalar fields above apply to it.
+    pose_targets: tuple[np.ndarray, ...] | None = None
+    gripper_targets: tuple[float, ...] | None = None

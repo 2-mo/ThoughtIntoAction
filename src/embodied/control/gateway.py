@@ -152,6 +152,9 @@ class Gateway:
         """Read-only; needs no lease or feedback."""
         robot = {name: getattr(self.config, name) for name in DESCRIBED_ROBOT_FIELDS if hasattr(self.config, name)}
         robot['joint_count'] = len(self.config.park_q)
+        describe_arms = getattr(self.config, 'describe_arms', None)
+        if callable(describe_arms):
+            robot['arms'] = describe_arms()
         robot['gripper_velocity_max_m_s'] = self.capabilities.get('gripper_velocity_max_m_s', self.config.gripper_velocity_max_m_s)
         robot['gripper'] = self.capabilities.get('gripper', {'present': self.config.gripper_max_width > 0,
                                                           'position': self.config.gripper_max_width > 0, 'grasp': False})

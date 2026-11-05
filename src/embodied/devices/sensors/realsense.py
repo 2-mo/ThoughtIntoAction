@@ -48,6 +48,16 @@ class RealSenseCamera:
         self.imu_lock = threading.Lock()
         self.imu = {"supported": False, "error": None, "accel": None, "gyro": None}
 
+    @staticmethod
+    def color_sensor(device, rs):
+        """Some D405 units expose RGB on the Stereo Module and have no standalone color sensor."""
+        try:
+            return device.first_color_sensor()
+        except RuntimeError:
+            return next((sensor for sensor in device.query_sensors()
+                         if any(profile.stream_type() == rs.stream.color
+                                for profile in sensor.get_stream_profiles())), None)
+
     def start_imu(self, device, rs):
         for sensor in device.query_sensors():
             profiles = sensor.get_stream_profiles()
@@ -121,8 +131,8 @@ class RealSenseCamera:
             started = True
             intr = profile.get_stream(rs.stream.color).as_video_stream_profile().get_intrinsics()
             device = profile.get_device()
-            color_sensor = device.first_color_sensor()
-            rgb_controls = configure_rgb(color_sensor, rs, self.color_options)
+            color_sensor = self.color_sensor(device, rs)
+            rgb_controls = {} if color_sensor is None else configure_rgb(color_sensor, rs, self.color_options)
             self.depth_scale = device.first_depth_sensor().get_depth_scale()
             self.metadata = {
                 "depth_scale_m": self.depth_scale, "depth_frame": "depth_optical",

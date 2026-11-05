@@ -306,7 +306,7 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.28;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -343,7 +343,7 @@ scene.add(handeyeBoardPreview);
 let handeyeBoardCameraTarget = null;
 const OPENCV_CAMERA_TO_VIEWER = new THREE.Matrix4().makeRotationX(Math.PI);
 scene.fog = new THREE.FogExp2(0x0d0d0d, 0.3);
-scene.environmentIntensity = 0.72;
+scene.environmentIntensity = 0.9;
 let sceneEnvironmentTarget = null;
 
 function rebuildSceneEnvironment() {
@@ -359,8 +359,9 @@ rebuildSceneEnvironment();
 const DEFAULT_SCENE_CAMERA_FOV_DEG = 39;
 const camera = new THREE.PerspectiveCamera(DEFAULT_SCENE_CAMERA_FOV_DEG, 1, 0.01, 8);
 camera.up.set(0, 0, 1);
-const DEFAULT_CAMERA_POSITION = new THREE.Vector3(-0.72, -0.72, 0.8);
-const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0.22, -0.2, 0.22);
+// Same default framing as the 18081 monitor scene (src/embodied/applications/monitor/web/scene.js).
+const DEFAULT_CAMERA_POSITION = new THREE.Vector3(-0.85, -1.05, 0.85);
+const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0.16, 0, 0.23);
 camera.position.copy(DEFAULT_CAMERA_POSITION);
 
 const controls = new OrbitControls(camera, elements.canvas);
@@ -982,6 +983,17 @@ const dragBasisX = new THREE.Vector3();
 const dragBasisY = new THREE.Vector3();
 
 let actualModel;
+// Dual-arm: a second X5 driven by joints 6..11 of the same feedback stream.
+// Bench layout: the two bases sit ~0.7 m apart along the bench, the far one
+// staggered slightly deeper into the tabletop.
+const SECOND_ARM_OFFSET = new THREE.Vector3(0.05, -0.7, 0);
+let actualModel2 = null;
+let secondAngles = null;
+let displayedAngles2 = null;
+let actualGripperWidth2Mm = null;
+let displayedGripperWidth2Mm = null;
+let modelGeometries = null;
+let modelD405Geometry = null;
 let previewModel;
 let selectionRing;
 let eefDragHandle;
@@ -3651,7 +3663,82 @@ function updateInspector() {
   }
 }
 
-function handleArmState(nextState) {
+function ensureSecondModel() {
+  if (actualModel2 || !modelGeometries) return;
+  actualModel2 = createRobotModel(modelGeometries, false, modelD405Geometry);
+  actualModel2.root.position.copy(SECOND_ARM_OFFSET);
+  setModelAngles(actualModel2, displayedAngles);
+  setModelGripperWidth(actualModel2, displayedGripperWidth2Mm ?? displayedGripperWidthMm);
+  displayedAngles2 = displayedAngles.slice();
+  frameDualScene();
+}
+
+// One-shot framing for a two-arm bench: fit the calibrated tabletop plus both
+// arms, so the whole table is visible when the dual kernel first reports.
+function frameDualScene() {
+  const box = new THREE.Box3().setFromObject(calibrationTable.root);
+  if (box.isEmpty()) return;
+  for (const base of [new THREE.Vector3(0, 0, 0), SECOND_ARM_OFFSET]) {
+    box.expandByPoint(base.clone().add(new THREE.Vector3(-0.45, -0.45, 0)));
+    box.expandByPoint(base.clone().add(new THREE.Vector3(0.45, 0.45, 0.7)));
+  }
+  const center = box.getCenter(new THREE.Vector3());
+  // The arms reach along +X (their end effector sits at +0.24 m), so the
+  // operator stands on the +X side: look back at the bench from there, a
+  // little to one side and above, which keeps both arms in the foreground.
+  const direction = new THREE.Vector3(0.62, -0.42, 0.66).normalize();
+  const forward = direction.clone().negate();
+  const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+  const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+  const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+  const horizontalFov = 2 * Math.atan(
+    Math.tan(verticalFov / 2) * Math.max(camera.aspect, 0.5),
+  );
+  const tanV = Math.tan(verticalFov / 2);
+  const tanH = Math.tan(horizontalFov / 2);
+  // Tightest distance that still keeps every corner of table + arms in frame.
+  const corner = new THREE.Vector3();
+  let distance = 0.4;
+  for (let index = 0; index < 8; index += 1) {
+    corner.set(
+      index & 1 ? box.max.x : box.min.x,
+      index & 2 ? box.max.y : box.min.y,
+      index & 4 ? box.max.z : box.min.z,
+    ).sub(center);
+    distance = Math.max(distance,
+      Math.max(Math.abs(corner.dot(right)) / tanH, Math.abs(corner.dot(up)) / tanV)
+      - corner.dot(forward));
+  }
+  distance *= 1.06;
+  // The scene fog is tuned for a ~1 m close-up; at bench scale it would eat
+  // most of the light, so keep it proportional to the new viewing distance.
+  if (scene.fog instanceof THREE.FogExp2) {
+    scene.fog.density = Math.min(scene.fog.density, 0.32 / distance);
+  }
+  controls.maxDistance = Math.max(controls.maxDistance, distance * 1.5);
+  controls.target.copy(center);
+  camera.position.copy(center).addScaledVector(direction, distance);
+  controls.update();
+}
+
+function handleArmState(rawState) {
+  let nextState = rawState;
+  const joints = Array.isArray(rawState?.joint_position_deg) ? rawState.joint_position_deg : null;
+  if (joints && joints.length === 12 && joints.every((value) => Number.isFinite(value))) {
+    secondAngles = joints.slice(6).map(Number);
+    displayedAngles2 ??= secondAngles.slice();
+    const widths = rawState?.gripper_widths_mm;
+    if (Array.isArray(widths) && Number.isFinite(widths[1])) {
+      actualGripperWidth2Mm = widths[1];
+      displayedGripperWidth2Mm ??= actualGripperWidth2Mm;
+    }
+    ensureSecondModel();
+    nextState = { ...rawState, joint_position_deg: joints.slice(0, 6) };
+  } else if (joints && joints.length === 6) {
+    secondAngles = null;
+    actualGripperWidth2Mm = null;
+    displayedGripperWidth2Mm = null;
+  }
   const hadLiveFeedback = Boolean(armState.connected)
     && finiteJointVector(armState.joint_position_deg);
   const previousConnected = Boolean(armState.connected);
@@ -5474,6 +5561,17 @@ function render(now) {
     });
     if (changed) setModelAngles(actualModel, displayedAngles);
 
+    if (!actualModel2 && secondAngles) ensureSecondModel();
+    if (actualModel2 && displayedAngles2 && secondAngles) {
+      let changed2 = false;
+      displayedAngles2 = displayedAngles2.map((value, index) => {
+        const next = value + (secondAngles[index] - value) * follow;
+        if (Math.abs(next - value) > 1e-4) changed2 = true;
+        return next;
+      });
+      if (changed2) setModelAngles(actualModel2, displayedAngles2);
+    }
+
     const gripperFollowRate = armState.busy ? 65 : 34;
     const gripperFollow = 1 - Math.exp(-gripperFollowRate * elapsedSeconds);
     const nextGripperWidth = displayedGripperWidthMm
@@ -5483,6 +5581,15 @@ function render(now) {
       setModelGripperWidth(actualModel, displayedGripperWidthMm);
       if (!hasTeleoperationPreview()) {
         setModelGripperWidth(previewModel, displayedGripperWidthMm);
+      }
+    }
+    if (actualModel2 && Number.isFinite(actualGripperWidth2Mm)
+        && Number.isFinite(displayedGripperWidth2Mm)) {
+      const nextGripperWidth2 = displayedGripperWidth2Mm
+        + (actualGripperWidth2Mm - displayedGripperWidth2Mm) * gripperFollow;
+      if (Math.abs(nextGripperWidth2 - displayedGripperWidth2Mm) > 1e-4) {
+        displayedGripperWidth2Mm = nextGripperWidth2;
+        setModelGripperWidth(actualModel2, displayedGripperWidth2Mm);
       }
     }
     const targetGripperFollow = 1 - Math.exp(-32 * elapsedSeconds);
@@ -5636,6 +5743,8 @@ async function initializeModel() {
       cacheHits,
     } = await loadGeometries(markSkeletonLinkReady);
     disposeLoadingSkeleton();
+    modelGeometries = geometries;
+    modelD405Geometry = d405Geometry;
     actualModel = createRobotModel(geometries, false, d405Geometry);
     previewModel = createRobotModel(geometries, true, d405Geometry);
     selectionRing = createSelectionRing();

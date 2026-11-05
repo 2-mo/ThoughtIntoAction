@@ -8,17 +8,34 @@
 
 ```text
 src/api/                    API 协议与服务地址
+src/shell/                  三个页面共用的顶部导航
+src/features/overview/      只读总览页面 + 内核/相机服务操作
+src/features/policy/        策略任务页面（prompt 输入与运行监控）
 src/features/control/       机械臂和夹爪控制界面
 src/features/scene/         Three.js 场景与目标姿态编辑
 src/features/camera/        D455/D405 WebRTC 显示
 src/features/cube/          方块姿态显示算法
 src/features/teleoperation/ 手势遥操作界面
-src/features/collection/    GR00T 采集页面
+src/features/collection/    采集会话：配置、单条采集、实时状态
 ../../assets/arx_motion/   MediaPipe 运行库、WASM、图标和纹理
 ../../assets/arx_motion/weights/browser/  MediaPipe 模型与 X5/D405 网格
 ```
 
-页面包含三块功能：官方 X5 模型驱动的 3D XYZ/单关节控制、夹爪/高级关节调试，
+四个页面共用顶部导航：`/` 总览、`/control` 控制台、`/collection` 数据采集、`/policy` 策略。
+总览只轮询只读接口 `GET /api/v1/system/status`，不连接 `/api/v1/control`，
+因此不会申请或释放内核控制权；控制台仍保持单浏览器所有者。
+
+命令行能力通过白名单接口 `/api/v1/operations` 暴露：启动/停止内核与相机服务、
+运行内核采集、运行策略。浏览器只提交操作类型和校验过的参数，后端映射成固定的
+`./run.sh` 调用；真机内核和策略运行需要显式确认，且只能停止由本服务启动的进程。
+
+采集页只负责采集会话本身：任务描述、采集方式（固定时长或手动停止）、相机、
+目标条数与图像格式。开始后通过 operations 接口运行 `collect run`，页面轮询
+只读状态接口显示关节轨迹、相机预览与采集进度；单条 episode 以子进程退出状态
+判定成功或失败，日志在页面内可展开查看。相机预览读取共享相机服务
+（`outputs/runtime/camera.sock`）的最新 JPEG，与录制使用同一路画面。
+
+控制台页面包含三块功能：官方 X5 模型驱动的 3D XYZ/单关节控制、夹爪/高级关节调试，
 以及连接在机械臂主机上的 Intel RealSense D455 RGB-D 画面与 MediaPipe 预览。
 主机使用一个 `librealsense` pipeline 同步采集 RGB 与 Depth，经 WebRTC 双视频轨
 送到浏览器，MediaPipe 仍只处理 RGB；关键点目前不会转换成机械臂动作。
@@ -121,13 +138,15 @@ sudo security add-trusted-cert -d -r trustRoot \
 CA 私钥。随后用 Chrome 打开启动命令显示的完整地址，例如：
 
 ```text
-https://100.112.78.10:8000/?token=启动时显示的令牌
+https://100.112.78.10:8000/control?token=启动时显示的令牌
 ```
+
+根路径 `/` 是只读总览；收藏控制台请使用 `/control?token=...`。
 
 页面通过 HTTPS 打开；控制 API 使用同源 `/api/v1/control`，不再要求手机额外连接
 `8766`。D455 RGB-D 仍由 `wss://主机:8767/api/v1/cameras/d455/webrtc`
-完成需要画面时的 WebRTC 信令，媒体使用 WebRTC 加密传输。GR00T 采集页不连接
-相机服务；录制命令只通过主机内部 `127.0.0.1:8768` 转发。Three.js、MediaPipe 运行库、
+完成需要画面时的 WebRTC 信令，媒体使用 WebRTC 加密传输。采集页的预览与录制
+都走共享相机服务，不占用 WebRTC 端口；两者同时打开会争用同一台相机。Three.js、MediaPipe 运行库、
 WASM 以及 Pose/Hand 任务模型均由前端构建或本地资产提供；固定版本 X5 STL 获取
 超时会自动使用内置降级几何，避免控制页面卡在加载状态。以后
 重新运行 `./run.sh components run deployment.tailnet` 时，

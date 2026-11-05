@@ -1,0 +1,14 @@
+{
+  "profile": "arx5-dual",
+  "version": 1,
+  "arms": [
+    {
+      "id": "left",
+      "can_interface": "can1"
+    },
+    {
+      "id": "right",
+      "can_interface": "can0"
+    }
+  ]
+}

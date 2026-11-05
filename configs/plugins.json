@@ -241,7 +241,10 @@
   "mapping": {
     "phone_calibrated": {
       "factory": "embodied.devices.inputs.phone:phone_calibrated",
-      "capabilities": ["relative-pose", "manual-calibration"]
+      "capabilities": [
+        "relative-pose",
+        "manual-calibration"
+      ]
     },
     "phone_tool": {
       "factory": "embodied.devices.inputs.phone:phone_tool",
@@ -605,6 +608,10 @@
     "reference7": {
       "factory": "embodied.devices.robots.reference7.model:Model",
       "runtime": "control"
+    },
+    "arx5-dual": {
+      "factory": "embodied.devices.robots.arx5.dual:DualKinematics",
+      "runtime": "control"
     }
   },
   "perception": {
@@ -649,6 +656,10 @@
     },
     "reference7": {
       "factory": "embodied.devices.robots.reference7.profile:load_profile",
+      "runtime": "control"
+    },
+    "arx5-dual": {
+      "factory": "embodied.devices.robots.arx5.profile:load_dual_profile",
       "runtime": "control"
     }
   },

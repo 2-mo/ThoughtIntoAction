@@ -493,6 +493,8 @@ class CommandEngine:
                 'q': state.q.tolist(), 'dq': state.dq.tolist(), 'pose': state.pose.tolist(),
                 'gripper_width': state.gripper_width, 'gripper_velocity': state.gripper_velocity,
                 'gripper_effort': state.gripper_effort, 'gripper_contact': state.gripper_contact,
+                'gripper_widths': None if state.gripper_widths is None else list(state.gripper_widths),
+                'eef_poses': None if state.poses is None else [list(pose) for pose in state.poses],
                 'feedback_monotonic_ns': int(state.received_at * 1e9),
                 'operations': [{k: v for k, v in op.items() if k != 'plan'} for op in self.operations.values()]}
 

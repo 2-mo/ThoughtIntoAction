@@ -58,6 +58,14 @@ const PUBLIC_NAMES = new Map(
   ]),
 );
 
+export function withToken(href: string): string {
+  const token = new URLSearchParams(window.location.search).get("token");
+  if (!token) return href;
+  const url = new URL(href, window.location.href);
+  url.searchParams.set("token", token);
+  return url.toString();
+}
+
 export function controlEndpoint(): string {
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
   const url = new URL("/api/v1/control", window.location.href);

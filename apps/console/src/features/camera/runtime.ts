@@ -6,7 +6,7 @@ const {
   HandLandmarker,
   PoseLandmarker,
 } = await import(/* @vite-ignore */ MEDIAPIPE_RUNTIME_URL);
-import { serviceEndpoint } from "../../api/control-protocol";
+import { serviceEndpoint, withToken } from "../../api/control-protocol";
 import { PoseTemporalStabilizer } from "../vision/pose-temporal-filter";
 import handModelUrl from "@weights/mediapipe/hand_landmarker.task?url";
 import poseModelUrl from "@weights/mediapipe/pose_landmarker_heavy.task?url";
@@ -100,10 +100,7 @@ function websocketEndpoint(port) {
 
 elements.bridgeUrl.value = websocketEndpoint(8765);
 if (elements.grootCollectionLink) {
-  const collectionUrl = new URL("/collection", document.baseURI);
-  const collectionToken = new URLSearchParams(window.location.search).get("token");
-  if (collectionToken) collectionUrl.searchParams.set("token", collectionToken);
-  elements.grootCollectionLink.href = collectionUrl.toString();
+  elements.grootCollectionLink.href = withToken("/collection");
 }
 
 const context = elements.canvas.getContext("2d");
@@ -772,6 +769,20 @@ async function startPoseRecognition() {
   scheduleRenderLoop();
 }
 
+async function describeCameraOffline() {
+  let text = "相机服务未启动";
+  try {
+    const response = await fetch(withToken("/api/v1/system/status"), { cache: "no-store" });
+    if (response.ok) {
+      const status = await response.json();
+      if (status?.shared_camera) text = "相机正由采集服务使用（采集优先）";
+    }
+  } catch {
+    // keep the default hint
+  }
+  if (!cameraActive) elements.emptyState.textContent = text;
+}
+
 function showCameraError(message, generation) {
   if (generation !== cameraGeneration || !cameraActive) return;
   running = false;
@@ -783,6 +794,15 @@ function showCameraError(message, generation) {
   stopCameraTransport();
   setCameraToggle(false);
   updatePoseModeUi(false);
+  if (/信令连接失败|信令连接超时|信令提前断开/.test(message)) {
+    // The camera service is simply not running; this is an expected idle state.
+    setPill(elements.cameraStatus, "相机未连接", "pending");
+    setEmptyStateVisible(true);
+    elements.emptyState.classList.remove("error");
+    elements.emptyState.textContent = "相机服务未启动";
+    void describeCameraOffline();
+    return;
+  }
   setPill(elements.cameraStatus, `相机错误：${message}`, "bad");
   setEmptyStateVisible(true);
   elements.emptyState.classList.add("error");
@@ -1059,10 +1079,30 @@ async function startWebRtcCamera(generation) {
     }
     updateCubeBackgroundUi();
   });
-  const rgbTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
-  const depthTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
-  const eyeInHandTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
-  const eyeInHandDepthTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
+  try {
+    await window.__tiaCapabilitiesReady;
+  } catch {
+    // Capability probe failed; keep the full four-track layout.
+  }
+  const cameraSet = (document.body.dataset.cameraSet || "").split(",").filter(Boolean);
+  const wristOnly = cameraSet.length === 1 && cameraSet[0] === "wrist_rgb";
+  let rgbTransceiver;
+  let depthTransceiver;
+  let eyeInHandTransceiver;
+  let eyeInHandDepthTransceiver;
+  if (wristOnly) {
+    // The single camera is served on the first tracks the server sends, so the
+    // wrist transceivers must come first for the track handler to match them.
+    eyeInHandTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
+    eyeInHandDepthTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
+    rgbTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
+    depthTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
+  } else {
+    rgbTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
+    depthTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
+    eyeInHandTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
+    eyeInHandDepthTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
+  }
   preferBrowserH264(rgbTransceiver);
   preferBrowserH264(depthTransceiver);
   preferBrowserH264(eyeInHandTransceiver);
@@ -1112,6 +1152,7 @@ async function startWebRtcCamera(generation) {
     recordWebRtcDiagnostic(diagnostics, "track", label);
     target.srcObject = new MediaStream([event.track]);
     target.play().catch((error) => console.warn("WebRTC autoplay failed", error));
+    setEmptyStateVisible(false);
   });
   peer.addEventListener("connectionstatechange", () => {
     recordWebRtcDiagnostic(diagnostics, "peer", peer.connectionState);
@@ -2723,7 +2764,10 @@ async function startCamera() {
   updatePoseModeUi(false);
   setEmptyStateVisible(true);
   elements.emptyState.classList.remove("error");
-  elements.emptyState.textContent = "正在连接 D455 RGB-D 与眼在手 D405…";
+  const cameraSet = document.body.dataset.cameraSet || "";
+  elements.emptyState.textContent = cameraSet === "wrist_rgb"
+    ? "正在连接腕部 D405…"
+    : "正在连接 D455 RGB-D 与眼在手 D405…";
   stopCameraTransport();
   elements.canvas.width = 640;
   elements.canvas.height = 480;

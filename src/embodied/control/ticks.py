@@ -107,6 +107,27 @@ class TickPublisher:
             raise ValueError(f"Telemetry {name} requires {self.joint_count} joints, got {len(values)}")
         getattr(packet, name)[:self.joint_count] = values
 
+    @staticmethod
+    def _arm_telemetry(info):
+        """Flatten a composite backend's per-arm telemetry into wire order."""
+        arms = info.get('arms')
+        if not arms:
+            return info
+        merged = {}
+        for key, value in arms[0].items():
+            if isinstance(value, dict):
+                merged[key] = {
+                    name: ([item for arm in arms for item in ((arm.get(key) or {}).get(name) or [])]
+                           if isinstance(inner, (list, tuple)) else inner)
+                    for name, inner in value.items()
+                }
+            elif isinstance(value, (list, tuple)):
+                merged[key] = [item for arm in arms
+                               for item in (arm.get(key) if isinstance(arm.get(key), (list, tuple)) else [])]
+            else:
+                merged[key] = value
+        return merged
+
     def _send(self, packet):
         try:
             send(self.publisher, packet)
@@ -139,7 +160,10 @@ class TickPublisher:
                 packet.flags |= POSE_TARGET
                 packet.pose_target[:] = command.pose_target
             controller = getattr(backend, 'controller', None)
-            joint_goal = getattr(controller, '_joint_goal', None)
+            # A composite backend owns the goal for every arm it drives; a
+            # single controller's goal would be short in wire order.
+            joint_goal = (backend.joint_goal if hasattr(backend, 'joint_goal')
+                          else getattr(controller, '_joint_goal', None))
             if joint_goal is not None:
                 packet.flags |= IK_GOAL
                 self._copy_joint(packet, 'joint_goal', joint_goal)
@@ -151,7 +175,7 @@ class TickPublisher:
                 packet.ik_rejections = controller.ik_rejections
                 packet.ik_partial_solutions = controller.ik_partial_solutions
             if completed:
-                info = backend.telemetry()
+                info = self._arm_telemetry(backend.telemetry())
                 packet.flags |= COMMAND
                 for destination, key in (("sent_q", "sent_q"), ("sent_dq", "sent_dq"),
                                          ("kp", "applied_kp"), ("kd", "applied_kd"),

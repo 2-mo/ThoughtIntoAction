@@ -26,5 +26,9 @@ class BackendSettings:
 
     @property
     def allowed_origins(self) -> tuple[str, ...]:
+        # Binding a LAN address must also accept that address as a page origin.
+        hosts = ("localhost", "127.0.0.1")
+        if self.host not in hosts and self.host not in ("0.0.0.0", "::"):
+            hosts += (self.host,)
         return self.origins or tuple(f"http://{host}:{port(name)}" for name in ("frontend_dev", "console")
-                                     for host in ("localhost", "127.0.0.1"))
+                                     for host in hosts)

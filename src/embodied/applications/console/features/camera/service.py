@@ -1941,6 +1941,12 @@ def parse_args() -> argparse.Namespace:
         help="只启动 RGB；用于验证检测完全不依赖深度流",
     )
     parser.add_argument(
+        "--no-external",
+        action="store_true",
+        default=os.environ.get("ARX5_NO_EXTERNAL_CAMERA", "").lower() in {"1", "true", "yes"},
+        help="不打开外部 D455；只服务腕部相机（单相机配置）",
+    )
+    parser.add_argument(
         "--depth-preset",
         choices=tuple(DEPTH_PRESET_VALUES),
         default=os.environ.get("ARX5_DEPTH_PRESET", "default"),
@@ -2185,6 +2191,9 @@ async def handle_collection_client(
     ):
         await websocket.close(code=1008, reason="invalid collection client")
         return
+    if hub is None:
+        await websocket.close(code=1011, reason="外部相机未配置；单相机模式不支持双相机采集")
+        return
     camera_session_id: str | None = None
     print("主机采集相机控制已连接。")
     try:
@@ -2238,7 +2247,8 @@ async def handle_collection_client(
                 )
             except RuntimeError:
                 pass
-        hub.stop_if_idle()
+        if hub is not None:
+            hub.stop_if_idle()
         eye_in_hand_hub.stop_if_idle()
         print("主机采集相机控制已断开。")
 
@@ -2302,6 +2312,24 @@ async def handle_client(
             try:
                 message = json.loads(raw_message)
                 message_type = message.get("type")
+                if hub is None:
+                    if message_type == "camera_status":
+                        response = {
+                            "type": "camera_status",
+                            "ok": False,
+                            "source_revision": SOURCE_REVISION,
+                            "service_started_at": SERVICE_STARTED_AT,
+                            "depth_available": False,
+                            "depth_error": "外部相机未配置",
+                            "depth_retry_in_ms": None,
+                            "intrinsics": None,
+                            "cube_perception_enabled": False,
+                        }
+                        response["id"] = message.get("id")
+                        if channel.readyState == "open":
+                            channel.send(json.dumps(response, separators=(",", ":")))
+                        return
+                    raise ValueError("外部相机未配置")
                 if message_type == "depth_sample":
                     response = hub.depth_sample(
                         message.get("x"), message.get("y"), message.get("radius", 2)
@@ -2349,7 +2377,7 @@ async def handle_client(
                 }
             if channel.readyState == "open":
                 channel.send(json.dumps(response, separators=(",", ":")))
-            if response.get("clean_restart"):
+            if response.get("clean_restart") and hub is not None:
                 self_loop = asyncio.get_running_loop()
                 self_loop.call_later(
                     CAMERA_CALIBRATION_RESTART_DELAY_SECONDS,
@@ -2387,12 +2415,13 @@ async def handle_client(
             try:
                 offer_handled = True
                 send_video = message.get("video", True) is not False
-                await hub.ensure_running()
+                if hub is not None:
+                    await hub.ensure_running()
                 if send_video:
                     await eye_in_hand_hub.ensure_running()
-                    log_peer_event("D455/D405 采集首帧就绪")
+                    log_peer_event("相机采集首帧就绪")
                 else:
-                    log_peer_event("D455 采集就绪（仅数据通道）")
+                    log_peer_event("采集就绪（仅数据通道）")
                 tasks_before = set(asyncio.all_tasks())
                 await peer.setRemoteDescription(
                     RTCSessionDescription(sdp=message["sdp"], type="offer")
@@ -2400,7 +2429,7 @@ async def handle_client(
                 remember_peer_connect_tasks(tasks_before)
                 log_peer_event("浏览器 SDP 已接收")
                 if send_video:
-                    tracks = [
+                    tracks = ([] if hub is None else [
                         RealSenseVideoTrack(
                             hub,
                             "rgb",
@@ -2417,6 +2446,7 @@ async def handle_client(
                                 f"编码器首帧={label}"
                             ),
                         ),
+                    ]) + [
                         RealSenseVideoTrack(
                             eye_in_hand_hub,
                             "rgb",
@@ -2482,7 +2512,8 @@ async def handle_client(
             await asyncio.gather(*peer_connect_tasks, return_exceptions=True)
         await peer.close()
         peers.discard(peer)
-        hub.stop_if_idle()
+        if hub is not None:
+            hub.stop_if_idle()
         eye_in_hand_hub.stop_if_idle()
         print(f"相机浏览器已断开：{remote}")
 
@@ -2502,7 +2533,7 @@ async def run_server(args: argparse.Namespace) -> bool:
     print(f"采集视频编码器已预热：{video_encoder}")
 
     restart_event = asyncio.Event()
-    hub = RealSenseFrameHub(
+    hub = None if args.no_external else RealSenseFrameHub(
         width=args.width,
         height=args.height,
         frame_rate=args.fps,
@@ -2561,7 +2592,8 @@ async def run_server(args: argparse.Namespace) -> bool:
             )
             print(
                 "相机绑定："
-                f"D455={args.serial}，眼在手 D405={args.eye_in_hand_serial} "
+                f"{'外部=未配置，' if args.no_external else f'D455={args.serial}，'}"
+                f"眼在手 D405={args.eye_in_hand_serial} "
                 f"采集={args.eye_in_hand_width}x{args.eye_in_hand_height}@"
                 f"{args.eye_in_hand_fps}，预览={args.eye_in_hand_output_width}x"
                 f"{args.eye_in_hand_output_height}@{args.eye_in_hand_output_fps}fps"
@@ -2574,7 +2606,9 @@ async def run_server(args: argparse.Namespace) -> bool:
             print("D455 采集进程正在自动恢复。")
     finally:
         await asyncio.gather(*(peer.close() for peer in peers))
-        await asyncio.gather(hub.shutdown(), eye_in_hand_hub.shutdown())
+        if hub is not None:
+            await hub.shutdown()
+        await eye_in_hand_hub.shutdown()
     return restart_event.is_set()
 
 

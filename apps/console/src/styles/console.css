@@ -44,6 +44,34 @@ button.danger:hover:not(:disabled) { border-color: #ff9191; background: #b83a3a;
   radial-gradient(circle at 45% 42%, rgba(38, 79, 62, .35), transparent 43%),
   linear-gradient(145deg, #08110e, #020504); }
 #robotCanvas { width: 100%; height: 100%; min-height: 590px; cursor: grab; touch-action: none; }
+.scene-connect-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 14%;
+  z-index: 6;
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 26px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(120, 240, 199, .55);
+  border-radius: 999px;
+  color: #b6ffe4;
+  background: rgba(16, 38, 30, .88);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .5), 0 0 24px rgba(53, 201, 154, .3);
+  font: inherit;
+  font-size: .98rem;
+  font-weight: 720;
+  letter-spacing: .01em;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.scene-connect-prompt:hover:not(:disabled) { background: rgba(26, 58, 46, .95); color: #dcfff0; }
+.scene-connect-prompt:focus-visible { outline: 2px solid var(--accent, #78f0c7); outline-offset: 3px; }
+.scene-connect-prompt:disabled { opacity: .6; cursor: progress; }
+.scene-connect-prompt[hidden] { display: none; }
+.scene-connect-prompt i { font-size: 1rem; }
 #robotCanvas:active { cursor: grabbing; }
 #robotCanvas.direct-drag-ready { cursor: crosshair; }
 #robotCanvas.direct-drag-active { cursor: grabbing; }
@@ -468,7 +496,7 @@ dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
   .control-url { grid-column: 1 / -1; }
   .manual-workspace { grid-template-columns: 1fr; }
   .control-state { position: static; }
-  .robot-console { grid-template-columns: minmax(0, 1.35fr) minmax(270px, .65fr); }
+  .robot-console { grid-template-columns: minmax(0, 1.8fr) minmax(270px, .6fr); }
   .joint-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bridge-url { grid-column: 1 / -1; }
   .workspace { grid-template-columns: 1fr; }
@@ -497,11 +525,11 @@ body { min-height: 0; }
 
 main {
   width: 100%;
-  height: 100dvh;
+  height: calc(100dvh - var(--shell-nav-height, 0px));
   margin: 0;
   padding: clamp(8px, 1.1vw, 16px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(270px, 23vw, 340px);
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 19vw, 320px);
   grid-template-rows: auto auto minmax(0, 1fr);
   grid-template-areas:
     "app-header app-header"
@@ -1792,10 +1820,10 @@ body {
 
 main {
   width: 100%;
-  height: 100dvh;
+  height: calc(100dvh - var(--shell-nav-height, 0px));
   margin: 0;
   padding: 12px 16px 0;
-  grid-template-columns: minmax(0, 1fr) clamp(292px, 25vw, 368px);
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 19vw, 320px);
   grid-template-rows: auto minmax(0, 1fr) 30px;
   grid-template-areas:
     "arm-toolbar vision-dock"
@@ -1858,7 +1886,7 @@ main > .section-heading { display: none; }
 .manual-main { gap: 0; }
 .robot-console {
   height: 100%;
-  grid-template-columns: minmax(0, 1fr) clamp(286px, 30%, 360px);
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 25%, 340px);
   border-color: transparent;
   border-radius: 6px;
   background: rgba(255,255,255,.035);
@@ -3246,7 +3274,7 @@ main > .section-heading { display: none; }
   main:has(#robotControlModes[data-selected="hand"]) {
     width: 100%;
     height: auto;
-    min-height: 100dvh;
+    min-height: calc(100dvh - var(--shell-nav-height, 0px));
     padding: 8px 10px 40px;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto auto auto;
@@ -3380,9 +3408,19 @@ main > .section-heading { display: none; }
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: auto minmax(0, .65fr) minmax(240px, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 6px;
   overflow: hidden;
+}
+
+/* One dock section at a time: camera / teleoperation / calibration. */
+.vision-tool-shell[data-vision-tool="camera"] .hand-teleoperation-panel,
+.vision-tool-shell[data-vision-tool="handeye"] .hand-teleoperation-panel {
+  display: none;
+}
+
+.vision-tool-shell[data-vision-tool="teleop"] .workspace {
+  display: none;
 }
 .vision-tool-shell > [hidden],
 #handControlPane[hidden] {
@@ -3391,7 +3429,18 @@ main > .section-heading { display: none; }
 .vision-tool-modes {
   min-width: 0;
 }
-.vision-tool-modes.binary-segment[data-selected="handeye"]::before,
+.vision-tool-modes.binary-segment {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.vision-tool-modes.binary-segment::before {
+  width: calc((100% - 6px) / 3);
+}
+.vision-tool-modes.binary-segment[data-selected="teleop"]::before {
+  transform: translateX(100%);
+}
+.vision-tool-modes.binary-segment[data-selected="handeye"]::before {
+  transform: translateX(200%);
+}
 #teleoperationProfile[data-selected="fast"]::before {
   transform: translateX(100%);
 }
@@ -4538,6 +4587,14 @@ main {
   font-weight: 400;
   white-space: nowrap;
 }
+.app-statusbar #armConnectButton.pending.primary {
+  padding: 0 14px;
+  color: #04120c;
+  background: #6fe7bd !important;
+  font-weight: 760;
+  box-shadow: inset 0 0 0 1px rgba(4, 18, 12, .25);
+}
+.app-statusbar #armConnectButton.pending.primary > i { opacity: 1; }
 .app-statusbar #armConnectButton.ok {
   background: #0078d4 !important;
 }
@@ -4617,7 +4674,7 @@ main {
 
   main {
     height: auto;
-    min-height: 100dvh;
+    min-height: calc(100dvh - var(--shell-nav-height, 0px));
     padding: 8px 10px 0;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(1040px, calc(100dvh - 84px)) 260px var(--statusbar-height);
@@ -4660,4 +4717,84 @@ main {
     bottom: 0;
     z-index: 50;
   }
+}
+
+/* One wrist camera: the external D455 panes and cube tools that depend on it
+   are not part of this machine's capability set. */
+body[data-camera-set="wrist_rgb"] .camera-grid .camera-view:nth-child(1),
+body[data-camera-set="wrist_rgb"] .camera-grid .camera-view:nth-child(2) {
+  display: none;
+}
+
+body[data-camera-set="wrist_rgb"] .camera-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+body[data-camera-set="wrist_rgb"] #cubePerceptionButton,
+body[data-camera-set="wrist_rgb"] #cubeRoiButton,
+body[data-camera-set="wrist_rgb"] #cubeRoiVisibilityButton,
+body[data-camera-set="wrist_rgb"] #tableEdgeEditButton {
+  display: none;
+}
+
+/* WebRTC videos fill their panes; the wrist camera is the only source here. */
+.camera-grid .camera-view video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Calibration tab keeps a small live preview above the dialog. */
+.vision-tool-shell[data-vision-tool="handeye"] {
+  grid-template-rows: auto minmax(120px, .42fr) minmax(0, 1fr);
+}
+.vision-tool-shell .handeye-calibration-dialog {
+  overflow: auto;
+}
+
+/* One wrist camera: only D405 calibration applies. */
+body[data-camera-set="wrist_rgb"] #handeyeD455Start,
+body[data-camera-set="wrist_rgb"] #handeyeCalibrationStart {
+  display: none;
+}
+
+/* Cube pick/place tasks need the external overview camera. */
+body[data-camera-set="wrist_rgb"] #cubePickButton,
+body[data-camera-set="wrist_rgb"] #cubeMoveButton,
+body[data-camera-set="wrist_rgb"] #cubePlaceButton,
+body[data-camera-set="wrist_rgb"] #cubeHomeButton,
+body[data-camera-set="wrist_rgb"] #cubeStackButton {
+  display: none;
+}
+
+/* Dual-arm selector: hidden unless the kernel reports more than one arm. */
+
+.arm-selector {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--statusbar-height);
+}
+
+.arm-selector[hidden] {
+  display: none;
+}
+
+.arm-selector button {
+  min-height: calc(var(--statusbar-height) - 6px);
+  padding: 2px 9px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .05);
+  color: rgba(255, 255, 255, .72);
+  font-size: .72rem;
+  cursor: pointer;
+}
+
+.arm-selector button[aria-pressed="true"] {
+  border-color: rgba(120, 240, 199, .55);
+  background: rgba(53, 201, 154, .16);
+  color: #a5f8dc;
 }
