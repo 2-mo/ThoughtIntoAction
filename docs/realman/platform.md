@@ -10,7 +10,7 @@
 | `right_wrist_rgb` | 右臂 `.18` 腕部 | `wrist` / `right` |
 | `exterior_rgb` | 侧面固定机位 | `fixed` |
 
-三台均为 D435，RGB 为640×480、30 FPS，原生深度预览同档位；录制保存RGB，不录深度。`[recording].camera_ids` 列出以上三路，工作台 **C** 按这个列表生成采集命令，不再写死两路。网页每台可独立开关、放大及显示深度；回放补齐右臂画面。名称、安装类型和所属机械臂随相机元数据保存。**一条采集仍记录所选 RUN 的机械臂状态加三路图像，不是双臂状态联合录制。**
+三台均为 D435，目标配置为RGB 640×480、30 FPS，原生深度预览同档位；录制保存RGB，不录深度。`[recording].camera_ids` 列出以上三路，工作台 **C** 按这个列表生成采集命令，不再写死两路。网页每台可独立开关、放大及显示深度；回放补齐右臂画面。名称、安装类型和所属机械臂随相机元数据保存。**一条采集仍记录所选 RUN 的机械臂状态加三路图像，不是双臂状态联合录制。**
 
 工作台用 **[ / ]** 选择机械臂后，**H** 按本侧 `robot_side` 选择腕部标定相机；没有唯一对应项时不提供该标定动作，避免把左相机标到右臂。**J** 仍选侧面相机。三台均未完成手眼／固定外参标定，不复用旧ARX安装的外参。
 
@@ -19,19 +19,24 @@
 ```bash
 cd /home/guest/下载/ThoughtIntoAction-local
 ./run.sh bench restart --target camera
-./run.sh bench restart --target interfaces
 ```
 
-随后刷新监看网页，预期显示左臂、右臂、侧面三张卡片及各自RGB／深度状态。左臂与侧面枚举为USB 2.1、右臂为USB 3.2；SDK能解析三台的配置，但本次未启动视频管线，三路并发帧率、丢帧及USB带宽仍需现场核对。
+随后刷新监看网页。相机维护不需要重启 interfaces 或机械臂控制进程。
 
-当前机器缺少 `ffmpeg`，默认MP4录制尚不可用。可先使用既有PNG方式（将 `<RUN>` 替换为所选臂实际运行目录）：
+2026-11-05 实机检查：右臂相机通过USB 3.2正常输出640×480@30 RGB和深度，已保存并查看实际RGB画面。左臂、侧面仅枚举为USB 2.1；640×480@30和@15的RGB＋深度均不能稳定出帧。左臂在独立SDK低带宽诊断中以424×240@15纯RGB连续取得60帧，首帧等待约5.5秒，不能据此宣称平台完整模式可用；侧面同档纯RGB等待10秒仍无帧。原驱动仍使用RGB＋深度，不自动降画质或关闭深度。
+
+本机 `configs/local.toml` 暂将左臂、侧面设为 `enabled=false`，右臂保持在线，避免故障设备反复重试；三路序列号和录制列表保留。需现场检查左臂、侧面的USB 3数据线、端口和供电，优先直连主机USB 3端口；恢复后将对应 `enabled` 改为 `true` 并仅重启相机服务。未恢复前不要启动默认三路采集。诊断和截图保存在 `outputs/diagnostics/three-cameras-20261105/`。相机操作期间没有重启控制内核或发送运动命令；两臂保持此前已有的 `native input stale` 状态，没有新增撤权记录，这不代表现场遥操已验证。
+
+项目内已安装ffmpeg 7.0.2-static（来自imageio-ffmpeg 0.6.0的PyPI wheel，下载SHA256已核验），入口为 `.venv/bin/ffmpeg`，实际文件和来源记录在 `outputs/tools/ffmpeg-0.6.0/`；没有修改系统包。启动器将所选Python环境的bin目录加入子进程PATH，因此 `run.sh collect` 无需先激活shell环境也能找到ffmpeg。此二进制和本机配置不进入Git；其他部署需在对应环境中提供ffmpeg。
+
+三路相机实际恢复出帧后，可使用默认MP4录制（将 `<RUN>` 替换为所选臂实际运行目录）：
 
 ```bash
 ./run.sh collect run --run <RUN> --task 三相机检查 \
-  --cameras wrist_rgb,right_wrist_rgb,exterior_rgb --rgb png --duration 20
+  --cameras wrist_rgb,right_wrist_rgb,exterior_rgb --rgb mp4 --duration 20
 ```
 
-预期输出 `outputs/datasets/runtime/episode_*/`，包含三路独立PNG目录与MCAP帧索引；PNG占用更多磁盘。要使用默认MP4，先按系统包管理方式安装 `ffmpeg`。本次14项针对性测试通过：三路IPC身份、采集参数、元数据、独立开关／故障、标定选择和PNG录制／导出；MP4测试因缺少ffmpeg跳过。前端模块语法检查通过；Playwright依赖缺失，未执行浏览器视觉验收或真实相机出帧验收。
+预期输出 `outputs/datasets/runtime/episode_*/`，包含三路MP4与MCAP帧索引；已有PNG模式仍可使用。本次此前14项针对性测试通过，覆盖三路IPC身份、采集参数、元数据、独立开关／故障、标定选择及PNG录制／导出；安装ffmpeg后，环境PATH检查和三路MP4录制／导出回归另2项通过。MP4使用测试帧，尚未完成三路真实录制。前端模块语法检查通过；Playwright依赖缺失，未执行浏览器视觉验收。
 
 ## 2026-11-05：现有真机路径的速度与夹爪调整
 

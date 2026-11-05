@@ -146,12 +146,14 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
             python = resolve_python(config)
         except ValueError:
             python = Path(sys.executable)
+        env["PATH"] = os.pathsep.join((str(python.parent), env.get("PATH", os.defpath)))
         env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
         for key in ("PYTHONHOME", "LD_LIBRARY_PATH"):
             env.pop(key, None)
         return [str(python), "-B", "-m", MODULE_COMMANDS[command], *arguments], env
 
     python = resolve_python(config)
+    env["PATH"] = os.pathsep.join((str(python.parent), env.get("PATH", os.defpath)))
     if (command in {"examples", "collect", "runtime-data", "workbench", "robot-pair", "phone", "motion", "component-source"}
             or command == "handeye" and any(arg == '--runtime' or arg.startswith('--runtime=') for arg in arguments)):
         # Independent components use the gateway; they do not load legacy SDK extensions.

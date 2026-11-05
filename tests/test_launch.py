@@ -16,6 +16,12 @@ from embodied.core.project import load_config
 
 
 class LauncherTests(unittest.TestCase):
+    def test_project_tools_are_available_without_shell_activation(self):
+        for command in ('bench', 'collect', 'camera-service'):
+            config = load_config()
+            _, env = build_command(command, ['--help'], config)
+            self.assertEqual(env['PATH'].split(os.pathsep)[0], str(resolve_python(config).parent))
+
     def preview(self, *arguments):
         result = subprocess.run(
             [str(ROOT / "run.sh"), "--print-command", *arguments],
