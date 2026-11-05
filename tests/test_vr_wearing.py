@@ -2,6 +2,7 @@
 from concurrent.futures import Future
 from contextlib import nullcontext
 import os
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -12,6 +13,14 @@ from embodied.applications.workstation import bench, bench_panels as panels
 
 
 class VRWearingTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.record = Path(directory.name) / 'quest-wearing.json'
+        patcher = patch.object(panels, 'VR_WEAR_RESULT', self.record)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_unavailable_usb_never_sends_a_wear_command(self):
         for state in ('unauthorized', 'missing', 'offline', 'multiple'):
             with self.subTest(state=state), \
@@ -57,9 +66,55 @@ class VRWearingTests(unittest.TestCase):
             vr.snapshot()
             self.assertIs(jobs[1][0], panels.request_vr_wearing)
             self.assertFalse(jobs[1][1][0])
+            panels.save_json(self.record, {'completed_at': '2026-11-05T11:00:00+08:00',
+                                          'text': 'unwear sent', 'level': 'waiting'})
             jobs[1][2].set_result(panels.Status('unwear sent', 'waiting'))
             vr.snapshot()
-            self.assertEqual(str(vr.wear_message), 'unwear sent')
+            self.assertIn('unwear sent', str(vr.wear_message))
+            vr.close()
+
+    def test_completed_requests_are_shared_across_windows_and_restarts(self):
+        with patch.object(panels, 'ThreadPoolExecutor'), \
+             patch.object(panels, 'vr_transport_status', return_value={
+                 'usb_status': 'ready', 'usb_serial': 'quest-test', 'boot_completed': True}), \
+             patch.object(panels, 'transport_command', return_value=subprocess.CompletedProcess(
+                 [], 0, 'Broadcast completed: result=0', '')):
+            home, vr = panels.VRConnection(), panels.VRConnection()
+            self.assertIn('尚无工作台请求记录', str(home.wear_message))
+            for enabled in (True, False):
+                result = panels.request_vr_wearing(enabled)
+                self.assertEqual(home.wear_message, vr.wear_message)
+                self.assertIn(result.text, str(home.wear_message))
+                self.assertIn('最近', str(home.wear_message))
+                self.assertEqual(panels.VRConnection().wear_message, home.wear_message)
+                record = json.loads(self.record.read_text())
+                self.assertIs(record['enabled'], enabled)
+                self.assertEqual(record['usb_serial'], 'quest-test')
+                self.assertEqual(record['stdout'], 'Broadcast completed: result=0')
+                self.assertEqual(record['returncode'], 0)
+                self.assertNotEqual(home.wear_message.level, 'ready')
+            with patch.object(panels, 'vr_transport_status', return_value={'usb_status': 'unauthorized'}):
+                panels.request_vr_wearing(True)
+            self.assertEqual(home.wear_message, vr.wear_message)
+            self.assertEqual(home.wear_message.level, 'error')
+            record = json.loads(self.record.read_text())
+            self.assertIsNone(record['returncode'])
+            self.assertEqual(record['stdout'], '')
+
+    def test_bad_record_and_save_failure_do_not_crash_or_claim_success(self):
+        with patch.object(panels, 'ThreadPoolExecutor') as executor:
+            vr = panels.VRConnection()
+            for content in ('{', 'null', '{}', '{"completed_at": false}'):
+                self.record.write_text(content)
+                self.assertEqual(vr.wear_message.level, 'error')
+            future = Future()
+            executor.return_value.submit.return_value = future
+            vr.set_wearing(True)
+            vr.snapshot()
+            future.set_exception(OSError('disk full'))
+            vr.snapshot()
+            self.assertIn('结果保存失败', str(vr.wear_message))
+            self.assertEqual(vr.wear_message.level, 'error')
             vr.close()
 
     def test_vr_window_w_and_u_are_available_without_a_robot(self):

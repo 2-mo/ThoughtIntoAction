@@ -27,11 +27,13 @@ import threading
 import time
 
 from embodied.core.project import PROJECT_ROOT as ROOT, load_config, port, resolve_path
+from embodied.core.storage import save_json
 from embodied.contracts.robot import load_robot_profile
 from embodied.applications.workstation.status import Status, status_text
 
 TITLES = {'kernel': 'robot · 机械臂', 'vr': 'Quest · VR', 'camera': '共享相机',
           'web': '监看与采集', 'site': '项目宣传网站', 'phone': '手机 · RobotTeleop'}
+VR_WEAR_RESULT = ROOT / 'outputs/logs/bench/quest-wearing.json'
 SERVICE_COMMANDS = {
     'web': ['./run.sh', 'web', 'monitor', '--kernel', '--mode', 'real', '--no-camera', '--no-connections'],
     'site': ['./run.sh', 'web', 'site'],
@@ -207,22 +209,34 @@ def prepare_vr(stop=None):
 def request_vr_wearing(enabled, stop=None):
     """Send only the headset wear request; keep client and robot lifecycles separate."""
     state = vr_transport_status(stop)
+    label = '模拟佩戴' if enabled else '取消模拟佩戴'
+    response = None
     if state.get('usb_status') != 'ready':
         reason = {'unauthorized': 'USB 未授权', 'missing': 'USB 未连接',
                   'offline': 'USB 已离线', 'multiple': '连接了多台 USB 设备'}.get(
                       state.get('usb_status'), state.get('error') or 'USB 状态未确认')
-        return Status(f'{reason}，未发送佩戴请求；模拟佩戴不能代替 USB 授权', 'error')
-    if not state.get('boot_completed'):
-        return Status('头显仍在开机，未发送佩戴请求', 'waiting')
-    label = '模拟佩戴' if enabled else '取消模拟佩戴'
-    try:
-        result = transport_command([str(ROOT / 'run.sh'), 'quest', 'wake', 'wear' if enabled else 'unwear'],
-                                   timeout=10, stop=stop)
-        if result.returncode:
-            return Status(label + '失败：' + (result.stderr or result.stdout or 'ADB 未确认执行成功').strip(), 'error')
-        return Status('已发送' + label + '请求；实际佩戴状态未读回', 'waiting')
-    except (OSError, subprocess.SubprocessError) as exc:
-        return Status(label + f'失败：{exc}', 'error')
+        result = Status(f'{reason}，未发送{label}请求；模拟佩戴不能代替 USB 授权', 'error')
+    elif not state.get('boot_completed'):
+        result = Status(f'头显仍在开机，未发送{label}请求', 'waiting')
+    else:
+        try:
+            response = transport_command([str(ROOT / 'run.sh'), 'quest', 'wake', 'wear' if enabled else 'unwear'],
+                                         timeout=10, stop=stop)
+            if response.returncode:
+                result = Status(label + '失败：' + (response.stderr or response.stdout or 'ADB 未确认执行成功').strip(), 'error')
+            else:
+                result = Status('已发送' + label + '请求；实际佩戴状态未读回', 'waiting')
+        except (OSError, subprocess.SubprocessError) as exc:
+            result = Status(label + f'失败：{exc}', 'error')
+    save_json(VR_WEAR_RESULT, {
+        'completed_at': datetime.now().astimezone().isoformat(timespec='seconds'),
+        'enabled': enabled, 'usb_serial': state.get('usb_serial'),
+        'text': result.text, 'level': result.level,
+        'returncode': response.returncode if response is not None else None,
+        'stdout': response.stdout if response is not None else '',
+        'stderr': response.stderr if response is not None else '',
+    })
+    return result
 
 
 class VRConnection:
@@ -235,7 +249,7 @@ class VRConnection:
         self.preparing = False
         self.wearing = False
         self.pending_wear = None
-        self.wear_message = Status('未发送请求 · 实际佩戴状态未读回', 'disabled')
+        self._wear_message = None
         self.auto_prepare = auto_prepare
         self.retry = False
         self.attempt = None
@@ -245,24 +259,45 @@ class VRConnection:
         self.retry_at = 0.
         self.backoff = 2.
 
+    @property
+    def wear_message(self):
+        if self._wear_message is not None:
+            return self._wear_message
+        try:
+            record = json.loads(VR_WEAR_RESULT.read_text())
+            timestamp = datetime.fromisoformat(record['completed_at']).astimezone().strftime('%m-%d %H:%M:%S')
+            if record['level'] not in ('waiting', 'error') or not isinstance(record['text'], str):
+                raise ValueError('请求结果格式无效')
+            return Status(f'最近 {timestamp} · {record["text"]}', record['level'])
+        except FileNotFoundError:
+            return Status('尚无工作台请求记录 · 实际佩戴状态未读回', 'disabled')
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            return Status(f'佩戴请求记录读取失败：{exc}', 'error')
+
     def snapshot(self):
         if self.future is not None:
             if not self.future.done():
                 return self.state
-            result = self.future.result()
-            self.future = None
-            if self.wearing:
-                self.wear_message = result
+            wearing = self.wearing
+            if wearing:
+                try:
+                    self.future.result()
+                    self._wear_message = None
+                except OSError as exc:
+                    self._wear_message = Status(f'佩戴请求结果保存失败：{exc}；请求可能已发送，请勿据此重复操作', 'error')
                 self.wearing = False
                 self.checked_at = 0.
-            elif self.preparing:
+            else:
+                result = self.future.result()
+            self.future = None
+            if self.preparing:
                 self.message = result
                 self.state = {'checking': True}
                 self.checked_at = 0.
                 self.preparing = False
                 self.retry_at = time.monotonic() + self.backoff
                 self.backoff = min(self.backoff * 2, 30.)
-            else:
+            elif not wearing:
                 self.state = result
                 self.checked_at = time.monotonic()
         state = self.state
@@ -280,7 +315,7 @@ class VRConnection:
         if self.pending_wear is not None:
             enabled, self.pending_wear = self.pending_wear, None
             self.wearing = True
-            self.wear_message = Status('正在发送' + ('模拟佩戴' if enabled else '取消模拟佩戴') + '请求…', 'waiting')
+            self._wear_message = Status('正在发送' + ('模拟佩戴' if enabled else '取消模拟佩戴') + '请求…', 'waiting')
             self.future = self.executor.submit(request_vr_wearing, enabled, self.stop)
         elif self.retry or (self.auto_prepare and known and need_prepare and
                           (attempt != self.attempt or time.monotonic() >= self.retry_at)):
