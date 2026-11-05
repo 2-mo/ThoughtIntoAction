@@ -23,6 +23,17 @@ def validate_contract(contract):
         raise ValueError('Runtime joint vectors require radians')
     if 'gripper' not in contract:
         raise ValueError('Declare gripper metadata or explicit null for a robot without a gripper')
+    grippers = contract.get('grippers')
+    if grippers is not None:
+        if not isinstance(grippers, list) or not grippers:
+            raise ValueError('grippers must be a nonempty list of per-arm width descriptors')
+        seen = set(names)
+        for entry in grippers:
+            _validate_gripper(entry, seen)
+            seen.add(entry['name'])
+        if contract['gripper'] is not None:
+            raise ValueError('Declare either one gripper or per-arm grippers, not both')
+        return contract
     gripper = contract['gripper']
     if gripper is None:
         return contract
@@ -34,6 +45,25 @@ def validate_contract(contract):
             (limits[1] is not None and (type(limits[1]) not in (int, float) or not math.isfinite(limits[1]) or limits[1] <= limits[0]))):
         raise ValueError('Invalid gripper width range (null upper bound means undeclared)')
     return contract
+
+
+def _validate_gripper(gripper, taken):
+    if (not isinstance(gripper, dict) or not isinstance(gripper.get('name'), str)
+            or not gripper['name'] or gripper['name'] in taken or gripper.get('unit') != 'm'):
+        raise ValueError('A distinct gripper width name and metre unit are required')
+    limits = gripper.get('range')
+    if (not isinstance(limits, list) or len(limits) != 2 or
+            type(limits[0]) not in (int, float) or not math.isfinite(limits[0]) or limits[0] < 0 or
+            (limits[1] is not None and (type(limits[1]) not in (int, float)
+                                        or not math.isfinite(limits[1]) or limits[1] <= limits[0]))):
+        raise ValueError('Invalid gripper width range (null upper bound means undeclared)')
+
+
+def gripper_contracts(contract):
+    """Per-arm gripper descriptors; a single-gripper contract yields one entry."""
+    if contract.get('grippers'):
+        return list(contract['grippers'])
+    return [contract['gripper']] if contract.get('gripper') else []
 
 
 def runtime_contract(descriptor):
@@ -56,10 +86,25 @@ def runtime_contract(descriptor):
         width = profile.get('gripper_max_width', descriptor.get('gripper_max_width'))
         if width is None and legacy:
             width = .082
-        contract = validate_contract({'schema': SCHEMA, 'representation': 'absolute_joint_position',
-            'joint_names': names or [f'joint{i + 1}' for i in range(count)], 'joint_unit': 'rad',
+        arm_count = descriptor.get('arm_count') or 1
+        widths = descriptor.get('gripper_max_widths') or [width] * arm_count
+        joint_names = names or [f'joint{i + 1}' for i in range(count)]
+        vector_contract = {'schema': SCHEMA, 'representation': 'absolute_joint_position',
+            'joint_names': joint_names, 'joint_unit': 'rad',
             'gripper': {'name': 'gripper_m', 'unit': 'm', 'range': [0., width]},
-            'robot_type': descriptor.get('robot_type') or profile.get('name') or ('stanford_x5' if legacy else 'joint_robot')})
+            'robot_type': descriptor.get('robot_type') or profile.get('name') or ('stanford_x5' if legacy else 'joint_robot')}
+        if arm_count > 1:
+            # One width per arm, named after the joint prefix (left_joint1 -> gripper_left).
+            sides = []
+            for index in range(arm_count):
+                joint = joint_names[index * (count // arm_count)] if count % arm_count == 0 else ''
+                sides.append(joint.split('_')[0] if '_' in joint else f'arm{index + 1}')
+            vector_contract['gripper'] = None
+            vector_contract['grippers'] = [
+                {'name': f'gripper_{side}', 'unit': 'm',
+                 'range': [0., widths[index] if index < len(widths) else width]}
+                for index, side in enumerate(sides)]
+        contract = validate_contract(vector_contract)
         if len(contract['joint_names']) != count:
             raise ValueError('Joint names disagree with runtime joint_count')
     if descriptor.get('joint_count') is not None and len(contract['joint_names']) != descriptor['joint_count']:
@@ -85,19 +130,27 @@ def episode_contract(metadata):
 
 
 def feature_names(contract):
-    return [*contract['joint_names'], *([contract['gripper']['name']] if contract['gripper'] else [])]
+    return [*contract['joint_names'], *[gripper['name'] for gripper in gripper_contracts(contract)]]
 
 
 def action_definition(contract):
-    return 'sent_joint_position' + (' + sent_gripper_width' if contract['gripper'] else '')
+    return 'sent_joint_position' + (' + sent_gripper_width' if gripper_contracts(contract) else '')
 
 
 def vector(row, contract):
-    values = [*row['q'], *([row['gripper_width']] if contract['gripper'] else [])]
+    grippers = gripper_contracts(contract)
+    if contract.get('grippers'):
+        widths = row.get('gripper_widths')
+        if not isinstance(widths, (list, tuple)) or len(widths) != len(grippers):
+            raise ValueError('Per-arm gripper widths disagree with the contract')
+        widths = list(widths)
+    else:
+        widths = [row['gripper_width']] if grippers else []
+    values = [*row['q'], *widths]
     if len(values) != len(feature_names(contract)) or any(type(x) not in (int, float) or not math.isfinite(x) for x in values):
         raise ValueError('Robot vector dimension or finite values disagree with its contract')
-    if contract['gripper']:
-        low, high = contract['gripper']['range']
-        if values[-1] < low or (high is not None and values[-1] > high):
+    for gripper, width in zip(grippers, widths):
+        low, high = gripper['range']
+        if width < low or (high is not None and width > high):
             raise ValueError('Gripper outside recorded calibrated width range')
     return values

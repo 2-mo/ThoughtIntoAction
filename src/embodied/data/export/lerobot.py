@@ -12,7 +12,7 @@ from contextlib import ExitStack
 
 import numpy as np
 from embodied.data.episode.cameras import camera_metadata, anchor_camera, camera_roles
-from embodied.data.episode.contract import episode_contract, feature_names, vector
+from embodied.data.episode.contract import episode_contract, feature_names, gripper_contracts, vector
 
 LEROBOT_REVISION = '0cf864870cf29f4738d3ade893e6fd13fbd7cdb5'
 
@@ -257,7 +257,7 @@ def export(source, output, repo_id, task=None, fps=30, skip_invalid=False,
                     'layout': adapter.layout, 'action_fps': 30, 'raw_robot_fps': adapter.raw_hz,
                     'episode_schema': adapter.identity[0], 'action_definition': adapter.identity[1],
                     'sidecar': 'robot/episode_{episode_index:06d}.npz',
-                    'state': 'actual joints (rad)' + (' + actual gripper width (m)' if contract['gripper'] else ''),
+                    'state': 'actual joints (rad)' + (' + actual gripper width (m)' if gripper_contracts(contract) else ''),
                     'action': adapter.identity[1],
                     'data_contract': contract, 'anchor_camera': reference_camera, 'camera_roles': roles,
                     'alignment': 'declared RGB anchors; latest preceding robot state and other cameras within max skew; original clocks retained',

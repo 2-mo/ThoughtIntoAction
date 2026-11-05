@@ -1,7 +1,7 @@
 """Causal RGB anchors for separately timestamped robot feedback and commands."""
 from bisect import bisect_right
 from collections import Counter
-from embodied.data.episode.contract import runtime_contract, vector
+from embodied.data.episode.contract import gripper_contracts, runtime_contract, vector
 
 
 def align(states, commands, frames, *, max_age_ns=100_000_000, sources=('quest',), phases=(1,), contract=None):
@@ -32,7 +32,8 @@ def align(states, commands, frames, *, max_age_ns=100_000_000, sources=('quest',
         if any(row['phase'] not in phases or row['source'] not in sources or row['error'] for row in (state, command)):
             excluded['phase-source-or-error'] += 1
             continue
-        if any(row.get('mode') != 3 or (contract['gripper'] and row.get('gripper_mode') != 3) for row in (state, command)):
+        if any(row.get('mode') != 3 or (gripper_contracts(contract) and row.get('gripper_mode') != 3)
+               for row in (state, command)):
             excluded['not-position-following'] += 1
             continue
         if command.get('submitted') is not True:

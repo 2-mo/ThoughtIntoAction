@@ -75,7 +75,7 @@
 | 接口 | 用途 |
 | --- | --- |
 | `commands.sock` | 长度前缀 JSON。`describe`（限位、频率、模型、工作空间、夹爪能力）、`status`、`acquire` / `heartbeat` / `release`（租约）、流式 `joint` / `cartesian` / `gripper` / `free-drive`、`preview` / `execute` / `cancel`（MoveJ / MoveL / Path / Home）、反馈驱动的 `grasp`、`hold` / `stop`。完整字段与单位见 [内核命令协议](../reference/kernel-protocol.md) |
-| `observer.sock` | RobotTickV3 流：显式关节数（1..15）、反馈、命令、来源、owner epoch、操作 ID；`latest` 或 `full` 模式 |
+| `observer.sock` | RobotTickV4 流：显式关节数（1..15）、反馈、命令、来源、owner epoch、操作 ID；`latest` 或 `full` 模式 |
 | `embodied.contracts.runtime` | `ControlClient`、`ControlSession`、`RuntimeReader`，平台侧唯一的内核客户端 |
 
 右手柄由原生 coordinator 处理，语义与上游相同；工作台只加一层“允许 / 暂停”，并要求先松开全部按键。其他来源经 gateway 进入，统一检查限位、桌面平面与步长。

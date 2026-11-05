@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / 'src'), str(ROOT)]
 
 import numpy as np
-from embodied.control.ticks import RobotTickV3, TickPublisher, TickSubscriber, layout, to_dict
+from embodied.control.ticks import RobotTickV4, TickPublisher, TickSubscriber, layout, to_dict
 from embodied.control.settings import load_settings
 from embodied.devices.robots.arx5.simulation import MujocoBackend
 from embodied.contracts.control import ControlCommand, Mode
@@ -67,7 +67,7 @@ class IntegrationChecks(unittest.TestCase):
             first = reader.receive()
             self.assertIsNotNone(first)
             self.assertGreater(first.sequence, 0)
-            self.assertEqual(first.size, ctypes.sizeof(RobotTickV3))
+            self.assertEqual(first.size, ctypes.sizeof(RobotTickV4))
         finally:
             writer.close()
             reader.close()

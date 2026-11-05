@@ -66,7 +66,7 @@ def load_episode(path):
             if owner_context is not None and context != owner_context:
                 raise ValueError('Control ownership changed within the episode')
             owner_context = context
-        if (tick.get('type') != 'tick' or tick.get('version') not in (1, 2, 3)
+        if (tick.get('type') != 'tick' or tick.get('version') not in (1, 2, 3, 4)
                 or tick['runtime_id'] != meta['runtime']['runtime_id'] or tick['sequence'] != previous + 1
                 or tick['producer_dropped'] != meta['producer_dropped_at_start']
                 or tick['observer_gaps'] != meta['observer_gaps_at_start'] or tick['error']):

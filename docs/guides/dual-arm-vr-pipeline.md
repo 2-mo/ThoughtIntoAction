@@ -106,7 +106,7 @@ print(ControlClient(Path('outputs/runtime/control/<RUN>')).status()['ingresses']
 
 ## 8. 尚未完成
 
-- 采集仍按单臂契约记录（`episode.json` 只有一个 pose/夹爪），双臂数据要等 Tick V4 / D-07。
+- 采集已按 14 维记录（12 关节 + 每臂夹爪，Tick V4）；末端 pose 仍是一份。
 - 第二台模型的位姿目标编辑、按臂末端预览未做（3D 双臂跟随与按臂关节卡片已完成，D-08）。
 - 按臂夹爪宽度已进内核状态（`gripper_widths` / `eef_poses`），旧内核需要重启后才带这两个字段。
 - 控制频率 150 Hz，策略推理前需要优化 SDK 调用流水线。

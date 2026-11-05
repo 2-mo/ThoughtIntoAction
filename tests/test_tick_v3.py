@@ -30,7 +30,7 @@ def publisher():
     with patch.object(ticks, 'create_node'), patch.object(ticks, 'service'), \
          patch.object(ticks, 'make_publisher'), \
          patch.object(ticks, 'send', side_effect=lambda _, value: packets.append(
-             ticks.RobotTickV3.from_buffer_copy(bytes(value)))):
+             ticks.RobotTickV4.from_buffer_copy(bytes(value)))):
         writer = ticks.TickPublisher('arx5-test', joint_count=7)
         yield writer, packets
         writer.close()
@@ -57,7 +57,7 @@ def test_v3_wire_and_json_keep_seven_joints_without_padding(publisher):
     assert writer.dropped == 0
     packet, = packets
     row = ticks.to_dict(packet)
-    assert packet.version == 3 and packet.size == ctypes.sizeof(ticks.RobotTickV3)
+    assert packet.version == 4 and packet.size == ctypes.sizeof(ticks.RobotTickV4)
     assert len(packet.q) == 15
     assert row['joint_count'] == 7
     assert row['feedback']['q'] == [.1] * 7
@@ -72,9 +72,9 @@ def test_v3_wire_and_json_keep_seven_joints_without_padding(publisher):
 
 
 def test_layout_has_its_own_versioned_fixture():
-    fixture = ROOT / 'src/embodied/control/robot_tick_v3.json'
+    fixture = ROOT / 'src/embodied/control/robot_tick_v4.json'
     assert ticks.layout() == json.loads(fixture.read_text())
-    assert ticks.RobotTickV3.type_name() == 'QuestRobotTickV3'
+    assert ticks.RobotTickV4.type_name() == 'QuestRobotTickV4'
 
 
 @pytest.mark.parametrize('count', [0, 16, True, 7.0])
@@ -104,7 +104,7 @@ def test_reader_rejects_changed_dimensions_and_versions(publisher):
     reader = client.RuntimeReader.__new__(client.RuntimeReader)
     reader.runtime_id, reader.mode, reader.sock = 'arx5-test', 'full', None
     reader.terminal, reader.sequence, reader.dropped = False, None, None
-    reader.tick_version, reader.joint_count, reader.gaps = 3, 7, 0
+    reader.tick_version, reader.joint_count, reader.gaps = 4, 7, 0
     with patch.object(client, 'read_message', return_value=row):
         assert reader.read()['feedback']['q'] == [.1] * 7
     for bad in (row | {'version': 2}, row | {'joint_count': 6}):
@@ -139,6 +139,6 @@ def test_seven_axis_trace_round_trips_through_mcap_v2_storage(publisher, tmp_pat
     recording.close('runtime-terminal')
     meta, rows = runtime_export.load_episode(recording.path)
     assert meta['schema_version'] == 2  # Storage/action contract is independent of the native ABI.
-    assert rows['tick'][0]['version'] == 3
+    assert rows['tick'][0]['version'] == 4
     assert rows['state'][0]['q'] == [.1] * 7
     assert rows['command'][0]['q'] == [.3] * 7

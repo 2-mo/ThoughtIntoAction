@@ -7,8 +7,9 @@ import time
 
 from embodied.control.ipc.services import create_node, make_publisher, make_subscriber, send, validate_prefix
 
-VERSION = 3
+VERSION = 4
 MAX_JOINTS = 15
+MAX_ARMS = 2  # Telemetry carries one gripper width/target per arm.
 CAPACITY = 4096
 FEEDBACK = 1
 COMMAND = 2
@@ -22,7 +23,7 @@ MODES = {"disabled": 0, "free-drive": 2, "command-following": 3}
 PHASES = {"control": 1, "shutdown-parking": 2, "terminal": 3}
 
 
-class RobotTickV3(c.Structure):
+class RobotTickV4(c.Structure):
     _fields_ = [
         ("version", c.c_uint32), ("size", c.c_uint32), ("runtime_id", c.c_char * 48),
         ("sequence", c.c_uint64), ("dropped", c.c_uint64), ("flags", c.c_uint32),
@@ -45,24 +46,27 @@ class RobotTickV3(c.Structure):
         ("error", c.c_char * 192),
         ('source', c.c_char * 32), ('owner_epoch', c.c_uint64),
         ('source_sequence', c.c_int64), ('operation_id', c.c_char * 72),
+        # V4: one gripper per arm. The scalar fields above stay as arm 1.
+        ('arm_count', c.c_uint32), ('gripper_widths', c.c_double * MAX_ARMS),
+        ('gripper_targets', c.c_double * MAX_ARMS),
     ]
 
     @classmethod
     def type_name(cls):
-        return 'QuestRobotTickV3'
+        return 'QuestRobotTickV4'
 
 
 def layout():
-    return {"version": VERSION, "size": c.sizeof(RobotTickV3), "alignment": c.alignment(RobotTickV3),
-            "fields": {name: {"offset": getattr(RobotTickV3, name).offset, "size": c.sizeof(kind)}
-                       for name, kind in RobotTickV3._fields_}}
+    return {"version": VERSION, "size": c.sizeof(RobotTickV4), "alignment": c.alignment(RobotTickV4),
+            "fields": {name: {"offset": getattr(RobotTickV4, name).offset, "size": c.sizeof(kind)}
+                       for name, kind in RobotTickV4._fields_}}
 
 
 def service(node, prefix):
     import iceoryx2 as iox
     validate_prefix(prefix)
-    return (node.service_builder(iox.ServiceName.new(f"{prefix}/telemetry/robot_tick/v3"))
-            .publish_subscribe(RobotTickV3).enable_safe_overflow(True)
+    return (node.service_builder(iox.ServiceName.new(f"{prefix}/telemetry/robot_tick/v4"))
+            .publish_subscribe(RobotTickV4).enable_safe_overflow(True)
             .history_size(CAPACITY).subscriber_max_buffer_size(CAPACITY)
             .max_publishers(1).max_subscribers(8).max_nodes(9).open_or_create())
 
@@ -84,8 +88,8 @@ class TickPublisher:
         self.last_error = None
 
     def _new(self, phase):
-        packet = RobotTickV3()
-        packet.version, packet.size = VERSION, c.sizeof(RobotTickV3)
+        packet = RobotTickV4()
+        packet.version, packet.size = VERSION, c.sizeof(RobotTickV4)
         packet.joint_count = self.joint_count
         packet.runtime_id = self.runtime_id.encode()
         packet.sequence, packet.dropped = self.sequence, self.dropped
@@ -153,6 +157,11 @@ class TickPublisher:
             self._copy_joint(packet, 'dq', state.dq)
             packet.pose[:] = state.pose
             packet.gripper_width = state.gripper_width
+            widths = getattr(state, 'gripper_widths', None)
+            packet.arm_count = min(len(widths), MAX_ARMS) if widths else 1
+            packet.gripper_widths[0] = state.gripper_width
+            if packet.arm_count > 1:
+                packet.gripper_widths[:packet.arm_count] = widths[:packet.arm_count]
             packet.mode, packet.gripper_mode = _mode(state.mode), _mode(state.gripper_mode or state.mode)
             packet.command_mode = _mode(command.mode)
             packet.command_gripper_mode = _mode(command.gripper_mode or command.mode)
@@ -175,13 +184,22 @@ class TickPublisher:
                 packet.ik_rejections = controller.ik_rejections
                 packet.ik_partial_solutions = controller.ik_partial_solutions
             if completed:
-                info = self._arm_telemetry(backend.telemetry())
+                raw = backend.telemetry()
+                info = self._arm_telemetry(raw)
                 packet.flags |= COMMAND
                 for destination, key in (("sent_q", "sent_q"), ("sent_dq", "sent_dq"),
                                          ("kp", "applied_kp"), ("kd", "applied_kd"),
                                          ("feedforward", "user_feedforward_torque")):
                     self._copy_joint(packet, destination, info[key])
                 packet.gripper_target = info["gripper_target"]
+                packet.gripper_targets[0] = info["gripper_target"]
+                arms = raw.get('arms') if isinstance(raw, dict) else None
+                if arms:
+                    packet.arm_count = max(packet.arm_count, min(len(arms), MAX_ARMS))
+                    for index, arm_info in enumerate(arms[:MAX_ARMS]):
+                        target = arm_info.get("gripper_target")
+                        if isinstance(target, (int, float)):
+                            packet.gripper_targets[index] = target
                 packet.gripper_kp, packet.gripper_kd = info["gripper_applied_kp"], info["gripper_applied_kd"]
                 packet.command_started_ns = info["command_started_ns"]
                 packet.command_submitted_ns = info["command_submitted_ns"]
@@ -222,9 +240,9 @@ class TickSubscriber:
         sample = self.subscriber.receive()
         if sample is None:
             return None
-        packet = RobotTickV3.from_buffer_copy(bytes(sample.payload().contents))
-        if packet.version != VERSION or packet.size != c.sizeof(RobotTickV3):
-            raise ValueError("RobotTickV3 ABI mismatch")
+        packet = RobotTickV4.from_buffer_copy(bytes(sample.payload().contents))
+        if packet.version != VERSION or packet.size != c.sizeof(RobotTickV4):
+            raise ValueError("RobotTickV4 ABI mismatch")
         return packet
 
     def close(self):
@@ -241,7 +259,7 @@ def to_dict(packet):
         return array(value[:packet.joint_count])
     result = {"type": "tick", "version": VERSION, "runtime_id": packet.runtime_id.decode(),
               "sequence": packet.sequence, "producer_dropped": packet.dropped,
-              "joint_count": packet.joint_count,
+              "joint_count": packet.joint_count, "arm_count": packet.arm_count,
               "phase": packet.phase, "terminal": bool(packet.flags & TERMINAL),
               "error": packet.error.decode(errors="replace") or None,
               "timing": {name: getattr(packet, name) for name in (
@@ -253,6 +271,7 @@ def to_dict(packet):
     if packet.flags & FEEDBACK:
         result["feedback"] = {"q": joints(packet.q), "dq": joints(packet.dq), "pose": array(packet.pose),
                               "gripper_width": packet.gripper_width,
+                              "gripper_widths": array(packet.gripper_widths[:max(packet.arm_count, 1)]),
                               "mode": packet.mode, "gripper_mode": packet.gripper_mode}
         result["target"] = {"pose": array(packet.pose_target) if packet.flags & POSE_TARGET else None,
                             "joint_goal": joints(packet.joint_goal) if packet.flags & IK_GOAL else None,
@@ -264,6 +283,8 @@ def to_dict(packet):
         result["command"] = {"q": joints(packet.sent_q), "dq": joints(packet.sent_dq),
                              "kp": joints(packet.kp), "kd": joints(packet.kd),
                              "feedforward": joints(packet.feedforward), "gripper_width": packet.gripper_target,
+                             "gripper_widths": array(packet.gripper_targets[:max(packet.arm_count, 1)]),
+                             "gripper_targets": array(packet.gripper_targets[:max(packet.arm_count, 1)]),
                              "gripper_kp": packet.gripper_kp, "gripper_kd": packet.gripper_kd,
                              "mode": packet.command_mode, "gripper_mode": packet.command_gripper_mode,
                              "submitted": True}

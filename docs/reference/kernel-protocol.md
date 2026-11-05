@@ -6,7 +6,7 @@
 - 租约：同一时刻只有一个拥有者；租约在最后一条带租约请求后 0.5 s 过期，`status` 不续租。任何撤销（过期、release、stop、接管）都使 `epoch` 加一，之前的 token 立即失效。
 - 安全由内核统一负责：关节限位、桌面平面、单步与导数界限、0.15 m 笛卡尔领先距离、目标过期后保持，对所有来源一致。
 - 金样本：`tests/golden/kernel/samples.json`（每个动作一条真实请求与结果，长列表已截短）；`./run.sh check all` 的 `sim` 组用 `scripts/check_kernel_protocol.py` 在 MuJoCo 内核上逐个动作核对，`--update` 重新生成样本。
-- 观测流（`observer.sock`，RobotTickV3）为只读遥测，见 `src/embodied/control/robot_tick_v3.json` 与 `embodied.contracts.runtime.RuntimeReader`。V3 使用独立原生类型与 `/telemetry/robot_tick/v3` topic，显式 `joint_count` 为 1..15，JSON 数组只含实际轴数；不得用 V2 名称解析 V3 ABI。episode schema 2 是独立的存储与动作定义版本，保持不变。
+- 观测流（`observer.sock`，RobotTickV4）为只读遥测，见 `src/embodied/control/robot_tick_v4.json` 与 `embodied.contracts.runtime.RuntimeReader`。V4 使用独立原生类型与 `/telemetry/robot_tick/v4` topic，显式 `joint_count` 为 1..15、`arm_count` 为 1..2，每臂一个 `gripper_widths` / `gripper_targets`；JSON 数组只含实际轴数与实际臂数。V4 保留 V3 的标量夹爪字段（等于第一臂），已录制的 V3 episode 数据仍可读导出。episode schema 2 不变，双臂 episode 的向量是 12 关节 + 每臂夹爪 = 14 维。
 
 下面的表由 `embodied.contracts.protocol` 生成（`PYTHONPATH=src python3 -m embodied.contracts.protocol`）。
 

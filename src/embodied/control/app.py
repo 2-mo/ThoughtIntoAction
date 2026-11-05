@@ -284,7 +284,7 @@ def main(argv=None):
     launch.add_argument("--config", help="robot profile (default: configs/robots/arx5/robot.json)")
     launch.add_argument("--vr-config", help="VR profile (default: configs/inputs/quest.json)")
     launch.add_argument("--record-tuning", action="store_true", help="record feedback/targets/gains (always enabled for real)")
-    launch.add_argument("--telemetry", action="store_true", help="Publish RobotTickV3 and start the independent read-only observer")
+    launch.add_argument("--telemetry", action="store_true", help="Publish RobotTickV4 and start the independent read-only observer")
     check = sub.add_parser("doctor")
     check.add_argument("--vr", action="store_true")
     check.add_argument("--config")

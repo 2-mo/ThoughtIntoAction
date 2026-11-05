@@ -52,8 +52,13 @@
   - 已验证：双手各握 Grip，两条机械臂分别跟随对应手柄，`phase=teleop`、`armed/permit=true`。
   - 关键修复：左手输入/位姿中继（丢弃首帧）、协调器先启动（iceoryx 容量契约）、设备先于协调器、按臂反馈（bridge arms=2）、只在协调器下发模式后才镜像、`joint_step_limit` 按臂拆分。
   - 详见 `docs/guides/dual-arm-vr-pipeline.md`。
-- [ ] **D-07** 采集：12 关节 + 每臂 pose/夹爪写入 episode
-  - 验证：录一条 episode，`episode.json` 的 `joint_count=12`、两臂姿态都在。
+- [x] **D-07** 采集：12 关节 + 每臂夹爪写入 episode（14 维）
+  - Tick 升 V4：新增 `arm_count`、`gripper_widths[2]`、`gripper_targets[2]`，保留 V3 标量夹爪字段（= 第一臂），topic 改 `/telemetry/robot_tick/v4`；`RuntimeReader`/导出接受 version 1–4。
+  - 契约：`data_contract.grippers` 声明每臂夹爪（`gripper_left` / `gripper_right`），双臂向量 = 12 关节 + 2 夹爪 = 14 维；单臂契约保持 7 维不变。
+  - 写入/校验/导出/对齐按契约走；`RuntimeEpisodeWriter`、`runtime_v2`、`runtime_alignment`、LeRobot features 无需按臂特判。
+  - 旧数据（13 维）保持可读：契约存在 episode.json 里，导出按旧契约走。
+  - 已录 57 条 13 维数据用 `scripts/datasets/recover_right_gripper.py` 从内核 `tuning.jsonl` 恢复右夹爪**下发值**（逐 tick 对齐，左夹爪对照一致率 >99%）；右夹爪实测值该 SDK 版本不可得。
+  - 未做：每臂末端 pose（Tick 里仍是一份）。
 - [~] **D-08** 控制台 3D 双模型与按臂关节卡片
   - 已做：状态 12 关节时场景自动创建第二台 X5 模型（`SECOND_ARM_OFFSET`，按实机布局沿台面长边相隔 0.7 m、错开 50 mm），两台模型在同一张工作台/场景里，按 joints 6..11 独立驱动；首次出现双臂时自动把相机拉到能看全桌面又在机械臂一侧的机位；关节卡片单独切片、臂选择器按 `describe.arms.side` 显示 **左臂/右臂**；内核状态增加 `gripper_widths` / `eef_poses`，第二台夹爪跟随。
   - 已做：VR 遥操占用租约时，控制页退到只读接入（`mode=observe`），3D 与关节反馈照常显示，运动命令提示只读。

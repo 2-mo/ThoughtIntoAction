@@ -26,7 +26,7 @@ def read_message(sock):
 
 def validate_tick_joints(message, expected_count=None):
     """Validate V3 logical dimensions independently of its padded native ABI."""
-    if message.get("version") != 3:
+    if message.get("version") not in (3, 4):
         return expected_count
     count = message.get("joint_count")
     if type(count) is not int or not 1 <= count <= 15:
@@ -77,7 +77,7 @@ class RuntimeReader:
                 raise ValueError("Runtime belongs to a different host boot")
             self.tick_version = self.descriptor.get("layout", {}).get("version")
             self.joint_count = self.descriptor.get("joint_count")
-            if self.tick_version == 3 and (type(self.joint_count) is not int or not 1 <= self.joint_count <= 15):
+            if self.tick_version in (3, 4) and (type(self.joint_count) is not int or not 1 <= self.joint_count <= 15):
                 raise ValueError("V3 runtime descriptor requires joint_count (1..15)")
             self.gaps = self.descriptor["observer_gaps"]
             self.dropped = None
@@ -89,7 +89,7 @@ class RuntimeReader:
         if self.terminal:
             raise EOFError("Runtime terminal already received")
         message = read_message(self.sock)
-        if (not isinstance(message, dict) or message.get("type") != "tick" or message.get("version") not in (1, 2, 3)
+        if (not isinstance(message, dict) or message.get("type") != "tick" or message.get("version") not in (1, 2, 3, 4)
                 or message.get("runtime_id") != self.runtime_id):
             raise ValueError("Runtime protocol or identity changed")
         if self.tick_version is not None and message["version"] != self.tick_version:
