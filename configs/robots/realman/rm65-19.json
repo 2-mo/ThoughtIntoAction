@@ -7,7 +7,7 @@
   "expected_work_frame": "Base",
   "expected_work_pose": [0, 0, 0, 0, 0, 0],
   "timeout_s": 0.3,
-  "control_hz": 25,
+  "control_hz": 50,
   "stale_s": 0.3,
   "speed_percent": 100,
   "linear_speed_percent": 100,

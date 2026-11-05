@@ -1,6 +1,7 @@
 """Official nominal RM65 geometry, MuJoCo FK/Jacobian and local DLS IK."""
 import mujoco
 import numpy as np
+import time
 from scipy.spatial.transform import Rotation
 from embodied.devices.robots.arx5.kinematics import se3_error
 
@@ -13,6 +14,8 @@ def vector(value, count, name):
 
 
 class Model:
+    ik_time_budget_s = None
+
     def __init__(self, config):
         config.model_id  # Validate model, mesh and tool identity before loading.
         self.model = mujoco.MjModel.from_xml_path(config.model_path)
@@ -40,6 +43,7 @@ class Model:
                      Rotation.from_matrix(data.site_xmat[self.site].reshape(3, 3)).as_quat()]
 
     def solve_ik(self, target, q_seed, q_anchor=None):
+        deadline = None if self.ik_time_budget_s is None else time.monotonic() + self.ik_time_budget_s
         target = vector(target, 7, 'pose')
         if not np.isclose(np.linalg.norm(target[3:]), 1., atol=.01):
             raise ValueError('Pose quaternion must be normalized')
@@ -51,7 +55,9 @@ class Model:
         best, best_cost, best_residual = q.copy(), float('inf'), float('inf')
         # Same local SE(3) error, damping, measured-posture regularization and
         # finite partial solution policy as the existing ARX solver.
-        for _ in range(50):
+        for iteration in range(50):
+            if iteration and deadline is not None and time.monotonic() >= deadline:
+                break
             current = self.fk(q)
             rotation = self.data.site_xmat[self.site].reshape(3, 3)
             error = se3_error(current[:3], rotation, target[:3], goal)

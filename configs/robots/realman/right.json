@@ -2,5 +2,6 @@
   "profile": "realman.hardware",
   "name": "RealMan RM65 right 18",
   "connection_path": "rm65-18.json",
+  "control_hz": 50,
   "model_path": "../../../assets/robots/realman/runtime/rm65.xml"
 }

@@ -13,6 +13,8 @@ from .model import Model, vector
 
 class JointModel(Model):
     """Use the read-back modified DH chain with the same MuJoCo DLS as simulation."""
+    ik_time_budget_s = .012
+
     def __init__(self, info):
         dh = np.asarray([info['get_DH_data'][f'joint_{i}'] for i in range(1, 7)], dtype=float)
         if dh.shape != (6, 4) or not np.isfinite(dh).all():

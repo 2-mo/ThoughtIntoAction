@@ -31,6 +31,14 @@ def test_standard_profiles_use_realman_without_an_arx_controller():
     assert load_settings().robot.simulation_plugin == 'realman.sim'
 
 
+def test_dual_realman_profiles_use_matching_50_hz_low_follow_rates():
+    from embodied.devices.robots.realman.backend import load_config as load_connection
+    for side in ('left', 'right'):
+        settings = load_settings(f'configs/robots/realman/{side}.json')
+        assert settings.robot.control_hz == 50
+        assert load_connection(settings.robot.connection_path)['control_hz'] == 50
+
+
 def test_single_quest_routing_uses_robot_rate_and_own_input_namespace(tmp_path):
     settings = load_settings('configs/robots/realman/sim.json')
     paths = Routing.configure(tmp_path, 'robot-test', settings)

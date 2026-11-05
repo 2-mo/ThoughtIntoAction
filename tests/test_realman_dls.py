@@ -1,6 +1,7 @@
 """Read-back RM65 geometry and continuous local IK; no device connection."""
 import unittest
 from copy import deepcopy
+from unittest.mock import patch
 import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -21,6 +22,17 @@ INFO['get_DH_data'] = dict(zip((f'joint_{i}' for i in range(1, 7)), [
 
 
 class DlsTests(unittest.TestCase):
+    def test_ik_time_budget_returns_finite_partial_target(self):
+        model = JointModel(INFO)
+        q = np.deg2rad([0, 0, 90, 0, 90, 0])
+        target = model.fk(q).copy()
+        target[0] -= .8
+        with patch('embodied.devices.robots.realman.model.time.monotonic', side_effect=[0., .013]):
+            partial, converged, residual = model.solve_ik(target, q, q)
+        self.assertFalse(converged)
+        np.testing.assert_allclose(partial, q)
+        self.assertTrue(np.isfinite(residual))
+
     def test_fk_matches_independent_pinned_vendor_fixtures(self):
         model = JointModel(INFO)
         fixtures = [([0]*6, [0, 0, .9905, 0, 0, 1, 0]),
