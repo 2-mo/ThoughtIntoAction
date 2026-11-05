@@ -93,6 +93,7 @@ def create_collection_router(settings: BackendSettings) -> APIRouter:
                 raise HTTPException(status_code=400, detail="data directory must stay under outputs/datasets")
             items: list[dict[str, object]] = []
             total = 0
+            complete = failed = 0
             if path.is_dir():
                 folders = sorted(
                     (entry for entry in path.iterdir() if entry.is_dir()),
@@ -104,25 +105,37 @@ def create_collection_router(settings: BackendSettings) -> APIRouter:
                     if not meta.is_file():
                         continue
                     total += 1
-                    if len(items) >= limit:
-                        continue
                     try:
                         data = json.loads(meta.read_text())
+                        counts = data.get("counts") or {}
+                        lifecycle = data.get("lifecycle")
+                        if lifecycle == "complete":
+                            complete += 1
+                        else:
+                            failed += 1
+                        started, stopped = data.get("started_monotonic_ns"), data.get("stopped_monotonic_ns")
+                        seconds = ((stopped - started) / 1e9
+                                   if isinstance(started, int) and isinstance(stopped, int) and stopped >= started
+                                   else None)
                     except (OSError, ValueError):
+                        failed += 1
                         continue
-                    counts = data.get("counts") or {}
+                    if len(items) >= limit:
+                        continue
                     items.append(
                         {
                             "name": folder.name,
                             "task": data.get("task"),
-                            "lifecycle": data.get("lifecycle"),
+                            "lifecycle": lifecycle,
                             "ticks": counts.get("state"),
                             "frames": counts.get("frame"),
+                            "seconds": seconds,
                             "cameras": list((data.get("cameras") or {}).keys()),
                             "written_at": datetime.fromtimestamp(meta.stat().st_mtime).isoformat(timespec="seconds"),
                         }
                     )
-            return {"directory": str(path.relative_to(PROJECT_ROOT)), "episodes": items, "total": total}
+            return {"directory": str(path.relative_to(PROJECT_ROOT)), "episodes": items, "total": total,
+                    "summary": {"complete": complete, "failed": failed}}
 
         return await asyncio.to_thread(scan)
 

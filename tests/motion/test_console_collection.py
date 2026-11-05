@@ -36,6 +36,8 @@ class EpisodeRouteTests(unittest.TestCase):
                 "lifecycle": "complete",
                 "counts": {"state": 900, "frame": 120},
                 "cameras": {"wrist_rgb": {}},
+                "started_monotonic_ns": 1_000_000_000,
+                "stopped_monotonic_ns": 13_500_000_000,
             }))
             result = asyncio.run(
                 self.route.endpoint(directory=str(Path(folder)), limit=3, token=None)
@@ -46,7 +48,9 @@ class EpisodeRouteTests(unittest.TestCase):
         self.assertEqual(summary["lifecycle"], "complete")
         self.assertEqual(summary["ticks"], 900)
         self.assertEqual(summary["frames"], 120)
+        self.assertEqual(summary["seconds"], 12.5)
         self.assertEqual(summary["cameras"], ["wrist_rgb"])
+        self.assertEqual(result["summary"], {"complete": 1, "failed": 0})
 
     def test_missing_directory_returns_an_empty_listing(self):
         result = asyncio.run(

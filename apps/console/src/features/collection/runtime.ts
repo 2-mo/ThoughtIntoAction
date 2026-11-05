@@ -274,6 +274,13 @@ async function refreshEpisodes() {
     const data = await listEpisodes(settings.output, 6);
     setText(ui.datasetPath, data.directory);
     setText(ui.datasetCount, data.total ? `${data.total} 条` : "暂无");
+    // The header progress must describe what is actually on disk, so a deleted
+    // episode stops counting the moment the list refreshes.
+    if (data.summary) {
+      counters.collected = Number(data.summary.complete) || 0;
+      counters.failed = Number(data.summary.failed) || 0;
+      updateTarget();
+    }
     const rows = (data.episodes || []).map((episode) => {
       const done = episode.lifecycle === "complete";
       const label = episode.lifecycle === "complete" ? "完成" : (episode.lifecycle || "未知");
@@ -287,7 +294,8 @@ async function refreshEpisodes() {
             title="${armed ? "再点一次确认删除，删除后不可恢复" : "删除这条录制"}">${armed ? "确认删除" : "删除"}</button>
         </span>
         <small>${escapeHtml(episode.name)}</small>
-        <small>${episode.ticks ?? "—"} tick · ${episode.frames ?? 0} 帧</small>
+        <small>${episode.ticks ?? "—"} tick · ${episode.frames ?? 0} 帧${Number.isFinite(episode.seconds)
+          ? ` · ${Number(episode.seconds).toFixed(1)} s` : ""}</small>
       </li>`;
     });
     ui.episodeList.innerHTML = rows.length

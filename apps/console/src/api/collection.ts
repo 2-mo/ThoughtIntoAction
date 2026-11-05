@@ -6,6 +6,7 @@ export interface EpisodeSummary {
   lifecycle: string | null;
   ticks: number | null;
   frames: number | null;
+  seconds: number | null;
   cameras: string[];
   written_at: string;
 }
@@ -14,6 +15,7 @@ export interface EpisodeListing {
   directory: string;
   episodes: EpisodeSummary[];
   total: number;
+  summary?: { complete: number; failed: number };
 }
 
 export async function deleteEpisode(directory: string, name: string): Promise<void> {

@@ -132,8 +132,15 @@ class Schema2:
         if len(anchors) < 2:
             raise ValueError('Insufficient causal position-following RGB anchors')
         parameters = meta['runtime'].get('parameters', {})
-        # Identity uses content hashes, not machine-specific model paths.
-        meta['robot'] = {'model': parameters['model']['manifest'], 'backend': meta['runtime']['backend'],
+        # Identity uses content hashes, not machine-specific model paths. A
+        # dual-arm profile describes one model per arm instead of one manifest.
+        model = parameters.get('model') or {}
+        manifest = model.get('manifest')
+        if manifest is None and model.get('arms'):
+            manifest = {'arms': [arm.get('manifest') for arm in model['arms']]}
+        if manifest is None:
+            raise ValueError('Runtime parameters do not describe the robot model')
+        meta['robot'] = {'model': manifest, 'backend': meta['runtime']['backend'],
                          'action_definition': self.identity[1], 'data_contract': contract}
         meta['data_contract'] = contract
         rows = []
