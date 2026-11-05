@@ -213,11 +213,11 @@ const watchdog = setInterval(() => {
 }, 100);
 window.addEventListener('pagehide', () => clearInterval(watchdog), {once: true});
 
-// Two stacked RGB streams determine this column's width; spare space belongs to 3D.
+// Stacked RGB streams determine this column's width; spare space belongs to 3D.
 function fitCameraColumn() {
   cancelAnimationFrame(cameraLayoutFrame);
   cameraLayoutFrame = requestAnimationFrame(() => {
-    if (innerWidth < 1200 || cards.size !== 2 || document.body.dataset.view === 'replay') return;
+    if (innerWidth < 1200 || cards.size < 2 || document.body.dataset.view === 'replay') return;
     const panel = document.querySelector('.camera-panel');
     const style = getComputedStyle(panel);
     let width = 0;

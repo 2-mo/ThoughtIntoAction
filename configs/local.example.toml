@@ -9,27 +9,47 @@ can_port = "can0"
 can_device = "/dev/arx_r5"
 
 [cameras.wrist_rgb]
-model = "D435i"
-width = 1920
-height = 1080
+label = "左臂相机"
+driver = "realsense"
+model = "D435"
+mount = "wrist"
+robot_side = "left"
+width = 640
+height = 480
 fps = 30
 serial = "REPLACE_WITH_CAMERA_SERIAL"
 hand_eye_calibrated = false
 
-# Optional second camera. Enable after replacing the serial with check-camera output.
-[cameras.exterior_rgb]
-label = "外部相机"
+# Optional right wrist for the RealMan pair; enable after binding its own serial.
+[cameras.right_wrist_rgb]
+label = "右臂相机"
 enabled = false
 driver = "realsense"
 model = "D435"
 serial = ""
-width = 1920
-height = 1080
+mount = "wrist"
+robot_side = "right"
+width = 640
+height = 480
 fps = 30
+hand_eye_calibrated = false
 
-# Enable both devices above before opting into dual-camera recording.
+# Optional fixed side camera. Enable after replacing the serial with check-camera output.
+[cameras.exterior_rgb]
+label = "侧面相机"
+enabled = false
+driver = "realsense"
+model = "D435"
+serial = ""
+mount = "fixed"
+width = 640
+height = 480
+fps = 30
+hand_eye_calibrated = false
+
+# Enable all three devices above before opting into three-camera recording.
 # [recording]
-# camera_ids = ["wrist_rgb", "exterior_rgb"]
+# camera_ids = ["wrist_rgb", "right_wrist_rgb", "exterior_rgb"]
 
 # Optional shared RGB profile, applied to every camera on service startup/reconnect.
 # Exposure is in 100 microsecond units for D435/D435i RGB (167 = 16.7 ms).

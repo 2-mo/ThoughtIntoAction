@@ -37,11 +37,14 @@ class MultiCameraTests(unittest.TestCase):
              patch("embodied.devices.sensors.service.DeviceLease", side_effect=AssertionError("synthetic owns no hardware")), \
              patch("embodied.devices.sensors.factories.realsense", side_effect=AssertionError("wrong driver")), \
              patch.object(SyntheticCamera, "read", one_frame):
-            service = CameraService({"wrist_rgb": {"driver": "synthetic", "width": 3, "height": 2}})
+            service = CameraService({"wrist_rgb": {"driver": "synthetic", "width": 3, "height": 2,
+                "label": "左臂相机", "mount": "wrist", "robot_side": "left"}})
             feed = service.feeds["wrist_rgb"]
             feed.capture(feed.options, stop)
         self.assertIsNone(feed.error)
         self.assertEqual(feed.metadata["model"], "synthetic")
+        self.assertEqual((feed.metadata["label"], feed.metadata["mount"], feed.metadata["robot_side"]),
+                         ("左臂相机", "wrist", "left"))
         self.assertEqual(feed.frame["image"].shape, (2, 3, 3))
         self.assertEqual(feed.frame["stream_id"], feed.metadata["stream_id"])
         self.assertIsNotNone(feed.preview)
@@ -84,7 +87,7 @@ class MultiCameraTests(unittest.TestCase):
         self.assertEqual(writes, [])
 
     def test_named_pixels_default_recording_channel_and_unknown_ids(self):
-        service = CameraService({"wrist_rgb": options("wrist"), "exterior_rgb": options("exterior", "D435")})
+        service = CameraService({"wrist_rgb": options("wrist"), "right_wrist_rgb": options("right", "D435"), "exterior_rgb": options("exterior", "D435")})
         stamp = time.monotonic_ns()
         for number, feed in enumerate(service.feeds.values()):
             feed.enabled = True
@@ -98,12 +101,15 @@ class MultiCameraTests(unittest.TestCase):
             server = LocalServer(path, service.dispatch)
             self.addCleanup(server.close)
             with patch("embodied.devices.sensors.client.socket_path", return_value=path):
-                with SharedCamera("wrist", 3, 2) as wrist, SharedCamera("exterior", 3, 2, camera_id="exterior_rgb") as exterior:
+                with SharedCamera("wrist", 3, 2) as wrist, \
+                        SharedCamera("right", 3, 2, camera_id="right_wrist_rgb") as right, \
+                        SharedCamera("exterior", 3, 2, camera_id="exterior_rgb") as exterior:
                     np.testing.assert_array_equal(wrist.read()["image"], np.zeros((2, 3, 3), dtype=np.uint8))
-                    np.testing.assert_array_equal(exterior.read()["image"], np.ones((2, 3, 3), dtype=np.uint8))
+                    np.testing.assert_array_equal(right.read()["image"], np.ones((2, 3, 3), dtype=np.uint8))
+                    np.testing.assert_array_equal(exterior.read()["image"], np.full((2, 3, 3), 2, dtype=np.uint8))
                 data = request(path, "monitor")
                 self.assertEqual(data["preview"]["jpeg_base64"], "preview-0")
-                self.assertEqual(data["cameras"]["exterior_rgb"]["preview"]["jpeg_base64"], "preview-1")
+                self.assertEqual(data["cameras"]["exterior_rgb"]["preview"]["jpeg_base64"], "preview-2")
                 self.assertEqual(data["default_camera_id"], "wrist_rgb")
                 for camera_id in ("missing", False, []):
                     with self.assertRaisesRegex(RuntimeError, "Unknown camera"):

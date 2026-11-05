@@ -120,7 +120,8 @@ class CameraFeed:
                 with lease, registry.create("camera_device", driver, options=options) as camera:
                     # A reconnect starts a new stream even when device frame numbers repeat.
                     stream_id = uuid.uuid4().hex
-                    metadata = {**camera.metadata, "stream_id": stream_id, "zmq_frame_protocol": 1}
+                    metadata = {**camera.metadata, "stream_id": stream_id, "zmq_frame_protocol": 1,
+                                **{key: options[key] for key in ("label", "mount", "robot_side") if key in options}}
                     last_preview = 0
                     last_number = None
                     source_missing = 0

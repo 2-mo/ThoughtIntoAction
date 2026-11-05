@@ -32,7 +32,7 @@ SESSION = os.environ.get('EMBODIED_BENCH_SESSION') or DEFAULT_SESSION
 WINDOWS = {'home': '总控', 'shell': '命令', 'kernel': 'robot', 'web': '网页',
            'vr': 'VR', 'camera': '相机', 'site': '宣传', 'phone': '手机'}
 WINDOW_HINT = 'Ctrl+B → 1 总控 · 2 命令 · 3 robot · 4 网页 · 5 VR · 6 相机 · 7 宣传 · 8 手机'
-UI_REVISION = '20'
+UI_REVISION = '21'
 ICON_STYLE = 'bold bright_cyan'
 SHELLS = {'bash', 'zsh', 'sh', 'fish'}
 REAL = 'bash scripts/arm/kernel_real.sh'
@@ -432,7 +432,16 @@ def actions(run, identity, episode=None, now=None):
     r = shlex.quote(relative(run))
     backend = identity['backend']
     gateway = (Path(run) / 'commands.sock').exists()
-    cameras = '--cameras wrist_rgb,exterior_rgb' if identity.get('backend') == 'real' else '--camera synthetic'
+    config = load_config()
+    camera_ids = config['recording']['camera_ids']
+    cameras = ('--cameras ' + shlex.quote(','.join(camera_ids))) if backend == 'real' else '--camera synthetic'
+    wrist = config.get('camera_service', {}).get('default_camera_id', 'wrist_rgb')
+    deployment = Path(run) / 'workbench.json'
+    side = json.loads(deployment.read_text()).get('pair', {}).get('side') if deployment.exists() else None
+    if side:
+        matches = [key for key, options in config['cameras'].items()
+                   if options.get('mount') == 'wrist' and options.get('robot_side') == side]
+        wrist = matches[0] if len(matches) == 1 else None
     stamp = (now or datetime.now()).strftime('%Y%m%d-%H%M%S')
     rows = [
         ('v', 'MuJoCo 视图', f'./run.sh kernel viewer --run {r}', True, False),
@@ -448,7 +457,8 @@ def actions(run, identity, episode=None, now=None):
          f'./run.sh examples movel --backend {backend} --run {r} --offset 0 0 0.02', False, True),
         ('t', '连续路径：Z +2 cm → Y +2 cm（回车开始）',
          f'./run.sh examples move_path --backend {backend} --run {r}', False, True),
-        ('h', '手眼标定 · 腕部相机（标定板在桌面）', f'./run.sh calib handeye capture wrist_rgb --auto --run {r}', False, True),
+        ('h', '手眼标定 · 当前臂腕部相机（标定板在桌面）',
+         f'./run.sh calib handeye capture {shlex.quote(wrist)} --auto --run {r}' if wrist else None, False, True),
         ('j', '手眼标定 · 固定相机（标定板在夹爪）', f'./run.sh calib handeye capture exterior_rgb --auto --run {r}', False, True),
         ('g', 'π0.5 策略（填写任务后回车）', f'./run.sh policy kernel --run {r} --policy sft --prompt ""', False, True),
     ]

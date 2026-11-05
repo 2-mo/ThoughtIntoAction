@@ -76,6 +76,14 @@ try {
   await page.waitForFunction(() => !document.querySelector('#replay-exterior-video').hidden && document.querySelector('#replay-exterior-video').naturalWidth===64);
   assert.equal(await page.locator('#recorded-exterior').isVisible(),true);
   assert.equal(await page.locator('#recorded-grid').getAttribute('data-count'),'2');
+  frame.cameras.right_wrist_rgb = {image_base64:jpeg,image_mime:'image/jpeg',label:'右臂相机'};
+  await page.waitForFunction(() => document.querySelector('#replay-right-wrist-video').naturalWidth === 64);
+  assert.equal(await page.locator('#recorded-right-wrist').isVisible(),true);
+  assert.equal(await page.locator('#recorded-grid').getAttribute('data-count'),'3');
+  frame.cameras.right_wrist_rgb.image_base64 = null;
+  await page.waitForFunction(() => !document.querySelector('#replay-right-wrist-video').hasAttribute('src'));
+  delete frame.cameras.right_wrist_rgb;
+  await page.waitForFunction(() => document.querySelector('#recorded-right-wrist').hidden);
   frame.cameras.exterior_rgb.image_base64 = null;
   await page.waitForFunction(() => !document.querySelector('#replay-exterior-video').hasAttribute('src'));
   assert.equal(await page.locator('#replay-exterior-empty').isVisible(),true);

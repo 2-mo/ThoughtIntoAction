@@ -31,6 +31,26 @@ def run(root, name, *, pid=999_999_999, ready=True, managed=False):
 
 
 class BenchStateTests(unittest.TestCase):
+    def test_three_camera_capture_and_calibration_follow_selected_arm(self):
+        cameras = {
+            'wrist_rgb': {'mount': 'wrist', 'robot_side': 'left'},
+            'right_wrist_rgb': {'mount': 'wrist', 'robot_side': 'right'},
+            'exterior_rgb': {'mount': 'fixed'},
+        }
+        config = {'cameras': cameras, 'recording': {'camera_ids': list(cameras)}}
+        with tempfile.TemporaryDirectory() as root, patch.object(bench, 'load_config', return_value=config):
+            for side, camera in [('left', 'wrist_rgb'), ('right', 'right_wrist_rgb')]:
+                directory = run(root, side, managed=True)
+                (directory / 'workbench.json').write_text(json.dumps({'pair': {'side': side}}))
+                rows = {key: command for key, _, command, _, _ in bench.actions(directory, {'backend': 'real'})}
+                args = shlex.split(rows['c'])
+                self.assertEqual(args[args.index('--cameras') + 1], 'wrist_rgb,right_wrist_rgb,exterior_rgb')
+                self.assertIn(f'capture {camera} --auto', rows['h'])
+                self.assertIn('capture exterior_rgb --auto', rows['j'])
+            del cameras['right_wrist_rgb']
+            rows = {key: command for key, _, command, _, _ in bench.actions(directory, {'backend': 'real'})}
+            self.assertIsNone(rows['h'])  # Never calibrate the left camera against the right arm.
+
     def test_summary_keeps_arm_feedback_when_gripper_is_unavailable_and_recovers(self):
         with tempfile.TemporaryDirectory() as root:
             directory = run(root, 'realman', managed=True)
@@ -204,7 +224,7 @@ class BenchStateTests(unittest.TestCase):
         self.assertEqual(plain['w'], 'web')
         self.assertIsNone(plain['h'])
         self.assertIsNone(plain['k'])  # nothing recorded yet
-        self.assertIn('--cameras wrist_rgb,exterior_rgb', plain['c'])
+        self.assertIn('--cameras ' + ','.join(bench.load_config()['recording']['camera_ids']), plain['c'])
         self.assertIn('--camera synthetic', full['c'])
         self.assertEqual(full['w'], 'web')
         self.assertIn('calib handeye capture wrist_rgb --auto --run', full['h'])

@@ -1,6 +1,7 @@
 """Raw stream preservation, causal alignment, and incomplete episode handling."""
 import copy
 import json
+import shutil
 from pathlib import Path
 import tempfile
 import time
@@ -57,12 +58,21 @@ class RuntimeCollectionTests(unittest.TestCase):
         self.assertEqual(anchors[0]['action_monotonic_ns'], self.stamp + 2_000_000)
         self.assertTrue(meta['terminal_received'])
 
-    def test_two_cameras_as_mp4_align_for_export(self):
-        """Kernel capture with wrist and exterior cameras, stored as H.264, exported with both views."""
+    @unittest.skipUnless(shutil.which('ffmpeg'), 'MP4 recording requires ffmpeg')
+    def test_three_cameras_as_mp4_align_for_export(self):
+        self.check_three_cameras_for_export(video=True)
+
+    def test_three_cameras_as_png_align_for_export(self):
+        self.check_three_cameras_for_export(video=False)
+
+    def check_three_cameras_for_export(self, *, video):
+        """Left/right wrist and side images retain separate files, clocks and roles."""
         from embodied.data.export.exporters import Schema2
         cameras = {'wrist_rgb': {'stream_id': 'wrist', 'width': 64, 'height': 48, 'fps': 30},
-                   'exterior_rgb': {'stream_id': 'exterior', 'width': 64, 'height': 48, 'fps': 30}}
-        writer = RuntimeEpisodeWriter(self.temp.name, {'runtime_id': 'test'}, 'dual camera', cameras=cameras, video=True)
+                   'exterior_rgb': {'stream_id': 'exterior', 'width': 64, 'height': 48, 'fps': 30},
+                   'right_wrist_rgb': {'stream_id': 'right', 'width': 64, 'height': 48, 'fps': 30}}
+        writer = RuntimeEpisodeWriter(self.temp.name, {'runtime_id': 'test'}, 'three cameras', cameras=cameras, video=video,
+            camera_roles={'left_wrist_0_rgb': 'wrist_rgb', 'right_wrist_0_rgb': 'right_wrist_rgb', 'base_0_rgb': 'exterior_rgb'})
         writer.manifest['kind'] = 'quest_runtime_episode'
         ticks = [tick(i, self.stamp + i * 4_000_000) for i in range(40)]
         for row in ticks:
@@ -73,14 +83,23 @@ class RuntimeCollectionTests(unittest.TestCase):
             writer.add_frame({'image': image, 'host_received_monotonic_ns': stamp, 'frame_number': n, 'stream_id': 'wrist'})
             writer.add_frame({'image': image, 'host_received_monotonic_ns': stamp - 5_000_000, 'frame_number': n,
                               'stream_id': 'exterior'}, 'exterior_rgb')
+            writer.add_frame({'image': 255 - image, 'host_received_monotonic_ns': stamp - 3_000_000,
+                              'frame_number': n, 'stream_id': 'right'}, 'right_wrist_rgb')
         writer.add_tick(tick(40, self.stamp + 160_000_000, terminal=True))
         manifest = writer.close('runtime-terminal')
         self.assertEqual(manifest['lifecycle'], 'complete', manifest['error'])
         self.assertEqual(manifest['counts']['frame'], 4)
         self.assertEqual(manifest['counts']['frame:exterior_rgb'], 4)
-        self.assertTrue((writer.path / 'wrist_rgb.mp4').is_file() and (writer.path / 'exterior_rgb.mp4').is_file())
+        self.assertEqual(manifest['counts']['frame:right_wrist_rgb'], 4)
+        self.assertEqual(manifest['camera_roles']['right_wrist_0_rgb'], 'right_wrist_rgb')
+        for camera_id in cameras:
+            artifact = f'{camera_id}.mp4' if video else f'{camera_id}/000002.png'
+            self.assertTrue((writer.path / artifact).is_file())
         meta, stored = load_episode(writer.path)
-        self.assertEqual(stored['frame:exterior_rgb'][2]['video_frame_index'], 2)
+        for camera_id in ('exterior_rgb', 'right_wrist_rgb'):
+            frame = stored['frame:' + camera_id][2]
+            self.assertEqual(frame['video_frame_index'] if video else frame['image'],
+                             2 if video else f'{camera_id}/000002.png')
         meta['outcome'] = 'success'
         (writer.path / 'episode.json').write_text(json.dumps(meta))
         meta['runtime']['parameters'] = {'model': {'manifest': 'm'}}
@@ -92,7 +111,8 @@ class RuntimeCollectionTests(unittest.TestCase):
             frames = row[3]['camera_frames']
             self.assertEqual(frames['wrist_rgb']['host_received_monotonic_ns'] - frames['exterior_rgb']['host_received_monotonic_ns'],
                              5_000_000)
-        self.assertEqual(set(report['cameras']), {'wrist_rgb', 'exterior_rgb'})
+            self.assertEqual(frames['wrist_rgb']['host_received_monotonic_ns'] - frames['right_wrist_rgb']['host_received_monotonic_ns'], 3_000_000)
+        self.assertEqual(set(report['cameras']), {'wrist_rgb', 'right_wrist_rgb', 'exterior_rgb'})
         self.assertEqual(report['cameras']['exterior_rgb']['repeated_images'], 0)
 
     def test_latest_nonfollowing_command_does_not_reuse_old_action(self):

@@ -57,14 +57,15 @@ class CaptureCameraTests(unittest.TestCase):
                 return nullcontext(SimpleNamespace(metadata={}))
 
         config = {'cameras': {'wrist_rgb': {'driver': 'realsense', 'serial': '1', 'width': 64, 'height': 48, 'fps': 30},
-                              'exterior_rgb': {'driver': 'realsense', 'serial': '2', 'width': 64, 'height': 48, 'fps': 30}}}
+                              'exterior_rgb': {'driver': 'realsense', 'serial': '2', 'width': 64, 'height': 48, 'fps': 30},
+                              'right_wrist_rgb': {'driver': 'realsense', 'serial': '3', 'width': 64, 'height': 48, 'fps': 30}}}
         with patch('embodied.contracts.registry.Registry', Registry), \
                 patch('embodied.core.project.load_config', return_value=config), \
                 patch('embodied.devices.sensors.control.recording_guard', return_value=SimpleNamespace(close=lambda: None)), \
                 patch.object(capture, 'RuntimeReader', side_effect=Stop):
             with self.assertRaises(Stop):
-                capture.main(['--run', '/nonexistent', '--task', 't', '--cameras', 'wrist_rgb,exterior_rgb'])
-        self.assertEqual([(c['camera_id'], c['serial']) for c in created], [('wrist_rgb', '1'), ('exterior_rgb', '2')])
+                capture.main(['--run', '/nonexistent', '--task', 't', '--cameras', 'wrist_rgb,right_wrist_rgb,exterior_rgb'])
+        self.assertEqual([(c['camera_id'], c['serial']) for c in created], [('wrist_rgb', '1'), ('right_wrist_rgb', '3'), ('exterior_rgb', '2')])
 
     def test_external_camera_cannot_inherit_an_unrelated_wrist_driver(self):
         config = {'cameras': {'wrist_rgb': {'driver': 'realsense'}, 'external_rgb': {'serial': '2'}}}

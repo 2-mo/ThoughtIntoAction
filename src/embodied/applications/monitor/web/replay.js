@@ -52,14 +52,21 @@ function render() {
   el('replay-video-empty').textContent = f ? '该条未录制 RGB' : '等待回放数据';
   if (pixels) el('replay-video').src = `data:${f.image_mime || 'image/jpeg'};base64,${pixels}`;
   else el('replay-video').removeAttribute('src');
-  const exterior = f?.cameras?.exterior_rgb;
-  el('recorded-exterior').hidden = !exterior;
-  el('recorded-grid').dataset.count = exterior ? '2' : '1';
-  el('replay-exterior-video').hidden = !exterior?.image_base64;
-  el('replay-exterior-empty').hidden = !!exterior?.image_base64;
-  el('replay-exterior-empty').textContent = '该时刻无有效 RGB';
-  if (exterior?.image_base64) el('replay-exterior-video').src = `data:${exterior.image_mime || 'image/jpeg'};base64,${exterior.image_base64}`;
-  else el('replay-exterior-video').removeAttribute('src');
+  el('replay-video').closest('.camera-card').querySelector('h3').textContent = `${f?.cameras?.wrist_rgb?.label || '腕部相机'} · 录制`;
+  let count = 1;
+  for (const [id, suffix, label] of [['right_wrist_rgb', 'right-wrist', '右臂相机'], ['exterior_rgb', 'exterior', '外部相机']]) {
+    const camera = f?.cameras?.[id];
+    const card = el(`recorded-${suffix}`), img = el(`replay-${suffix}-video`), empty = el(`replay-${suffix}-empty`);
+    card.hidden = !camera;
+    card.querySelector('h3').textContent = `${camera?.label || label} · 录制`;
+    img.hidden = !camera?.image_base64;
+    empty.hidden = !!camera?.image_base64;
+    empty.textContent = '该时刻无有效 RGB';
+    if (camera?.image_base64) img.src = `data:${camera.image_mime || 'image/jpeg'};base64,${camera.image_base64}`;
+    else img.removeAttribute('src');
+    if (camera) count++;
+  }
+  el('recorded-grid').dataset.count = String(count);
   el('replay-video-status').textContent = f ? '录制 RGB · ' + 'MCAP' : '录制 RGB';
   el('replay-video-status').title = '视频按接收时间与机械臂样本对齐；未录制深度';
 }
@@ -90,6 +97,7 @@ el('replay-video').onclick = () => {
   else wrap.requestFullscreen?.();
 };
 el('replay-exterior-video').onclick = el('replay-video').onclick;
+el('replay-right-wrist-video').onclick = el('replay-video').onclick;
 const timelineSize = new ResizeObserver(() => {
   panel.closest('.stage').style.setProperty('--replay-space', `${panel.getBoundingClientRect().height + 44}px`);
 });

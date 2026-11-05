@@ -29,6 +29,8 @@ profile 的命令参数排在用户额外参数之前，后者可以覆盖前者
 
 相机服务支持多个 `[cameras.<名称>]`，每台独立绑定序列号。`recording.camera_ids` 默认只录 `wrist_rgb`；设为 `["wrist_rgb", "exterior_rgb"]` 后两路都必须在线才能开始录制，并分别保存视频、帧号、设备时钟与主机接收时钟。修改录制列表后重启遥操采集会话，见 [网页和相机控制](../docs/guides/viewer-camera-controls.md)。标定原图、会话与结果在 `outputs/calibrations/`，不放入配置目录；未知外参和未完成标定状态保持原样。
 
+RealMan双臂三相机部署使用 `wrist_rgb`（左臂）、`right_wrist_rgb`（右臂）、`exterior_rgb`（侧面）。两只腕部相机显式配置 `mount="wrist"` 和 `robot_side="left"/"right"`，固定相机配置 `mount="fixed"`；工作台采集读取 `recording.camera_ids`，腕部标定按所选运行的侧别匹配。完整入口、档位和验证范围见 [RealMan三相机接入](../docs/realman/platform.md#三相机接入)。
+
 `[camera_service.color]` 统一设置所有相机的 RGB 白平衡、曝光、增益和色彩参数；
 `[cameras.<名称>.color]` 可覆盖单台设置。未配置时保留设备设置，未知、不支持或超范围参数会报错。
 修改后重启相机服务生效，重连时也会重新应用。网页展示 SDK 回读值，录制相机的参数随 camera 元数据保存。
