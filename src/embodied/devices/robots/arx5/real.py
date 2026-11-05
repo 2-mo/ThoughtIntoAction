@@ -320,7 +320,10 @@ class RealBackend:
         sample = hardware.get_joint_state()
         q = np.asarray(sample.pos(), dtype=float).copy()
         dq = np.asarray(sample.vel(), dtype=float).copy()
-        width = float(sample.gripper_pos)
+        # Fully closed jaws read a small negative position on this SDK; a
+        # physical width cannot be negative, and the episode contract rejects
+        # values below zero (that aborted a recording mid-episode).
+        width = max(0.0, float(sample.gripper_pos))
         fault = ""
         valid = q.shape == (6,) and dq.shape == (6,)
         valid = valid and np.isfinite(q).all() and np.isfinite(dq).all() and np.isfinite(width)
