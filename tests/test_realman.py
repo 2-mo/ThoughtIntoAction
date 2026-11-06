@@ -104,9 +104,11 @@ def test_invalid_percentage_speed_feedback_rejects_and_closes(value):
     Backend(config, client=client).close()
 
 
-def test_percentage_mode_sends_faster_step_with_per_axis_budget(setup):
+@pytest.mark.parametrize('control_hz', [25, 50])
+def test_percentage_mode_sends_faster_step_with_per_axis_budget(setup, control_hz):
     _, client = setup
     config = load_config()
+    config['control_hz'] = control_hz
     config['host'] = 'test-realman'
     backend = Backend(config, client=client, allow_motion=True)
     try:
@@ -117,24 +119,26 @@ def test_percentage_mode_sends_faster_step_with_per_axis_budget(setup):
         backend.motion_check.check = check
         goal = backend.state.pose.copy(); goal[0] += .05
         backend.step(command(goal), time.monotonic())
-        assert client.sent[-1]['pose'][0] == 310000  # 0.25 m/s * 0.04 s, formerly 0.125 m/s.
-        np.testing.assert_allclose(calls[0]['max_joint_step_deg'], [7.2] * 6)
+        assert client.sent[-1]['pose'][0] == round((.3 + .25/control_hz)*1e6)
+        np.testing.assert_allclose(calls[0]['max_joint_step_deg'], [180/control_hz] * 6)
         assert backend.command_diagnostics['position_lead_limit_m'] == pytest.approx(.075)
         assert not backend.command_diagnostics['lead_limited']
     finally:
         backend.close()
 
 
-def test_unbounded_workspace_still_rate_limits_distant_target(setup):
+@pytest.mark.parametrize('control_hz', [25, 50])
+def test_unbounded_workspace_still_rate_limits_distant_target(setup, control_hz):
     _, client = setup
     config = load_config()
+    config['control_hz'] = control_hz
     config['host'] = 'test-realman'
     backend = Backend(config, client=client, allow_motion=True)
     try:
         goal = backend.state.pose.copy(); goal[0] += .4
         backend.step(command(goal), time.monotonic())
         assert client.sent[-1]['command'] == 'movep_canfd'
-        assert backend.last_target[0] == pytest.approx(.31)  # 1 cm, not an unbounded jump.
+        assert backend.last_target[0] == pytest.approx(.3 + .25/control_hz)
     finally:
         backend.close()
 
@@ -173,15 +177,17 @@ def test_identity_mismatch_closes_connection_and_releases_lease(setup):
     Backend(config, client=client).close()
 
 
-def test_speed_limit_deadman_and_no_enable(setup):
+@pytest.mark.parametrize('control_hz', [25, 50])
+def test_speed_limit_deadman_and_no_enable(setup, control_hz):
     config, client = setup
+    config['control_hz'] = control_hz
     backend = Backend(config, client=client, allow_motion=True)
     try:
         target = backend.state.pose.copy(); target[0] += .04
         backend.step(command(target), time.monotonic())
         assert client.sent[-1]['command'] == 'movep_canfd'
         assert client.sent[-1]['follow'] is False
-        assert client.sent[-1]['pose'][0] == 304000
+        assert client.sent[-1]['pose'][0] == round((.3 + .1/control_hz)*1e6)
         assert target[0] == pytest.approx(.34)  # Caller-owned target is not mutated.
         backend.step(ControlCommand(Mode.DISABLED), time.monotonic())
         assert client.sent[-1] == {'command': 'set_arm_stop'}
@@ -565,9 +571,11 @@ def test_gripper_exchange_requires_separate_permission_and_matches_ack():
         client.close(); thread.join(timeout=1)
 
 
-def test_joint_step_backoff_checks_wire_pose_before_send(setup):
+@pytest.mark.parametrize('control_hz,attempts,scale', [(25, 4, .125), (50, 3, .25)])
+def test_joint_step_backoff_checks_wire_pose_before_send(setup, control_hz, attempts, scale):
     from embodied.devices.robots.realman.kinematics import JointStepTooLarge
     config, client = setup
+    config['control_hz'] = control_hz
     config['linear_speed_m_s'] = .06  # Keep candidates away from the fake IK's exact 1-degree boundary.
     backend = Backend(config, client=client, allow_motion=True)
     try:
@@ -583,9 +591,9 @@ def test_joint_step_backoff_checks_wire_pose_before_send(setup):
         backend.motion_check.check = check
         goal = origin.copy(); goal[0] += .01
         backend.step(command(goal), time.monotonic())
-        assert len(calls) == 4
-        assert backend.command_diagnostics['joint_step_scale'] == .125
-        assert len(backend.command_diagnostics['joint_step_rejections']) == 3
+        assert len(calls) == attempts
+        assert backend.command_diagnostics['joint_step_scale'] == scale
+        assert len(backend.command_diagnostics['joint_step_rejections']) == attempts-1
         assert np.allclose(decode_pose(client.sent[-1]['pose']), calls[-1])
         assert abs(calls[-1][0] - origin[0]) <= .0005
     finally:
