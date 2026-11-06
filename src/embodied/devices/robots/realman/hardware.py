@@ -302,7 +302,8 @@ class Backend:
             'gripper_applied_kp': 0., 'gripper_applied_kd': 0.,
             'command_started_ns': started, 'command_submitted_ns': time.monotonic_ns(),
             'feedback_velocity_source': 'encoder_finite_difference', 'gripper_raw': dict(self.gripper),
-            'gripper_ready': self.gripper_ready, 'gripper_needs_release': self.gripper_needs_release}
+            'gripper_ready': self.gripper_ready, 'gripper_needs_release': self.gripper_needs_release,
+            'gripper_contact_latched': self.gripper_contact, 'gripper_pending': self.pending_gripper}
 
     def _check_planned_tcp_speed(self, q, previous):
         # Live targets use joint/controller transmission bounds only. Planned
@@ -346,8 +347,6 @@ class Backend:
                 self.gripper_stop_requested_at = None
         if raw > self.gripper['actpos']+3:
             self.gripper_contact = False
-        if self.gripper_contact and raw < self.gripper['actpos']:
-            return
         if self.gripper['mode'] in (4, 5):
             if self.pending_gripper is not None and now-self.pending_gripper[1] > 5.:
                 raise RuntimeError('EG2 segment still moving after 5 s')
@@ -361,8 +360,14 @@ class Backend:
                 if now-sent > 5.:
                     raise RuntimeError('EG2 position feedback did not reach the accepted segment')
                 return
+            # A completed opening releases old contact even if Trigger was
+            # pressed again while its previous mode-6 feedback was cached.
+            if target > origin:
+                self.gripper_contact = False
             self.pending_gripper = None
             self.gripper_stop_requested_at = None
+        if self.gripper_contact and raw < self.gripper['actpos']:
+            return
         if abs(raw-position) <= 5:
             return
         # Send the requested opening once; 100-unit subgoals made the EG2

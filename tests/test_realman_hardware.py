@@ -292,6 +292,34 @@ class HardwareTests(unittest.TestCase):
         self.assertIsNone(b.pending_gripper)
         self.assertEqual(len(self.connection.client.sent), count)
 
+    def test_close_during_open_after_contact_does_not_latch_contact_forever(self):
+        b = self.backend
+        # Right EG2 log: contact 958 -> opening 944 -> fully open 1000,
+        # with Trigger pressed again before the old contact feedback changed.
+        b.gripper.update(mode=6, actpos=958)
+        b._gripper_target(0., 1.)
+        b._gripper_target(.07, 1.1)
+        count = len(self.connection.client.sent)
+        b._gripper_target(0., 1.2)
+        b.gripper.update(mode=5, actpos=944)
+        b._gripper_target(0., 1.3)
+        self.assertEqual(len(self.connection.client.sent), count)
+        b.gripper.update(mode=1, actpos=1000)
+        b._gripper_target(0., 1.5)
+        self.assertEqual(len(self.connection.client.sent), count + 1)
+        self.assertEqual(self.connection.client.sent[-1]['position'], 1)
+        self.assertFalse(b.gripper_contact)
+
+    def test_open_after_contact_still_times_out_when_latest_target_is_close(self):
+        b = self.backend
+        b.gripper.update(mode=6, actpos=958)
+        b._gripper_target(0., 1.)
+        b._gripper_target(.07, 1.1)
+        b._gripper_target(0., 1.2)
+        b.gripper.update(mode=1, actpos=960)
+        with self.assertRaisesRegex(RuntimeError, 'did not reach'):
+            b._gripper_target(0., 7.)
+
     def test_two_grippers_follow_simultaneously_with_independent_segments(self):
         other_connection = Connection(self.kinematics)
         with closing(Backend(self.config, connection=other_connection, kinematics=self.kinematics)) as other:
