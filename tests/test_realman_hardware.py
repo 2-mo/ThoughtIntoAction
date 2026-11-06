@@ -364,6 +364,69 @@ class HardwareTests(unittest.TestCase):
         self.step(gripper_target=.07)
         self.assertEqual(b.pending_gripper[0], 1000)
 
+    def test_arm_stop_can_cancel_before_gripper_motion_starts_without_mode_three(self):
+        b = self.backend
+        for mode, position, width in ((1, 1000, 0.), (2, 0, .07), (6, 430, .07)):
+            with self.subTest(mode=mode):
+                self.connection.client.gripper.update(mode=mode, actpos=position)
+                b.last_gripper_poll = float('-inf')
+                self.step(gripper_target=width)
+                self.assertIsNotNone(b.pending_gripper)
+                self.step(hold=True, gripper_target=None)
+                stopped_at = b.gripper_stop_requested_at
+                self.assertIsNotNone(stopped_at)
+                count = len(self.connection.client.sent)
+                # Cached idle feedback must not count as post-stop confirmation.
+                for _ in range(5):
+                    b._gripper_target(None, stopped_at + .01)
+                self.assertIsNotNone(b.pending_gripper)
+                b._poll_gripper(stopped_at + .1)
+                b._gripper_target(None, stopped_at + .1)
+                self.assertIsNotNone(b.pending_gripper)
+                b._poll_gripper(stopped_at + .2)
+                b._gripper_target(None, stopped_at + .2)
+                self.assertIsNone(b.pending_gripper)
+                self.assertIsNone(b.gripper_stop_requested_at)
+                self.assertEqual(len(self.connection.client.sent), count)
+                # The next press after the old five-second deadline is usable.
+                b._gripper_target(width, stopped_at + 9.)
+                self.assertEqual(len(self.connection.client.sent), count + 1)
+                b.pending_gripper = None
+
+    def test_stop_confirmation_counts_only_consecutive_fresh_idle_feedback(self):
+        b = self.backend
+        self.step(gripper_target=0.)
+        self.step(hold=True, gripper_target=None)
+        stopped_at = b.gripper_stop_requested_at
+        for offset, mode in ((.1, 1), (.2, 4), (.3, 1)):
+            self.connection.client.gripper.update(mode=mode, actpos=900)
+            b._poll_gripper(stopped_at + offset)
+            b._gripper_target(.07, stopped_at + offset)
+            self.assertIsNotNone(b.pending_gripper)
+        b._poll_gripper(stopped_at + .4)
+        b._gripper_target(.07, stopped_at + .4)
+        self.assertIsNone(b.pending_gripper)
+        self.assertTrue(b.gripper_needs_release)
+        count = len(self.connection.client.sent)
+        b._gripper_target(.07, stopped_at + .5)
+        self.assertEqual(len(self.connection.client.sent), count)
+        b._gripper_target(None, stopped_at + .6)
+        b._gripper_target(.07, stopped_at + .7)
+        self.assertEqual(len(self.connection.client.sent), count + 1)
+
+    def test_segment_feedback_is_processed_even_without_a_new_target(self):
+        b = self.backend
+        b.gripper.update(mode=1, actpos=1000)
+        b._gripper_target(0., 1.)
+        b.gripper.update(mode=2, actpos=1)
+        count = len(self.connection.client.sent)
+        b._gripper_target(None, 2.)
+        self.assertIsNone(b.pending_gripper)
+        self.assertEqual(len(self.connection.client.sent), count)
+        b._gripper_target(.07, 3.)
+        with self.assertRaisesRegex(RuntimeError, 'did not reach'):
+            b._gripper_target(None, 9.)
+
     def test_partial_initialization_closes_connection(self):
         c = Connection(self.kinematics)
         del c.client.gripper['actpos']

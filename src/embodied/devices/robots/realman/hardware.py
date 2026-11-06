@@ -74,6 +74,7 @@ class Backend:
         self.last_gripper_poll = float('-inf')
         self.pending_gripper = None
         self.gripper_stop_requested_at = None
+        self.gripper_stop_samples = 0
         self.gripper_contact = False
         self.gripper_ready = False
         self.gripper_ready_samples = 0
@@ -140,6 +141,7 @@ class Backend:
             self.gripper_needs_release = True
             self.pending_gripper = None
             self.gripper_stop_requested_at = None
+            self.gripper_stop_samples = 0
             self.gripper_contact = False
         else:
             if self.gripper['mode'] not in (1, 2, 3, 4, 5, 6):
@@ -155,6 +157,19 @@ class Backend:
                 self.gripper_ready_samples = 0
             if self.gripper_ready:
                 self.gripper_initializing = False
+        if (self.gripper_ready and self.gripper_stop_requested_at is not None
+                and now > self.gripper_stop_requested_at):
+            # Stop before an EG2 move starts may retain mode 1/2/6, not 3.
+            # Require two fresh idle reports; cached or moving feedback cannot cancel it.
+            self.gripper_stop_samples = (self.gripper_stop_samples + 1
+                if self.gripper['mode'] in (1, 2, 6) else 0)
+            if self.gripper['mode'] == 3 or self.gripper_stop_samples >= 2:
+                print(f'{self.config.name}: EG2停止反馈已确认；撤销目标={self.pending_gripper}，'
+                      f'反馈={self.gripper}；等待松开控制后重新操作。', flush=True)
+                self.pending_gripper = None
+                self.gripper_stop_requested_at = None
+                self.gripper_stop_samples = 0
+                self.gripper_needs_release = True
         notice = ('ready' if self.gripper_ready else 'unavailable')
         if notice != self.gripper_notice:
             print(f'{self.config.name}: EG2 {notice}; feedback={self.gripper}. '
@@ -182,6 +197,7 @@ class Backend:
         self.gripper_needs_release = True
         self.pending_gripper = None
         self.gripper_stop_requested_at = None
+        self.gripper_stop_samples = 0
         self.gripper_contact = False
         self.last_gripper_poll = float('-inf')
         print(f'{self.config.name}: 已接受操作者的EG2初始化张开请求；等待有效反馈，不自动闭合。', flush=True)
@@ -272,6 +288,7 @@ class Backend:
             self.connection.stop()
             if stopping_gripper:
                 self.gripper_stop_requested_at = time.monotonic()
+                self.gripper_stop_samples = 0
         else:
             if (self.stopped or (cancel_requested and cancel_requested()) or
                     (self.cancel_requested and self.cancel_requested())):
@@ -303,7 +320,9 @@ class Backend:
             'command_started_ns': started, 'command_submitted_ns': time.monotonic_ns(),
             'feedback_velocity_source': 'encoder_finite_difference', 'gripper_raw': dict(self.gripper),
             'gripper_ready': self.gripper_ready, 'gripper_needs_release': self.gripper_needs_release,
-            'gripper_contact_latched': self.gripper_contact, 'gripper_pending': self.pending_gripper}
+            'gripper_contact_latched': self.gripper_contact, 'gripper_pending': self.pending_gripper,
+            'gripper_stop_requested_at': self.gripper_stop_requested_at,
+            'gripper_stop_samples': self.gripper_stop_samples}
 
     def _check_planned_tcp_speed(self, q, previous):
         # Live targets use joint/controller transmission bounds only. Planned
@@ -316,24 +335,13 @@ class Backend:
     def _gripper_target(self, width, now):
         if not self.gripper_ready:
             return
-        # set_arm_stop can also interrupt an EG2 segment (mode 3). Only
-        # discard its target after stop feedback; an old idle sample or a
-        # still-moving segment must not permit another queued move.
-        if (self.gripper_stop_requested_at is not None
-                and self.last_gripper_poll > self.gripper_stop_requested_at
-                and self.gripper['mode'] == 3):
-            self.pending_gripper = None
-            self.gripper_stop_requested_at = None
-            self.gripper_needs_release = True
         if self.gripper_needs_release:
             if width is None:
                 self.gripper_needs_release = False
             return  # Never replay a target that was held across an outage.
-        if width is None:
-            return
-        if not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width:
+        if width is not None and (not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width):
             raise ValueError('Invalid EG2 nominal width target')
-        raw = round(width/self.config.gripper_max_width*1000)
+        raw = None if width is None else round(width/self.config.gripper_max_width*1000)
         position = int(np.clip(self.gripper['actpos'], 0, 1000))
         if self.gripper['mode'] not in (1, 2, 3, 4, 5, 6):
             raise RuntimeError(f'Unknown EG2 mode: {self.gripper}')
@@ -345,7 +353,8 @@ class Backend:
             if self.pending_gripper is not None and self.pending_gripper[0] < self.pending_gripper[2]:
                 self.pending_gripper = None
                 self.gripper_stop_requested_at = None
-        if raw > self.gripper['actpos']+3:
+                self.gripper_stop_samples = 0
+        if raw is not None and raw > self.gripper['actpos']+3:
             self.gripper_contact = False
         if self.gripper['mode'] in (4, 5):
             if self.pending_gripper is not None and now-self.pending_gripper[1] > 5.:
@@ -366,6 +375,9 @@ class Backend:
                 self.gripper_contact = False
             self.pending_gripper = None
             self.gripper_stop_requested_at = None
+            self.gripper_stop_samples = 0
+        if raw is None:
+            return  # Feedback still completes/checks the accepted segment without new input.
         if self.gripper_contact and raw < self.gripper['actpos']:
             return
         if abs(raw-position) <= 5:
