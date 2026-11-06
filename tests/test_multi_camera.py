@@ -61,7 +61,8 @@ class MultiCameraTests(unittest.TestCase):
             wrist = service.feeds["wrist_rgb"]
             wrist.registry.create("camera_device", "realsense", options=wrist.options)
             camera.assert_called_once_with("wrist", 3, 2, 30, expected_model="D435i",
-                                           color_options={"gain": 64, "white_balance": 4600})
+                                           color_options={"gain": 64, "white_balance": 4600},
+                                           stop=None)
         values = dict.fromkeys(RGB_OPTIONS, 0.)
         values.update(enable_auto_white_balance=1., enable_auto_exposure=1.)
         writes = []

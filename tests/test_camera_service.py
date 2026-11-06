@@ -1,6 +1,7 @@
 """Synthetic camera IPC verifies shared pixels and viewer independence without USB."""
 import base64
 import json
+import sys
 from pathlib import Path
 import tempfile
 import time
@@ -21,6 +22,81 @@ from embodied.applications.monitor.scene import Scene
 
 
 class CameraServiceTests(unittest.TestCase):
+    def test_realsense_first_frame_wait_is_longer_but_cancellable(self):
+        from embodied.devices.sensors.realsense import RealSenseCamera
+        camera = RealSenseCamera('fake')
+        camera.depth_scale = None
+        frame = Mock()
+        frame.get_frame_number.return_value = 1
+        frame.get_timestamp.return_value = 123.
+        frame.get_data.return_value = np.zeros((2, 3, 3), dtype=np.uint8)
+        frames = Mock()
+        frames.get_color_frame.return_value = frame
+        frames.get_depth_frame.return_value = None
+        camera.pipeline = Mock()
+        camera.pipeline.try_wait_for_frames.side_effect = [(False, None), (True, frames)]
+        with patch('embodied.devices.sensors.realsense.time.monotonic', side_effect=[0., 3.]):
+            self.assertEqual(camera.read()['frame_number'], 1)
+        camera.pipeline.try_wait_for_frames.return_value = (False, None)
+        camera.pipeline.try_wait_for_frames.side_effect = None
+        with patch('embodied.devices.sensors.realsense.time.monotonic', side_effect=[0., 3.]):
+            with self.assertRaisesRegex(RuntimeError, 'timeout'):
+                camera.read()
+        camera.last_number = None
+        with patch('embodied.devices.sensors.realsense.time.monotonic', side_effect=[0., 11.]):
+            with self.assertRaisesRegex(RuntimeError, 'timeout'):
+                camera.read()
+        camera.pipeline.try_wait_for_frames.side_effect = lambda _: (camera.stop.set() or False, None)
+        with self.assertRaisesRegex(RuntimeError, 'stopped'):
+            camera.read()
+        self.assertTrue(all(call.args == (100,) for call in camera.pipeline.try_wait_for_frames.call_args_list))
+
+    def test_realsense_cancelled_start_releases_pipeline(self):
+        from embodied.devices.sensors.realsense import RealSenseCamera
+        rs = Mock()
+        device = Mock()
+        device.get_info.side_effect = lambda key: {rs.camera_info.serial_number: 'fake',
+            rs.camera_info.name: 'RealSense D435', rs.camera_info.usb_type_descriptor: '2.1'}[key]
+        rs.context.return_value.query_devices.return_value = [device]
+        profile = rs.pipeline.return_value.start.return_value
+        profile.get_device.return_value = device
+        profile.get_stream.return_value.as_video_stream_profile.return_value.get_intrinsics.return_value = SimpleNamespace(
+            width=424, height=240, fx=1., fy=1., ppx=0., ppy=0., model='none', coeffs=[])
+        camera = RealSenseCamera('fake', expected_model='D435')
+        camera.stop.set()
+        rs.pipeline.return_value.stop.reset_mock()
+        with patch.dict(sys.modules, pyrealsense2=rs), \
+             patch('embodied.devices.sensors.realsense.configure_rgb', return_value={}), \
+             patch.object(camera, 'start_imu'):
+            with self.assertRaisesRegex(RuntimeError, 'stopped'):
+                camera.__enter__()
+        rs.pipeline.return_value.stop.assert_called_once()
+        self.assertIsNone(camera.pipeline)
+
+    def test_realsense_skips_reused_rgb_but_rejects_backwards_or_stuck_frames(self):
+        from embodied.devices.sensors.realsense import RealSenseCamera
+        camera = RealSenseCamera('fake')
+        camera.depth_scale = .001
+        camera.last_number = 7
+        frame = Mock()
+        frame.get_frame_number.side_effect = [7, 7, 8]
+        frame.get_timestamp.return_value = 123.
+        frame.get_data.return_value = np.zeros((2, 3, 3), dtype=np.uint8)
+        frames = Mock()
+        frames.get_color_frame.return_value = frame
+        frames.get_depth_frame.return_value = None
+        camera.pipeline = Mock()
+        camera.pipeline.try_wait_for_frames.return_value = (True, frames)
+        self.assertEqual(camera.read()['frame_number'], 8)
+        frame.get_frame_number.side_effect = None
+        frame.get_frame_number.return_value = 6
+        with self.assertRaisesRegex(RuntimeError, 'backwards'):
+            camera.read()
+        frame.get_frame_number.return_value = 8
+        with patch('embodied.devices.sensors.realsense.time.monotonic', side_effect=[0., 3.]):
+            with self.assertRaisesRegex(RuntimeError, 'timeout'):
+                camera.read()
+
     def test_full_hd_zmq_frames_preserve_pixels_and_imu_timestamps(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'camera.sock'

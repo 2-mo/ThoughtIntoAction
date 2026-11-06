@@ -117,7 +117,7 @@ class CameraFeed:
                 import cv2
                 spec = registry.spec("camera_device", driver)
                 lease = closing(DeviceLease("camera:" + options["serial"])) if spec.hardware else nullcontext()
-                with lease, registry.create("camera_device", driver, options=options) as camera:
+                with lease, registry.create("camera_device", driver, options=options, stop=stop) as camera:
                     # A reconnect starts a new stream even when device frame numbers repeat.
                     stream_id = uuid.uuid4().hex
                     metadata = {**camera.metadata, "stream_id": stream_id, "zmq_frame_protocol": 1,

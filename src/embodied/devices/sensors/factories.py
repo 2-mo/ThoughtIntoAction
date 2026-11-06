@@ -1,16 +1,17 @@
 """Camera owners for the shared service; SDKs load only for the selected driver."""
 
 
-def realsense(*, options):
+def realsense(*, options, stop=None):
     from .realsense import RealSenseCamera
 
     return RealSenseCamera(
         options["serial"], options["width"], options["height"], options["fps"],
         expected_model=options.get("model"), color_options=options.get("color", {}),
+        stop=stop,
     )
 
 
-def synthetic(*, options):
+def synthetic(*, options, stop=None):
     from .synthetic import SyntheticCamera
 
     return SyntheticCamera(**{key: options[key] for key in ("serial", "width", "height", "fps")})

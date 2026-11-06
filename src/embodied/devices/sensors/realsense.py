@@ -36,9 +36,11 @@ def configure_rgb(sensor, rs, requested):
 
 
 class RealSenseCamera:
-    def __init__(self, serial, width=640, height=480, fps=30, *, expected_model="D435i", color_options=None):
+    def __init__(self, serial, width=640, height=480, fps=30, *, expected_model="D435i", color_options=None,
+                 stop=None):
         if not serial:
             raise ValueError("Set cameras.<camera_id>.serial; camera selection must be explicit")
+        self.stop = stop if stop is not None else threading.Event()
         self.serial, self.width, self.height, self.fps = serial, width, height, fps
         self.expected_model = expected_model
         self.color_options = {} if color_options is None else color_options
@@ -124,6 +126,7 @@ class RealSenseCamera:
             color_sensor = device.first_color_sensor()
             rgb_controls = configure_rgb(color_sensor, rs, self.color_options)
             self.depth_scale = device.first_depth_sensor().get_depth_scale()
+            self.last_number = None
             self.metadata = {
                 "depth_scale_m": self.depth_scale, "depth_frame": "depth_optical",
                 "depth_aligned_to_rgb": False,
@@ -155,15 +158,26 @@ class RealSenseCamera:
             raise
 
     def read(self):
-        frames = self.pipeline.wait_for_frames(2000)
-        frame = frames.get_color_frame()
+        # First RGB frame may need several seconds; keep shutdown responsive.
+        deadline = time.monotonic() + (10 if self.last_number is None else 2)
+        while not self.stop.is_set():
+            arrived, frames = self.pipeline.try_wait_for_frames(100)
+            if arrived:
+                frame = frames.get_color_frame()
+                if not frame:
+                    raise RuntimeError("Missing RGB frame")
+                number = frame.get_frame_number()
+                if self.last_number is None or number > self.last_number:
+                    break
+                if number < self.last_number:
+                    raise RuntimeError("Camera frame number moved backwards")
+                # Depth can advance while the synchronizer reuses the previous RGB frame.
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Camera frame timeout")
+        else:
+            raise RuntimeError("Camera capture stopped")
         depth = frames.get_depth_frame()
         received = time.monotonic_ns()
-        if not frame:
-            raise RuntimeError("Missing RGB frame")
-        number = frame.get_frame_number()
-        if self.last_number is not None and number <= self.last_number:
-            raise RuntimeError("Non-increasing camera frame number")
         self.last_number = number
         return {"imu": self.imu_snapshot(), "depth_image": None if not depth else np.asanyarray(depth.get_data()).copy(),
                 "depth_scale_m": self.depth_scale,
