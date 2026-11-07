@@ -96,9 +96,11 @@ class ControlSession(ControlClient):
     def execute(self, plan):
         return self.command('execute', plan_id=plan['plan_id'])
 
-    def wait(self, operation_id, timeout=60):
+    def wait(self, operation_id, timeout=60, *, poll=None):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
+            if poll is not None:
+                poll()
             for op in self.status()['operations']:
                 if op['operation_id'] == operation_id and op['status'] != 'running':
                     if op['status'] != 'completed':
