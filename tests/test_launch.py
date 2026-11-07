@@ -144,6 +144,23 @@ class LauncherTests(unittest.TestCase):
         self.assertNotIn('PYTHONHOME', env)
         self.assertNotIn('LD_LIBRARY_PATH', env)
 
+    def test_handeye_preserves_capture_arguments_without_legacy_sdk_defaults(self):
+        config = load_config()
+        config['environment']['arm_sdk_python'] = '/missing-device-sdk'
+        arguments = ['capture', 'wrist_rgb', '--auto', '--step-rad', '0.25',
+                     '--speed', '0.17', '--size-m', '0.10']
+        with patch.dict(os.environ, {'PYTHONHOME': '/old-python', 'LD_LIBRARY_PATH': '/old-sdk'}):
+            argv, env = build_command('handeye', arguments, config)
+        self.assertEqual(argv[2:], ['-m', MODULE_COMMANDS['handeye'], *arguments])
+        self.assertEqual(env['PYTHONPATH'], str(ROOT / 'src'))
+        self.assertNotIn('PYTHONHOME', env)
+        self.assertNotIn('LD_LIBRARY_PATH', env)
+        self.assertEqual(self.preview('calib', 'handeye', *arguments)['argv'], argv)
+        help_result = subprocess.run([*argv, '--help'], env=env, cwd=ROOT,
+                                     capture_output=True, text=True)
+        self.assertEqual(help_result.returncode, 0, help_result.stdout + help_result.stderr)
+        self.assertIn('--step-rad', help_result.stdout)
+
 
 class CatalogTests(unittest.TestCase):
     """`./run.sh <group> <command>` names existing commands, scripts and components."""
