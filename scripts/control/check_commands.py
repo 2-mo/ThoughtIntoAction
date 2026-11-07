@@ -396,7 +396,7 @@ class StandstillTests(unittest.TestCase):
 
 class CommandsTests(unittest.TestCase):
     def setUp(self):
-        self.config = load_settings().robot
+        self.config = load_settings(ROOT / 'configs/robots/arx5/robot.json').robot
         self.engine = CommandEngine('run', self.config, 'model')
         self.now, self.sequence = 10., 0
         self.state = RobotState(np.asarray(self.config.park_q), np.zeros(6), np.array([0,0,0,0,0,0,1.]), .04, self.now)
@@ -526,12 +526,14 @@ class CommandsTests(unittest.TestCase):
             {'q': (self.state.q + [.1, 0, 0, 0, 0, 0]).tolist()},
             self.engine.status(self.state, self.now), self.now)
         self.request('execute', _plan=plan)
-        elapsed = plan['times'][-1]*.2
-        self.now += elapsed
-        self.request('heartbeat')
-        command = self.tick()
+        start = self.now
+        ticks = int(plan['times'][-1] * .2 * self.config.control_hz)
+        for index in range(ticks + 1):
+            self.now = start + index / self.config.control_hz
+            self.request('heartbeat')
+            command = self.tick()
         np.testing.assert_allclose(command.joint_acceleration_target,
-                                   plan['_trajectory'].sample_acceleration(elapsed))
+                                   plan['_trajectory'].sample_acceleration(ticks / self.config.control_hz))
         self.assertGreater(np.max(np.abs(command.joint_acceleration_target)), 1.)
         self.request('cancel')
         self.assertIsNone(self.tick().joint_acceleration_target)
@@ -542,12 +544,13 @@ class CommandsTests(unittest.TestCase):
         plan = planner.plan({'q': goal.tolist(), 'gripper_width': .03},
                             self.engine.status(self.state, self.now), self.now)
         self.request('execute', _plan=plan)
-        end = self.now + plan['times'][-1]
+        start = self.now
         # Encoder feedback is within tolerance but differs from the command.
         self.state.q = goal - [.001, 0, 0, 0, 0, 0]
         self.state.gripper_width = .029
-        for index in range(30):
-            self.now = end + index * .01
+        ticks = int(np.ceil((plan['times'][-1] + self.engine.settling.duration) * self.config.control_hz)) + 3
+        for index in range(ticks):
+            self.now = start + index / self.config.control_hz
             self.request('heartbeat')
             self.tick()
         operation = self.engine.operations[plan['plan_id']]
@@ -630,7 +633,8 @@ class CommandsTests(unittest.TestCase):
                                     self.engine.status(self.state, self.now), self.now)
                 self.request('execute', _plan=plan)
                 start = self.now
-                for elapsed in np.arange(.004, plan['times'][-1]/2, .004):
+                period = 1. / self.config.control_hz
+                for elapsed in np.arange(period, plan['times'][-1]/2, period):
                     self.now = start + elapsed
                     self.request('heartbeat')
                     controller.update(self.tick(), self.state.q, self.now)
