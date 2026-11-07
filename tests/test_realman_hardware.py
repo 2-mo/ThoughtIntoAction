@@ -179,6 +179,43 @@ class HardwareTests(unittest.TestCase):
                 joint_step_limit=np.full(6, .15 / 50), planned=True), now)
         self.assertEqual(len(self.motions()), before)
 
+    def test_joint_plans_time_scale_combined_tcp_motion_before_driver_submission(self):
+        from embodied.control.commands import MotionPlanner
+        from embodied.control.motion_limits import MotionLimits
+        from embodied.devices.robots.realman.hardware import Hardware
+        self.backend.close()
+        self.config = replace(self.config, control_hz=50, park_q=(.2,) * 6)
+        self.connection = Connection(self.kinematics)
+        self.connection.config.update(linear_speed_m_s=.02, angular_speed_rad_s=.2)
+        self.backend = Backend(self.config, connection=self.connection, kinematics=self.kinematics)
+        limits = MotionLimits.load(self.config, backend='real', capabilities=
+            Hardware().capabilities(self.config, self.backend.runtime_parameters()))
+        with patch('embodied.contracts.registry.Registry.create', return_value=self.kinematics):
+            planner = MotionPlanner(self.config, 'model', motion_limits=limits)
+            original = MotionPlanner(self.config, 'model')
+        snapshot = {'q': [0.] * 6, 'gripper_width': .07, 'epoch': 0, 'owner': None}
+        for kind in ('movej', 'home', 'jog'):
+            with self.subTest(kind=kind):
+                request = {'kind': kind, 'q': [.2] * 6, 'speed': .17}
+                plan = planner.plan(request, snapshot, 1.)
+                self.assertGreater(plan['times'][-1], original.plan(request, snapshot, 1.)['times'][-1])
+                self.assertEqual(plan['limits']['tcp'], {'tcp_speed': .02, 'angular_speed': .2})
+                self.assertLessEqual(plan['metrics']['peak_tcp_speed_m_s'], .02)
+                self.assertLessEqual(plan['metrics']['peak_angular_speed_rad_s'], .2)
+                self.connection.q[:] = 0.
+                self.step(hold=True)
+                previous = np.zeros(6)
+                curve = plan['_trajectory']
+                for tick in range(int(np.ceil(curve.duration * 50)) + 1):
+                    elapsed = min(tick / 50, curve.duration)
+                    q, dq = curve.sample(elapsed)
+                    self.step(joint_target=q, joint_velocity_target=dq,
+                        joint_acceleration_target=curve.sample_acceleration(elapsed),
+                        joint_step_limit=limits.step_limits(plan['limits']), planned=True)
+                    self.assertTrue(np.all(np.abs(q - previous) <= .17 / 50 + 1e-10))
+                    self.connection.q = previous = q.copy()
+                np.testing.assert_allclose(q, [.2] * 6, atol=1e-12)
+
     def test_gripper_single_sweep_and_linear_intermediate_opening(self):
         b = self.backend
         b.gripper.update(actpos=1000)

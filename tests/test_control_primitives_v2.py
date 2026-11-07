@@ -96,7 +96,8 @@ class ControlPrimitiveTests(unittest.TestCase):
         self.assertEqual(explicit['limits']['tcp'], {'tcp_speed': .04})
         self.assertLess(explicit['times'][-1], default['times'][-1])
         joint = self.plan(kind='movej', q=[.1, 0., 0., 0., 0., 0.])
-        self.assertNotIn('tcp', joint['limits'])
+        self.assertEqual(joint['limits']['tcp'], {'tcp_speed': .02})
+        self.assertLessEqual(joint['metrics']['peak_tcp_speed_m_s'], .02)
 
     def test_settling_timeout_reports_error_without_claiming_success(self):
         plan = self.plan(kind='movej', q=[.1, 0., 0., 0., 0., 0.])

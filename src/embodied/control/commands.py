@@ -536,8 +536,8 @@ class MotionPlanner:
         if requested_tcp and kind not in ('movel', 'move_path'):
             raise ValueError('TCP limits apply only to movel and move_path')
         limits = self.motion_limits.resolve(request)
-        if kind in ('movel', 'move_path'):
-            requested_tcp = self.motion_limits.resolve_cartesian(request)
+        requested_tcp = self.motion_limits.resolve_cartesian(request)
+        if requested_tcp or kind in ('movel', 'move_path'):
             limits['tcp'] = requested_tcp
         velocity_limit = np.asarray(limits['joint_velocity_rad_s'])
         acceleration_limit, jerk_limit = limits['acceleration'], limits['jerk']
@@ -631,7 +631,7 @@ class MotionPlanner:
                                if math.isclose(float(value), float(max(timing.values())), rel_tol=1e-9)]
             derivative_evaluation = 'sampled_analytic'
         tcp = {}
-        if kind in ('movel', 'move_path'):
+        if requested_tcp or kind in ('movel', 'move_path'):
             trajectory, times, qs, velocity, acceleration, jerk, tcp, tcp_limited = apply_tcp_limits(
                 self.model, trajectory, times, qs, velocity, acceleration, jerk,
                 requested_tcp, limits, self.config.control_hz)
