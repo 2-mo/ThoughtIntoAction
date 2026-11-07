@@ -42,6 +42,12 @@ cd /home/guest/下载/ThoughtIntoAction-local
 
 预期输出 `outputs/datasets/runtime/episode_*/`，包含三路MP4与MCAP帧索引；已有PNG模式仍可使用。本次此前14项针对性测试通过，覆盖三路IPC身份、采集参数、元数据、独立开关／故障、标定选择及PNG录制／导出；安装ffmpeg后，环境PATH检查和三路MP4录制／导出回归另2项通过。该轮MP4使用测试帧；11月6日已完成上文所述真实相机帧写入MP4，但尚未验收含机械臂状态的标准三路采集。前端模块语法检查通过；Playwright依赖缺失，未执行浏览器视觉验收。
 
+## 2026-11-07：手眼标定的规划限速与实机采样
+
+标定使用的 MoveJ 此前只按关节约束规划，驱动仍检查末端速度，导致预览通过后报 `Planned curve exceeds controller TCP speed capability` 并退出。MoveJ、Home、Jog 现在复用已有末端约束和整体时间缩放；驱动的逐周期关节及末端保护不变。使用保存的实际控制器 DH 和采样计划离线检查 26 个姿态及返回中心共 27 段，最大末端角速度约 0.2942 rad/s，低于运行上限 0.3 rad/s；报告为 `outputs/diagnostics/handeye-movej-tcp-replay-20261107-131631.json`。该结果是离线检查。
+
+经授权用左臂 `.19`、真实 `wrist_rgb`、0.10 m 标定板、±0.25 rad 范围和 0.17 rad/s 关节速度进行实机采样。7 段运动完成，保存 2 个拟合姿态、共 40 帧真实图像；之后连续 4 个姿态检测不到标定板，采样按规则失败并保持，未继续或自动回中心。会话为 `outputs/calibration/hand_eye/wrist_rgb/20261107-132120-agent-check/`，内核为 `20261107-132018-robot-f3d762fd2a26`；内核未因速度保护退出，验证结束后已请求控制器停止并正常关闭，报告 `error=null`。尚未取得留出验证样本，未求解或更新有效标定结果；下一轮需要重新选择能覆盖采样范围的标定板视角。
+
 ## 2026-11-05：现有真机路径的速度与夹爪调整
 
 继续使用 `codex/realman-following-fix`、现有 Quest 输入、目标控制器和 JSON 协议。
