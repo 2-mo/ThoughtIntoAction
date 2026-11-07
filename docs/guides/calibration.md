@@ -7,7 +7,7 @@
 | `wrist_rgb`（腕部 D435i） | `wrist` | 固定在桌面 | `T_eef_camera`：TCP → RGB 光学系 |
 | `exterior_rgb`（固定 D435） | `fixed` | 夹在夹爪中 | `T_base_camera`：基座 → RGB 光学系 |
 
-默认 `wrist_rgb` 为腕部安装，其他相机为固定安装；需要时在 `[cameras.<id>]` 中写 `mount = "wrist"` 或 `"fixed"`。TCP 是内核的 `tcp_link`（link6 沿 +x 0.145 m），与遥操、采集、策略使用同一末端坐标系。相机坐标系是 RGB 光学系（+X 右、+Y 下、+Z 前）。
+默认 `wrist_rgb` 为腕部安装，其他相机为固定安装；需要时在 `[cameras.<id>]` 中写 `mount = "wrist"` 或 `"fixed"`。TCP 是当前机器人配置的 `tcp_link`，与遥操、采集、策略使用同一末端坐标系；偏移以对应机器人配置及控制器读回为准，不套用其他机械臂的工具偏移。相机坐标系是 RGB 光学系（+X 右、+Y 下、+Z 前）。
 
 ## 1. 标定板
 
@@ -52,10 +52,15 @@ marker_id = 0
 
 - 会话（原始图像、每帧机器人状态、`session.json`、`result.json`）在 `outputs/calibration/hand_eye/<相机>/<时间>/`。
 - 当前结果在 `outputs/calibrations/hand_eye/<相机>.json`，上一个保留为 `<相机>.previous.json`。
-- 求解：`relative_svd`、Shah、Li 三种方法在拟合样本上做鲁棒拟合（最多剔除 20%），选内点最多、残差最小者；留一法检查安装变换稳定性；留出验证样本从不参与拟合。`validated` 需要留一稳定且留出验证通过：至少 4 个验证姿态、满足运动多样性，且每个验证姿态均不超过 8 mm / 2°，不是仅看整体 RMS。终端会同时列出验证姿态不足、多样性不足或单姿态误差超限等未通过原因。
+- 求解：使用 `relative_svd` 初始化；当前 OpenCV 提供 `calibrateRobotWorldHandEye` 时，也比较 Shah、Li 初始化。每个候选、内点重拟合及留一检查均联合优化安装变换与固定目标变换的旋转、平移，使 `A_i X C_i = Z` 的几何残差最小；按 8 mm / 2° 归一化两种残差。之后按原门槛筛选（最多剔除 20%），选内点最多、残差最小者。输出的 `method` 记录初始化方法，`refinement` 记录联合几何优化；留出验证样本从不参与拟合、剔除或模型选择。
+- `validated` 需要留一稳定且留出验证通过：至少 4 个验证姿态、满足运动多样性，且每个验证姿态均不超过 8 mm / 2°，不是仅看整体 RMS。40 mm 平移跨度、20° 旋转跨度、旋转轴秩及误差阈值均为本项目的工程质量门，不是论文规定的通用精度保证。终端会同时列出验证姿态不足、多样性不足或单姿态误差超限等未通过原因。
 - 未通过验证的结果不会自动保存；检查后可用 `solve <会话> --save --force` 采用（`status` 会标注）。
 - 结果绑定相机序列号：换相机后旧结果不再被使用。
 - `embodied.applications.calibration.load(<相机>)` 返回可用结果；网页控制台据此在三维场景中显示相机。
+
+边长必须是检测到的那个黑色方块的实测长度（米），不是纸张或外框尺寸。标记 PnP 的平移尺度随输入边长同比变化：`--size-m 0.10` 和 `--size-m 1.0` 相差十倍。采集启动时会打印实际使用的尺寸；已有会话不能只修改 `target` 字段，必须由原始角点、相机内参重新计算每帧位姿并重新检查静止性。不能把尺寸当作调参项来降低拟合误差。
+
+联合优化参考 [Horaud 与 Dornaika，Hand-Eye Calibration，1995，§5.2](https://doi.org/10.1177/027836499501400301) 的同时估计旋转和平移思路。本实现使用两个 SE(3) 变换、旋转向量及按项目门槛归一化的绝对姿态残差，属于工程实现，不是对论文四元数目标函数及权重的逐式复现。坐标方向与最少非平行旋转条件见 [OpenCV 手眼标定文档](https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html)；尺寸与位移同单位的约定见 [ArUco 位姿估计文档](https://docs.opencv.org/4.x/d5/dae/tutorial_aruco_detection.html)。
 
 ## 4. 验证
 

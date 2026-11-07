@@ -37,7 +37,7 @@ class CalibrationArm:
         identity = self.session.identity
         return {'runtime_id': identity['runtime_id'], 'backend': identity.get('backend'),
                 'model_id': self.session.status()['model_id'], 'base_frame': 'base_link',
-                'eef_frame': 'tcp_link (link6 + 0.145 m along +x)', 'joint_unit': 'rad', 'length_unit': 'm'}
+                'eef_frame': 'tcp_link', 'joint_unit': 'rad', 'length_unit': 'm'}
 
     def _keepalive(self):
         # Free-drive is a short-TTL target: renew it while teaching, keeping the gripper where it is.

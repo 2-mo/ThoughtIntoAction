@@ -100,6 +100,7 @@ def capture(args):
         raise ValueError('No running kernel: start ./run.sh kernel sim or ./run.sh kernel real first')
     output = Path(args.output or SESSIONS / args.camera_id / datetime.now().strftime('%Y%m%d-%H%M%S'))
     print(f'{args.camera_id} ({mount}): target {"fixed on the table" if mount == "wrist" else "held by the gripper"}; '
+          f'black square {spec["black_square_size_m"]:g} m; '
           f'kernel {Path(runs[-1]).name}.', flush=True)
     session = None
     def interrupted(signum, frame):

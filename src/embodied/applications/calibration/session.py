@@ -1,6 +1,6 @@
 """Stationary, multi-frame hand-eye samples with auditable raw images and robot brackets.
 
-Robot poses are the kernel's measured base -> TCP poses (`tcp_link`, link6 + 0.145 m), the frame
+Robot poses are the kernel's measured base -> TCP poses (`tcp_link` of the active robot profile), the frame
 every other platform component uses for the end effector.
 """
 

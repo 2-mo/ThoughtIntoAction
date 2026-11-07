@@ -7,6 +7,8 @@ Both camera mounts reduce to A X C = Z with C = T_camera_target:
 
 import cv2
 import numpy as np
+from scipy.optimize import least_squares
+from scipy.spatial.transform import Rotation
 
 from embodied.core.transforms import from_rt, inverse, mean_pose, pose_error, transform
 
@@ -54,14 +56,40 @@ def _fit(a, c, indices, method):
         if rank < 3:
             raise ValueError("Unobservable hand-eye translation")
         x = from_rt(rotation, translation)
-        return x, mean_pose([a[i] @ x @ c[i] for i in indices])
-    # OpenCV solves A X = Z B. For eye-in-hand B=inv(T_camera_target).
-    b = [inverse(c[i]) for i in indices]
-    aa = [a[i] for i in indices]
-    rx, tx, rz, tz = cv2.calibrateRobotWorldHandEye(
-        [p[:3, :3] for p in aa], [p[:3, 3] for p in aa],
-        [p[:3, :3] for p in b], [p[:3, 3] for p in b], method=method)
-    return from_rt(rx, tx), from_rt(rz, tz)
+        z = mean_pose([a[i] @ x @ c[i] for i in indices])
+    else:
+        # OpenCV solves A X = Z B. For eye-in-hand B=inv(T_camera_target).
+        b = [inverse(c[i]) for i in indices]
+        aa = [a[i] for i in indices]
+        rx, tx, rz, tz = cv2.calibrateRobotWorldHandEye(
+            [p[:3, :3] for p in aa], [p[:3, 3] for p in aa],
+            [p[:3, :3] for p in b], [p[:3, 3] for p in b], method=method)
+        x, z = from_rt(rx, tx), from_rt(rz, tz)
+    return _refine(a, c, indices, x, z)
+
+
+def _refine(a, c, indices, x, z):
+    """Jointly fit both rigid transforms on this fit subset; linear solutions only initialize."""
+    aa, cc = np.asarray([a[i] for i in indices]), np.asarray([c[i] for i in indices])
+
+    def unpack(values):
+        return (from_rt(Rotation.from_rotvec(values[:3]).as_matrix(), values[3:6]),
+                from_rt(Rotation.from_rotvec(values[6:9]).as_matrix(), values[9:12]))
+
+    def objective(values):
+        xx, zz = unpack(values)
+        predicted = aa @ xx @ cc
+        translation = (predicted[:, :3, 3] - zz[:3, 3]) / TRANSLATION_LIMIT
+        rotation = Rotation.from_matrix(predicted[:, :3, :3] @ zz[:3, :3].T).as_rotvec()
+        return np.column_stack((translation, rotation / np.radians(ROTATION_LIMIT_DEG))).ravel()
+
+    initial = np.r_[Rotation.from_matrix(x[:3, :3]).as_rotvec(), x[:3, 3],
+                    Rotation.from_matrix(z[:3, :3]).as_rotvec(), z[:3, 3]]
+    # Rotation noise affects translation too; optimize the same geometric errors that the gates assess.
+    result = least_squares(objective, initial, max_nfev=100, ftol=1e-10, xtol=1e-10, gtol=1e-10)
+    if not result.success or not np.isfinite(result.x).all():
+        raise ValueError('Joint hand-eye refinement did not converge')
+    return unpack(result.x)
 
 
 def residuals(a, c, x, z):
@@ -105,6 +133,8 @@ def solve(samples, mount="wrist"):
     rng = np.random.default_rng(20260908)
     subsets = [np.arange(len(a))] + [rng.choice(len(a), 6, replace=False) for _ in range(96)]
     candidates = []
+    required_inliers = max(10, int(np.ceil(0.8 * len(a))))
+    best_inliers = 0
     limits = np.array([TRANSLATION_LIMIT, ROTATION_LIMIT_DEG])
     methods = [("relative_svd", "relative_svd")]
     if hasattr(cv2, "calibrateRobotWorldHandEye"):
@@ -116,7 +146,8 @@ def solve(samples, mount="wrist"):
                 x, z = _fit(a, c, indices, method)
                 errors = residuals(a, c, x, z)
                 inliers = np.flatnonzero(np.all(errors <= limits, axis=1))
-                if len(inliers) < max(10, int(np.ceil(0.8 * len(a)))):
+                best_inliers = max(best_inliers, len(inliers))
+                if len(inliers) < required_inliers:
                     continue
                 # Recheck diversity AFTER outlier rejection (missing in old robust fit).
                 diversity([robot[i] for i in inliers])
@@ -129,7 +160,9 @@ def solve(samples, mount="wrist"):
             except (cv2.error, ValueError, np.linalg.LinAlgError):
                 continue
     if not candidates:
-        raise ValueError("No fit passed residual/diversity gates with <=20% excluded samples")
+        raise ValueError("No fit passed residual/diversity gates with <=20% excluded samples; "
+                         f"best consensus {best_inliers}/{len(a)} poses (need {required_inliers}). "
+                         "Check the measured black-square size, pose units and rigid mounting.")
     _, _, name, method, x, z, inliers, errors = min(candidates, key=lambda item: item[:2])
     # Leave-one-out stability of the mounting transform, not only board location.
     stability = []
@@ -157,6 +190,7 @@ def solve(samples, mount="wrist"):
             "status": "validated" if stable and validation_pass else "candidate",
             "equation": equation, "camera_frame": "RGB optical (+X right, +Y down, +Z forward)",
             x_name: x.tolist(), z_name: z.tolist(), "method": name,
+            "refinement": "joint_se3_least_squares",
             "fit": metrics(errors[inliers]), "motion_diversity": diversity([robot[i] for i in inliers]),
             "input_motion_diversity": info,
             "inlier_ids": [fit[i]["id"] for i in inliers],
