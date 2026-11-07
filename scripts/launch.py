@@ -154,8 +154,7 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
 
     python = resolve_python(config)
     env["PATH"] = os.pathsep.join((str(python.parent), env.get("PATH", os.defpath)))
-    if (command in {"examples", "collect", "runtime-data", "workbench", "robot-pair", "phone", "motion", "component-source"}
-            or command == "handeye" and any(arg == '--runtime' or arg.startswith('--runtime=') for arg in arguments)):
+    if command in {"examples", "collect", "runtime-data", "workbench", "robot-pair", "phone", "motion", "component-source", "handeye"}:
         # Independent components use the gateway; they do not load legacy SDK extensions.
         env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
         for key in ('PYTHONHOME', 'LD_LIBRARY_PATH'):
@@ -198,7 +197,7 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
     if command == "teleop-dry-run":
         defaults.append("--dry-run")
     if command in MODULE_COMMANDS:
-        if command in {"control-arm", "handeye", "arm-service"}:
+        if command in {"control-arm", "arm-service"}:
             defaults.extend(["--urdf", str(resolve_path(config["robot"]["urdf"]))])
         if command in {"session", "record"}:
             defaults = [command]
