@@ -331,7 +331,8 @@ class CommandEngine:
             self.settling.clear()
             self.completed_target = None
             self.operation = {'operation_id': key, 'status': 'running', 'started': now,
-                              'plan': plan, 'kind': plan['kind']}
+                              'plan': plan, 'kind': plan['kind'], 'trajectory_tick': 0,
+                              'settling_started': None}
             self.operations[key] = self.operation
             while len(self.operations) > 64:
                 self.operations.popitem(last=False)
@@ -423,7 +424,9 @@ class CommandEngine:
                 self.reset_reference = True
         elif self.owner and self.operation:
             op, plan = self.operation, self.operation['plan']
-            elapsed = now - op['started']
+            duration = float(plan['times'][-1])
+            # Use the driver's fixed cycle budget; delayed ticks never skip curve samples.
+            elapsed = min(op['trajectory_tick'] / self.config.control_hz, duration)
             trajectory = plan.get('_trajectory')
             acceleration = getattr(trajectory, 'sample_acceleration', None)
             ddq = acceleration(elapsed) if acceleration is not None else None
@@ -438,20 +441,26 @@ class CommandEngine:
                 joint_velocity_target=dq, joint_acceleration_target=ddq, gripper_target=plan['gripper_width'],
                 joint_step_limit=self.motion_limits.step_limits(plan.get('limits')),
                 planned=trajectory is not None)
-            if elapsed >= plan['times'][-1]:
-                settled = self.settling.update(now, state.q, state.dq, q)
-                timed_out = elapsed > plan['times'][-1] + self.motion_limits.settling['timeout_s']
-                if settled or timed_out:
-                    # Retain measured accuracy on success as well as failure;
-                    # passing a tolerance never means the error was zero.
-                    errors = np.abs(state.q - q)
-                    op['settling'] = {
-                        'joint_error_rad': errors.tolist(), 'worst_joint': int(np.argmax(errors)) + 1,
-                        'max_joint_error_rad': float(np.max(errors)),
-                        'position_tolerance_rad': self.settling.position_limit,
-                        'trajectory_duration_s': float(plan['times'][-1]),
-                        'settling_elapsed_s': elapsed - float(plan['times'][-1]),
-                    }
+            if not self.reset_reference:
+                op['trajectory_tick'] += 1
+            finished = elapsed >= duration
+            if finished and op['settling_started'] is None:
+                op['settling_started'] = now
+            settling_elapsed = now - op['settling_started'] if finished else 0.
+            settled = finished and self.settling.update(now, state.q, state.dq, q)
+            timeout = self.motion_limits.settling['timeout_s']
+            timed_out = (settling_elapsed > timeout if finished
+                         else now - op['started'] > duration + timeout)
+            if settled or timed_out:
+                # Retain measured accuracy against the goal even if execution timed out early.
+                errors = np.abs(state.q - plan['q'][-1])
+                op['settling'] = {
+                    'joint_error_rad': errors.tolist(), 'worst_joint': int(np.argmax(errors)) + 1,
+                    'max_joint_error_rad': float(np.max(errors)),
+                    'position_tolerance_rad': self.settling.position_limit,
+                    'trajectory_duration_s': duration,
+                    'settling_elapsed_s': settling_elapsed,
+                }
                 if settled:
                     op['status'] = 'completed'
                     self.operation = None
@@ -459,7 +468,7 @@ class CommandEngine:
                     self.settling.clear()
                 elif timed_out:
                     op['status'] = 'failed'
-                    op['reason'] = 'Robot did not settle'
+                    op['reason'] = 'Robot did not settle' if finished else 'Trajectory execution timed out'
                     self.operation = None
                     self.completed_target = None
                     self.reset_reference = True

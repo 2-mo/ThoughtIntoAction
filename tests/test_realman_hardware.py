@@ -1,6 +1,7 @@
 """Fake-controller checks; no robot, Quest SDK or live service is opened."""
 from types import SimpleNamespace
 from contextlib import closing
+from dataclasses import replace
 import json
 from pathlib import Path
 import tempfile
@@ -134,6 +135,49 @@ class HardwareTests(unittest.TestCase):
             self.step(joint_target=np.array([0, 0, 0, .02, 0, 0]),
                       joint_velocity_target=np.zeros(6), planned=True)
         self.assertEqual(len(self.motions()), count)
+
+    def test_planned_motion_at_50hz_keeps_driver_budget_under_tick_jitter(self):
+        from embodied.control.commands import CommandEngine, MotionPlanner
+        self.backend.close()
+        self.config = replace(self.config, control_hz=50)
+        self.connection = Connection(self.kinematics)
+        self.backend = Backend(self.config, connection=self.connection, kinematics=self.kinematics)
+        engine = CommandEngine('fixture', self.config, 'model')
+        state = self.backend.state
+        now = 1.
+        for stamp in np.linspace(.74, now, 66):
+            state.received_at = float(stamp)
+            engine.next(state, float(stamp))
+        lease = engine.request({'version': 1, 'runtime_id': 'fixture', 'action': 'acquire',
+                                'source': 'test'}, state, now)
+        engine.next(state, now)
+        with patch('embodied.contracts.registry.Registry.create', return_value=self.kinematics):
+            planner = MotionPlanner(self.config, 'model')
+        goal = np.array([.1, 0, 0, 0, 0, 0])
+        plan = planner.plan({'kind': 'movej', 'q': goal.tolist(), 'speed': .15},
+                            engine.status(state, now), now)
+        engine.request({'version': 1, 'runtime_id': 'fixture', 'action': 'execute',
+            **{k: lease[k] for k in ('token', 'epoch')}, 'sequence': 1, '_plan': plan}, state, now)
+        engine.expires = 100.
+        previous = np.zeros(6)
+        ticks = int(np.ceil(plan['times'][-1] * 50)) + 1
+        for index in range(ticks):
+            now += .08 if index == 10 else (.018, .022, .026)[index % 3]
+            state = self.backend.read_state(time.monotonic())
+            command = engine.next(replace(state, received_at=now), now)
+            self.backend.step(command, now)
+            sent = self.backend.controller.q_target.copy()
+            self.assertTrue(np.all(np.abs(sent - previous) <= .15 / 50 + 1e-10))
+            self.connection.q = previous = sent
+        np.testing.assert_allclose(sent, goal, atol=1e-12)
+        # The same unchanged driver must still reject a genuinely oversized planned step.
+        state = self.backend.read_state(time.monotonic())
+        before = len(self.motions())
+        with self.assertRaisesRegex(ValueError, 'cycle speed budget'):
+            self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING,
+                joint_target=goal + [.004, 0, 0, 0, 0, 0], joint_velocity_target=np.zeros(6),
+                joint_step_limit=np.full(6, .15 / 50), planned=True), now)
+        self.assertEqual(len(self.motions()), before)
 
     def test_gripper_single_sweep_and_linear_intermediate_opening(self):
         b = self.backend

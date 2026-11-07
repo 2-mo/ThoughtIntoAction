@@ -110,12 +110,78 @@ class ControlPrimitiveTests(unittest.TestCase):
         engine.request({'version': 1, 'runtime_id': 'r', 'action': 'execute',
             **{k: lease[k] for k in ('token', 'epoch')}, 'sequence': 1, '_plan': plan}, state, 1.)
         engine.expires = 100.
-        command = engine.next(state, 1. + plan['times'][-1] + engine.motion_limits.settling['timeout_s'] + .01)
+        for index in range(int(np.ceil(plan['times'][-1] * self.config.control_hz)) + 1):
+            now = 1. + index / self.config.control_hz
+            state.received_at = now
+            engine.next(state, now)
+        command = engine.next(state, now + engine.motion_limits.settling['timeout_s'] + .01)
         result = engine.operations[plan['plan_id']]
         self.assertEqual(result['status'], 'failed')
         self.assertEqual(result['settling']['worst_joint'], 1)
         self.assertAlmostEqual(result['settling']['max_joint_error_rad'], .1)
         self.assertTrue(command.hold)
+        self.assertIsNone(engine.completed_target)
+
+    def test_fixed_period_samples_survive_jitter_and_settle_on_wall_time(self):
+        for hz in (50, 250):
+            with self.subTest(hz=hz):
+                self.config.control_hz = hz
+                plan = self.plan(kind='movej', q=[.1, -.06, .02, -.08, .04, -.03], speed=.15)
+                engine = CommandEngine('r', self.config, 'fixture')
+                state = self.state(1.)
+                for stamp in np.linspace(.74, 1., 66):
+                    state.received_at = float(stamp)
+                    engine.next(state, float(stamp))
+                lease = engine.request({'version': 1, 'runtime_id': 'r', 'action': 'acquire',
+                                        'source': 'test'}, state, 1.)
+                # Execution in the acquisition tick must not consume a sample during reference reset.
+                engine.request({'version': 1, 'runtime_id': 'r', 'action': 'execute',
+                    **{k: lease[k] for k in ('token', 'epoch')}, 'sequence': 1, '_plan': plan}, state, 1.)
+                self.assertTrue(engine.next(state, 1.).reset_reference)
+                engine.expires = 100.
+                now, previous = 1., state.q.copy()
+                count = int(np.ceil(plan['times'][-1] * hz)) + 1
+                for index in range(count):
+                    now += .08 if index == 10 else (1., 1.1, .9)[index % 3] / hz
+                    state.received_at = now
+                    command = engine.next(state, now)
+                    elapsed = min(index / hz, plan['times'][-1])
+                    q, dq = plan['_trajectory'].sample(elapsed)
+                    np.testing.assert_allclose(command.joint_target, q, atol=1e-12)
+                    np.testing.assert_allclose(command.joint_velocity_target, dq, atol=1e-12)
+                    np.testing.assert_allclose(command.joint_acceleration_target,
+                        plan['_trajectory'].sample_acceleration(elapsed), atol=1e-12)
+                    self.assertTrue(np.all(np.abs(q - previous) <= .15 / hz + 1e-10))
+                    self.assertEqual(engine.operation['status'], 'running')
+                    state.q, state.dq, previous = q.copy(), dq.copy(), q.copy()
+                self.assertAlmostEqual(engine.operation['settling_started'], now)
+                end = now
+                for index in range(1, int(np.ceil(engine.settling.duration * hz)) + 3):
+                    now = end + index / hz
+                    state.received_at = now
+                    engine.next(state, now)
+                result = engine.operations[plan['plan_id']]
+                self.assertEqual(result['status'], 'completed')
+                self.assertGreaterEqual(result['settling']['settling_elapsed_s'], engine.settling.duration)
+
+    def test_execution_delay_times_out_without_skipping_to_the_goal(self):
+        plan = self.plan(kind='movej', q=[.1, 0., 0., 0., 0., 0.], speed=.15)
+        engine = CommandEngine('r', self.config, 'fixture')
+        state = self.state(1.)
+        for stamp in np.linspace(.74, 1., 66):
+            state.received_at = float(stamp)
+            engine.next(state, float(stamp))
+        lease = engine.request({'version': 1, 'runtime_id': 'r', 'action': 'acquire', 'source': 'test'}, state, 1.)
+        engine.next(state, 1.)
+        engine.request({'version': 1, 'runtime_id': 'r', 'action': 'execute',
+            **{k: lease[k] for k in ('token', 'epoch')}, 'sequence': 1, '_plan': plan}, state, 1.)
+        engine.expires = 100.
+        command = engine.next(state, 1. + plan['times'][-1] + engine.motion_limits.settling['timeout_s'] + .01)
+        result = engine.operations[plan['plan_id']]
+        self.assertEqual(result['reason'], 'Trajectory execution timed out')
+        self.assertAlmostEqual(result['settling']['max_joint_error_rad'], .1)
+        self.assertEqual(result['settling']['settling_elapsed_s'], 0.)
+        self.assertTrue(command.hold and command.reset_reference)
         self.assertIsNone(engine.completed_target)
 
     def test_pure_rotation_uses_angular_not_linear_speed(self):
@@ -144,7 +210,9 @@ class ControlPrimitiveTests(unittest.TestCase):
         operation = engine.request({'version': 1, 'runtime_id': 'r', 'action': 'execute',
             **{k: lease[k] for k in ('token', 'epoch')}, 'sequence': 1, '_plan': plan}, state, 1.)
         engine.expires = 100.
-        command = engine.next(state, 1. + duration/2)
+        for index in range(int(duration * self.config.control_hz / 2) + 1):
+            state.received_at = 1. + index / self.config.control_hz
+            command = engine.next(state, state.received_at)
         self.assertGreater(np.linalg.norm(command.joint_velocity_target), 1e-6)
         self.assertEqual(engine.operation['operation_id'], operation['operation_id'])
         self.assertEqual(len(engine.operations), 1)
