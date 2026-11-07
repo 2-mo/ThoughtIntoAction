@@ -4,14 +4,15 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import cv2
 import numpy as np
 
 from embodied.applications import calibration
 from embodied.applications.calibration.arm import Refused
-from embodied.applications.calibration.plan import MAX_CONSECUTIVE_MISSES, kernel_model, make_plan, run_plan, validate_plan
+from embodied.applications.calibration.plan import (MAX_CONSECUTIVE_MISSES, kernel_model, make_plan,
+                                                   make_realman_plan, run_plan, target_visible, validate_plan)
 from embodied.applications.calibration.session import Session, pose_matrix
 from embodied.applications.calibration.solver import solve
 from embodied.applications.calibration.target import MarkerDetector, marker_svg, normalize_pixels, square_pose, target_spec
@@ -244,6 +245,147 @@ class PlanTests(unittest.TestCase):
         with self.assertRaises(KeyboardInterrupt):
             run_plan(arm, self.plan, sample)
         self.assertEqual(len(arm.moves), 1)
+
+
+class RealmanPlanTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from embodied.core.project import PROJECT_ROOT
+        cls.model = kernel_model(PROJECT_ROOT / 'assets/robots/realman/runtime/rm65.urdf')
+        cls.center = np.array([.11, -.39, 1.13, -.13, 1.81, -.18])
+        cls.camera = {**TargetTests.intrinsics, 'serial': 'synthetic-rm65'}
+        cls.x = from_rt(cv2.Rodrigues(np.array([0., 0., -.5]))[0], [-.08, -.03, -.11])
+        cls.board = cls.model.fk(cls.center) @ cls.x @ from_rt(cv2.Rodrigues(np.array([2.9, .1, 0]))[0], [0, 0, .5])
+        cls.view = {'camera_id': 'wrist_rgb', 'camera': cls.camera, 'target': target_spec(.1),
+                    'T_eef_camera': cls.x.tolist(), 'T_base_target': cls.board.tolist()}
+        cls.plan = make_realman_plan(cls.model, cls.center, view=cls.view)
+
+    def test_preset_has_separate_diverse_splits_and_visible_paths(self):
+        report = validate_plan(self.plan, self.model)
+        self.assertEqual(report['waypoints'], 26)
+        self.assertLessEqual(report['max_offset_rad'], .25 + 1e-9)
+        self.assertEqual([row['split'] for row in self.plan['waypoints']].count('validation'), 6)
+        self.assertEqual(len({tuple(row['q']) for row in self.plan['waypoints']}), 26)
+        self.assertTrue(all(np.count_nonzero(np.abs(np.asarray(row['q']) - self.center) > 1e-10) <= 2
+                            for row in self.plan['waypoints']))
+        for split in ('fit', 'validation'):
+            self.assertGreaterEqual(report[split]['translation_span_m'], .04)
+            self.assertGreaterEqual(report[split]['rotation_span_deg'], 20)
+            self.assertGreaterEqual(report[split]['rotation_axis_rank'], 2)
+        self.assertTrue(target_visible(self.model.fk(self.center), self.view))
+        moved = {**self.view, 'T_base_target': from_rt(np.eye(3), [10., 10., 10.]).tolist()}
+        self.assertFalse(target_visible(self.model.fk(self.center), moved))
+        with self.assertRaisesRegex(ValueError, 'image margin'):
+            validate_plan({**self.plan, 'view': moved}, self.model)
+        with self.assertRaisesRegex(ValueError, 'Not enough visible'):
+            make_realman_plan(self.model, self.center, view=moved)
+
+    def test_reference_candidate_is_used_only_for_planning_and_heldout_is_untouched(self):
+        from embodied.applications.calibration.cli import main
+        rows = []
+        for i, row in enumerate(self.plan['waypoints']):
+            rows.append({'id': i, 'q': row['q'], 'split': row['split'],
+                         'T_camera_target': (inverse(self.model.fk(row['q']) @ self.x) @ self.board).tolist()
+                         if row['split'] == 'fit' else 'held-out values must not be read'})
+        with tempfile.TemporaryDirectory() as folder:
+            session = Path(folder)
+            (session / 'session.json').write_text(json.dumps({
+                'kind': 'hand_eye_samples', 'camera_id': 'wrist_rgb', 'mount': 'wrist',
+                'camera': self.camera, 'target': target_spec(.1), 'plan': self.plan, 'samples': rows}))
+            result = {'status': 'candidate', 'T_eef_camera': self.x.tolist(), 'inlier_ids': list(range(20))}
+            (session / 'result.json').write_text(json.dumps(result))
+            output = session / 'preset.json'
+            with patch('embodied.applications.calibration.save') as save, patch('builtins.print'):
+                main(['plan', str(session), '--output', str(output)])
+            plan = json.loads(output.read_text())
+            self.assertEqual(plan['view']['source_status'], 'candidate')
+            self.assertEqual(plan['view']['purpose'], 'approximate view planning only; not an adopted calibration')
+            np.testing.assert_allclose(plan['view']['T_base_target'], self.board, atol=1e-12)
+            self.assertEqual(json.loads((session / 'result.json').read_text()), result)
+            save.assert_not_called()
+            with patch('builtins.print'), self.assertRaises(FileExistsError):
+                main(['plan', str(session), '--output', str(output)])
+
+    def test_simulation_preview_rejects_hardware_before_acquiring_control(self):
+        from embodied.applications.calibration.cli import main
+        client = MagicMock()
+        client.identity = {'backend': 'real'}
+        with patch('embodied.contracts.runtime.control.ControlClient', return_value=client), \
+                patch('embodied.applications.calibration.arm.CalibrationArm') as arm, \
+                self.assertRaisesRegex(ValueError, 'simulation runtime'):
+            main(['preview', '/missing-plan.json', '--run', '/fake-runtime'])
+        arm.assert_not_called()
+
+    def test_preview_records_actual_poses_and_fails_if_a_point_is_refused(self):
+        from embodied.applications.calibration.cli import main
+        client = MagicMock()
+        client.identity = {'backend': 'sim'}
+        client.parameters = {'model': {'xml_path': str(self.model.urdf.with_suffix('.xml'))}}
+        for refuse in (False, True):
+            with self.subTest(refuse=refuse), tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / 'plan.json'
+                path.write_text(json.dumps(self.plan))
+                arm = FakeArm(self.model, self.center,
+                              refuse=[self.plan['waypoints'][0]['q']] if refuse else [])
+                context = MagicMock()
+                context.__enter__.return_value = arm
+                with patch('embodied.contracts.runtime.control.ControlClient', return_value=client), \
+                        patch('embodied.applications.calibration.arm.CalibrationArm', return_value=context), \
+                        patch('builtins.print'):
+                    if refuse:
+                        with self.assertRaisesRegex(ValueError, 'Only 25/26'):
+                            main(['preview', str(path), '--run', '/fake-sim'])
+                    else:
+                        main(['preview', str(path), '--run', '/fake-sim'])
+                report = json.loads(path.with_suffix('.preview.json').read_text())
+                self.assertEqual(report['status'], 'failed' if refuse else 'complete')
+                self.assertEqual(len(report['samples']), 25 if refuse else 26)
+                if not refuse:
+                    self.assertGreaterEqual(report['measured_diversity']['validation']['rotation_span_deg'], 20)
+                    np.testing.assert_allclose(report['final_q'], self.center)
+                context.__exit__.assert_called_once()
+
+    def test_auto_selects_realman_preset_and_rechecks_a_saved_view_before_motion(self):
+        from types import SimpleNamespace
+        from embodied.applications.calibration.cli import run_auto
+        arm = MagicMock()
+        arm.session.parameters = {'model': {'xml_path': str(self.model.urdf.with_suffix('.xml'))},
+                                  'effective_robot_config': {'model_plugin': 'realman.hardware'}}
+        arm.snapshot.return_value = {'q': self.center.tolist()}
+        observed = inverse(self.model.fk(self.center) @ self.x) @ self.board
+        observed[0, 3] += .005
+        data = {'camera_id': 'wrist_rgb', 'camera': self.camera, 'target': target_spec(.1), 'mount': 'wrist',
+                'center_observation': {'T_camera_target': observed.tolist()}}
+        session = MagicMock()
+        session.data = dict(data)
+        with patch('embodied.applications.calibration.plan.kernel_model', return_value=self.model), \
+                patch('embodied.applications.calibration.plan.make_realman_plan', return_value=self.plan) as preset, \
+                patch('embodied.applications.calibration.plan.make_plan') as arx, \
+                patch('embodied.applications.calibration.plan.run_plan', return_value=26), patch('builtins.print'):
+            run_auto(SimpleNamespace(plan=None, step_rad=.25, speed=.17), arm, session, Mock())
+        preset.assert_called_once()
+        arx.assert_not_called()
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'plan.json'
+            path.write_text(json.dumps(self.plan))
+            args = SimpleNamespace(plan=path, speed=.17)
+            with patch('embodied.applications.calibration.plan.kernel_model', return_value=self.model), \
+                    patch('embodied.applications.calibration.plan.run_plan', return_value=26) as execute, \
+                    patch('builtins.print'):
+                run_auto(args, arm, session, Mock())
+                expected = self.model.fk(self.center) @ self.x @ observed
+                np.testing.assert_allclose(session.data['plan']['view']['T_base_target'], expected)
+                execute.assert_called_once()
+                execute.reset_mock()
+                session.data = {**data, 'camera': {**self.camera, 'serial': 'other-camera'}}
+                with self.assertRaisesRegex(ValueError, 'another camera'):
+                    run_auto(args, arm, session, Mock())
+                execute.assert_not_called()
+                session.data = {**data, 'center_observation': {'T_camera_target':
+                                from_rt(np.eye(3), [10., 10., 10.]).tolist()}}
+                with self.assertRaisesRegex(ValueError, 'image margin'):
+                    run_auto(args, arm, session, Mock())
+                execute.assert_not_called()
 
 
 class Camera:
