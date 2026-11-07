@@ -1,9 +1,11 @@
-"""Hand-eye calibration of a configured camera through the arx kernel.
+"""Hand-eye calibration of a configured camera through the control kernel.
 
   marker                 printable ArUco target (measure the printed black square)
   capture <camera_id>    teach by hand and sample with s / v, or --auto: teach a centre pose, press c,
                          and the kernel visits a sampling plan around it; solves and saves when validated
   solve <session>        re-solve a session offline; --save makes it the current result
+  plan <session>         preset RM65 points using an earlier wrist session as approximate view geometry
+  preview <plan>         replay preset points in an existing simulation, without a camera
   status                 current result of every configured camera
 
 The target is fixed on the table for a wrist camera, and held by the gripper for a fixed camera.
@@ -18,11 +20,12 @@ import signal
 import numpy as np
 
 from embodied.applications import calibration
-from embodied.applications.calibration.session import load as load_session
-from embodied.applications.calibration.solver import solve
+from embodied.applications.calibration.session import load as load_session, pose_matrix
+from embodied.applications.calibration.solver import diversity, solve
 from embodied.applications.calibration.target import MarkerDetector, marker_svg, target_spec
 from embodied.core.project import PROJECT_ROOT
 from embodied.core.storage import save_json
+from embodied.core.transforms import mean_pose, transform
 
 SESSIONS = PROJECT_ROOT / 'outputs/calibration/hand_eye'
 WINDOW = 'hand-eye calibration'
@@ -155,6 +158,8 @@ def capture(args):
                         print('The target must be visible at the centre pose.', flush=True)
                         continue
                     auto_running = True
+                    session.data['center_observation'] = {
+                        'T_camera_target': detection['T_camera_target'].tolist()}
                     run_auto(args, arm, session, sample)
                     break
                 if not args.auto and key in (ord('s'), ord('v')):
@@ -177,7 +182,7 @@ def capture(args):
 
 
 def run_auto(args, arm, session, sample):
-    from embodied.applications.calibration.plan import kernel_model, make_plan, run_plan, validate_plan
+    from embodied.applications.calibration.plan import kernel_model, make_plan, make_realman_plan, run_plan, validate_plan
     arm.hold()
     model = kernel_model(Path(arm.session.parameters['model']['xml_path']).with_suffix('.urdf'))
     center = arm.snapshot()['q']
@@ -186,8 +191,21 @@ def run_auto(args, arm, session, sample):
         validate_plan(plan, model)
         if np.max(np.abs(np.asarray(center) - plan['center'])) > .03:
             raise ValueError('Teach the plan centre pose first (within 0.03 rad)')
+        if plan.get('view'):
+            view = plan['view']
+            if (view['camera_id'] != session.data['camera_id']
+                    or view['camera']['serial'] != session.data['camera']['serial']
+                    or view['target'] != session.data['target'] or session.data['mount'] != 'wrist'):
+                raise ValueError('Plan view belongs to another camera, target or mounting')
+            # Re-anchor to the live board; a saved candidate is only a planning estimate.
+            view['T_base_target'] = (model.fk(center) @ transform(view['T_eef_camera'])
+                                     @ transform(session.data['center_observation']['T_camera_target'])).tolist()
+            view['camera'] = {key: session.data['camera'][key] for key in view['camera']}
+            plan['center'] = list(center)
+            validate_plan(plan, model)
     else:
-        plan = make_plan(model, center, args.step_rad)
+        realman = arm.session.parameters['effective_robot_config']['model_plugin'].startswith('realman')
+        plan = (make_realman_plan if realman else make_plan)(model, center, args.step_rad)
     session.data['plan'] = plan
     session.save()
     print(f'Sampling {len(plan["waypoints"])} poses within ±{plan["step_rad"]} rad at {args.speed} rad/s; '
@@ -195,6 +213,75 @@ def run_auto(args, arm, session, sample):
     taken = run_plan(arm, plan, sample, speed=args.speed,
                      log=lambda text: (session.skip(None, None, text), print(text, flush=True)))
     print(f'{taken} samples captured; back at the centre pose.', flush=True)
+
+
+def prepare_plan(args):
+    from embodied.applications.calibration.plan import kernel_model, make_realman_plan, validate_plan
+    from embodied.control.settings import load_settings
+    robot = load_settings(args.robot_config).robot
+    if not robot.model_plugin.startswith('realman'):
+        raise ValueError('This preset uses an RM65 robot configuration')
+    model = kernel_model(Path(robot.model_path).with_suffix('.urdf'))
+    source = load_session(args.session)
+    result = json.loads((Path(args.session) / 'result.json').read_text())
+    if source['mount'] != 'wrist' or source.get('plan', {}).get('robot') != model.metadata():
+        raise ValueError('Reference must be a wrist session captured with this robot URDF/TCP')
+    x = transform(result['T_eef_camera'])
+    # Use only fitting inliers to estimate board location in the nominal simulation model.
+    fit = [row for row in source['samples'] if row['split'] == 'fit' and row['id'] in result['inlier_ids']]
+    board = mean_pose([model.fk(row['q']) @ x @ transform(row['T_camera_target']) for row in fit])
+    view = {'camera_id': source['camera_id'], 'target': source['target'],
+            'camera': {key: source['camera'][key] for key in
+                       ('serial', 'width', 'height', 'matrix', 'distortion_model', 'coefficients')},
+            'T_eef_camera': x.tolist(), 'T_base_target': board.tolist(),
+            'source_session': str(Path(args.session).resolve()), 'source_status': result['status'],
+            'purpose': 'approximate view planning only; not an adopted calibration'}
+    plan = make_realman_plan(model, source['plan']['center'], args.step_rad, view=view)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with args.output.open('x') as output:
+        json.dump(plan, output, indent=2)
+        output.write('\n')
+    print(json.dumps({'plan': str(args.output), **validate_plan(plan, model)}, indent=2))
+
+
+def preview_plan(args):
+    from embodied.applications.calibration.arm import CalibrationArm
+    from embodied.applications.calibration.plan import kernel_model, run_plan, target_visible, validate_plan
+    from embodied.contracts.runtime.control import ControlClient
+    client = ControlClient(args.run)
+    if client.identity['backend'] != 'sim':
+        raise ValueError('Plan preview requires a simulation runtime; hardware is never executed here')
+    plan = json.loads(args.plan.read_text())
+    model = kernel_model(Path(client.parameters['model']['xml_path']).with_suffix('.urdf'))
+    summary = validate_plan(plan, model)
+    report = {'simulation_only': True, 'runtime': str(args.run), 'plan': str(args.plan),
+              'summary': summary, 'samples': [], 'skipped': [], 'status': 'running'}
+    try:
+        with CalibrationArm(args.run) as arm:
+            arm.move(plan['center'], args.speed)
+            arm.hold()
+            def sample(split, index):
+                measured = arm.snapshot()
+                report['samples'].append({'index': index, 'split': split, **measured})
+                if np.max(np.abs(np.asarray(measured['q']) - plan['waypoints'][index]['q'])) > .01:
+                    raise RuntimeError(f'Simulation did not settle at waypoint {index}')
+                if plan.get('view') and not target_visible(pose_matrix(measured['pose']), plan['view']):
+                    raise RuntimeError(f'Simulated waypoint {index} fails the predicted target view')
+                print(f'Simulation {index + 1}/{summary["waypoints"]}: {split}', flush=True)
+            taken = run_plan(arm, plan, sample, speed=args.speed, log=report['skipped'].append)
+            report['final_q'] = arm.snapshot()['q']
+            if taken != summary['waypoints']:
+                raise ValueError(f'Only {taken}/{summary["waypoints"]} simulation poses reached; inspect preview report')
+            report['measured_diversity'] = {
+                split: diversity([pose_matrix(row['pose']) for row in report['samples'] if row['split'] == split],
+                                 minimum=10 if split == 'fit' else 4) for split in ('fit', 'validation')}
+        report['status'] = 'complete'
+    except BaseException as exc:
+        report.update(status='failed', error=str(exc))
+        raise
+    finally:
+        save_json(args.plan.with_suffix('.preview.json'), report)
+    print(f'Simulation replay complete; report: {args.plan.with_suffix(".preview.json")}')
 
 
 def status():
@@ -232,6 +319,16 @@ def main(argv=None):
     solver.add_argument('session')
     solver.add_argument('--save', action='store_true', help='Make it the current result when validated')
     solver.add_argument('--force', action='store_true', help='With --save: adopt a result that failed validation')
+    from embodied.contracts.paths import ROBOT_CONFIG
+    preset = commands.add_parser('plan', help='Prepare RM65 points offline from an earlier wrist session')
+    preset.add_argument('session', type=Path)
+    preset.add_argument('--robot-config', type=Path, default=ROBOT_CONFIG)
+    preset.add_argument('--step-rad', type=float, default=.25)
+    preset.add_argument('--output', type=Path, required=True)
+    preview = commands.add_parser('preview', help='Replay a saved plan in simulation only, without camera sampling')
+    preview.add_argument('plan', type=Path)
+    preview.add_argument('--run', type=Path, required=True)
+    preview.add_argument('--speed', type=float, default=.17)
     commands.add_parser('status', help='Current result of every configured camera')
     args = parser.parse_args(argv)
     if args.command == 'marker':
@@ -243,10 +340,12 @@ def main(argv=None):
         path.write_text(marker_svg(spec))
         save_json(path.with_suffix('.json'), spec)
         print(f'{path}: print at 100%, then measure the BLACK square (nominal {1000 * spec["black_square_size_m"]:g} mm).')
-    elif args.command == 'capture':
+    elif args.command in {'capture', 'preview'}:
         if not .05 <= args.speed <= .5:
             raise ValueError('--speed must be within 0.05..0.5 rad/s')
-        capture(args)
+        (capture if args.command == 'capture' else preview_plan)(args)
+    elif args.command == 'plan':
+        prepare_plan(args)
     elif args.command == 'solve':
         result = solve_session(args.session)
         if args.save:

@@ -104,7 +104,7 @@ GROUPS = {
         "setup-sft-jax": ("安装微调推理环境（JAX）", ("bash", "src/embodied/policy/pi05_sft/setup_jax.sh", [])),
     }),
     "calib": ("标定", {
-        "handeye": ("手眼标定（经内核）：marker | capture <相机> [--auto] | solve <会话> | status", ("run", ["handeye"])),
+        "handeye": ("手眼标定（经内核）：marker | plan <会话> | preview <计划> | capture <相机> [--auto] | solve <会话> | status", ("run", ["handeye"])),
         "gripper": ("夹爪零点", ("component", "calibration.gripper")),
         "payload": ("负载辨识", ("component", "calibration.payload")),
     }),
