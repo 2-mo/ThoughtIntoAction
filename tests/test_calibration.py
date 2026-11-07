@@ -73,6 +73,44 @@ class SolverTests(unittest.TestCase):
         rows, _, _ = synthetic()
         self.assertEqual(solve(rows[:18])["status"], "candidate")
 
+    def test_joint_fit_recovers_mount_under_small_motion_and_orientation_noise(self):
+        for mount, name in (("wrist", "T_eef_camera"), ("fixed", "T_base_camera")):
+            with self.subTest(mount=mount):
+                rng = np.random.default_rng(17)
+                x = from_rt(cv2.Rodrigues(np.array([.1, .05, -.1]))[0], [.04, .02, .10])
+                z = from_rt(cv2.Rodrigues(np.array([2.8, .1, .1]))[0], [.05, -.05, .9])
+                rows = []
+                for i in range(24):
+                    span = .2 if i < 18 else .35
+                    robot = from_rt(cv2.Rodrigues(rng.uniform(-span, span, 3))[0],
+                                    np.array([.1, -.1, .3]) + rng.uniform(-.05, .05, 3))
+                    a = robot if mount == 'wrist' else inverse(robot)
+                    c = inverse(x) @ inverse(a) @ z
+                    c[:3, :3] = cv2.Rodrigues(rng.normal(0, .008, 3))[0] @ c[:3, :3]
+                    c[:3, 3] += rng.normal(0, .0003, 3)
+                    rows.append({'id': i, 'split': 'fit' if i < 18 else 'validation',
+                                 'T_base_eef': robot.tolist(), 'T_camera_target': c.tolist()})
+                result = solve(rows, mount)
+                self.assertEqual(result['status'], 'validated')
+                self.assertEqual(result['refinement'], 'joint_se3_least_squares')
+                distance, angle = pose_error(result[name], x)
+                self.assertLess(distance, .003)
+                self.assertLess(angle, .2)
+                self.assertEqual(result['inlier_ids'], list(range(18)))
+                # A validation error must not affect the mounting estimate or model selection.
+                rows[-1]['T_camera_target'][0][3] += .1
+                rejected = solve(rows, mount)
+                self.assertEqual(rejected['status'], 'candidate')
+                np.testing.assert_allclose(rejected[name], result[name], atol=1e-10)
+
+    def test_joint_fit_does_not_hide_tenfold_translation_scale_error(self):
+        rows, _, _ = synthetic()
+        for row in rows:
+            for axis in range(3):
+                row['T_camera_target'][axis][3] *= 10
+        with self.assertRaisesRegex(ValueError, r'No fit.*best consensus'):
+            solve(rows)
+
     def test_rejects_duplicates_nonrigid_nan_single_axis_and_unknown_mount(self):
         rows, _, _ = synthetic()
         with self.assertRaisesRegex(ValueError, "Mount"):
