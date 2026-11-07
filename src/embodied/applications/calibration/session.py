@@ -56,18 +56,23 @@ class Session:
         self.data["skipped"].append({"split": split, "waypoint_index": waypoint, "reason": str(reason)})
         self.save()
 
-    def capture(self, camera, arm, detector, split, waypoint=None):
+    def capture(self, camera, arm, detector, split, waypoint=None, *, update=None):
         if split not in {"fit", "validation"}:
             raise ValueError("Unknown sample split")
         anchor = np.asarray(arm.snapshot()["q"])
         # Discard queued pre-settle frames; retained frames must all pass a stationary bracket.
         for _ in range(3):
-            camera.read()
+            frame = camera.read()
+            if update is not None:
+                update(frame['image'])
         frames, rejections = [], []
         for _ in range(20):
             before = arm.snapshot()
             frame = camera.read()
             after = arm.snapshot()
+            # GUI work stays outside the measured RGB/robot bracket.
+            if update is not None:
+                update(frame['image'])
             if (after["host_monotonic_ns"] - before["host_monotonic_ns"]) > 150_000_000:
                 raise ValueError("RGB/robot bracket took >150 ms")
             qs = np.asarray([before["q"], after["q"]])
@@ -97,6 +102,8 @@ class Session:
         folder.mkdir()
         raw = []
         for offset, frame in enumerate(frames):
+            if update is not None:
+                update(frame['image'])
             relative = f"{folder.name}/rgb_{offset:03d}.png"
             if not cv2.imwrite(str(self.directory / relative), frame["image"]):
                 raise OSError("Failed to save raw RGB frame")

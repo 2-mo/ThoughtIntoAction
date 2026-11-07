@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import cv2
 import numpy as np
@@ -306,6 +306,115 @@ class ResultTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
+    def test_auto_preview_updates_and_stop_holds_at_each_capture_stage(self):
+        from embodied.applications.calibration.cli import main
+        from embodied.contracts.runtime.control import ControlSession
+        settings = {'cameras': {'wrist_rgb': {'serial': '1', 'width': 32, 'height': 32, 'fps': 30}}}
+        for stop_at in (None, 'hold', 'preview', 'move', 'burst', 'write', 'close'):
+            with self.subTest(stop_at=stop_at), tempfile.TemporaryDirectory() as folder:
+                phase, displayed, texts = ['prepare'], [], []
+                camera = MagicMock()
+                camera.__enter__.return_value = camera
+                camera.metadata = {'serial': '1'}
+                camera.read.side_effect = Camera().read
+                client = MagicMock()
+                feedback = {'q': [0.] * 6, 'dq': [0.] * 6, 'pose': [0., 0., 0., 0., 0., 0., 1.],
+                            'gripper_width': .02, 'feedback_monotonic_ns': 1_000_000, 'model_id': 'test'}
+                client.identity = {'runtime_id': 'test'}
+                operation_reads = []
+
+                def status():
+                    operation_reads.append(phase[0])
+                    running = operation_reads.count('move') < 3
+                    return {**feedback, 'operations': [{'operation_id': 'op',
+                             'status': 'running' if running else 'completed'}]}
+
+                def preview(*args, **kwargs):
+                    phase[0] = 'preview'
+                    return {'times': [0., .1]}
+
+                def execute(plan):
+                    phase[0] = 'move'
+                    return {'operation_id': 'op'}
+
+                client.status.side_effect = status
+                client.preview.side_effect = preview
+                client.execute.side_effect = execute
+                client.wait.side_effect = lambda *args, **kwargs: ControlSession.wait(client, *args, **kwargs)
+
+                def auto(args, arm, session, sample):
+                    phase[0] = 'hold'
+                    arm.hold(settle_s=0)
+                    arm.move([0.] * 6, .17)
+                    phase[0] = 'burst'
+                    sample('fit', 0)
+                    phase[0] = 'done'
+
+                def key(delay):
+                    displayed.append(phase[0])
+                    if phase[0] == 'prepare':
+                        return ord('c')
+                    return ord('q') if phase[0] == stop_at else -1
+
+                write_image = cv2.imwrite
+                def write(path, image):
+                    phase[0] = 'write'
+                    return write_image(path, image)
+
+                output = Path(folder) / 'session'
+                with patch('embodied.applications.calibration.cli.config', return_value=settings), \
+                        patch('embodied.devices.sensors.client.SharedCamera', return_value=camera), \
+                        patch('embodied.applications.calibration.arm.ControlSession', return_value=client), \
+                        patch('embodied.applications.calibration.cli.MarkerDetector', return_value=Detector()), \
+                        patch('embodied.applications.calibration.cli.run_auto', side_effect=auto), \
+                        patch('embodied.applications.calibration.cli.solve_session') as solve_session, \
+                        patch('embodied.applications.calibration.cli.finish'), \
+                        patch('cv2.imshow'), patch('cv2.destroyAllWindows'), \
+                        patch('cv2.waitKey', side_effect=key), \
+                        patch('cv2.getWindowProperty', side_effect=lambda *args: 0 if stop_at == 'close' and phase[0] == 'move' else 1), \
+                        patch('cv2.putText', wraps=cv2.putText) as put_text, \
+                        patch('cv2.imwrite', side_effect=write):
+                    argv = ['capture', 'wrist_rgb', '--auto', '--size-m', '.1', '--run', folder, '--output', str(output)]
+                    if stop_at is None:
+                        main(argv)
+                    else:
+                        with self.assertRaises(KeyboardInterrupt):
+                            main(argv)
+                    texts = [call.args[1] for call in put_text.call_args_list]
+                data = json.loads((output / 'session.json').read_text())
+                client.close.assert_called_once()
+                self.assertEqual(client.command.call_args.args, ('hold',))
+                self.assertEqual(data['status'], 'complete' if stop_at is None else 'interrupted')
+                if stop_at is None:
+                    self.assertTrue({'hold', 'preview', 'move', 'burst', 'write'} <= set(displayed))
+                    self.assertTrue(any(text.startswith('1 samples') for text in texts))
+                    self.assertEqual(len(data['samples'][0]['frames']), 20)
+                    raw = cv2.imread(str(output / data['samples'][0]['frames'][0]['image']))
+                    self.assertFalse(np.any(raw))  # Overlay must not enter calibration images.
+                    solve_session.assert_called_once()
+                else:
+                    solve_session.assert_not_called()
+                    if stop_at in ('hold', 'preview'):
+                        client.execute.assert_not_called()
+
+    def test_summary_reports_both_insufficient_validation_and_maximum_error(self):
+        from embodied.applications.calibration.cli import finish
+        result = {'status': 'candidate', 'method': 'relative_svd',
+                  'fit': {'count': 13, 'translation_rms_m': .00346, 'rotation_rms_deg': .55},
+                  'leave_one_out': {'passed': True},
+                  'validation': {'count': 3, 'translation_rms_m': .0059, 'rotation_rms_deg': 1.19,
+                                 'translation_max_m': .008216, 'rotation_max_deg': 1.47,
+                                 'failure': 'Need at least 4 distinct poses'},
+                  'quality_limits': {'translation_m': .008, 'rotation_deg': 2.}}
+        with patch('builtins.print') as output, patch('embodied.applications.calibration.save') as save:
+            finish('/session', result)
+        message = '\n'.join(call.args[0] for call in output.call_args_list)
+        self.assertIn('Need at least 4 distinct poses', message)
+        self.assertIn('8.22 mm', message)
+        self.assertIn('per-pose limits 8 mm / 2°', message)
+        self.assertIn('Raw samples and candidate result are saved', message)
+        save.assert_not_called()
+
     def test_marker_and_status_need_no_arm_or_camera_drivers(self):
         from embodied.applications.calibration.cli import main
         original = builtins.__import__

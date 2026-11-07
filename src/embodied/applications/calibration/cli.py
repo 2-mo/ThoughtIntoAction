@@ -47,6 +47,22 @@ def summary(result):
     if validation.get('count'):
         text += (f"; held-out {validation['count']} poses, {1000 * validation['translation_rms_m']:.2f} mm / "
                  f"{validation['rotation_rms_deg']:.2f}° RMS")
+    if result['status'] != 'validated':
+        reasons = []
+        if not result['leave_one_out']['passed']:
+            reasons.append('leave-one-out mounting stability failed')
+        if not validation.get('count'):
+            reasons.append('no held-out poses (need at least 4)')
+        else:
+            if validation.get('failure'):
+                reasons.append(validation['failure'])
+            limits = result['quality_limits']
+            if (validation['translation_max_m'] > limits['translation_m']
+                    or validation['rotation_max_deg'] > limits['rotation_deg']):
+                reasons.append(f"held-out maximum {1000 * validation['translation_max_m']:.2f} mm / "
+                               f"{validation['rotation_max_deg']:.2f}° exceeds per-pose limits "
+                               f"{1000 * limits['translation_m']:g} mm / {limits['rotation_deg']:g}°")
+        text += '\nNot validated: ' + '; '.join(reasons)
     return text
 
 
@@ -65,8 +81,8 @@ def finish(directory, result, force=False):
         path = calibration.save(result['camera_id'], {**result, 'operator_override': result['status'] != 'validated'})
         print(f'Saved as the current {result["camera_id"]} calibration: {path}')
     else:
-        print(f'Not saved: held-out validation did not pass. Inspect {directory}/result.json; '
-              f'`./run.sh calib handeye solve {directory} --save --force` adopts it anyway.')
+        print(f'Not adopted as the current calibration. Raw samples and candidate result are saved in {directory}. '
+              'Improve the target view and collect a new session; inspect result.json for details.')
 
 
 def capture(args):
@@ -94,33 +110,50 @@ def capture(args):
             camera = stack.enter_context(SharedCamera(options['serial'], options['width'], options['height'],
                                                       options['fps'], camera_id=args.camera_id))
             detector = MarkerDetector(spec, camera.metadata)
-            arm = stack.enter_context(CalibrationArm(runs[-1]))
-            session = Session(output, args.camera_id, mount, camera.metadata, spec, arm.robot)
             stack.callback(cv2.destroyAllWindows)
-
-            def sample(split, index=None):
-                session.capture(camera, arm, detector, split, index)
-
-            arm.teach()
             keys = 'c = centre and start' if args.auto else 's = sample, v = held-out sample'
-            print(f'Arm is free: move it by hand so the camera sees the target. {keys}, q = finish.', flush=True)
-            while True:
-                image = camera.read()['image']
+            auto_running = False
+
+            def display(image=None):
+                image = camera.read()['image'] if image is None else image.copy()
                 try:
                     detection = detector.detect(image)
-                    text = f"target {detection['reprojection_error_undistorted_px']:.2f}px | {keys} | q"
+                    text = f"target {detection['reprojection_error_undistorted_px']:.2f}px"
                 except ValueError as exc:
                     detection, text = None, str(exc)
+                controls = 'AUTO | q/Esc = stop' if auto_running else f'{keys} | q'
                 count = len(session.data['samples'])
                 cv2.putText(image, f'{count} samples | {text}', (10, 25), cv2.FONT_HERSHEY_SIMPLEX, .6, (0, 255, 0), 2)
+                cv2.putText(image, controls, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, .6, (0, 255, 0), 2)
                 cv2.imshow(WINDOW, image)
                 key = cv2.waitKey(1) & 0xff
-                if key in (ord('q'), 27) or cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) < 1:
+                closed = cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) < 1
+                return detection, key, closed
+
+            def refresh(image=None):
+                _, key, closed = display(image)
+                if key in (ord('q'), 27) or closed:
+                    raise KeyboardInterrupt('Capture stopped from the preview window')
+
+            arm = stack.enter_context(CalibrationArm(runs[-1], update=refresh))
+            session = Session(output, args.camera_id, mount, camera.metadata, spec, arm.robot)
+
+            def sample(split, index=None):
+                session.capture(camera, arm, detector, split, index, update=refresh)
+                refresh()
+
+            arm.teach()
+            print(f'Prepare a pose that sees the target (hand teaching depends on the backend). '
+                  f'{keys}, q = finish.', flush=True)
+            while True:
+                detection, key, closed = display()
+                if key in (ord('q'), 27) or closed:
                     break
                 if args.auto and key == ord('c'):
                     if detection is None:
                         print('The target must be visible at the centre pose.', flush=True)
                         continue
+                    auto_running = True
                     run_auto(args, arm, session, sample)
                     break
                 if not args.auto and key in (ord('s'), ord('v')):
@@ -130,7 +163,7 @@ def capture(args):
                     except ValueError as exc:
                         print(f'Sample rejected: {exc}', flush=True)
                     arm.teach()
-            arm.hold()
+            # Context exit holds without refreshing a window the operator may have closed.
         session.finish('complete')
     except BaseException as exc:
         if session is not None:

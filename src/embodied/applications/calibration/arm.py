@@ -17,8 +17,9 @@ class Refused(ValueError):
 
 
 class CalibrationArm:
-    def __init__(self, directory):
+    def __init__(self, directory, *, update=None):
         self.session = ControlSession(directory, source='handeye', purpose='operation')
+        self.update = update or (lambda: None)
         self.teaching = threading.Event()
         self.stop = threading.Event()
         self.error = None
@@ -71,10 +72,14 @@ class CalibrationArm:
         self.session.command('hold')
         deadline = time.monotonic() + 3
         while time.monotonic() < deadline:
+            self.update()
             if np.max(np.abs(self.snapshot()['dq'])) < .01:
                 break
             time.sleep(.02)
-        time.sleep(settle_s)
+        deadline = time.monotonic() + settle_s
+        while time.monotonic() < deadline:
+            self.update()
+            time.sleep(.02)
 
     def move(self, q, speed):
         """Kernel MoveJ: preview (limits, table plane, derivative bounds), execute, wait until settled."""
@@ -83,7 +88,9 @@ class CalibrationArm:
             plan = self.session.preview('movej', q=[float(v) for v in q], speed=float(speed))
         except RuntimeError as exc:
             raise Refused(str(exc)) from exc
-        self.session.wait(self.session.execute(plan)['operation_id'], timeout=float(plan['times'][-1]) + 15)
+        self.update()  # Process a stop requested while the kernel was previewing, before executing.
+        self.session.wait(self.session.execute(plan)['operation_id'], timeout=float(plan['times'][-1]) + 15,
+                          poll=self.update)
         return plan
 
     def __exit__(self, *exc):
