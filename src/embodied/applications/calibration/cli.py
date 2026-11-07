@@ -160,7 +160,10 @@ def capture(args):
                     auto_running = True
                     session.data['center_observation'] = {
                         'T_camera_target': detection['T_camera_target'].tolist()}
-                    run_auto(args, arm, session, sample)
+                    if not run_auto(args, arm, session, sample):
+                        auto_running = False
+                        arm.teach()
+                        continue
                     break
                 if not args.auto and key in (ord('s'), ord('v')):
                     arm.hold()
@@ -186,26 +189,34 @@ def run_auto(args, arm, session, sample):
     arm.hold()
     model = kernel_model(Path(arm.session.parameters['model']['xml_path']).with_suffix('.urdf'))
     center = arm.snapshot()['q']
-    if args.plan:
-        plan = json.loads(Path(args.plan).read_text())
-        validate_plan(plan, model)
-        if np.max(np.abs(np.asarray(center) - plan['center'])) > .03:
-            raise ValueError('Teach the plan centre pose first (within 0.03 rad)')
-        if plan.get('view'):
-            view = plan['view']
-            if (view['camera_id'] != session.data['camera_id']
-                    or view['camera']['serial'] != session.data['camera']['serial']
-                    or view['target'] != session.data['target'] or session.data['mount'] != 'wrist'):
-                raise ValueError('Plan view belongs to another camera, target or mounting')
-            # Re-anchor to the live board; a saved candidate is only a planning estimate.
-            view['T_base_target'] = (model.fk(center) @ transform(view['T_eef_camera'])
-                                     @ transform(session.data['center_observation']['T_camera_target'])).tolist()
-            view['camera'] = {key: session.data['camera'][key] for key in view['camera']}
-            plan['center'] = list(center)
+    realman = arm.session.parameters['effective_robot_config']['model_plugin'].startswith('realman')
+    try:
+        if args.plan:
+            plan = json.loads(Path(args.plan).read_text())
             validate_plan(plan, model)
-    else:
-        realman = arm.session.parameters['effective_robot_config']['model_plugin'].startswith('realman')
-        plan = (make_realman_plan if realman else make_plan)(model, center, args.step_rad)
+            if not realman and np.max(np.abs(np.asarray(center) - plan['center'])) > .03:
+                raise ValueError('Teach the plan centre pose first (within 0.03 rad)')
+            view = plan.get('view')
+            if view:
+                if (view['camera_id'] != session.data['camera_id']
+                        or view['camera']['serial'] != session.data['camera']['serial']
+                        or view['target'] != session.data['target'] or session.data['mount'] != 'wrist'):
+                    raise ValueError('Plan view belongs to another camera, target or mounting')
+                # Re-anchor to the live board; a saved candidate is only a planning estimate.
+                view['T_base_target'] = (model.fk(center) @ transform(view['T_eef_camera'])
+                                         @ transform(session.data['center_observation']['T_camera_target'])).tolist()
+                view['camera'] = {key: session.data['camera'][key] for key in view['camera']}
+            if realman:
+                # The saved view guides new points around the operator's current pose.
+                plan = make_realman_plan(model, center, args.step_rad, view=view)
+            elif view:
+                plan['center'] = list(center)
+                validate_plan(plan, model)
+        else:
+            plan = (make_realman_plan if realman else make_plan)(model, center, args.step_rad)
+    except ValueError as exc:
+        print(f'Cannot start sampling: {exc}. Adjust the centre view/range and press c again, or q to finish.', flush=True)
+        return False
     session.data['plan'] = plan
     session.save()
     print(f'Sampling {len(plan["waypoints"])} poses within ±{plan["step_rad"]} rad at {args.speed} rad/s; '
@@ -213,6 +224,7 @@ def run_auto(args, arm, session, sample):
     taken = run_plan(arm, plan, sample, speed=args.speed,
                      log=lambda text: (session.skip(None, None, text), print(text, flush=True)))
     print(f'{taken} samples captured; back at the centre pose.', flush=True)
+    return True
 
 
 def prepare_plan(args):
@@ -309,7 +321,7 @@ def main(argv=None):
     shoot.add_argument('--run', type=Path, help='outputs/runtime/control/<RUN> (default: newest running kernel)')
     shoot.add_argument('--step-rad', type=float, default=.25, help='--auto: joint offsets around the centre')
     shoot.add_argument('--speed', type=float, default=.3, help='--auto: joint speed, rad/s (kernel bound 0.5)')
-    shoot.add_argument('--plan', help='--auto: reuse a saved plan (its centre must be taught first)')
+    shoot.add_argument('--plan', help='--auto: RM65 regenerates points at the current centre using the saved view; ARX replays the saved plan')
     shoot.add_argument('--output', help='New session directory')
     for sub in (marker, shoot):
         sub.add_argument('--size-m', type=float, help='Measured black square, metres (default [hand_eye] marker_size_m)')

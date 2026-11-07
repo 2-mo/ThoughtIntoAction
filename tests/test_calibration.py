@@ -351,7 +351,8 @@ class RealmanPlanTests(unittest.TestCase):
         arm = MagicMock()
         arm.session.parameters = {'model': {'xml_path': str(self.model.urdf.with_suffix('.xml'))},
                                   'effective_robot_config': {'model_plugin': 'realman.hardware'}}
-        arm.snapshot.return_value = {'q': self.center.tolist()}
+        current = self.center + [.2, .1, -.07, .16, -.11, .08]
+        arm.snapshot.return_value = {'q': current.tolist()}
         observed = inverse(self.model.fk(self.center) @ self.x) @ self.board
         observed[0, 3] += .005
         data = {'camera_id': 'wrist_rgb', 'camera': self.camera, 'target': target_spec(.1), 'mount': 'wrist',
@@ -364,27 +365,34 @@ class RealmanPlanTests(unittest.TestCase):
                 patch('embodied.applications.calibration.plan.run_plan', return_value=26), patch('builtins.print'):
             run_auto(SimpleNamespace(plan=None, step_rad=.25, speed=.17), arm, session, Mock())
         preset.assert_called_once()
+        self.assertEqual(preset.call_args.args[1], current.tolist())
         arx.assert_not_called()
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'plan.json'
             path.write_text(json.dumps(self.plan))
-            args = SimpleNamespace(plan=path, speed=.17)
+            args = SimpleNamespace(plan=path, step_rad=.25, speed=.17)
             with patch('embodied.applications.calibration.plan.kernel_model', return_value=self.model), \
                     patch('embodied.applications.calibration.plan.run_plan', return_value=26) as execute, \
-                    patch('builtins.print'):
-                run_auto(args, arm, session, Mock())
-                expected = self.model.fk(self.center) @ self.x @ observed
+                    patch('builtins.print') as output:
+                self.assertTrue(run_auto(args, arm, session, Mock()))
+                expected = self.model.fk(current) @ self.x @ observed
                 np.testing.assert_allclose(session.data['plan']['view']['T_base_target'], expected)
+                np.testing.assert_allclose(session.data['plan']['center'], current)
+                validate_plan(session.data['plan'], self.model)
                 execute.assert_called_once()
                 execute.reset_mock()
                 session.data = {**data, 'camera': {**self.camera, 'serial': 'other-camera'}}
-                with self.assertRaisesRegex(ValueError, 'another camera'):
-                    run_auto(args, arm, session, Mock())
+                self.assertFalse(run_auto(args, arm, session, Mock()))
+                self.assertIn('another camera', output.call_args.args[0])
                 execute.assert_not_called()
                 session.data = {**data, 'center_observation': {'T_camera_target':
                                 from_rt(np.eye(3), [10., 10., 10.]).tolist()}}
-                with self.assertRaisesRegex(ValueError, 'image margin'):
-                    run_auto(args, arm, session, Mock())
+                self.assertFalse(run_auto(args, arm, session, Mock()))
+                execute.assert_not_called()
+                # ARX saved plans retain their existing absolute-centre requirement.
+                arm.session.parameters['effective_robot_config']['model_plugin'] = 'arx5'
+                self.assertFalse(run_auto(args, arm, session, Mock()))
+                self.assertIn('Teach the plan centre', output.call_args.args[0])
                 execute.assert_not_called()
 
 
@@ -490,7 +498,7 @@ class CliTests(unittest.TestCase):
         from embodied.applications.calibration.cli import main
         from embodied.contracts.runtime.control import ControlSession
         settings = {'cameras': {'wrist_rgb': {'serial': '1', 'width': 32, 'height': 32, 'fps': 30}}}
-        for stop_at in (None, 'hold', 'preview', 'move', 'burst', 'write', 'close'):
+        for stop_at in (None, 'retry', 'hold', 'preview', 'move', 'burst', 'write', 'close'):
             with self.subTest(stop_at=stop_at), tempfile.TemporaryDirectory() as folder:
                 phase, displayed, texts = ['prepare'], [], []
                 camera = MagicMock()
@@ -501,7 +509,7 @@ class CliTests(unittest.TestCase):
                 feedback = {'q': [0.] * 6, 'dq': [0.] * 6, 'pose': [0., 0., 0., 0., 0., 0., 1.],
                             'gripper_width': .02, 'feedback_monotonic_ns': 1_000_000, 'model_id': 'test'}
                 client.identity = {'runtime_id': 'test'}
-                operation_reads = []
+                operation_reads, attempts = [], []
 
                 def status():
                     operation_reads.append(phase[0])
@@ -523,12 +531,16 @@ class CliTests(unittest.TestCase):
                 client.wait.side_effect = lambda *args, **kwargs: ControlSession.wait(client, *args, **kwargs)
 
                 def auto(args, arm, session, sample):
+                    attempts.append(1)
+                    if stop_at == 'retry' and len(attempts) == 1:
+                        return False
                     phase[0] = 'hold'
                     arm.hold(settle_s=0)
                     arm.move([0.] * 6, .17)
                     phase[0] = 'burst'
                     sample('fit', 0)
                     phase[0] = 'done'
+                    return True
 
                 def key(delay):
                     displayed.append(phase[0])
@@ -555,7 +567,7 @@ class CliTests(unittest.TestCase):
                         patch('cv2.putText', wraps=cv2.putText) as put_text, \
                         patch('cv2.imwrite', side_effect=write):
                     argv = ['capture', 'wrist_rgb', '--auto', '--size-m', '.1', '--run', folder, '--output', str(output)]
-                    if stop_at is None:
+                    if stop_at in (None, 'retry'):
                         main(argv)
                     else:
                         with self.assertRaises(KeyboardInterrupt):
@@ -564,14 +576,15 @@ class CliTests(unittest.TestCase):
                 data = json.loads((output / 'session.json').read_text())
                 client.close.assert_called_once()
                 self.assertEqual(client.command.call_args.args, ('hold',))
-                self.assertEqual(data['status'], 'complete' if stop_at is None else 'interrupted')
-                if stop_at is None:
+                self.assertEqual(data['status'], 'complete' if stop_at in (None, 'retry') else 'interrupted')
+                if stop_at in (None, 'retry'):
                     self.assertTrue({'hold', 'preview', 'move', 'burst', 'write'} <= set(displayed))
                     self.assertTrue(any(text.startswith('1 samples') for text in texts))
                     self.assertEqual(len(data['samples'][0]['frames']), 20)
                     raw = cv2.imread(str(output / data['samples'][0]['frames'][0]['image']))
                     self.assertFalse(np.any(raw))  # Overlay must not enter calibration images.
                     solve_session.assert_called_once()
+                    self.assertEqual(len(attempts), 2 if stop_at == 'retry' else 1)
                 else:
                     solve_session.assert_not_called()
                     if stop_at in ('hold', 'preview'):
