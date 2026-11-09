@@ -1,4 +1,4 @@
-"""Single-owner RealSense RGB stream with explicit receive/device clock metadata."""
+"""Single-owner RealSense RGB and aligned depth with explicit receive/device clocks."""
 
 import time
 import threading
@@ -45,6 +45,7 @@ class RealSenseCamera:
         self.expected_model = expected_model
         self.color_options = {} if color_options is None else color_options
         self.pipeline = None
+        self.align = None
         self.last_number = None
         self.imu_sensor = None
         self.imu_lock = threading.Lock()
@@ -114,7 +115,7 @@ class RealSenseCamera:
             raise ValueError(f"Expected {self.expected_model}, got {model} ({self.serial})")
         pipeline, config = rs.pipeline(), rs.config()
         config.enable_device(self.serial)
-        # Depth is a lightweight native preview, independent of the RGB recording resolution.
+        # Capture native depth; the SDK aligns it to RGB before publication.
         config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, self.fps)
         config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps)
         started = False
@@ -126,11 +127,12 @@ class RealSenseCamera:
             color_sensor = device.first_color_sensor()
             rgb_controls = configure_rgb(color_sensor, rs, self.color_options)
             self.depth_scale = device.first_depth_sensor().get_depth_scale()
+            self.align = rs.align(rs.stream.color)
             self.last_number = None
             self.metadata = {
-                "depth_scale_m": self.depth_scale, "depth_frame": "depth_optical",
-                "depth_aligned_to_rgb": False,
-                "depth_width": 640, "depth_height": 480,
+                "depth_scale_m": self.depth_scale, "depth_frame": "color_optical",
+                "depth_aligned_to_rgb": True,
+                "depth_width": intr.width, "depth_height": intr.height,
                 "serial": device.get_info(rs.camera_info.serial_number),
                 "model": device.get_info(rs.camera_info.name),
                 "usb_type": device.get_info(rs.camera_info.usb_type_descriptor),
@@ -176,11 +178,14 @@ class RealSenseCamera:
                 raise RuntimeError("Camera frame timeout")
         else:
             raise RuntimeError("Camera capture stopped")
-        depth = frames.get_depth_frame()
         received = time.monotonic_ns()
+        depth = (self.align.process(frames) if self.align is not None else frames).get_depth_frame()
         self.last_number = number
         return {"imu": self.imu_snapshot(), "depth_image": None if not depth else np.asanyarray(depth.get_data()).copy(),
                 "depth_scale_m": self.depth_scale,
+                "depth_frame_number": None if not depth else depth.get_frame_number(),
+                "depth_device_timestamp_ms": None if not depth else float(depth.get_timestamp()),
+                "depth_device_timestamp_domain": None if not depth else str(depth.get_frame_timestamp_domain()),
                 "image": np.asanyarray(frame.get_data()).copy(), "frame_number": number,
                 "device_timestamp_ms": float(frame.get_timestamp()),
                 "device_timestamp_domain": str(frame.get_frame_timestamp_domain()),
