@@ -27,6 +27,7 @@ class CameraFeed:
         self.frame = None
         self.preview = None
         self.depth_preview = None
+        self.depth = None
         self.metadata = None
         self.error = "Camera starting"
 
@@ -60,7 +61,7 @@ class CameraFeed:
                     self.thread = None
                     self.enabled = False
                     with self.data_lock:
-                        self.frame = self.preview = self.depth_preview = self.metadata = None
+                        self.frame = self.preview = self.depth_preview = self.depth = self.metadata = None
                         self.error = "相机已关闭"
                 return self.dispatch({"command": "monitor"})
             finally:
@@ -75,6 +76,13 @@ class CameraFeed:
     def dispatch(self, payload):
         if payload.get("command") == "set_enabled":
             return self.set_enabled(payload.get("enabled"))
+        if payload.get("command") == "depth":
+            with self.data_lock:
+                depth = self.depth
+            if depth is None:
+                raise RuntimeError("No metric depth frame available")
+            return {**{k: v for k, v in depth.items() if k != "depth_image"},
+                    "depth_base64": base64.b64encode(depth["depth_image"].astype("<u2").tobytes()).decode("ascii")}
         if payload.get("command") == "frame":
             with self.data_lock:
                 frame = self.frame
@@ -105,7 +113,8 @@ class CameraFeed:
                            "age_s": None if frame is None else (now - frame["host_received_monotonic_ns"]) / 1e9},
                 "depth_preview": {"jpeg_base64": None if depth is None else depth[1],
                                   "age_s": None if depth is None else (now - depth[0]) / 1e9,
-                                  "range_m": [0.2, 2.0], "aligned_to_rgb": False},
+                                  "range_m": [0.2, 2.0],
+                                  "aligned_to_rgb": bool(self.metadata and self.metadata.get("depth_aligned_to_rgb"))},
                 "preview": {"jpeg_base64": None if preview is None else preview[1],
                             "age_s": None if preview is None else (now - preview[0]) / 1e9}}
 
@@ -154,11 +163,16 @@ class CameraFeed:
                             last_preview = time.monotonic()
                         with self.data_lock:
                             self.frame, self.metadata, self.error = encoded_frame, metadata, None
+                            self.depth = None if frame.get("depth_image") is None else {
+                                **{k: v for k, v in encoded_frame.items() if k != "image"},
+                                "depth_image": frame["depth_image"], "depth_scale_m": frame["depth_scale_m"],
+                                "width": metadata["depth_width"], "height": metadata["depth_height"],
+                                "aligned_to_rgb": metadata["depth_aligned_to_rgb"], "camera": metadata}
                             self.preview, self.depth_preview = preview, depth_preview
             except Exception as exc:
                 with self.data_lock:
                     self.error = f"{type(exc).__name__}: {exc}"
-                    self.frame = self.preview = self.depth_preview = self.metadata = None
+                    self.frame = self.preview = self.depth_preview = self.depth = self.metadata = None
                 stop.wait(2)
 
 

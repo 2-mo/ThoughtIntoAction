@@ -57,6 +57,7 @@ class SharedCamera:
         self.expected = (serial, width, height, fps)
         self.arguments = {} if camera_id is None else {"camera_id": camera_id}
         self.last = None
+        self.last_depth = None
         self.frames = None
 
     def __enter__(self):
@@ -102,6 +103,36 @@ class SharedCamera:
                 return frame
             time.sleep(.005)
         raise RuntimeError("Camera service stopped producing frames")
+
+    def read_depth(self):
+        """Aligned uint16 depth in camera units; zero is invalid, metres = value * depth_scale_m."""
+        import numpy as np
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            frame = request(socket_path(), "depth", timeout=1, **self.arguments)
+            meta = frame["camera"]
+            if tuple(meta[k] for k in ("serial", "width", "height", "fps")) != self.expected:
+                raise RuntimeError("Depth camera service settings differ")
+            age = time.monotonic_ns() - frame["host_received_monotonic_ns"]
+            if not 0 <= age <= 500_000_000:
+                raise RuntimeError("Camera service depth frame is stale")
+            scale = frame["depth_scale_m"]
+            if (frame["aligned_to_rgb"] is not True or not np.isfinite(scale) or scale <= 0
+                    or (frame["width"], frame["height"]) != self.expected[1:3]):
+                raise ValueError("Require aligned metric depth with RGB dimensions")
+            if (frame["depth_device_timestamp_domain"] != frame["device_timestamp_domain"]
+                    or abs(frame["depth_device_timestamp_ms"] - frame["device_timestamp_ms"]) > 50):
+                raise RuntimeError("Depth and RGB timestamps are not synchronized within 50 ms")
+            identity = (frame["stream_id"], frame["depth_frame_number"])
+            if identity != self.last_depth:
+                raw = base64.b64decode(frame.pop("depth_base64"), validate=True)
+                if len(raw) != frame["width"] * frame["height"] * 2:
+                    raise ValueError("Invalid uint16 depth buffer size")
+                frame["depth_image"] = np.frombuffer(raw, dtype="<u2").reshape(frame["height"], frame["width"]).copy()
+                self.last_depth = identity
+                return frame
+            time.sleep(.005)
+        raise RuntimeError("Camera service stopped producing depth frames")
 
     def __exit__(self, *exc):
         if self.frames is not None:
