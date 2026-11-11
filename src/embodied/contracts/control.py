@@ -31,7 +31,7 @@ class RobotState:
     q: np.ndarray
     dq: np.ndarray
     pose: np.ndarray
-    gripper_width: float
+    gripper_width: float | None  # None: installed gripper has no valid position feedback.
     received_at: float
     mode: Mode = Mode.DISABLED
     fault: str = ""
@@ -63,3 +63,4 @@ class ControlCommand:
     # Dual-arm commands. None means a single arm; the scalar fields above apply to it.
     pose_targets: tuple[np.ndarray, ...] | None = None
     gripper_targets: tuple[float, ...] | None = None
+    gripper_initialize_open: bool = False  # Explicit operator request; never inferred from missing feedback.

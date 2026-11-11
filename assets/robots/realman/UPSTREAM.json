@@ -1,0 +1,43 @@
+{
+  "repository": "https://github.com/RealManRobot/ros2_rm_robot",
+  "commit": "711abedd48c6614f26fb4f7661db92f306ff05bd",
+  "license": "Apache-2.0",
+  "files": {
+    "LICENSE": {
+      "upstream_path": "LICENSE",
+      "sha256": "cc144ade7a0c0760b7b6f334c7b98f615e108167933b9f3aec5e144812b96e54"
+    },
+    "upstream/rm_65.urdf": {
+      "upstream_path": "rm_description/urdf/rm_65.urdf",
+      "sha256": "240ae37c64cbe13b5f947e04a37cebce7daffd7100cbc09dcf02054b0fe74b57"
+    },
+    "meshes/base_link.STL": {
+      "upstream_path": "rm_description/meshes/rm_65_arm/base_link.STL",
+      "sha256": "e83f8626e0b92137b02dbedd6f59281fb3cbd02a7905470fa461fa7f3014fde3"
+    },
+    "meshes/link1.STL": {
+      "upstream_path": "rm_description/meshes/rm_65_arm/link1.STL",
+      "sha256": "008894df7deb20d9aec98b4dbc3ac8e12dbc31b90e6a8485542140eb0ab3ded5"
+    },
+    "meshes/link2.STL": {
+      "upstream_path": "rm_description/meshes/rm_65_arm/link2.STL",
+      "sha256": "d3a46b4b619bfd28d8948d5335f8bd62284ea0742ec4fb2b7ac5e5ab858d67f8"
+    },
+    "meshes/link3.STL": {
+      "upstream_path": "rm_description/meshes/rm_65_arm/link3.STL",
+      "sha256": "5d903745e9369009ac064bc24c080d03f503b3386b8e14325a318cf8fde0959d"
+    },
+    "meshes/link4.STL": {
+      "upstream_path": "rm_description/meshes/rm_65_arm/link4.STL",
+      "sha256": "2fc93b2bc970eadca950afa3120129766e2bead60234c6d8752d3b223e407046"
+    },
+    "meshes/link5.STL": {
+      "upstream_path": "rm_description/meshes/rm_65_arm/link5.STL",
+      "sha256": "f9d0216056f7e1512858033163b0415973e1db573a1fee5af1609171967c043f"
+    },
+    "meshes/link6.STL": {
+      "upstream_path": "rm_description/meshes/rm_65_arm/link6.STL",
+      "sha256": "a491f4471cf587b0a64c9c25424fd2b096b14f0028b67d0909233bf6f6a947df"
+    }
+  }
+}

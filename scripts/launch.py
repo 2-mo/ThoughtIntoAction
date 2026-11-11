@@ -53,6 +53,7 @@ MODULE_COMMANDS = {
     "examples": "examples",
     "collect": "embodied.data.capture.capture",
     "workbench": "embodied.applications.workstation.workbench",
+    "realman": "embodied.devices.robots.realman.cli",
     "component-source": "embodied.applications.workstation.source",
     "phone": "embodied.devices.inputs.phone",
     "motion": "embodied.applications.operations.cli",

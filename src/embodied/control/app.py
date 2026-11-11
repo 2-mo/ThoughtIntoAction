@@ -1,6 +1,7 @@
 """Launch the existing VR pipeline with an explicit simulation or native SDK backend."""
 
 import argparse
+import inspect
 import json
 import os
 from pathlib import Path
@@ -68,7 +69,7 @@ def native_components(registry, device, routing, settings, backend):
 
 def print_ready(device_plugin, routing_plugin, gripper_max_width):
     """Describe the selected input, including native plugins used by managed profiles."""
-    if device_plugin == 'arx.quest':
+    if device_plugin in ('arx.quest', 'quest.native'):
         print('robot · 已就绪，等待 Quest 控制器输入。', flush=True)
         trigger = '夹爪' if gripper_max_width > 0 else '未启用（无夹爪）'
         print(f'右手柄：长按 A 150 ms 切换模式 · Grip 跟随 · Trigger {trigger} · A+B 回 Home。', flush=True)
@@ -129,7 +130,9 @@ def run(args):
         if not native_commands or len(native_commands) > 64 or set(native_commands) & {'backend', 'observer', 'viewer'}:
             raise ValueError('Invalid native component process names/count')
         native = {'device': device_plugin, 'routing': args.routing_plugin, 'ingress': args.ingress_plugin,
-                  'channel': args.ingress_channel, 'dependencies': list(native_commands)}
+                  'channel': args.ingress_channel, 'dependencies': list(native_commands),
+                  'settings_aware': 'settings' in inspect.signature(
+                      registry.load('ingress', args.ingress_plugin, runtime='control')).parameters}
     (directory / 'runtime.json').write_text(json.dumps({
         'runtime_id': prefix, 'backend': args.backend, 'input': args.input,
         'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
@@ -154,11 +157,14 @@ def run(args):
     print(f'robot · 正在启动{mode} · {settings.robot.name} · {settings.robot.control_hz} Hz', flush=True)
     print(f'日志目录：{directory}', flush=True)
     if args.backend == 'real':
-        if args.managed:
+        if hasattr(settings.robot, 'startup_behavior'):
+            behavior = settings.robot.startup_behavior
+        elif args.managed:
             behavior = '使能电机，先保持当前位置和夹爪，随后接受所选输入控制'
         else:
             behavior = '使能电机，回 Home 并打开夹爪'
-        print(f'真机行为：{behavior}。Ctrl+C 退出后进入阻尼，退出前请支撑机械臂。', flush=True)
+        shutdown = getattr(settings.robot, 'shutdown_behavior', 'Ctrl+C 退出后进入阻尼，退出前请支撑机械臂')
+        print(f'真机行为：{behavior}。退出：{shutdown}。', flush=True)
     try:
         if telemetry:
             children.start("observer", [sys.executable, '-m', 'embodied.control.observer',

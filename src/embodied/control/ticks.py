@@ -156,10 +156,12 @@ class TickPublisher:
             self._copy_joint(packet, 'q', state.q)
             self._copy_joint(packet, 'dq', state.dq)
             packet.pose[:] = state.pose
-            packet.gripper_width = state.gripper_width
+            packet.gripper_width = (state.gripper_width if state.gripper_width is not None
+                                    else float('nan'))
             widths = getattr(state, 'gripper_widths', None)
             packet.arm_count = min(len(widths), MAX_ARMS) if widths else 1
-            packet.gripper_widths[0] = state.gripper_width
+            packet.gripper_widths[0] = (state.gripper_width if state.gripper_width is not None
+                                        else float('nan'))
             if packet.arm_count > 1:
                 packet.gripper_widths[:packet.arm_count] = widths[:packet.arm_count]
             packet.mode, packet.gripper_mode = _mode(state.mode), _mode(state.gripper_mode or state.mode)
@@ -191,8 +193,9 @@ class TickPublisher:
                                          ("kp", "applied_kp"), ("kd", "applied_kd"),
                                          ("feedforward", "user_feedforward_torque")):
                     self._copy_joint(packet, destination, info[key])
-                packet.gripper_target = info["gripper_target"]
-                packet.gripper_targets[0] = info["gripper_target"]
+                packet.gripper_target = (info["gripper_target"] if info["gripper_target"] is not None
+                                         else float('nan'))
+                packet.gripper_targets[0] = packet.gripper_target
                 arms = raw.get('arms') if isinstance(raw, dict) else None
                 if arms:
                     packet.arm_count = max(packet.arm_count, min(len(arms), MAX_ARMS))
@@ -257,6 +260,8 @@ def to_dict(packet):
         return [float(x) if math.isfinite(x) else None for x in value]
     def joints(value):
         return array(value[:packet.joint_count])
+    def scalar(value):
+        return value if math.isfinite(value) else None
     result = {"type": "tick", "version": VERSION, "runtime_id": packet.runtime_id.decode(),
               "sequence": packet.sequence, "producer_dropped": packet.dropped,
               "joint_count": packet.joint_count, "arm_count": packet.arm_count,
@@ -270,7 +275,7 @@ def to_dict(packet):
               "owner_epoch": packet.owner_epoch, "operation_id": packet.operation_id.decode() or None}
     if packet.flags & FEEDBACK:
         result["feedback"] = {"q": joints(packet.q), "dq": joints(packet.dq), "pose": array(packet.pose),
-                              "gripper_width": packet.gripper_width,
+                              "gripper_width": scalar(packet.gripper_width),
                               "gripper_widths": array(packet.gripper_widths[:max(packet.arm_count, 1)]),
                               "mode": packet.mode, "gripper_mode": packet.gripper_mode}
         result["target"] = {"pose": array(packet.pose_target) if packet.flags & POSE_TARGET else None,
@@ -282,7 +287,7 @@ def to_dict(packet):
     if packet.flags & COMMAND:
         result["command"] = {"q": joints(packet.sent_q), "dq": joints(packet.sent_dq),
                              "kp": joints(packet.kp), "kd": joints(packet.kd),
-                             "feedforward": joints(packet.feedforward), "gripper_width": packet.gripper_target,
+                             "feedforward": joints(packet.feedforward), "gripper_width": scalar(packet.gripper_target),
                              "gripper_widths": array(packet.gripper_targets[:max(packet.arm_count, 1)]),
                              "gripper_targets": array(packet.gripper_targets[:max(packet.arm_count, 1)]),
                              "gripper_kp": packet.gripper_kp, "gripper_kd": packet.gripper_kd,
@@ -290,5 +295,5 @@ def to_dict(packet):
                              "submitted": True}
     if packet.flags & SDK_OUTPUT:
         result["sdk_output"] = {"q": joints(packet.sdk_q), "dq": joints(packet.sdk_dq),
-                                "torque": joints(packet.sdk_torque), "gripper_width": packet.sdk_gripper_target}
+                                "torque": joints(packet.sdk_torque), "gripper_width": scalar(packet.sdk_gripper_target)}
     return result

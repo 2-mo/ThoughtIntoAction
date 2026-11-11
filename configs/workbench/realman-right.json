@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "robot": "realman.real",
+  "source": "quest",
+  "camera": "none",
+  "config": "configs/robots/realman/right.json",
+  "native": {
+    "device": "quest.shared",
+    "routing": "quest.shared",
+    "ingress": "quest.shared",
+    "channel": "native"
+  }
+}

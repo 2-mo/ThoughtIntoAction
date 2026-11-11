@@ -20,7 +20,8 @@ def check_feedback(state, now):
         raise RuntimeError(state.fault)
     if not np.isfinite(state.received_at) or not 0 <= now - state.received_at < .1:
         raise RuntimeError("Robot feedback exceeded 100 ms or has an invalid timestamp")
-    if not all(np.isfinite(value).all() for value in (state.q, state.dq, state.pose, state.gripper_width)):
+    if (not all(np.isfinite(value).all() for value in (state.q, state.dq, state.pose))
+            or state.gripper_width is not None and not np.isfinite(state.gripper_width)):
         raise RuntimeError("Robot feedback contains non-finite values")
 
 
@@ -59,6 +60,7 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
     error = None
     parked = False
     stop_requested = False
+    damping_requested = False
     park_error = None
     shutdown_policy = None
     shutdown_completed = False
@@ -107,7 +109,9 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
         nonlocal feedback_read_ns
         feedback_read_ns = time.monotonic_ns()
         try:
-            check_feedback(state, tick)
+            # A synchronous SDK may timestamp receipt after the tick began.
+            # Validate against the clock after the read, not its start time.
+            check_feedback(state, time.monotonic())
             count = len(settings.robot.park_q)
             if np.shape(state.q) != (count,) or np.shape(state.dq) != (count,):
                 raise RuntimeError(f"Robot feedback must contain {count} joints")
@@ -148,7 +152,8 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
                 from embodied.devices.robots.arx5.profile import DualArmProfile
                 ingresses[native['channel']] = registry.create('ingress', native['ingress'], runtime='control',
                     prefix=prefix, dependencies=native['dependencies'], gripper=settings.robot.gripper_max_width > 0,
-                    dual=isinstance(settings.robot, DualArmProfile))
+                    dual=isinstance(settings.robot, DualArmProfile),
+                    **({'settings': settings} if native.get('settings_aware') else {}))
             gateway = Gateway(directory, prefix, settings.robot,
                               registry.load("planner", planner_plugin, runtime="control"), ingresses,
                               motion_limits=motion_limits, capabilities=capabilities,
@@ -178,7 +183,10 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
             if command is not None:
                 command.joint_step_limit = native_step_limits
             if gateway is not None:
-                command = gateway.tick(state, tick)
+                # Synchronous hardware stamps feedback after the read starts.
+                # Arbitration/standstill must use the post-read host clock, just
+                # like check_and_record_feedback, rather than the tick start.
+                command = gateway.tick(state, time.monotonic())
                 if state is not gateway.feedback:
                     state = gateway.feedback
                     check_and_record_feedback(state, time.monotonic(), 'simulation-state-change')
@@ -192,7 +200,9 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
             pose_commands += int(command.pose_target is not None)
             grip_commands += int(command.gripper_target is not None)
             step_and_record(state, command, tick, 'control')
-            width_min, width_max = min(width_min, state.gripper_width), max(width_max, state.gripper_width)
+            if state.gripper_width is not None:
+                width_min = state.gripper_width if width_min is None else min(width_min, state.gripper_width)
+                width_max = state.gripper_width if width_max is None else max(width_max, state.gripper_width)
             max_motion = max(max_motion, float(np.linalg.norm(state.pose[:3] - initial.pose[:3])))
             max_joint_delta = max(max_joint_delta, float(np.max(np.abs(state.q - prior_q))))
             prior_q = state.q.copy()
@@ -214,6 +224,7 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
                 parked = result.get('park_completed', False)
                 park_error = result.get('park_joint_error_rad')
                 stop_requested = result.get('stop_requested', False)
+                damping_requested = result.get('damping_requested', stop_requested)
                 shutdown_policy = result['policy']
                 shutdown_completed = True
             except Exception as exc:
@@ -245,7 +256,7 @@ def run(backend_name: str, prefix: str, config_path: str | None, directory: Path
         "shutdown_policy": shutdown_policy, "shutdown_completed": shutdown_completed,
         "stop_requested": stop_requested,
         "managed_stop": bool(gateway and gateway.engine.stopped),
-        "damping_requested": stop_requested,
+        "damping_requested": damping_requested,
         "park_joint_error_rad": park_error, "error": error,
         "ik_rejections": getattr(getattr(backend, 'controller', None), 'ik_rejections', 0),
         "ik_partial_solutions": getattr(getattr(backend, 'controller', None), 'ik_partial_solutions', 0),

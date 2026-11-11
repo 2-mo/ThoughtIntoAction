@@ -1,0 +1,98 @@
+"""Deterministic offline-model and failure-path checks; no robot connection."""
+import numpy as np
+import pytest
+
+from embodied.contracts.control import RobotState
+from embodied.devices.robots.realman.kinematics import MotionCheck, CandidateRejected
+
+
+class Model:
+    version = 'fake-test-model'
+    lower = np.full(6, -180.)
+    upper = np.full(6, 180.)
+    code = 0
+    singular = 0
+    broken_fit = False
+
+    def fk(self, q):
+        return np.array([.3 + q[0]/1000 + (.01 if self.broken_fit else 0), 0, .4, 0, 0, 0, 1.])
+
+    def solve(self, target, seed):
+        q = np.zeros(6); q[0] = (target[0] - .3)*1000
+        return self.code, q
+
+    def singularity(self, q):
+        return (self.singular if q[0] > .01 else 0), .2
+
+
+@pytest.fixture
+def inputs():
+    model = Model()
+    state = RobotState(np.zeros(6), np.zeros(6), model.fk(np.zeros(6)), float('nan'), 0)
+    target = state.pose.copy(); target[0] += .0002
+    return model, state, target
+
+
+def test_offline_check_accepts_consistent_small_candidate(inputs):
+    model, state, target = inputs
+    check = MotionCheck({}, state, model=model)
+    out = check.check(target, state)
+    assert out['max_joint_change_deg'] == pytest.approx(.2)
+    assert out['singularity_code'] == 0
+
+
+@pytest.mark.parametrize('reason', ['fit', 'ik', 'limit', 'singular', 'jump', 'residual', 'nan'])
+def test_offline_guard_rejects_invalid_models_and_candidates(inputs, reason):
+    model, state, target = inputs
+    check = MotionCheck({}, state, model=model)
+    if reason == 'fit': model.broken_fit = True
+    if reason == 'ik': model.code = 1
+    if reason == 'limit': model.upper = np.full(6, .1)
+    if reason == 'singular': model.singular = -2
+    if reason == 'jump': target[0] += .002
+    if reason == 'residual':
+        target[0] += .002
+        model.solve = lambda target, seed: (0, np.zeros(6))
+    if reason == 'nan': model.solve = lambda target, seed: (0, np.full(6, np.nan))
+    with pytest.raises((RuntimeError, ValueError)):
+        check.check(target, state)
+
+
+def test_accumulated_feedback_lag_is_not_adjacent_command_jump(inputs):
+    model, state, target = inputs
+    check = MotionCheck({}, state, model=model)
+    previous = None
+    for change in (.4, .8, 1.232):
+        target[0] = .3 + change/1000
+        out = check.check(target, state, previous_joint_deg=previous)
+        previous = out['ik_joint_deg']
+    assert out['max_joint_change_deg'] == pytest.approx(.432)
+    assert out['feedback_lead_deg'][0] == pytest.approx(1.232)
+    assert out['baseline'] == 'previous_sent_command'
+    target[0] += .0011
+    with pytest.raises(RuntimeError, match='joint 1'):
+        check.check(target, state, previous_joint_deg=previous)
+    assert check.diagnostics['command_delta_deg'][0] == pytest.approx(1.1)
+    # Releasing Grip removes the command baseline; first command is conservative.
+    with pytest.raises(RuntimeError, match='joint 1'):
+        check.check(target, state)
+
+
+def test_controller_joint_speed_budget_replaces_fixed_one_degree_guard(inputs):
+    model, state, target = inputs
+    check = MotionCheck({}, state, model=model)
+    target[0] = .302  # 2 degrees in this synthetic model: exceeds the old 1-degree guard.
+    out = check.check(target, state, max_joint_step_deg=[3.6, 3.6, 4.5, 4.5, 4.5, 4.5])
+    assert out['max_joint_change_deg'] == pytest.approx(2.)
+    with pytest.raises(RuntimeError, match='joint 1'):
+        check.check(target, state, max_joint_step_deg=[1., 3.6, 4.5, 4.5, 4.5, 4.5])
+
+
+@pytest.mark.parametrize('code,recoverable', [(1, True), (-1, False), (-2, False)])
+def test_only_vendor_no_solution_is_a_recoverable_candidate_rejection(inputs, code, recoverable):
+    model, state, target = inputs
+    check = MotionCheck({}, state, model=model)
+    model.code = code
+    with pytest.raises(RuntimeError) as error:
+        check.check(target, state)
+    assert isinstance(error.value, CandidateRejected) is recoverable

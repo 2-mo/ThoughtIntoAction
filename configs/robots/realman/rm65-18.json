@@ -1,0 +1,18 @@
+{
+  "host": "192.168.1.18",
+  "port": 8080,
+  "expected_model": "RM65-BI",
+  "expected_tool": "work",
+  "expected_tool_pose": [0, 0, 140000, 0, 0, 0],
+  "expected_work_frame": "Base",
+  "expected_work_pose": [0, 0, 0, 0, 0, 0],
+  "timeout_s": 0.3,
+  "control_hz": 50,
+  "stale_s": 0.3,
+  "speed_percent": 100,
+  "linear_speed_percent": 100,
+  "translation_radius_m": null,
+  "rotation_radius_rad": null,
+  "position_scale": 1.0,
+  "xr_to_robot_basis": [[0, 0, 1], [1, 0, 0], [0, 1, 0]]
+}

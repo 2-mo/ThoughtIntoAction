@@ -1,0 +1,164 @@
+"""RealMan status and Quest relative-pose preview/control; no implicit activation."""
+import argparse
+from contextlib import ExitStack
+import errno
+import json
+import time
+import sys
+
+import numpy as np
+
+from .backend import Backend, DEFAULT_CONFIG, load_config
+from .gripper import status as gripper_status, move as gripper_move, DEFAULT_STEP, DEFAULT_SPEED
+from .quest_control import run_quest
+from .telemetry import StateMirror
+
+
+def connect_backends(config, left_config, *, execute, standby):
+    """Retry startup transport only; always release a partially connected pair."""
+    while True:
+        with ExitStack() as attempt:
+            options = {'defer_motion_check': True} if standby else {}
+            current = config
+            try:
+                right = Backend(config, allow_motion=execute, **options)
+                attempt.callback(right.close)
+                bindings = [('right', right)]
+                if left_config is not None:
+                    current = left_config
+                    left = Backend(left_config, allow_motion=execute, **options)
+                    attempt.callback(left.close)
+                    bindings.insert(0, ('left', left))
+            except OSError as exc:
+                if not standby or not (isinstance(exc, (TimeoutError, ConnectionError)) or
+                        exc.errno in (errno.ENETUNREACH, errno.EHOSTUNREACH, errno.ENETDOWN)):
+                    raise
+                print(f'等待机械臂 {current["host"]}:{current["port"]} 连接：{exc}。'
+                      '请检查电源、网线及主机网段地址；恢复后自动进入待机，不自动运动。', flush=True)
+            else:
+                return bindings, attempt.pop_all()
+        time.sleep(2.)
+
+
+def run():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('action', choices=['status', 'quest', 'check-kinematics', 'gripper-status', 'gripper-open', 'gripper-close', 'zero', 'pregrasp', 'quest-dual'])
+    parser.add_argument('--config', help='Robot config; in quest-dual this selects the right arm (default .18)')
+    parser.add_argument('--left-config', help='Left arm config for quest-dual (default .19)')
+    parser.add_argument('--execute', action='store_true', help='Permit motion; default is read-only target preview')
+    parser.add_argument('--standby', action='store_true', help='Controller session: wait for XR, B starts/pauses, Y pauses; no automatic motion')
+    parser.add_argument('--duration', type=float, default=30., help='Seconds; 0 runs until B or Ctrl+C (standby: Ctrl+C only)')
+    parser.add_argument('--gripper', action='store_true', help='Hold A (right) / X (left) to open, corresponding Trigger to close; works while following with Grip')
+    parser.add_argument('--gripper-speed', type=int, metavar='1..1000',
+                        help=f'Speed for explicit full open/close or startup open only (default {DEFAULT_SPEED}, 50 percent); position segments inherit controller speed')
+    parser.add_argument('--gripper-step', type=int, metavar='5..100',
+                        help=f'Raw opening units per segment (default {DEFAULT_STEP}); larger segments continue farther after release')
+    parser.add_argument('--gripper-initialize-open', action='store_true',
+                        help=f'Explicit full open at startup, or first B in standby (BOTH grippers in quest-dual, default speed {DEFAULT_SPEED}/1000); requires clear empty jaws')
+    parser.add_argument('--position-only', action='store_true', help='Translate while preserving the TCP orientation at each Grip engagement')
+    parser.add_argument('--xr-startup-timeout', type=float, default=15.,
+                        help='Seconds to wait for the first XR frame; live stale limit is unchanged')
+    args = parser.parse_args()
+    quest_action = args.action in ('quest', 'quest-dual')
+    if args.standby and not (quest_action and args.execute):
+        parser.error('--standby requires quest/quest-dual --execute')
+    if args.left_config is not None and args.action != 'quest-dual':
+        parser.error('--left-config requires quest-dual')
+    if args.execute and args.action not in ('quest', 'quest-dual', 'gripper-open', 'gripper-close', 'zero', 'pregrasp'):
+        parser.error('--execute requires quest/quest-dual, zero, pregrasp or gripper-open/close')
+    if args.action in ('gripper-open', 'gripper-close') and not args.execute:
+        parser.error('Gripper movement requires --execute')
+    if args.gripper and (not quest_action or not args.execute):
+        parser.error('--gripper requires quest/quest-dual --execute')
+    if args.gripper_step is not None:
+        if not args.gripper:
+            parser.error('--gripper-step requires quest/quest-dual --execute --gripper')
+        if not 5 <= args.gripper_step <= 100:
+            parser.error('--gripper-step must be in 5..100 raw units')
+    gripper_step = args.gripper_step if args.gripper_step is not None else DEFAULT_STEP
+    if args.position_only and not quest_action:
+        parser.error('--position-only requires quest/quest-dual')
+    if args.gripper_initialize_open and not (args.execute and (
+            args.action == 'gripper-open' or (quest_action and args.gripper))):
+        parser.error('--gripper-initialize-open requires quest/quest-dual --execute --gripper or gripper-open --execute')
+    if args.gripper_speed is not None:
+        if not (args.action in ('gripper-open', 'gripper-close') or args.gripper_initialize_open):
+            parser.error('--gripper-speed requires an explicit full open/close or --gripper-initialize-open')
+        if not 1 <= args.gripper_speed <= 1000:
+            parser.error('--gripper-speed must be in 1..1000')
+    gripper_speed = args.gripper_speed if args.gripper_speed is not None else DEFAULT_SPEED
+    if not np.isfinite(args.duration) or args.duration < 0:
+        parser.error('--duration must be finite and nonnegative')
+    if not np.isfinite(args.xr_startup_timeout) or args.xr_startup_timeout <= 0:
+        parser.error('--xr-startup-timeout must be finite and positive')
+    config_path = args.config or (str(DEFAULT_CONFIG.with_name('rm65-18.json'))
+        if args.action == 'quest-dual' else str(DEFAULT_CONFIG))
+    config = load_config(config_path)
+    left_config = None
+    if args.action == 'quest-dual':
+        left_config = load_config(args.left_config or str(DEFAULT_CONFIG))
+        if left_config['host'] == config['host']:
+            parser.error('Dual arms must use different robot hosts')
+        if left_config['control_hz'] != config['control_hz']:
+            parser.error('Dual arms must use the same control_hz')
+    with ExitStack() as stack:
+        bindings, connections = connect_backends(config, left_config,
+            execute=args.execute and quest_action, standby=args.standby)
+        stack.enter_context(connections)
+        backend = next(b for hand, b in bindings if hand == 'right')
+        if args.action in ('zero', 'pregrasp'):
+            from .positioning import JOINT_POSES, joint_preview, execute_joint_target
+            target = JOINT_POSES[args.action]
+            print(json.dumps({'joint_preview': joint_preview(backend, target), 'execute_requested': args.execute}), flush=True)
+            if args.execute:
+                print(json.dumps(execute_joint_target(backend, target)), flush=True)
+            return
+        if args.action in ('gripper-open', 'gripper-close') or args.gripper:
+            backend.client.allow_gripper = True
+        if args.action in ('gripper-open', 'gripper-close'):
+            if backend.state.fault:
+                raise RuntimeError(backend.state.fault)
+            print(json.dumps(gripper_move(backend.client, args.action.removeprefix('gripper-'),
+                speed=gripper_speed, initialize_open=args.gripper_initialize_open)), flush=True)
+            return
+        if args.action == 'gripper-status':
+            raw = gripper_status(backend.client)
+            print(json.dumps({'model': 'EG2-4C2', 'feedback': raw,
+                              'online': raw['status'] == 1, 'enabled': raw['enable'] == 1,
+                              'opening_unit': 'controller raw value; not calibrated to mm',
+                              'motion_sent': False, 'configuration_changed': False}, ensure_ascii=False, indent=2))
+            return
+        if args.action == 'status':
+            state = backend.read_state(time.monotonic())
+            print(json.dumps({'identity': backend.info, 'joint_rad': state.q.tolist(),
+                              'tcp_m_xyzw': state.pose.tolist(), 'fault': state.fault,
+                              'gripper': 'unknown; not configured', 'motion_sent': False}, ensure_ascii=False, indent=2))
+            return
+        if args.action == 'check-kinematics':
+            checker = backend.prepare_motion_check()
+            print(json.dumps({'model_fit': checker.fit,
+                              'current_pose_ik': checker.check(backend.state.pose, backend.state),
+                              'motion_sent': False}, indent=2))
+            return
+        import xrobotoolkit_sdk as xr
+        mirror = StateMirror()
+        stack.callback(mirror.close)
+        run_quest(bindings, xr, execute=args.execute, duration=args.duration,
+            startup_timeout=args.xr_startup_timeout, position_only=args.position_only,
+            gripper=args.gripper, gripper_step=gripper_step,
+            initialize_open=args.gripper_initialize_open, gripper_speed=gripper_speed,
+            standby=args.standby, mirror=mirror)
+
+
+def main():
+    try:
+        run()
+    except KeyboardInterrupt:
+        print('已退出；已尝试停止机械臂，请确认现场状态。', flush=True)
+    except (RuntimeError, ValueError, OSError) as exc:
+        print(f'会话已停止：{exc}。请确认机械臂已停，再处理原因并重新启动。', file=sys.stderr, flush=True)
+        raise SystemExit(1) from None
+
+
+if __name__ == '__main__':
+    main()

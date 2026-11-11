@@ -109,7 +109,8 @@ class RobotBridge:
             send(self._publishers[f"pose:{arm_name}"], Pose7.from_values(timestamp, list(pose)))
             send(self._publishers[f"q:{arm_name}"], JointVector15.from_values(timestamp, list(q)))
             send(self._publishers[f"dq:{arm_name}"], JointVector15.from_values(timestamp, list(dq)))
-            send(self._publishers[f"width:{grip_name}"], ParallelVector2.from_values(timestamp, [float(width)]))
+            if width is not None:  # a gripper without position feedback publishes nothing
+                send(self._publishers[f"width:{grip_name}"], ParallelVector2.from_values(timestamp, [float(width)]))
 
     def close(self) -> None:
         self._subscribers.clear()

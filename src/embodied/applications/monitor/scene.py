@@ -138,7 +138,11 @@ class Scene:
                     from embodied.devices.inputs.phone_service import monitor
                     payload = monitor()
                     identity = owner.runtime_monitor.identity if owner.runtime_monitor is not None else None
-                    payload['kernel_runtime_id'] = (identity or {}).get('runtime_id')
+                    if identity is None and owner.runtime_monitor is not None:
+                        from embodied.applications.workstation.bench import current_run
+                        found = current_run()
+                        identity = found[1] if found else None
+                    payload['kernel_runtime_id'] = payload.get('runtime_id') or (identity or {}).get('runtime_id')
                     payload['kernel_backend'] = (identity or {}).get('backend')
                     content, mime = json.dumps(payload, allow_nan=False).encode(), 'application/json'
                 elif path == '/api/simulation':
@@ -292,6 +296,9 @@ class Scene:
             for index, geometry in enumerate(self._visual.geometryObjects):
                 spec = {'name': geometry.name, 'link': robot.model.frames[geometry.parentFrame].name,
                         'scale': geometry.meshScale.tolist()}
+                gripper = getattr(robot, 'display_grippers', {}).get(spec['link'])
+                if gripper is not None:
+                    spec['gripper'] = gripper
                 mesh = Path(geometry.meshPath).resolve()
                 if mesh.is_file() and mesh.suffix.lower() == '.stl':
                     spec['url'] = f'/meshes/{index}.stl'

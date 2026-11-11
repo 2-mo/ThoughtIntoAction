@@ -16,6 +16,16 @@ from embodied.control.ticks import CAPACITY, TickSubscriber, layout, to_dict
 MAX_MESSAGE = 4_000_000
 
 
+def open_input_observer(identity, parameters):
+    native = identity.get('native')
+    if not native:
+        return None
+    from embodied.contracts.registry import Registry
+    device = Registry().load('vr', native['device'], runtime='control')
+    observe = getattr(device, 'open_observer', None)
+    return observe(identity['runtime_id'], parameters.get('effective_input_config') or {}) if observe else None
+
+
 def encode(value):
     raw = json.dumps(value, allow_nan=False, separators=(",", ":")).encode()
     if len(raw) > MAX_MESSAGE:
@@ -123,6 +133,9 @@ def run(directory):
     latest_packet = None
     gaps = 0
     terminal = False
+    input_observer = None
+    input_error = None
+    input_initialized = False
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         # Directory fd avoids AF_UNIX's 108-byte absolute-path limit after relocation.
@@ -141,6 +154,16 @@ def run(directory):
                 packet = subscriber.receive()
                 if packet is None:
                     break
+                if not input_initialized:
+                    # The observer starts before the backend. Its first tick
+                    # proves parameters.json has been written by that backend.
+                    input_initialized = True
+                    if identity.get('native'):
+                        try:
+                            input_observer = open_input_observer(identity,
+                                json.loads((directory/'parameters.json').read_text()))
+                        except Exception as exc:
+                            input_error = f'手柄监看未就绪：{exc}'
                 if last_sequence is not None and packet.sequence != last_sequence + 1:
                     gaps += 1
                 last_sequence = packet.sequence
@@ -148,6 +171,13 @@ def run(directory):
                 value["source"] = value["source"] or ("quest" if identity["input"] == "vr" else identity["input"])
                 value["observer_gaps"] = gaps
                 value["observer_received_ns"] = time.monotonic_ns()
+                if input_observer is not None:
+                    try:
+                        value['input'] = input_observer.snapshot()
+                    except Exception as exc:
+                        value['input'] = {'error': f'手柄监看读取失败：{exc}'}
+                elif input_error:
+                    value['input'] = {'error': input_error}
                 latest_packet = encode(value)
                 for peer in peers:
                     peer.offer(latest_packet)

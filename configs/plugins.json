@@ -29,6 +29,14 @@
       "capabilities": [
         "experimental"
       ]
+    },
+    "realman": {
+      "factory": "embodied.devices.robots.realman.backend:Backend",
+      "hardware": true,
+      "capabilities": [
+        "feedback",
+        "cartesian"
+      ]
     }
   },
   "input": {
@@ -78,6 +86,10 @@
     },
     "reference7": {
       "factory": "embodied.devices.robots.reference7.viewer:Viewer",
+      "runtime": "control"
+    },
+    "realman": {
+      "factory": "embodied.devices.robots.realman.viewer:Viewer",
       "runtime": "control"
     }
   },
@@ -160,6 +172,28 @@
         "joint",
         "cartesian"
       ]
+    },
+    "realman.sim": {
+      "factory": "embodied.devices.robots.realman.simulation:Simulation",
+      "runtime": "control",
+      "simulation_only": true,
+      "capabilities": [
+        "feedback",
+        "joint",
+        "cartesian",
+        "gripper"
+      ]
+    },
+    "realman.real": {
+      "factory": "embodied.devices.robots.realman.hardware:Hardware",
+      "hardware": true,
+      "runtime": "control",
+      "capabilities": [
+        "feedback",
+        "joint",
+        "cartesian",
+        "gripper"
+      ]
     }
   },
   "vr": {
@@ -189,6 +223,20 @@
       "capabilities": [
         "workbench-buttons",
         "native-control"
+      ]
+    },
+    "quest.shared": {
+      "factory": "embodied.devices.inputs.quest.shared:SharedDevice",
+      "runtime": "control"
+    },
+    "quest.native": {
+      "factory": "embodied.devices.inputs.quest.composition:QuestDevice",
+      "runtime": "control",
+      "capabilities": [
+        "pose",
+        "input",
+        "tracking",
+        "xr-basis"
       ]
     }
   },
@@ -294,6 +342,14 @@
         "workbench-buttons",
         "native-control"
       ]
+    },
+    "quest.shared": {
+      "factory": "embodied.devices.inputs.quest.shared:Routing",
+      "runtime": "control"
+    },
+    "quest.native": {
+      "factory": "embodied.devices.inputs.quest.shared:Routing",
+      "runtime": "control"
     }
   },
   "ingress": {
@@ -314,6 +370,14 @@
         "workbench-buttons",
         "native-control"
       ]
+    },
+    "quest.shared": {
+      "factory": "embodied.devices.inputs.quest.shared:Ingress",
+      "runtime": "control"
+    },
+    "quest.native": {
+      "factory": "embodied.devices.inputs.quest.shared:Ingress",
+      "runtime": "control"
     }
   },
   "controller": {
@@ -612,6 +676,14 @@
     "arx5-dual": {
       "factory": "embodied.devices.robots.arx5.dual:DualKinematics",
       "runtime": "control"
+    },
+    "realman": {
+      "factory": "embodied.devices.robots.realman.model:Model",
+      "runtime": "control"
+    },
+    "realman.hardware": {
+      "factory": "embodied.devices.robots.realman.hardware_model:planning_model",
+      "runtime": "control"
     }
   },
   "perception": {
@@ -660,6 +732,14 @@
     },
     "arx5-dual": {
       "factory": "embodied.devices.robots.arx5.profile:load_dual_profile",
+      "runtime": "control"
+    },
+    "realman": {
+      "factory": "embodied.devices.robots.realman.profile:load_profile",
+      "runtime": "control"
+    },
+    "realman.hardware": {
+      "factory": "embodied.devices.robots.realman.hardware_profile:load_profile",
       "runtime": "control"
     }
   },

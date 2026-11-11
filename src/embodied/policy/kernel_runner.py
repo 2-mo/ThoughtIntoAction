@@ -1,4 +1,4 @@
-"""OpenPI policy on the arx kernel (todo P-06).
+"""OpenPI policy through the robot-independent control kernel.
 
 Uses the existing policy workers and observation files; actions go to the kernel through one
 ControlSession. The kernel applies joint limits, the table plane and its per-tick step limit to
@@ -13,11 +13,30 @@ import time
 
 import numpy as np
 
-from embodied.contracts.runtime.control import ControlSession
+from embodied.contracts.runtime.control import ControlSession, ControlClient
 
 POLICY_FPS = 30
 KERNEL_ASSET_ID = 'local/x5_kernel'  # scripts/training/openpi/run.py LAYOUTS: trained on kernel sent_q
 JOINTS = {'joint_names': ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6'], 'joint_unit': 'rad', 'length_unit': 'm'}
+
+
+def validate_policy_robot(parameters, spec):
+    """Bind model normalization/actions to the actual device before opening resources."""
+    from embodied.data.episode.contract import validate_contract
+    contract = validate_contract(parameters['data_contract'])
+    adapter = spec.get('adapter_spec')
+    if adapter is None:
+        if parameters['effective_robot_config'].get('simulation_plugin') != 'arx.sim':
+            raise ValueError('RealMan requires an RM65-trained checkpoint with adapter_spec; X5 weights cannot be reused')
+        return JOINTS
+    if adapter['data_contract'] != contract:
+        raise ValueError('Checkpoint robot/gripper contract differs from this runtime')
+    if set(adapter['camera_roles'].values()) != {'wrist_rgb'}:
+        raise ValueError('This runner provides wrist_rgb; checkpoint camera roles do not match')
+    if len(contract['joint_names']) != 6 or contract['gripper'] is None:
+        raise ValueError('This runner requires six joints and a position gripper')
+    return {'joint_names': contract['joint_names'], 'joint_unit': 'rad', 'length_unit': 'm',
+            'data_contract': contract}
 
 
 def observe(session, camera, cycle, robot=JOINTS, max_skew_s=.06):
@@ -56,7 +75,8 @@ def run(session, worker, camera, output, prompt, *, seconds, chunk_steps, max_ag
                         or prediction['rgb_monotonic_ns'] != observation['rgb_monotonic_ns']):
                     raise ValueError('Prediction belongs to another observation')
                 with np.load(cycle / 'prediction.npz', allow_pickle=False) as data:
-                    actions = data['actions_x5' if 'actions_x5' in data.files else 'actions_x5_experimental'].copy()
+                    key = 'actions' if 'actions' in data.files else 'actions_x5' if 'actions_x5' in data.files else 'actions_x5_experimental'
+                    actions = data[key].copy()
                 if actions.ndim != 2 or actions.shape[1] != 7 or len(actions) < chunk_steps or not np.isfinite(actions).all():
                     raise ValueError('Invalid action chunk')
                 summary['cycles'] += 1
@@ -113,8 +133,10 @@ def main(argv=None):
     if not 0 < args.seconds <= 300:
         parser.error('seconds must be within 0..300')
     output = args.output or ROOT / 'outputs/policy_kernel' / time.strftime('%Y%m%d-%H%M%S')
+    parameters = ControlClient(args.run).parameters
     robot = JOINTS
     if args.policy == 'zeroshot':
+        validate_policy_robot(parameters, {})
         stats = args.stats or ROOT / 'outputs/zero-shot-assets/x5_quantiles_h50.json'
         if not stats.is_file():
             parser.error(f'{stats} missing; compute it with python -m embodied.policy.pi05_zeroshot.compute_stats')
@@ -133,11 +155,12 @@ def main(argv=None):
                                           else checkpoint_module.DEFAULT_CHECKPOINT)).expanduser()
         spec = (checkpoint_module.inspect_jax_checkpoint(checkpoint, horizon=args.jax_horizon) if args.backend == 'jax'
                 else checkpoint_module.inspect_checkpoint(checkpoint))
+        robot = validate_policy_robot(parameters, spec)
         if not 1 <= args.chunk_steps <= spec['model']['action_horizon']:
             parser.error('chunk-steps must be within the model horizon')
         if spec['cameras'] not in (None, ['wrist_rgb']):
             print(f'警告：模型训练相机为 {spec["cameras"]}，推理只打开腕部相机。', flush=True)
-        if spec['asset_id'] != KERNEL_ASSET_ID:
+        if spec.get('adapter_spec') is None and spec['asset_id'] != KERNEL_ASSET_ID:
             print(f'警告：模型训练数据为 {spec["asset_id"]}（旧机械臂服务 240 Hz 请求位置），'
                   '经内核执行时动作定义不同（内核 250 Hz sent_q）。', flush=True)
         output.mkdir(parents=True, exist_ok=False)

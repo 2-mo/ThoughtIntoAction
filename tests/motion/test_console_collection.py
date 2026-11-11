@@ -50,7 +50,10 @@ class EpisodeRouteTests(unittest.TestCase):
         self.assertEqual(summary["frames"], 120)
         self.assertEqual(summary["seconds"], 12.5)
         self.assertEqual(summary["cameras"], ["wrist_rgb"])
-        self.assertEqual(result["summary"], {"complete": 1, "failed": 0})
+        self.assertEqual(result["summary"]["complete"], 1)
+        self.assertEqual(result["summary"]["failed"], 0)
+        self.assertEqual(result["summary"]["by_task"]["把方块放到棋盘上"],
+                         {"complete": 1, "failed": 0})
 
     def test_missing_directory_returns_an_empty_listing(self):
         result = asyncio.run(

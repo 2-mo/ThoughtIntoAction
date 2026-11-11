@@ -1,0 +1,540 @@
+"""Dual routing and failure containment with deterministic fake XR/robots."""
+import sys
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+from embodied.devices.robots.realman import cli, quest_control
+from embodied.devices.robots.realman.backend import load_config
+
+
+POSE = [0., 0., 0., 0., 0., 0., 1.]
+
+
+class Session:
+    def __init__(self, monkeypatch, frames, *, execute=True, gripper=False):
+        self.frames, self.index, self.events = frames, 0, []
+        self.execute, self.gripper = execute, gripper
+        self.fault = self.read_error = self.send_error = self.stop_error = None
+        self.gripper_error = self.gripper_offline = None
+        self.stall_at = None
+        self.readiness_error = None
+        self.backends = {}
+        self.xr = SimpleNamespace(init=lambda: self.event('xr', 'init'),
+            close=lambda: self.event('xr', 'close'),
+            get_time_stamp_ns=lambda: (1 + min(self.index, self.stall_at)
+                if self.stall_at is not None else 1 + self.index) * 40_000_000,
+            get_B_button=lambda: self.index >= len(frames) or self.value('B', False),
+            get_Y_button=lambda: self.value('Y', False))
+        for hand, button in [('left', 'X'), ('right', 'A')]:
+            setattr(self.xr, f'get_{hand}_grip', lambda h=hand: self.value(h+'_grip', 0.))
+            setattr(self.xr, f'get_{hand}_trigger', lambda h=hand: self.value(h+'_trigger', 0.))
+            # Routing cases model continuous slow hand movement. Stationary
+            # hand cases below supply an explicit constant pose in every frame.
+            setattr(self.xr, f'get_{hand}_controller_pose', lambda h=hand: self.value(
+                h+'_pose', [max(self.index-1, 0)*.001, 0., 0., 0., 0., 0., 1.]))
+            setattr(self.xr, f'get_{button}_button', lambda b=button: self.value(b, False))
+        monkeypatch.setattr(quest_control, 'time', SimpleNamespace(
+            monotonic=lambda: 1. + self.index * .04, sleep=self.advance))
+        monkeypatch.setattr(cli, 'Backend', self.backend)
+        monkeypatch.setattr(cli, 'StateMirror', lambda: SimpleNamespace(update=lambda *a, **k: None, close=lambda: None))
+        monkeypatch.setitem(sys.modules, 'xrobotoolkit_sdk', self.xr)
+
+    def value(self, key, default):
+        return self.frames[self.index].get(key, default) if self.index < len(self.frames) else default
+
+    def event(self, host, kind, value=None):
+        self.events.append((self.index, host, kind, value))
+
+    def advance(self, seconds):
+        assert seconds >= 0
+        self.index += 1
+
+    def backend(self, config, allow_motion, defer_motion_check=False):
+        session = self
+        host = config['host']
+
+        class FakeBackend:
+            def __init__(self):
+                # Fake startup supplies the same effective limits as the onsite controller.
+                self.config = {**config, 'linear_speed_m_s': .125, 'angular_speed_rad_s': .30}
+                self.allow_motion = allow_motion
+                self.origin = np.array([-.3, 0., .3, 0., 0., 0., 1.])
+                self.state = SimpleNamespace(pose=self.origin.copy(), fault='')
+                self.info = {'get_current_tool_frame': {}, 'get_current_work_frame': {}}
+                self.active, self.closed = False, False
+                self.last_target = None
+                self.opening = 500
+                self.client = SimpleNamespace(query=self.query, exchange=self.exchange, allow_gripper=False)
+
+            def query(self, key):
+                if key == 'get_gripper_state':
+                    if session.gripper_error == (host, session.index):
+                        raise TimeoutError('gripper feedback timeout')
+                    ready = int(session.gripper_offline != (host, session.index))
+                    return dict(enable=ready, status=ready, error=0, mode=3,
+                        temperature=33, current_force=0, actpos=self.opening)
+                return self.info[key]
+
+            def exchange(self, message, expected):
+                assert self.client.allow_gripper
+                session.event(host, 'gripper', message.copy())
+                self.opening = message.get('position', self.opening)
+                return {'state': True}
+
+            def read_state(self, now):
+                if session.read_error == (host, session.index):
+                    raise OSError('feedback timeout')
+                self.state.fault = 'robot fault' if session.fault == (host, session.index) else ''
+                return self.state
+
+            def step(self, command, now):
+                assert self.allow_motion
+                if session.send_error == (host, session.index):
+                    raise RuntimeError('IK/send rejected')
+                self.active = True
+                self.last_target = command.pose_target.copy()
+                session.event(host, 'target', command.pose_target.copy())
+
+            def check_motion_ready(self):
+                session.event(host, 'check_ready')
+                if session.readiness_error == (host, session.index):
+                    from embodied.devices.robots.realman.kinematics import CandidateRejected
+                    raise CandidateRejected('Current posture near vendor singularity region: code=-3')
+
+            def telemetry(self):
+                return {'command': {}}
+
+            def stop(self):
+                session.event(host, 'stop_attempt')
+                self.last_target = None
+                if self.active:
+                    self.active = False
+                    session.event(host, 'stop')
+                    if session.stop_error == (host, session.index):
+                        raise OSError('stop unavailable')
+
+            def close(self):
+                self.stop()
+                self.closed = True
+                session.event(host, 'close')
+
+        result = self.backends[host] = FakeBackend()
+        return result
+
+    def run(self, monkeypatch, *extra):
+        args = ['realman', 'quest-dual', '--position-only', '--duration', '0']
+        if self.execute:
+            args += ['--execute']
+        if self.gripper:
+            args += ['--gripper']
+        monkeypatch.setattr(sys, 'argv', args + list(extra))
+        cli.run()
+
+    def targets(self, host):
+        return [e for e in self.events if e[1:3] == (host, 'target')]
+
+
+LEFT, RIGHT = '192.168.1.19', '192.168.1.18'
+BOTH = dict(left_grip=1., right_grip=1.)
+
+
+def test_cli_help_exposes_standby_and_default_speed(monkeypatch, capsys):
+    monkeypatch.setattr(sys, 'argv', ['realman', '--help'])
+    with pytest.raises(SystemExit) as result:
+        cli.run()
+    assert result.value.code == 0
+    output = capsys.readouterr().out
+    assert '--standby' in output
+    assert 'default 500' in output
+
+
+def test_default_hosts_independent_pose_clutch_and_reanchor(monkeypatch):
+    session = Session(monkeypatch, [{}, BOTH,
+        dict(BOTH, left_pose=[.02, 0., 0., 0., 0., 0., 1.],
+            right_pose=[0., 0., -.03, 0., 0., 0., 1.]),
+        dict(right_grip=1., right_pose=[0., 0., -.04, 0., 0., 0., 1.]),
+        dict(BOTH, left_pose=[.2, 0., 0., 0., 0., 0., 1.])])
+    session.run(monkeypatch)
+    left, right = session.targets(LEFT), session.targets(RIGHT)
+    assert [e[0] for e in left] == [1, 2, 4]
+    assert [e[0] for e in right] == [1, 2, 3, 4]
+    np.testing.assert_allclose(left[1][3][:3], [-.3, .02, .3])
+    np.testing.assert_allclose(right[1][3][:3], [-.33, 0., .3])
+    np.testing.assert_allclose(left[-1][3], session.backends[LEFT].state.pose)
+    assert any(e[:3] == (3, LEFT, 'stop') for e in session.events)
+    assert sum(e[1:3] == ('xr', 'init') for e in session.events) == 1
+    assert sum(e[1:3] == ('xr', 'close') for e in session.events) == 1
+    assert all(b.closed for b in session.backends.values())
+
+
+def test_readonly_preview_never_moves_either_arm_or_gripper(monkeypatch, capsys):
+    session = Session(monkeypatch, [{}, BOTH, dict(BOTH, X=True, A=True)], execute=False)
+    session.run(monkeypatch)
+    assert not any(e[2] in ('target', 'gripper', 'stop') for e in session.events)
+    assert '"hand": "left", "host": "192.168.1.19", "preview": true' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize('moving_hand', ['left', 'right'])
+def test_both_grippers_work_while_either_arm_is_following(monkeypatch, moving_hand):
+    closing_hand = 'right' if moving_hand == 'left' else 'left'
+    moving_host = LEFT if moving_hand == 'left' else RIGHT
+    held = {closing_hand+'_trigger': 1., moving_hand+'_grip': 1.,
+            moving_hand+'_trigger': 1.}
+    session = Session(monkeypatch, [{}, {'X': True, 'A': True}, {}, {}, {}, {}] +
+        [held]*3, gripper=True)
+    session.run(monkeypatch)
+    moves = [e for e in session.events if e[2] == 'gripper']
+    assert [(e[0], e[1], e[3]['position']) for e in moves] == [
+        (1, LEFT, 600), (1, RIGHT, 600), (6, LEFT, 500), (6, RIGHT, 500),
+        (8, LEFT, 400), (8, RIGHT, 400)]
+    assert session.targets(moving_host)
+    other_host = RIGHT if moving_host == LEFT else LEFT
+    assert not session.targets(other_host)
+
+
+def test_both_arms_follow_while_both_grippers_open_then_close(monkeypatch):
+    session = Session(monkeypatch, [{}, dict(BOTH, X=True, A=True), BOTH,
+        dict(BOTH, left_trigger=1., right_trigger=1.)], gripper=True)
+    session.run(monkeypatch)
+    moves = [e for e in session.events if e[2] == 'gripper']
+    assert [(e[0], e[1], e[3]['position']) for e in moves] == [
+        (1, LEFT, 600), (1, RIGHT, 600), (3, LEFT, 500), (3, RIGHT, 500)]
+    for host in (LEFT, RIGHT):
+        assert [e[0] for e in session.targets(host)] == [1, 2, 3]
+
+
+def test_gripper_recovers_with_buttons_neutral_while_arm_keeps_following(monkeypatch):
+    session = Session(monkeypatch, [{}] + [BOTH]*51 +
+        [dict(BOTH, left_trigger=1.)], gripper=True)
+    session.gripper_offline = (LEFT, 0)
+    session.run(monkeypatch)
+    assert len(session.targets(LEFT)) == 52
+    assert [(e[0], e[1], e[3]['position']) for e in session.events if e[2] == 'gripper'] == [
+        (52, LEFT, 400)]
+
+
+def test_gripper_timeout_during_following_stops_both_arms(monkeypatch):
+    session = Session(monkeypatch, [{}, BOTH, dict(BOTH, left_trigger=1.)], gripper=True)
+    session.gripper_error = (LEFT, 2)
+    with pytest.raises(TimeoutError, match='gripper feedback timeout'):
+        session.run(monkeypatch)
+    assert {e[1] for e in session.events if e[2] == 'stop'} == {LEFT, RIGHT}
+
+
+def test_explicit_dual_startup_open_applies_selected_speed_to_both_grippers(monkeypatch):
+    session = Session(monkeypatch, [{}], gripper=True)
+    session.run(monkeypatch, '--gripper-initialize-open', '--gripper-speed', '300')
+    moves = [e for e in session.events if e[2] == 'gripper']
+    assert {e[1] for e in moves} == {LEFT, RIGHT}
+    assert len(moves) == 2
+    assert all(e[3] == dict(command='set_gripper_release', speed=300, block=False) for e in moves)
+
+
+def test_dual_startup_open_defaults_to_half_gripper_speed(monkeypatch):
+    session = Session(monkeypatch, [{}], gripper=True)
+    session.run(monkeypatch, '--gripper-initialize-open')
+    moves = [e for e in session.events if e[2] == 'gripper']
+    assert {e[1] for e in moves} == {LEFT, RIGHT}
+    assert len(moves) == 2
+    assert all(e[3] == dict(command='set_gripper_release', speed=500, block=False) for e in moves)
+
+
+def test_standby_defers_open_until_B_and_supports_pause_and_resume(monkeypatch):
+    session = Session(monkeypatch, [{}, {'B': True}, BOTH, dict(BOTH, B=True),
+        BOTH, {}, {'B': True}, BOTH], gripper=True)
+    session.run(monkeypatch, '--standby', '--gripper-initialize-open', '--duration', '.32')
+    moves = [e for e in session.events if e[2] == 'gripper']
+    assert len(moves) == 2
+    assert all(e[0] == 1 and e[3]['speed'] == 500 for e in moves)
+    assert {e[0] for e in session.targets(LEFT)} == {2, 7}
+    assert {e[0] for e in session.targets(RIGHT)} == {2, 7}
+    assert {e[1] for e in session.events if e[0] == 3 and e[2] == 'stop'} == {LEFT, RIGHT}
+
+
+def test_standby_waits_for_XR_without_opening_or_moving(monkeypatch):
+    session = Session(monkeypatch, [{'B': True}, {}, {'B': True}, BOTH], gripper=True)
+    session.xr.get_time_stamp_ns = lambda: 0
+    session.run(monkeypatch, '--standby', '--gripper-initialize-open', '--duration', '.16',
+        '--xr-startup-timeout', '.01')
+    assert not any(e[2] in ('target', 'gripper') for e in session.events)
+
+
+def test_standby_held_B_at_startup_requires_release_and_new_press(monkeypatch):
+    session = Session(monkeypatch, [{'B': True}, {'B': True}, {}, {'B': True}, BOTH], gripper=True)
+    session.run(monkeypatch, '--standby', '--gripper-initialize-open', '--duration', '.20')
+    assert {e[0] for e in session.events if e[2] == 'gripper'} == {3}
+    assert {e[0] for e in session.targets(LEFT)} == {4}
+
+
+def test_standby_busy_gripper_does_not_silently_skip_speed_setting(monkeypatch):
+    session = Session(monkeypatch, [{}, {'B': True}, BOTH], gripper=True)
+    original = session.backend
+    def connect(config, allow_motion, **options):
+        backend = original(config, allow_motion, **options)
+        query = backend.client.query
+        def busy(key):
+            result = query(key)
+            if key == 'get_gripper_state':
+                result['mode'] = 5
+            return result
+        backend.client.query = busy
+        return backend
+    monkeypatch.setattr(cli, 'Backend', connect)
+    with pytest.raises(RuntimeError, match='speed was not applied'):
+        session.run(monkeypatch, '--standby', '--gripper-initialize-open', '--duration', '.12')
+    assert not any(e[2] in ('target', 'gripper') for e in session.events)
+    assert all(backend.closed for backend in session.backends.values())
+
+
+def test_standby_rejects_start_with_grip_held_and_Y_always_pauses(monkeypatch):
+    session = Session(monkeypatch, [{}, dict(BOTH, B=True), BOTH, {}, {'B': True},
+        BOTH, dict(BOTH, Y=True), dict(BOTH, B=True)], gripper=True)
+    session.run(monkeypatch, '--standby', '--gripper-initialize-open', '--duration', '.32')
+    assert {e[0] for e in session.targets(LEFT)} == {5}
+    assert {e[0] for e in session.events if e[2] == 'gripper'} == {4}
+
+
+def test_standby_XR_loss_requires_neutral_and_new_B_before_resuming(monkeypatch):
+    session = Session(monkeypatch, [{}, {'B': True}, BOTH, BOTH, {}, {'B': True}, BOTH])
+    session.xr.get_time_stamp_ns = lambda: 0 if session.index == 3 else (1 + session.index) * 40_000_000
+    session.run(monkeypatch, '--standby', '--duration', '.28')
+    assert {e[0] for e in session.targets(LEFT)} == {2, 6}
+    assert {e[1] for e in session.events if e[0] == 3 and e[2] == 'stop'} == {LEFT, RIGHT}
+
+
+def test_standby_resubscribes_after_stall_without_replaying_motion(monkeypatch):
+    session = Session(monkeypatch, [{}] * 90, gripper=True)
+    session.xr.get_time_stamp_ns = lambda: 123  # Cached nonzero SDK state never changes.
+    session.run(monkeypatch, '--standby', '--duration', '3.60')
+    assert len([e for e in session.events if e[1:3] == ('xr', 'init')]) == 2
+    assert not any(e[2] in ('target', 'gripper') for e in session.events)
+
+
+@pytest.mark.parametrize('rejected_hand,rejected_host,other_host', [
+    ('left', LEFT, RIGHT), ('right', RIGHT, LEFT)])
+def test_standby_rejected_arm_requires_new_grip_without_interrupting_other_arm_or_gripper(
+        monkeypatch, rejected_hand, rejected_host, other_host):
+    from embodied.devices.robots.realman.kinematics import CandidateRejected
+    session = Session(monkeypatch, [{}, {'B': True}, BOTH, BOTH,
+        dict(BOTH, **{rejected_hand+'_trigger': 1.}), BOTH,
+        dict(BOTH, **{rejected_hand+'_grip': 0., rejected_hand+'_pose': [2., 3., 4., 1., 0., 0., 0.]}),
+        dict(BOTH, **{rejected_hand+'_pose': [2., 3., 4., 1., 0., 0., 0.]}), BOTH], gripper=True)
+    original = session.backend
+    attempts = []
+    def connect(config, allow_motion, **options):
+        backend = original(config, allow_motion, **options)
+        send = backend.step
+        def step(command, now):
+            if config['host'] == rejected_host:
+                attempts.append(session.index)
+                if session.index == 3:
+                    raise CandidateRejected('Candidate near vendor singularity region: code=-3')
+            send(command, now)
+        backend.step = step
+        return backend
+    monkeypatch.setattr(cli, 'Backend', connect)
+    session.run(monkeypatch, '--standby', '--duration', '.36')
+    assert attempts == [2, 3, 7, 8]  # No retry while the rejected Grip remains held.
+    assert {e[0] for e in session.targets(other_host)} == set(range(2, 9))
+    assert {e[1] for e in session.events if e[0] == 3 and e[2] == 'stop'} == {rejected_host}
+    resumed = next(e[3] for e in session.targets(rejected_host) if e[0] == 7)
+    np.testing.assert_allclose(resumed, session.backends[rejected_host].state.pose)
+    assert any(e[0] == 4 and e[1:3] == (rejected_host, 'gripper') for e in session.events)
+
+
+def test_each_grip_zero_uses_actual_full_pose_despite_stale_command(monkeypatch):
+    from embodied.devices.robots.realman.geometry import matrix
+    session = Session(monkeypatch, [{},
+        dict(left_grip=1., left_pose=[10., -20., 30., 1., 0., 0., 0.]),
+        dict(left_grip=1., left_pose=[10.01, -20., 30., 1., 0., 0., 0.]),
+        dict(left_pose=[-10., 2., 5., 0., 1., 0., 0.]),
+        dict(left_grip=1., left_pose=[-10., 2., 5., 0., 1., 0., 0.]),
+        dict(left_grip=1., left_pose=[-10., 2., 5., 0., np.cos(.05), 0., np.sin(.05)])])
+    backend = session.backend(load_config(), True)
+    control = quest_control.ArmControl('left', backend, session.xr,
+        position_only=False, gripper=False, gripper_step=100)
+    control.plan(True)
+    session.index = 1
+    backend.last_target = backend.state.pose.copy()
+    backend.last_target[:3] += .1
+    backend.active = True
+    control.plan(True)
+    np.testing.assert_allclose(control.target, backend.state.pose)
+    assert backend.last_target is None
+    control.send_target(True, 1.04)
+    session.index = 2
+    control.plan(True)
+    np.testing.assert_allclose(control.target[:3], backend.state.pose[:3] + [0., .01, 0.])
+    control.send_target(True, 1.08)
+    session.index = 3
+    control.plan(True)
+    assert control.target is None
+    # Robot feedback differs from both the old zero and the last command.
+    backend.state.pose = np.array([-.25, .003, .32, 0., 0., np.sin(.2), np.cos(.2)])
+    session.index = 4
+    control.plan(True)
+    np.testing.assert_allclose(control.target, backend.state.pose)
+    control.send_target(True, 1.16)
+    session.index = 5
+    control.plan(True)
+    assert not np.allclose(matrix(control.target[3:]), matrix(backend.state.pose[3:]))
+    np.testing.assert_allclose(control.target[:3], backend.state.pose[:3])
+
+
+def test_standby_checks_both_postures_before_any_gripper_or_arm_motion(monkeypatch, capsys):
+    session = Session(monkeypatch, [{}, {'B': True}, BOTH, {}, {'B': True}, BOTH], gripper=True)
+    session.readiness_error = (RIGHT, 1)
+    session.run(monkeypatch, '--standby', '--gripper-initialize-open', '--duration', '.24')
+    assert '当前姿态不适合遥操' in capsys.readouterr().out
+    assert not any(e[0] < 4 and e[2] in ('target', 'gripper') for e in session.events)
+    assert {e[0] for e in session.events if e[2] == 'gripper'} == {4}
+    assert {e[0] for e in session.targets(RIGHT)} == {5}
+
+
+def test_standby_connection_retry_releases_partial_pair_and_does_not_init_XR(monkeypatch):
+    session = Session(monkeypatch, [])
+    attempts, waits, partials = [], [], []
+    def connect(config, allow_motion, **options):
+        attempts.append(config['host'])
+        if config['host'] == LEFT and len(attempts) == 2:
+            raise TimeoutError('robot not ready')
+        b = session.backend(config, allow_motion, **options)
+        if config['host'] == RIGHT:
+            partials.append(b)
+        return b
+    def wait(seconds):
+        waits.append(seconds)
+        assert partials[0].closed
+    monkeypatch.setattr(cli, 'Backend', connect)
+    monkeypatch.setattr(cli, 'time', SimpleNamespace(sleep=wait))
+    bindings, connections = cli.connect_backends(load_config(cli.DEFAULT_CONFIG.with_name('rm65-18.json')),
+        load_config(), execute=True, standby=True)
+    try:
+        assert attempts == [RIGHT, LEFT, RIGHT, LEFT]
+        assert waits == [2.]
+        assert not any(e[1] == 'xr' or e[2] in ('target', 'gripper') for e in session.events)
+        assert [hand for hand, _ in bindings] == ['left', 'right']
+    finally:
+        connections.close()
+
+
+def test_stationary_hand_stops_chasing_but_gripper_remains_available(monkeypatch):
+    moved = [.10, 0., 0., 0., 0., 0., 1.]
+    session = Session(monkeypatch, [{}, dict(BOTH, left_pose=POSE, right_pose=POSE)] +
+        [dict(left_grip=1., left_pose=moved)] * 6 +
+        [dict(left_grip=1., left_pose=[.12, 0., 0., 0., 0., 0., 1.])], gripper=True)
+    session.frames[5] = dict(session.frames[5], left_trigger=1.)
+    original = session.backend
+    def connect(config, allow_motion, **options):
+        b = original(config, allow_motion, **options)
+        send = b.step
+        def capped(command, now):
+            send(command, now)
+            if session.index == 2:
+                b.last_target = b.state.pose.copy()
+                b.last_target[1] += .004
+        b.step = capped
+        return b
+    monkeypatch.setattr(cli, 'Backend', connect)
+    session.run(monkeypatch)
+    targets = session.targets(LEFT)
+    held = next(e[3] for e in targets if e[0] == 3)
+    assert held[1] == pytest.approx(.004)  # Only the accepted step is retained.
+    assert not any(5 <= e[0] <= 7 for e in targets)
+    assert any(e[2] == 'stop' and 4 <= e[0] <= 5 for e in session.events)
+    resumed = next(e[3] for e in targets if e[0] == 8)
+    assert resumed[1] == pytest.approx(.02)  # Resume from feedback, not the old 10 cm goal.
+    assert any(e[0] == 5 and e[1:3] == (LEFT, 'gripper') for e in session.events)
+
+
+@pytest.mark.parametrize('extra', [
+    ['--gripper-speed', '300'],
+    ['--gripper-initialize-open', '--gripper-speed', '0'],
+    ['--gripper-initialize-open', '--gripper-speed', '1001'],
+])
+def test_speed_option_rejects_silent_ineffectiveness_and_invalid_range(monkeypatch, extra):
+    session = Session(monkeypatch, [], gripper=True)
+    with pytest.raises(SystemExit):
+        session.run(monkeypatch, *extra)
+    assert session.backends == {}
+
+
+@pytest.mark.parametrize('host', [LEFT, RIGHT])
+@pytest.mark.parametrize('failure', ['fault', 'read_error', 'send_error'])
+def test_either_robot_failure_stops_both_before_xr_close(monkeypatch, host, failure):
+    session = Session(monkeypatch, [{}, BOTH, BOTH, BOTH])
+    setattr(session, failure, (host, 3))
+    with pytest.raises((RuntimeError, OSError)):
+        session.run(monkeypatch)
+    for robot in (LEFT, RIGHT):
+        assert any(e[:3] == (3, robot, 'stop') for e in session.events)
+    close = next(i for i, e in enumerate(session.events) if e[1:3] == ('xr', 'close'))
+    assert all(i < close for i, e in enumerate(session.events) if e[2] == 'stop')
+    if failure in ('fault', 'read_error'):
+        assert not any(e[0] == 3 and e[2] == 'target' for e in session.events)
+
+
+def test_invalid_right_pose_prevents_left_command_that_tick(monkeypatch):
+    session = Session(monkeypatch, [{}, BOTH, BOTH, dict(BOTH, right_pose=[float('nan')]*7)])
+    with pytest.raises(ValueError, match='finite pose'):
+        session.run(monkeypatch)
+    assert not any(e[0] == 3 and e[2] == 'target' for e in session.events)
+    assert {e[1] for e in session.events if e[:1] == (3,) and e[2] == 'stop'} == {LEFT, RIGHT}
+
+
+@pytest.mark.parametrize('button', ['B', 'Y'])
+def test_either_exit_button_stops_both(monkeypatch, button):
+    session = Session(monkeypatch, [{}, BOTH, dict(BOTH, **{button: True})])
+    session.run(monkeypatch)
+    assert {e[1] for e in session.events if e[0] == 2 and e[2] == 'stop'} == {LEFT, RIGHT}
+    assert not any(e[0] == 2 and e[2] == 'target' for e in session.events)
+
+
+def test_global_xr_stall_stops_both_without_resuming(monkeypatch):
+    session = Session(monkeypatch, [{}] + [BOTH]*20)
+    session.stall_at = 2
+    with pytest.raises(RuntimeError, match='XR data stalled'):
+        session.run(monkeypatch)
+    assert {e[1] for e in session.events if e[2] == 'stop'} == {LEFT, RIGHT}
+    assert all(e[0] < session.index for e in session.events if e[2] == 'target')
+
+
+def test_failed_stop_does_not_skip_other_arm_or_hide_original_fault(monkeypatch, capsys):
+    session = Session(monkeypatch, [{}, BOTH, BOTH, BOTH])
+    session.fault, session.stop_error = (RIGHT, 3), (LEFT, 3)
+    with pytest.raises(RuntimeError, match='robot fault') as error:
+        session.run(monkeypatch)
+    assert {e[1] for e in session.events if e[2] == 'stop'} == {LEFT, RIGHT}
+    assert 'stop unavailable' in capsys.readouterr().err
+    assert any('Stop delivery failed' in note for note in error.value.__notes__)
+
+
+def test_second_connection_failure_closes_first_without_motion(monkeypatch):
+    session = Session(monkeypatch, [])
+    def connect(config, allow_motion):
+        if config['host'] == LEFT:
+            raise ConnectionRefusedError('left connection refused')
+        return session.backend(config, allow_motion)
+    monkeypatch.setattr(cli, 'Backend', connect)
+    with pytest.raises(ConnectionRefusedError):
+        session.run(monkeypatch)
+    assert session.backends[RIGHT].closed
+    assert not any(e[2] in ('target', 'gripper') for e in session.events)
+
+
+@pytest.mark.parametrize('invalid', ['same_host', 'different_hz'])
+def test_invalid_dual_configs_rejected_before_connection(monkeypatch, invalid):
+    session = Session(monkeypatch, [])
+    def config(path):
+        result = load_config(path)
+        if invalid == 'same_host':
+            result['host'] = LEFT
+        elif result['host'] == LEFT:
+            result['control_hz'] = 20
+        return result
+    monkeypatch.setattr(cli, 'load_config', config)
+    with pytest.raises(SystemExit):
+        session.run(monkeypatch)
+    assert session.backends == {}

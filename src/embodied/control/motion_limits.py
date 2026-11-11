@@ -57,7 +57,14 @@ class MotionLimits:
         velocity = capabilities['joint_velocity_limits_rad_s']
         if len(velocity) != len(config.park_q):
             raise ValueError('Capability joint count does not match robot profile')
-        return cls(**json.loads(Path(path).read_text()), joint_velocity_limits=velocity,
+        values = json.loads(Path(path).read_text())
+        for key, value in capabilities.get('cartesian_velocity_limits', {}).items():
+            if key not in ('tcp_speed', 'angular_speed'):
+                raise ValueError('Unknown Cartesian velocity capability')
+            value = positive_number(value, key)
+            configured = values['cartesian'][key]
+            values['cartesian'][key] = value if configured is None else min(configured, value)
+        return cls(**values, joint_velocity_limits=velocity,
                    source=capabilities['source'], control_hz=config.control_hz)
 
     def resolve_cartesian(self, request):

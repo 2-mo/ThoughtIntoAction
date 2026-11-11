@@ -308,6 +308,8 @@ class CommandEngine:
             return {'operation_id': key, 'status': 'running'}
         if action == 'execute':
             plan = request['_plan']  # Added by the bounded gateway, never trusted from a client.
+            if plan['gripper_width'] is not None and state.gripper_width is None:
+                raise ValueError('Gripper feedback unavailable; preview an arm-only move again')
             expected_epoch = plan['epoch'] if plan['owner_present'] else plan['epoch'] + 1
             if expected_epoch != self.epoch or plan['model_id'] != self.model_id or now > plan['expires']:
                 raise ValueError('Preview expired or its owner/model changed')
@@ -329,7 +331,8 @@ class CommandEngine:
             self.settling.clear()
             self.completed_target = None
             self.operation = {'operation_id': key, 'status': 'running', 'started': now,
-                              'plan': plan, 'kind': plan['kind']}
+                              'plan': plan, 'kind': plan['kind'], 'trajectory_tick': 0,
+                              'settling_started': None}
             self.operations[key] = self.operation
             while len(self.operations) > 64:
                 self.operations.popitem(last=False)
@@ -351,6 +354,8 @@ class CommandEngine:
             self.gripper_hold_effort = None
             # Optional gripper_width keeps the gripper position-controlled while the arm is free (teaching).
             width = request.get('gripper_width')
+            if width is not None and state.gripper_width is None:
+                raise ValueError('Gripper feedback unavailable')
             if width is not None and (isinstance(width, bool) or not isinstance(width, (int, float))
                                       or not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width):
                 raise ValueError('Invalid gripper width in metres')
@@ -374,7 +379,11 @@ class CommandEngine:
                 if np.linalg.norm(pose[:3] - state.pose[:3]) > .15:
                     raise ValueError('Cartesian stream target exceeds 0.15 m lead; use a previewed move')
             width = request.get('gripper_width', state.gripper_width)
-            if not isinstance(width, (int, float)) or not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width:
+            if state.gripper_width is None and (action == 'gripper' or width is not None):
+                raise ValueError('Gripper feedback unavailable')
+            if (width is None and action == 'gripper' or width is not None and
+                    (not isinstance(width, (int, float)) or not np.isfinite(width)
+                     or not 0 <= width <= self.config.gripper_max_width)):
                 raise ValueError('Invalid gripper width in metres')
             # A dual-arm source may address both grippers at once; the scalar
             # above stays the primary arm for single-arm clients.
@@ -429,7 +438,9 @@ class CommandEngine:
                 self.reset_reference = True
         elif self.owner and self.operation:
             op, plan = self.operation, self.operation['plan']
-            elapsed = now - op['started']
+            duration = float(plan['times'][-1])
+            # Use the driver's fixed cycle budget; delayed ticks never skip curve samples.
+            elapsed = min(op['trajectory_tick'] / self.config.control_hz, duration)
             trajectory = plan.get('_trajectory')
             acceleration = getattr(trajectory, 'sample_acceleration', None)
             ddq = acceleration(elapsed) if acceleration is not None else None
@@ -444,20 +455,26 @@ class CommandEngine:
                 joint_velocity_target=dq, joint_acceleration_target=ddq, gripper_target=plan['gripper_width'],
                 joint_step_limit=self.motion_limits.step_limits(plan.get('limits')),
                 planned=trajectory is not None)
-            if elapsed >= plan['times'][-1]:
-                settled = self.settling.update(now, state.q, state.dq, q)
-                timed_out = elapsed > plan['times'][-1] + self.motion_limits.settling['timeout_s']
-                if settled or timed_out:
-                    # Retain measured accuracy on success as well as failure;
-                    # passing a tolerance never means the error was zero.
-                    errors = np.abs(state.q - q)
-                    op['settling'] = {
-                        'joint_error_rad': errors.tolist(), 'worst_joint': int(np.argmax(errors)) + 1,
-                        'max_joint_error_rad': float(np.max(errors)),
-                        'position_tolerance_rad': self.settling.position_limit,
-                        'trajectory_duration_s': float(plan['times'][-1]),
-                        'settling_elapsed_s': elapsed - float(plan['times'][-1]),
-                    }
+            if not self.reset_reference:
+                op['trajectory_tick'] += 1
+            finished = elapsed >= duration
+            if finished and op['settling_started'] is None:
+                op['settling_started'] = now
+            settling_elapsed = now - op['settling_started'] if finished else 0.
+            settled = finished and self.settling.update(now, state.q, state.dq, q)
+            timeout = self.motion_limits.settling['timeout_s']
+            timed_out = (settling_elapsed > timeout if finished
+                         else now - op['started'] > duration + timeout)
+            if settled or timed_out:
+                # Retain measured accuracy against the goal even if execution timed out early.
+                errors = np.abs(state.q - plan['q'][-1])
+                op['settling'] = {
+                    'joint_error_rad': errors.tolist(), 'worst_joint': int(np.argmax(errors)) + 1,
+                    'max_joint_error_rad': float(np.max(errors)),
+                    'position_tolerance_rad': self.settling.position_limit,
+                    'trajectory_duration_s': duration,
+                    'settling_elapsed_s': settling_elapsed,
+                }
                 if settled:
                     op['status'] = 'completed'
                     self.operation = None
@@ -465,7 +482,7 @@ class CommandEngine:
                     self.settling.clear()
                 elif timed_out:
                     op['status'] = 'failed'
-                    op['reason'] = 'Robot did not settle'
+                    op['reason'] = 'Robot did not settle' if finished else 'Trajectory execution timed out'
                     self.operation = None
                     self.completed_target = None
                     self.reset_reference = True
@@ -505,7 +522,9 @@ class CommandEngine:
                 'last_revocation': self.last_revocation,
                 'lease_remaining_s': max(0, self.expires-now) if self.owner else 0., 'stopped': self.stopped, 'phase': self.phase,
                 'q': state.q.tolist(), 'dq': state.dq.tolist(), 'pose': state.pose.tolist(),
+                'mode': state.mode.value, 'gripper_mode': (state.gripper_mode or state.mode).value,
                 'gripper_width': state.gripper_width, 'gripper_velocity': state.gripper_velocity,
+                'gripper_ready': state.gripper_width is not None,
                 'gripper_effort': state.gripper_effort, 'gripper_contact': state.gripper_contact,
                 'gripper_widths': None if state.gripper_widths is None else list(state.gripper_widths),
                 'eef_poses': None if state.poses is None else [list(pose) for pose in state.poses],
@@ -533,8 +552,8 @@ class MotionPlanner:
         if requested_tcp and kind not in ('movel', 'move_path'):
             raise ValueError('TCP limits apply only to movel and move_path')
         limits = self.motion_limits.resolve(request)
-        if kind in ('movel', 'move_path'):
-            requested_tcp = self.motion_limits.resolve_cartesian(request)
+        requested_tcp = self.motion_limits.resolve_cartesian(request)
+        if requested_tcp or kind in ('movel', 'move_path'):
             limits['tcp'] = requested_tcp
         velocity_limit = np.asarray(limits['joint_velocity_rad_s'])
         acceleration_limit, jerk_limit = limits['acceleration'], limits['jerk']
@@ -628,7 +647,7 @@ class MotionPlanner:
                                if math.isclose(float(value), float(max(timing.values())), rel_tol=1e-9)]
             derivative_evaluation = 'sampled_analytic'
         tcp = {}
-        if kind in ('movel', 'move_path'):
+        if requested_tcp or kind in ('movel', 'move_path'):
             trajectory, times, qs, velocity, acceleration, jerk, tcp, tcp_limited = apply_tcp_limits(
                 self.model, trajectory, times, qs, velocity, acceleration, jerk,
                 requested_tcp, limits, self.config.control_hz)
@@ -643,8 +662,11 @@ class MotionPlanner:
                 or np.max(np.abs(acceleration)) > acceleration_limit * 1.01
                 or np.max(np.abs(jerk)) > jerk_limit * 1.01):
             raise ValueError('Planned path exceeds sampled derivative bounds')
-        width = float(request.get('gripper_width', snapshot['gripper_width']))
-        if not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width:
+        width = request.get('gripper_width', snapshot['gripper_width'])
+        if width is not None and snapshot['gripper_width'] is None:
+            raise ValueError('Gripper feedback unavailable')
+        if width is not None and (not isinstance(width, (int, float)) or not np.isfinite(width)
+                or not 0 <= width <= self.config.gripper_max_width):
             raise ValueError('Invalid gripper width')
         self.workspace.check_path(self.model.fk, qs)
         peaks = [float(np.max(np.abs(values))) for values in (velocity, acceleration, jerk)]

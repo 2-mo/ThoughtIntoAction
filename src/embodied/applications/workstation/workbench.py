@@ -136,6 +136,25 @@ def start(config, robot, args):
                     child.wait(timeout=5)
 
 
+def set_native_enabled(directory):
+    """Request the existing source to release/resume its own lease."""
+    from embodied.contracts.runtime.control import ControlClient
+    directory = Path(directory)
+    config = json.loads((directory / 'workbench.json').read_text())
+    if config.get('source') != 'quest':
+        raise ValueError('此运行未启用 Quest；可直接使用网页、动作或手机')
+    path = directory / 'native-source.json'
+    enabled = not (json.loads(path.read_text())['enabled'] if path.exists() else True)
+    status = ControlClient(directory).status()
+    if enabled and status.get('owner'):
+        raise ValueError('先停止当前动作 / 手机控制，再恢复 Quest')
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps({'enabled': enabled}))
+    temporary.replace(path)
+    return ('已请求恢复本侧 Quest；松开按键后重新切换跟随' if enabled
+            else '已请求释放本侧 Quest；控制权释放后可使用动作、网页或手机')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('plugins', 'validate', 'start', 'status', 'stop'))
