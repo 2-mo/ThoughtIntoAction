@@ -14,7 +14,7 @@ from embodied.data.export.runtime_v2 import load_episode
 from test_runtime_collection import tick
 
 
-def record_episode(root, *, count=7, gripper=True):
+def record_episode(root, *, count=7, gripper=True, frame_numbers=None):
     names = [f'axis_{i}' for i in range(count)]
     descriptor = {'runtime_id': 'test', 'boot_id': 'test-boot', 'joint_count': count, 'layout': {'version': 3}, 'backend': 'sim',
                   'parameters': {'model': {'manifest': {'sha256': 'example'}, 'joint_names': names},
@@ -38,9 +38,10 @@ def record_episode(root, *, count=7, gripper=True):
             row['command'].update(kp=[1.] * count, kd=[.1] * count, feedforward=[0.] * count)
         ticks.append(copy.deepcopy(row))
         writer.add_tick(row)
-    for index in range(4):
+    numbers = list(frame_numbers) if frame_numbers else list(range(4))
+    for index, number in enumerate(numbers):
         # .037 s is after tick 9 feedback but before tick 9 command submission.
-        writer.add_frame({'stream_id': 'external', 'frame_number': index,
+        writer.add_frame({'stream_id': 'external', 'frame_number': number,
             'host_received_monotonic_ns': origin + 37_000_000 + index * 33_000_000,
             'image': np.full((8, 8, 3), index, np.uint8)}, 'external_rgb')
     writer.close('runtime-terminal')
@@ -96,6 +97,17 @@ def test_six_axes_alone_do_not_imply_arx_gripper_calibration():
     assert contract['gripper']['range'] == [0., None]
 
 
+def test_measured_width_just_past_the_nominal_maximum_is_recordable():
+    from embodied.data.episode.contract import vector
+
+    contract = runtime_contract({'joint_count': 6, 'layout': {'version': 3},
+                                 'parameters': {'effective_robot_config': {'park_q': [0.] * 6,
+                                                                           'gripper_max_width': .082}}})
+    # The X5 reports 82.15 mm against an 82 mm nominal limit.
+    row = {'q': [0.] * 6, 'gripper_width': .08215163959228675}
+    assert vector(row, contract)[-1] == .08215163959228675
+
+
 def test_original_schema_two_without_contract_remains_readable(tmp_path):
     from test_data_review_runtime import episode
     path = episode(tmp_path)
@@ -105,7 +117,8 @@ def test_original_schema_two_without_contract_remains_readable(tmp_path):
     (path / 'episode.json').write_text(json.dumps(manifest))
     meta, rows, _, _ = prepare_camera_episode(path)
     assert rows[0][0].shape == (7,)
-    assert meta['data_contract']['gripper']['range'] == [0., .082]
+    # 82 mm nominal plus the margin that lets measured widths past the limit in.
+    assert meta['data_contract']['gripper']['range'] == [0., pytest.approx(.084)]
 
 
 @pytest.mark.parametrize('outcome', ['failure', 'discarded'])
@@ -116,3 +129,20 @@ def test_generic_export_preserves_outcome_rejection(tmp_path, outcome):
     (path / 'episode.json').write_text(json.dumps(metadata))
     with pytest.raises(ValueError, match='failure/discarded'):
         prepare_camera_episode(path)
+
+
+def test_large_camera_gap_still_fails_the_take(tmp_path):
+    """A long blind stretch is not a usable demonstration."""
+    from embodied.data.episode.runtime_episode import MAX_TOLERATED_FRAME_GAP
+    with pytest.raises(ValueError, match='exceeds the tolerated'):
+        record_episode(tmp_path, frame_numbers=(0, 1, 1 + MAX_TOLERATED_FRAME_GAP + 2))  # skip MAX+1 frames
+
+
+def test_camera_frame_gap_is_recorded_not_fatal(tmp_path):
+    """A dropped device frame number must not discard the whole demonstration."""
+    path, _ticks = record_episode(tmp_path, frame_numbers=(0, 1, 4))
+    meta = json.loads((path / 'episode.json').read_text())
+    assert meta['lifecycle'] == 'complete'
+    assert meta['camera_frame_gaps'] == {'external_rgb': 2}
+    loaded, raw = load_episode(path)
+    assert len(raw['frame:external_rgb']) == 3

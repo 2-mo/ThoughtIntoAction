@@ -12,6 +12,9 @@ from embodied.data.episode.contract import runtime_contract, vector, action_defi
 from embodied.data.episode.provenance import validate_demonstration
 from embodied.data.episode.schema import RUNTIME
 
+# ~0.17 s at 30 fps: a USB blip, not a broken take.
+MAX_TOLERATED_FRAME_GAP = 5
+
 TOPICS = {'tick': '/robot/tick', 'state': '/robot/state', 'command': '/robot/command',
           'frame': '/camera/wrist/rgb/index'}
 
@@ -70,6 +73,7 @@ class RuntimeEpisodeWriter:
         self.counts = dict.fromkeys(self.topics, 0)
         self.first_sequence = self.last_sequence = None
         self.last_frames = {}
+        self.frame_gaps = {}
         self.videos = {}
         self.dropped_baseline = self.gaps_baseline = None
         self.error = None
@@ -154,9 +158,19 @@ class RuntimeEpisodeWriter:
             raise ValueError(f'{camera_id}: camera stream identity changed or missing')
         number, stamp = frame['frame_number'], frame['host_received_monotonic_ns']
         last, last_time = self.last_frames.get(camera_id, (None, 0))
-        if (type(number) is not int or type(stamp) is not int or stamp <= last_time
-                or (last is not None and number != last + 1)):
-            raise ValueError(f'{camera_id}: camera frame gap or timestamp regression')
+        if type(number) is not int or type(stamp) is not int or stamp <= last_time:
+            raise ValueError(f'{camera_id}: camera frame timestamp regressed')
+        if last is not None and number <= last:
+            raise ValueError(f'{camera_id}: camera frame number did not advance')
+        if last is not None and number > last + 1:
+            # RealSense drops device frame numbers when the USB link hiccups. A
+            # small skip is recorded and the episode stays complete; a long blind
+            # stretch would make the take unusable, so it still fails.
+            skipped = number - last - 1
+            if skipped > MAX_TOLERATED_FRAME_GAP:
+                raise ValueError(f'{camera_id}: camera gap of {skipped} frames exceeds '
+                                 f'the tolerated {MAX_TOLERATED_FRAME_GAP}')
+            self.frame_gaps[camera_id] = self.frame_gaps.get(camera_id, 0) + skipped
         image = frame['image']
         if image.shape != (camera['height'], camera['width'], 3) or str(image.dtype) != 'uint8':
             raise ValueError(f'{camera_id}: camera image shape/dtype changed')
@@ -210,6 +224,7 @@ class RuntimeEpisodeWriter:
             self.stream.close()
             self.closed = True
         self.manifest.update(lifecycle='failed' if self.error else 'complete', error=self.error,
+            camera_frame_gaps=dict(self.frame_gaps) if self.frame_gaps else None,
             stopped_monotonic_ns=time.monotonic_ns(), counts=dict(self.counts), stop_reason=reason,
             first_sequence=self.first_sequence, last_sequence=self.last_sequence,
             terminal_received=self.terminal, producer_dropped_at_start=self.dropped_baseline,

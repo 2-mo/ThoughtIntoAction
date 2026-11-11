@@ -37,7 +37,47 @@ def load_config(local_path: str | None = None) -> dict:
     if selected or path.exists():
         with path.open("rb") as stream:
             config = merge(config, tomllib.load(stream))
+    if selected is None:
+        # The console's setup page owns machine-local device identity
+        # (configs/devices.json). Explicit config paths skip this so tests and
+        # alternate machines stay isolated.
+        override = devices_override()
+        if override:
+            config = merge_devices(config, override)
     return config
+
+
+def merge_devices(config: dict, override: dict) -> dict:
+    """Apply the console's device setup.
+
+    Cameras form the saved document together with the robots, so the document
+    owns the camera set: an entry removed on the page must disappear even when
+    `configs/local.toml` still lists it. Per-camera settings already present in
+    TOML (colour, calibration flags) are kept for the cameras that remain.
+    """
+    merged = merge(config, {key: value for key, value in override.items() if key != "cameras"})
+    base = config.get("cameras") or {}
+    merged["cameras"] = {
+        identifier: merge(base.get(identifier, {}), entry)
+        for identifier, entry in (override.get("cameras") or {}).items()
+    }
+    return merged
+
+
+def devices_override() -> dict:
+    """Cameras and robot setup saved by the console, or an empty dict."""
+    import json
+
+    path = PROJECT_ROOT / "configs/devices.json"
+    try:
+        document = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(document, dict) or document.get("version") != 1:
+        return {}
+    from embodied.core.device_setup import camera_entries
+
+    return {"cameras": camera_entries(document), "setup": document}
 
 
 def port(name: str, config: dict | None = None) -> int:

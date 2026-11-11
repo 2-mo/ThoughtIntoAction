@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import math
 import os
 import subprocess
 import time
+import traceback
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from embodied.applications.console.core.settings import BackendSettings
 from embodied.applications.console.protocol import CommandCatalog
@@ -207,6 +209,109 @@ def shared_camera_listening() -> bool:
         return False
 
 
+HOME_LOG = PROJECT_ROOT / "outputs/logs/console-home.log"
+READY_PATH = PROJECT_ROOT / "configs/control/ready_pose.json"
+
+
+def log_home(message: str) -> None:
+    """The page shows one line; keep every attempt on disk for diagnosis."""
+    try:
+        HOME_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with HOME_LOG.open("a", encoding="utf-8") as handle:
+            handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
+    except OSError:
+        pass
+
+
+def move_home(speed_percent: int = 25) -> dict[str, object]:
+    """Plan to the profile's park pose and execute it; no lease is taken over someone else's."""
+    return _move("home", {}, speed_percent, "回位")
+
+
+def ready_pose() -> dict[str, object]:
+    """The training start pose: left arm at zero, right arm at its demonstration start."""
+    payload = json.loads(READY_PATH.read_text())
+    q = payload.get("q")
+    if not isinstance(q, list) or len(q) != 12 or not all(
+            isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+            for value in q):
+        raise ValueError(f"{READY_PATH} 需要 12 个有限数值的 q")
+    speed = payload.get("speed_percent", 25)
+    if isinstance(speed, bool) or not isinstance(speed, int) or not 1 <= speed <= 100:
+        raise ValueError("准备位的 speed_percent 必须在 1..100")
+    return {"q": [float(value) for value in q], "speed_percent": speed}
+
+
+def move_ready(speed_percent: int | None = None) -> dict[str, object]:
+    """Move both arms to the ready pose the demonstrations start from."""
+    pose = ready_pose()
+    speed = pose["speed_percent"] if speed_percent is None else speed_percent
+    return _move("movej", {"q": pose["q"]}, speed, "准备位")
+
+
+def _move(kind: str, fields: dict[str, object], speed_percent: int, label: str) -> dict[str, object]:
+    from embodied.contracts.runtime.control import ControlClient
+
+    runs = live_runs(RUNS)
+    if not runs:
+        raise RuntimeError("没有运行中的内核")
+    run = runs[-1]
+    owner = (ControlClient(run).status().get("owner") or {}).get("source")
+    if owner:
+        raise PermissionError(f"内核控制权被 {owner} 占用，先停止遥操或策略")
+    # An arm that has just been enabled, released by a policy, or left by an
+    # earlier move keeps creeping toward its hold target for several seconds,
+    # and the kernel refuses both a new lease and a plan anchored to a pose it
+    # has already left. Retry the whole attempt while that transient lasts.
+    deadline = time.monotonic() + 20
+    while True:
+        try:
+            return _move_once(run, kind, fields, speed_percent, label)
+        except PermissionError:
+            raise
+        except RuntimeError as exc:
+            if not _settling(exc) or time.monotonic() >= deadline:
+                if _settling(exc):
+                    raise RuntimeError(f"机械臂还在运动，{label}未开始；等它停稳后再点一次") from exc
+                raise
+            time.sleep(0.3)
+
+
+def _settling(exc: BaseException) -> bool:
+    text = str(exc)
+    return "not settled" in text or "moved since preview" in text
+
+
+def _move_once(run: Path, kind: str, fields: dict[str, object], speed_percent: int,
+               label: str) -> dict[str, object]:
+    from embodied.contracts.runtime.control import ControlSession
+
+    with ControlSession(run, source="console", purpose="operation") as session:
+        plan = session.preview(kind, speed_scale=speed_percent / 100, **fields)
+        operation = session.execute(plan)["operation_id"]
+        deadline = time.monotonic() + plan["times"][-1] + 15
+        while time.monotonic() < deadline:
+            status = session.status()
+            entry = next((op for op in status["operations"] if op["operation_id"] == operation), None)
+            if entry is not None and entry["status"] != "running":
+                info = entry.get("settling") or {}
+                residual = info.get("max_joint_error_rad")
+                tolerance = info.get("position_tolerance_rad") or 0.0
+                # A target can sit a hair outside the kernel's settle window on a
+                # loaded joint, so reaching within twice that window counts as
+                # arrived; the residual is reported instead of hidden.
+                reached = entry["status"] == "completed" or (
+                    entry.get("reason") == "Robot did not settle"
+                    and residual is not None and residual <= 2 * tolerance)
+                if not reached:
+                    raise RuntimeError(f"{label}{entry['status']}：{entry.get('reason') or ''}")
+                return {"operation": operation, "seconds": plan["times"][-1],
+                        "residual_rad": residual}
+            time.sleep(0.05)
+        session.command("cancel")
+        raise TimeoutError(f"{label}超时，已取消")
+
+
 def read_kernel_status(run: Path | None) -> dict[str, object]:
     """Read-only kernel snapshot; never acquires, heartbeats, or releases a lease."""
     cameras = camera_inventory()
@@ -279,6 +384,12 @@ def read_kernel_status(run: Path | None) -> dict[str, object]:
 def create_system_router(catalog: CommandCatalog, settings: BackendSettings) -> APIRouter:
     router = APIRouter(prefix="/api/v1/system", tags=["system"])
 
+    def authorize(token: str | None) -> None:
+        if settings.token is not None and (
+            token is None or not hmac.compare_digest(token, settings.token)
+        ):
+            raise HTTPException(status_code=401, detail="invalid pairing token")
+
     @router.get("/health")
     async def health() -> dict[str, object]:
         return {"status": "ok", "api_version": 1}
@@ -291,22 +402,49 @@ def create_system_router(catalog: CommandCatalog, settings: BackendSettings) -> 
     async def quest() -> dict[str, object]:
         return await asyncio.to_thread(quest_snapshot)
 
+    async def run_move(request: Request, name: str, move) -> dict[str, object]:
+        try:
+            payload = await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            payload = {}
+        speed = payload.get("speed_percent") if isinstance(payload, dict) else None
+        if speed is not None and (isinstance(speed, bool) or not isinstance(speed, int)
+                                  or not 1 <= speed <= 100):
+            raise HTTPException(status_code=400, detail="速度百分比必须在 1..100")
+        try:
+            result = await asyncio.to_thread(move, speed)
+        except PermissionError as exc:
+            log_home(f"{name}拒绝 {exc}")
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except (RuntimeError, TimeoutError, OSError, ValueError) as exc:
+            log_home(f"{name}失败 {type(exc).__name__}: {exc}")
+            log_home(traceback.format_exc().rstrip())
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        log_home(f"{name}完成 operation={result.get('operation')} "
+                 f"residual={result.get('residual_rad')}")
+        return result
+
+    @router.post("/home")
+    async def home(request: Request, token: str | None = Query(default=None)) -> dict[str, object]:
+        authorize(token)
+        return await run_move(request, "回位", lambda speed: move_home(25 if speed is None else speed))
+
+    @router.post("/ready")
+    async def ready(request: Request, token: str | None = Query(default=None)) -> dict[str, object]:
+        """Both arms to the pose the demonstrations start from (configs/control/ready_pose.json)."""
+        authorize(token)
+        return await run_move(request, "准备位", move_ready)
+
     @router.post("/actions/{name}")
     async def action(name: str, token: str | None = Query(default=None)) -> dict[str, object]:
-        if settings.token is not None and (
-            token is None or not hmac.compare_digest(token, settings.token)
-        ):
-            raise HTTPException(status_code=401, detail="invalid pairing token")
+        authorize(token)
         if name not in QUEST_ACTIONS:
             raise HTTPException(status_code=404, detail="unknown action")
         return await asyncio.to_thread(run_action, name)
 
     @router.get("/status")
     async def status(token: str | None = Query(default=None)) -> dict[str, object]:
-        if settings.token is not None and (
-            token is None or not hmac.compare_digest(token, settings.token)
-        ):
-            raise HTTPException(status_code=401, detail="invalid pairing token")
+        authorize(token)
         return await asyncio.to_thread(read_kernel_status, settings.run)
 
     return router

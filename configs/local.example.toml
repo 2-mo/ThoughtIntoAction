@@ -50,3 +50,7 @@ fps = 30
 # power_line_frequency = 1 # 50 Hz; 2 = 60 Hz, 3 = auto
 # auto_exposure_priority = 0
 # Per-camera overrides can be set in [cameras.<name>.color].
+
+# 相机与机械臂的接入配置由控制台「总览 → 接入配置」写入 configs/devices.json。
+# 该文件存在时，相机集合以它为准（local.toml 里的 [cameras.*] 只补充颜色等额外键）。
+# 每台相机可声明 mount = "wrist" | "fixed" 与 arm = "<机械臂 ID>"。

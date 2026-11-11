@@ -24,7 +24,7 @@ BOOTSTRAP_PYTHON = PROJECT_ROOT / ".venv/bin/python"
 RUN_SH = PROJECT_ROOT / "run.sh"
 
 KINDS = ("kernel", "camera", "sensor", "collect", "policy")
-PROFILES = ("sim-manual", "real-manual", "real-quest", "real-dual-quest")
+PROFILES = ("sim-manual", "real-manual", "real-quest", "real-dual-manual", "real-dual-quest")
 POLICY_KINDS = ("sft", "zeroshot")
 SECONDS_RANGE = (1, 300)
 TEXT_LIMIT = 500
@@ -287,11 +287,31 @@ class OperationManager:
         if profile.startswith("real"):
             if payload.get("confirm") is not True:
                 raise OperationError("真机启动会使能电机，需要确认", 409)
+            profile = self._setup_profile(profile) if "quest" in profile else profile
             argv = ["bash", str(PROJECT_ROOT / "scripts/arm/kernel_real.sh"),
                     "--profile", profile, "--yes"]
         else:
             argv = ["bash", str(RUN_SH), "kernel", "profiles", "start", "--profile", profile]
         return argv, None
+
+    @staticmethod
+    def _setup_profile(profile: str) -> str:
+        """Launch with the profile generated from the setup page, when one exists."""
+        from embodied.applications.console.core.devices import (
+            SetupError, compile_setup, load_setup,
+        )
+        setup = load_setup()
+        if not setup:
+            return profile
+        try:
+            compiled = compile_setup(setup)
+        except SetupError as exc:
+            raise OperationError(f"设备配置不可用：{exc}", 409) from exc
+        arms = len(setup.get("robots") or ())
+        expected = "real-dual-quest" if arms == 2 else "real-quest"
+        if profile != expected:
+            raise OperationError(f"设备配置是 {'双臂' if arms == 2 else '单臂'}，请选择 {expected}", 409)
+        return compiled["workbench_name"]
 
     def _camera(self) -> list[str]:
         number = port("camera_webrtc")
@@ -310,6 +330,10 @@ class OperationManager:
     def _sensor(self) -> tuple[list[str], None]:
         """Shared camera service used by collection recording and previews."""
         from embodied.devices.sensors.client import socket_path
+
+        collect = self._operations.get("collect")
+        if collect is not None and collect.state in ("starting", "running", "stopping"):
+            raise OperationError("采集中，先停止采集再重启相机服务", 409)
 
         path = str(socket_path())
         try:
@@ -347,8 +371,11 @@ class OperationManager:
         run = _resolve_run(payload.get("run"))
         prompt = _text(payload.get("prompt"), "任务描述")
         seconds = _seconds(payload.get("seconds"), 60)
+        mode = str(payload.get("mode") or "local")
+        if mode not in ("local", "remote"):
+            raise OperationError("策略模式只能是 local 或 remote")
         policy = str(payload.get("policy") or "sft")
-        if policy not in POLICY_KINDS:
+        if mode == "local" and policy not in POLICY_KINDS:
             raise OperationError("不支持的策略类型")
         try:
             owner = ControlClient(run).status().get("owner")
@@ -357,6 +384,32 @@ class OperationManager:
         if owner:
             source = owner.get("source") or "其他客户端"
             raise OperationError(f"内核控制权被 {source} 占用，先关闭控制台页面", 409)
+        if mode == "remote":
+            server = _text(payload.get("server"), "服务端地址")
+            if not server.startswith(("ws://", "wss://")):
+                raise OperationError("服务端地址必须以 ws:// 或 wss:// 开头")
+            argv = [
+                "bash", str(RUN_SH), "policy", "remote", "--run", str(run),
+                "--server", server, "--prompt", prompt, "--seconds", str(seconds),
+            ]
+            if payload.get("rtc"):
+                chunk = payload.get("chunk_steps", 50)
+                if isinstance(chunk, bool) or not isinstance(chunk, int) or not 1 <= chunk <= 50:
+                    raise OperationError("块大小必须在 1..50", 400)
+                remaining = payload.get("reinfer_remaining", 30)
+                if isinstance(remaining, bool) or not isinstance(remaining, int) or not 0 <= remaining < chunk:
+                    raise OperationError("重推理剩余步数必须在 0..块大小-1", 400)
+                blend = payload.get("blend", 16)
+                if isinstance(blend, bool) or not isinstance(blend, int) or not 0 <= blend <= chunk:
+                    raise OperationError("混合步数必须在 0..块大小", 400)
+                guidance = payload.get("guidance", 10)
+                if isinstance(guidance, bool) or not isinstance(guidance, (int, float)) or not 0 <= guidance <= 100:
+                    raise OperationError("引导强度必须在 0..100", 400)
+                argv += ["--rtc", "--chunk-steps", str(chunk), "--reinfer-remaining", str(remaining),
+                         "--blend", str(blend), "--guidance", str(float(guidance))]
+            if payload.get("dry_run") is True:
+                argv.append("--dry-run")
+            return argv, run.name
         argv = [
             "bash", str(RUN_SH), "policy", "kernel", "--run", str(run),
             "--prompt", prompt, "--seconds", str(seconds), "--policy", policy,

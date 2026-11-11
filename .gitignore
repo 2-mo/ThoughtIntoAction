@@ -237,3 +237,6 @@ __marimo__/
 # Local design references: third-party video screenshots (watermarked), not redistributable.
 # The intended look is described in docs/plans/07-ui.md (U-05).
 /assets/references/
+
+# 控制台「接入配置」写入的本机设备清单
+/configs/devices.json

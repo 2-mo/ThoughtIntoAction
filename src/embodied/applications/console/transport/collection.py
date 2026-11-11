@@ -94,6 +94,9 @@ def create_collection_router(settings: BackendSettings) -> APIRouter:
             items: list[dict[str, object]] = []
             total = 0
             complete = failed = 0
+            # Per-task totals so the page can show progress for the task being
+            # recorded rather than everything that happens to be on disk.
+            by_task: dict[str, dict[str, int]] = {}
             if path.is_dir():
                 folders = sorted(
                     (entry for entry in path.iterdir() if entry.is_dir()),
@@ -109,10 +112,14 @@ def create_collection_router(settings: BackendSettings) -> APIRouter:
                         data = json.loads(meta.read_text())
                         counts = data.get("counts") or {}
                         lifecycle = data.get("lifecycle")
+                        task = str(data.get("task") or "").strip()
+                        bucket = by_task.setdefault(task, {"complete": 0, "failed": 0})
                         if lifecycle == "complete":
                             complete += 1
+                            bucket["complete"] += 1
                         else:
                             failed += 1
+                            bucket["failed"] += 1
                         started, stopped = data.get("started_monotonic_ns"), data.get("stopped_monotonic_ns")
                         seconds = ((stopped - started) / 1e9
                                    if isinstance(started, int) and isinstance(stopped, int) and stopped >= started
@@ -135,7 +142,7 @@ def create_collection_router(settings: BackendSettings) -> APIRouter:
                         }
                     )
             return {"directory": str(path.relative_to(PROJECT_ROOT)), "episodes": items, "total": total,
-                    "summary": {"complete": complete, "failed": failed}}
+                    "summary": {"complete": complete, "failed": failed, "by_task": by_task}}
 
         return await asyncio.to_thread(scan)
 

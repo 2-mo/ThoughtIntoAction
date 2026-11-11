@@ -10,6 +10,7 @@ from embodied.applications.console.features import feature_catalog
 from embodied.applications.console.operations import OperationManager
 from embodied.applications.console.runtime import ControlRuntime
 from embodied.applications.console.transport.collection import create_collection_router
+from embodied.applications.console.transport.setup import create_setup_router
 from embodied.applications.console.transport.control import create_control_router
 from embodied.applications.console.transport.frontend import SPAStaticFiles, create_ca_router
 from embodied.applications.console.transport.operations import create_operations_router
@@ -46,13 +47,14 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=list(resolved.allowed_origins),
         allow_credentials=False,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT"],
         allow_headers=["*"],
     )
     app.include_router(create_system_router(catalog, resolved))
     app.include_router(create_operations_router(operations, resolved))
     app.include_router(create_control_router(runtime, resolved))
     app.include_router(create_collection_router(resolved))
+    app.include_router(create_setup_router(resolved))
     app.include_router(create_ca_router(resolved.ca_cert))
     if resolved.frontend_directory is not None:
         app.mount(

@@ -15,12 +15,52 @@
     <section class="policy-card" aria-labelledby="policyFormTitle">
       <h2 id="policyFormTitle">任务设置</h2>
       <label class="policy-field">
+        <span>历史任务</span>
+        <select id="policyPromptHistory">
+          <option value="">自定义…</option>
+          <option value="sweep the garbage on the table into the yellow dustpan and pour it into the trash bin">双臂 π0.5 · 扫垃圾倒进垃圾桶</option>
+          <option value="Fold the towel on the table.">双臂 π0.5 · 叠毛巾（server2）</option>
+          <option value="把桌子上的毛巾叠好">双臂 π0.5 · 叠毛巾（gpu2 全量微调）</option>
+          <option value="place the green book neatly on top of the book stack">单臂 π0.5 · 把绿书叠到书堆上</option>
+        </select>
+      </label>
+      <label class="policy-field">
         <span>任务描述</span>
-        <textarea id="policyPrompt" rows="3" maxlength="500" placeholder="例如：place the green book neatly on top of the book stack"></textarea>
+        <textarea id="policyPrompt" rows="2" maxlength="500" placeholder="例如：sweep the garbage on the table into the yellow dustpan and pour it into the trash bin"></textarea>
       </label>
       <div class="policy-row">
         <label class="policy-field">
-          <span>策略</span>
+          <span>模式</span>
+          <select id="policyMode">
+            <option value="remote" selected>远程 · 双臂 14 维</option>
+            <option value="local">本地 · 单臂</option>
+          </select>
+        </label>
+        <label class="policy-field" id="policyServerField">
+          <span>服务端地址</span>
+          <input id="policyServer" value="ws://192.168.96.202:8000" spellcheck="false" list="policyServerPresets" />
+          <datalist id="policyServerPresets">
+            <option value="ws://192.168.96.202:8000">GPU 直连 · gpu2:8000</option>
+            <option value="ws://192.168.96.201:8000">GPU 直连 · server2:8000</option>
+            <option value="ws://127.0.0.1:8000">本机隧道 · ssh -L 8000</option>
+          </datalist>
+        </label>
+      </div>
+      <div class="policy-row" id="policyRtcRow">
+        <label class="policy-field policy-check"><span>RTC 引导</span><input id="policyRtc" type="checkbox" /></label>
+        <label class="policy-field policy-check"><span>只推理不下发</span><input id="policyDryRun" type="checkbox" /></label>
+      </div>
+      <details class="policy-help">
+        <summary>服务端启动命令（GPU 机器）</summary>
+        <pre>cd /home/qyj/openpi &amp;&amp; CUDA_VISIBLE_DEVICES=5 setsid /home/qyj/openpi/.venv/bin/python \
+  /home/qyj/serve_sweep_dual.py &gt; /home/qyj/logs/serve_sweep_dual.log 2&gt;&amp;1 &lt; /dev/null &amp;
+# 等日志出现 warmup base / warmup rtc / listening on 8000
+# 本机连接：ssh -N -L 8000:127.0.0.1:8000 qyj@192.168.96.202
+# 停止：pkill -f serve_sweep_dual.py</pre>
+      </details>
+      <div class="policy-row">
+        <label class="policy-field" id="policyLocalKindField">
+          <span>本地策略</span>
           <select id="policyKind">
             <option value="sft">π0.5 SFT</option>
             <option value="zeroshot">π0.5 Zero-shot</option>
@@ -41,10 +81,31 @@
       <div class="policy-actions">
         <button id="policyStart" type="button" class="primary">运行策略</button>
         <button id="policyStop" type="button">停止</button>
+        <button id="policyReady" type="button" title="到演示数据的起始位姿（configs/control/ready_pose.json）">准备位</button>
+        <button id="policyHome" type="button" title="回到参考位（内核 park）">回参考位</button>
       </div>
       <p id="policyMessage" class="policy-message" role="status"></p>
     </section>
 
+    <section class="rtc-panel" id="policyRtcPanel" aria-label="RTC 实时分块">
+        <h3>RTC 实时分块</h3>
+        <div class="rtc-controls">
+          <label class="rtc-fixed"><span>CHUNK SIZE（训练固定）</span><output id="rtcChunkOut">50</output></label>
+          <label><span>REINFER 剩余（剩多少步请求新块）</span><input id="rtcReinfer" type="range" min="1" max="49" value="30"><output id="rtcReinferOut">30</output></label>
+          <label><span>GUIDANCE 引导强度</span><input id="rtcGuidance" type="range" min="0" max="50" step="0.5" value="10"><output id="rtcGuidanceOut">10</output></label>
+          <label><span>BLEND 混合（客户端平滑）</span><input id="rtcBlend" type="range" min="0" max="49" value="16"><output id="rtcBlendOut">16</output></label>
+          <label class="rtc-fixed"><span>INFERENCE DELAY（运行时读取）</span><output id="rtcDelayOut">—</output></label>
+        </div>
+        <canvas id="rtcSchedule" height="300"></canvas>
+        <p id="rtcSummary" class="rtc-summary"></p>
+        <div class="rtc-legend">
+          <span><i class="rtc-free"></i>尚未执行的新预测</span>
+          <span><i class="rtc-blend"></i>与旧块混合</span>
+          <span><i class="rtc-frozen"></i>推理期间已执行</span>
+          <span><i class="rtc-exec"></i>执行线 · 切换点</span>
+          <span><i class="rtc-dry"></i>队列空转</span>
+        </div>
+      </section>
     <section class="policy-card policy-monitor" aria-labelledby="policyMonitorTitle">
       <div class="policy-monitor-head">
         <h2 id="policyMonitorTitle">运行状态</h2>

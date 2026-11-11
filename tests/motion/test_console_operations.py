@@ -121,6 +121,38 @@ class OperationValidationTests(unittest.TestCase):
             self.manager._policy({"prompt": "pick the book", "confirm": False})
         self.assertEqual(raised.exception.status, 409)
 
+    def test_remote_policy_builds_the_client_command(self):
+        with patch.object(operations, "_resolve_run", return_value=Path("/tmp/run")), \
+             patch.object(operations, "ControlClient") as client:
+            client.return_value.status.return_value = {"owner": None}
+            argv, run = self.manager._policy({
+                "mode": "remote", "confirm": True, "prompt": "sweep the table",
+                "server": "ws://127.0.0.1:8000", "seconds": 30,
+                "rtc": True, "chunk_steps": 50, "reinfer_remaining": 30, "blend": 16,
+                "guidance": 12.5,
+            })
+        self.assertEqual(argv[:4], ["bash", str(operations.RUN_SH), "policy", "remote"], argv)
+        self.assertIn("--server", argv)
+        self.assertIn("ws://127.0.0.1:8000", argv)
+        self.assertIn("--rtc", argv)
+        self.assertEqual(argv[argv.index("--reinfer-remaining") + 1], "30")
+        self.assertEqual(argv[argv.index("--blend") + 1], "16")
+        self.assertIn("12.5", argv)
+
+    def test_remote_policy_rejects_bad_server_and_bounds(self):
+        with patch.object(operations, "_resolve_run", return_value=Path("/tmp/run")), \
+             patch.object(operations, "ControlClient") as client:
+            client.return_value.status.return_value = {"owner": None}
+            with self.assertRaises(operations.OperationError):
+                self.manager._policy({"mode": "remote", "confirm": True, "prompt": "x", "server": "http://x"})
+            with self.assertRaises(operations.OperationError):
+                self.manager._policy({"mode": "remote", "confirm": True, "prompt": "x",
+                                      "server": "ws://x", "rtc": True, "chunk_steps": 50,
+                                      "reinfer_remaining": 60})
+            with self.assertRaises(operations.OperationError):
+                self.manager._policy({"mode": "remote", "confirm": True, "prompt": "x",
+                                      "server": "ws://x", "rtc": True, "chunk_steps": 0})
+
     def test_run_must_live_under_the_kernel_runs_root(self):
         with tempfile.TemporaryDirectory() as folder:
             with self.assertRaises(operations.OperationError):

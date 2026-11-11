@@ -103,16 +103,26 @@ class RuntimeCollectionTests(unittest.TestCase):
         self.assertEqual(anchors, [])
         self.assertEqual(excluded, {'not-position-following': 1})
 
-    def test_camera_restart_and_missing_frames_fail_recording(self):
-        for changes in [{'number': 3}, {'stream_id': 'camera-two'}]:
-            writer = self.writer(self.camera)
-            writer.add_tick(tick(0, self.stamp))
-            writer.add_frame(self.frame(self.stamp))
-            with self.assertRaises(ValueError):
-                writer.add_frame(self.frame(self.stamp + 33_000_000, **changes))
-            writer.close('stream-error', 'camera incomplete')
-            with self.assertRaisesRegex(ValueError, 'incomplete'):
-                load_episode(writer.path)
+    def test_camera_stream_change_fails_but_a_skipped_frame_number_is_recorded(self):
+        # A different camera identity still invalidates the recording.
+        writer = self.writer(self.camera)
+        writer.add_tick(tick(0, self.stamp))
+        writer.add_frame(self.frame(self.stamp))
+        with self.assertRaises(ValueError):
+            writer.add_frame(self.frame(self.stamp + 33_000_000, stream_id='camera-two'))
+        writer.close('stream-error', 'camera incomplete')
+        with self.assertRaisesRegex(ValueError, 'incomplete'):
+            load_episode(writer.path)
+        # A skipped device frame number is a gap, not a fatal error.
+        writer = self.writer(self.camera)
+        writer.add_tick(tick(0, self.stamp))
+        writer.add_frame(self.frame(self.stamp))
+        writer.add_frame(self.frame(self.stamp + 33_000_000, number=3))
+        writer.add_tick(tick(1, self.stamp + 40_000_000, terminal=True))
+        manifest = writer.close('runtime-terminal')
+        self.assertEqual(manifest['lifecycle'], 'complete', manifest['error'])
+        self.assertEqual(manifest['camera_frame_gaps'], {'wrist_rgb': 1})  # frame 2 never arrived
+        load_episode(writer.path)
 
     def test_manifest_cannot_hide_tick_gap_or_uncommitted_recording(self):
         writer = self.writer()

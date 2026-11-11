@@ -15,7 +15,7 @@ const JOINT_COLORS = ["#78f0c7", "#72b7ff", "#f2d06b", "#ff8f88", "#c8a5ff", "#9
 const ui = Object.fromEntries(
   [
     "sessionTask", "kernelBadge", "controlStatus", "manualLink",
-    "collectedCount", "targetCount", "episodeProgress", "sessionLabel",
+    "collectedCount", "targetCount", "episodeProgress", "sessionLabel", "progressScope",
     "finishedCount", "failedCount", "liveDuration",
     "messageBar", "messageIcon", "message",
     "cameraTitle", "cameraSpec", "cameraStatus", "recordingBadge", "timer",
@@ -170,17 +170,33 @@ function renderSessionTask() {
 }
 
 function updateTarget() {
+  const task = (ui.taskInput?.value || settings.task || "").trim();
   setText(ui.targetCount, String(settings.target));
   ui.episodeProgress.max = settings.target;
   ui.episodeProgress.value = Math.min(counters.collected, settings.target);
   setText(ui.collectedCount, String(counters.collected));
   setText(ui.finishedCount, String(counters.collected));
   setText(ui.failedCount, String(counters.failed));
+  // The band describes the task being recorded, not every episode on disk.
+  if (ui.progressScope) ui.progressScope.textContent = task ? "本任务" : "全部任务";
   const remaining = Math.max(settings.target - counters.collected, 0);
   setText(
     ui.sessionLabel,
     counters.collected === 0 ? "尚未开始" : `已完成 ${counters.collected} 条 · 剩余 ${remaining} 条`,
   );
+}
+
+// Totals from the last dataset scan; `applySummary` narrows them to the task
+// currently typed in the form so switching task switches the progress.
+let lastSummary = null;
+
+function applySummary() {
+  if (!lastSummary) return;
+  const task = (ui.taskInput?.value || settings.task || "").trim();
+  const bucket = task ? (lastSummary.by_task || {})[task] : null;
+  counters.collected = Number(bucket ? bucket.complete : lastSummary.complete) || 0;
+  counters.failed = Number(bucket ? bucket.failed : lastSummary.failed) || 0;
+  updateTarget();
 }
 
 let cameraSignature = "";
@@ -277,9 +293,8 @@ async function refreshEpisodes() {
     // The header progress must describe what is actually on disk, so a deleted
     // episode stops counting the moment the list refreshes.
     if (data.summary) {
-      counters.collected = Number(data.summary.complete) || 0;
-      counters.failed = Number(data.summary.failed) || 0;
-      updateTarget();
+      lastSummary = data.summary;
+      applySummary();
     }
     const rows = (data.episodes || []).map((episode) => {
       const done = episode.lifecycle === "complete";
@@ -715,6 +730,7 @@ ui.taskInput.addEventListener("input", () => {
   settings.task = ui.taskInput.value.trim();
   saveSettings();
   renderSessionTask();
+  applySummary();  // switching task switches the progress band with it
   updateControls();
 });
 ui.targetInput.addEventListener("input", readSettings);

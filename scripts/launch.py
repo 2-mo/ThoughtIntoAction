@@ -79,6 +79,7 @@ MODULE_COMMANDS = {
     "monitor": "legacy.quest_teleop.runtime.monitor",
     "ports": "embodied.applications.workstation.ports",
     "policy-kernel": "embodied.policy.kernel_runner",
+    "policy-remote": "embodied.policy.remote.runner",
     "bench": "embodied.applications.workstation.bench",
 }
 BOOTSTRAP_COMMANDS = {"control": "embodied.applications.workstation.control", "components": "embodied.applications.workstation.components.cli"}
@@ -144,6 +145,16 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
             python = resolve_python(config)
         except ValueError:
             python = Path(sys.executable)
+        env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+        for key in ("PYTHONHOME", "LD_LIBRARY_PATH"):
+            env.pop(key, None)
+        return [str(python), "-B", "-m", MODULE_COMMANDS[command], *arguments], env
+
+    if command == "policy-remote":
+        # The remote client needs websockets + msgpack + cv2, installed in the analysis environment.
+        python = PROJECT_ROOT / "configs/environments/arx_motion/.venv/bin/python"
+        if not python.is_file():
+            raise ValueError("缺少分析环境：./run.sh components setup analysis")
         env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
         for key in ("PYTHONHOME", "LD_LIBRARY_PATH"):
             env.pop(key, None)

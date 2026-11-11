@@ -98,9 +98,11 @@ def load_episode(path):
         previous, stamp = None, 0
         for frame in rows[frame_kind(camera_id)]:
             number, now = frame['frame_number'], frame['host_received_monotonic_ns']
+            # Device frame numbers may skip (recorded as camera_frame_gaps);
+            # they must only advance, never repeat or regress.
             if (not camera.get('stream_id') or frame.get('stream_id') != camera['stream_id']
-                    or (previous is not None and number != previous + 1) or now <= stamp):
-                raise ValueError(f'{camera_id}: camera stream changed or contains gaps')
+                    or (previous is not None and number <= previous) or now <= stamp):
+                raise ValueError(f'{camera_id}: camera stream changed or went backwards')
             if not (frame.get('image') or frame.get('video')) or not media_path(path, frame).is_file():
                 raise ValueError(f'{camera_id}: missing source image or video')
             previous, stamp = number, now

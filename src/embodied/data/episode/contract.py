@@ -7,6 +7,9 @@ import copy
 import math
 
 SCHEMA = 'embodied.joint_vectors/1'
+# Measured gripper widths drift a fraction of a millimetre past the nominal
+# maximum; the recorded range allows that without widening the command limits.
+GRIPPER_RANGE_MARGIN_M = 0.002
 
 
 def validate_contract(contract):
@@ -89,9 +92,13 @@ def runtime_contract(descriptor):
         arm_count = descriptor.get('arm_count') or 1
         widths = descriptor.get('gripper_max_widths') or [width] * arm_count
         joint_names = names or [f'joint{i + 1}' for i in range(count)]
+        # The physical gripper reads slightly past its nominal maximum (the X5
+        # reports 82.15 mm against a 82 mm limit), so the recorded range must
+        # allow that; otherwise every episode fails on its first feedback tick.
+        high = None if width is None else width + GRIPPER_RANGE_MARGIN_M
         vector_contract = {'schema': SCHEMA, 'representation': 'absolute_joint_position',
             'joint_names': joint_names, 'joint_unit': 'rad',
-            'gripper': {'name': 'gripper_m', 'unit': 'm', 'range': [0., width]},
+            'gripper': {'name': 'gripper_m', 'unit': 'm', 'range': [0., high]},
             'robot_type': descriptor.get('robot_type') or profile.get('name') or ('stanford_x5' if legacy else 'joint_robot')}
         if arm_count > 1:
             # One width per arm, named after the joint prefix (left_joint1 -> gripper_left).
@@ -102,7 +109,7 @@ def runtime_contract(descriptor):
             vector_contract['gripper'] = None
             vector_contract['grippers'] = [
                 {'name': f'gripper_{side}', 'unit': 'm',
-                 'range': [0., widths[index] if index < len(widths) else width]}
+                 'range': [0., (widths[index] if index < len(widths) else width) + GRIPPER_RANGE_MARGIN_M]}
                 for index, side in enumerate(sides)]
         contract = validate_contract(vector_contract)
         if len(contract['joint_names']) != count:

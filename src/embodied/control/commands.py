@@ -376,8 +376,22 @@ class CommandEngine:
             width = request.get('gripper_width', state.gripper_width)
             if not isinstance(width, (int, float)) or not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width:
                 raise ValueError('Invalid gripper width in metres')
+            # A dual-arm source may address both grippers at once; the scalar
+            # above stays the primary arm for single-arm clients.
+            widths = request.get('gripper_targets')
+            if widths is not None:
+                arms = len(getattr(self.config, 'arms', ())) or 1
+                limit = self.config.gripper_max_width + 1e-6  # allow float32-rounded maxima
+                if (not isinstance(widths, (list, tuple)) or len(widths) != arms
+                        or any(isinstance(value, bool) or not isinstance(value, (int, float))
+                               or not np.isfinite(value) or not 0 <= value <= limit
+                               for value in widths)):
+                    raise ValueError(f'gripper_targets must hold {arms} widths in metres')
+                width = float(widths[0])
             self.command = ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=pose,
-                joint_target=q, gripper_target=width, hold=action == 'gripper',
+                joint_target=q, gripper_target=width,
+                gripper_targets=None if widths is None else tuple(float(value) for value in widths),
+                hold=action == 'gripper',
                 joint_step_limit=self.motion_limits.step_limits())
         else:
             raise ValueError('Unsupported control action')

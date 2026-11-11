@@ -1,7 +1,7 @@
 """The browser forwards model capabilities instead of imposing hardware constants."""
 from pathlib import Path
 import unittest
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import numpy as np
 
@@ -59,16 +59,19 @@ class ConsoleCapabilities(unittest.IsolatedAsyncioTestCase):
         await self.console.start_stream('teleoperation', 2, {})
         self.assertEqual(self.console.stream['open'], .12)
 
-    async def test_invalid_description_releases_new_lease(self):
+    async def test_invalid_description_never_takes_a_lease(self):
+        """The page attaches read-only first, so a bad description fails before any lease."""
         self.console.session = None
+        self.console.client = None
         self.console.run = Path('/unused')
-        session = Mock()
-        session.__enter__ = Mock()
-        session.describe.return_value = {'robot': self.console.robot, 'motion_limits': {}}
-        with patch('embodied.applications.console.kernel.arx.ControlSession', return_value=session):
+        client = Mock()
+        client.describe.return_value = {'robot': self.console.robot, 'motion_limits': {}}
+        session = MagicMock()
+        with patch('embodied.applications.console.kernel.arx.ControlClient', return_value=client), \
+             patch('embodied.applications.console.kernel.arx.ControlSession', return_value=session):
             with self.assertRaises(KeyError):
                 await self.console.connect({})
-        session.close.assert_called_once()
+        session.__enter__.assert_not_called()
         self.assertIsNone(self.console.session)
 
     def test_percent_is_a_scale_without_a_second_speed_floor(self):

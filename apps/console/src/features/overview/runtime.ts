@@ -3,6 +3,7 @@
 import { withToken } from "../../api/control-protocol";
 import { listOperations, startOperation, stopOperation } from "../../api/operations";
 import { questStatus, runAction } from "../../api/system";
+import { initSetup } from "./setup";
 
 const POLL_MS = 200;
 const OPERATIONS_MS = 2000;
@@ -530,4 +531,5 @@ document.addEventListener("visibilitychange", () => (document.hidden ? stop() : 
 window.addEventListener("resize", drawTrend);
 window.addEventListener("pagehide", stop);
 wireOperations();
+void initSetup();
 start();

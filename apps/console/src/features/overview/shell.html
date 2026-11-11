@@ -12,6 +12,7 @@
   </header>
 
   <section class="overview-grid">
+    <div class="overview-main">
     <section class="overview-card overview-arm" aria-labelledby="overviewArmTitle">
       <div class="overview-card-head">
         <h2 id="overviewArmTitle">机械臂</h2>
@@ -34,6 +35,21 @@
       </div>
     </section>
 
+      <section class="overview-card" aria-labelledby="setupTitle" id="setupCard">
+        <h2 id="setupTitle">接入配置</h2>
+        <p class="op-hint">选择机械臂与相机，并指定每台相机装在哪个臂的腕部或作为固定外部相机。保存后按提示重启对应服务。</p>
+        <div id="setupRobots" class="setup-block"></div>
+        <div id="setupCameras" class="setup-block"></div>
+        <div class="op-actions setup-actions">
+          <button id="setupAddRobot" type="button">+ 机械臂</button>
+          <button id="setupAddCamera" type="button">+ 相机</button>
+          <button id="setupRefresh" type="button" title="重新枚举已连接设备">重新探测</button>
+          <button id="setupSave" type="button" class="primary">保存配置</button>
+        </div>
+        <p id="setupMessage" class="op-message" role="status"></p>
+        <div id="setupRestarts" class="setup-restarts" hidden></div>
+      </section>
+    </div>
     <aside class="overview-side">
       <section class="overview-card overview-wizard" aria-labelledby="overviewWizardTitle">
         <div class="overview-card-head">
@@ -112,7 +128,8 @@
         <label class="op-field"><span>运行配置</span>
           <select id="overviewKernelProfile">
             <option value="sim-manual">仿真 · 无输入</option>
-            <option value="real-manual">真机 · 无 Quest</option>
+            <option value="real-manual">真机 · 无 Quest（单臂）</option>
+            <option value="real-dual-manual">真机 · 无 Quest（双臂，策略用）</option>
             <option value="real-quest">真机 · Quest（单臂）</option>
             <option value="real-dual-quest" selected>真机 · 双臂 Quest</option>
           </select>

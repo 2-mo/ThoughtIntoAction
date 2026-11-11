@@ -12,6 +12,12 @@ from embodied.data.episode.runtime_episode import RuntimeEpisodeWriter
 from embodied.contracts.runtime import RuntimeReader
 
 
+# How long one camera may stay silent before the recording is considered broken.
+# Frames lost beyond MAX_TOLERATED_FRAME_GAP fail the take anyway, so this only
+# covers read errors that recover before the next frame is due.
+CAMERA_STALL_LIMIT_S = 2.
+
+
 def hand_eye(camera_id, metadata):
     """Extrinsics of a real camera at recording time (embodied.applications.calibration); synthetic cameras have none."""
     if not metadata.get('serial'):
@@ -41,9 +47,22 @@ def capture(reader, root, task, duration, camera=None, *, cameras=None, video=Fa
     heartbeat = CaptureStatus(writer, frames, dropped)
 
     def camera_loop(camera_id, source):
+        # A USB hiccup can stall one camera for a second or two. Keep waiting a
+        # bounded time and let the recorded frame numbers show the gap instead of
+        # discarding the whole demonstration.
+        stalled_since = None
         try:
             while not stop.is_set():
-                frame = source.read()
+                try:
+                    frame = source.read()
+                except Exception as exc:
+                    now = time.monotonic()
+                    stalled_since = stalled_since or now
+                    if now - stalled_since > CAMERA_STALL_LIMIT_S:
+                        raise RuntimeError(f'the camera stayed silent for {CAMERA_STALL_LIMIT_S:.0f} s: {exc}') from exc
+                    stop.wait(.2)
+                    continue
+                stalled_since = None
                 if not stop.is_set():
                     try:
                         frames.put_nowait((camera_id, frame))

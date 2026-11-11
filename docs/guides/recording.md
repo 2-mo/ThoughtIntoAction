@@ -17,6 +17,8 @@
   --annotator operator --confidence 0.8
 ```
 
+相机帧号允许小幅前跳（RealSense USB 抖动，单次不超过 5 帧 ≈ 0.17 s）：跳过帧数记入 `episode.json` 的 `camera_frame_gaps`，录制继续；超过 5 帧的空档仍判 `failed`，因为长盲区不可训练。单路相机连续 2 秒没有新帧判 `failed`。帧时间戳倒退、重复帧号、相机流身份变化仍然拒绝。
+
 原始数据默认保存在 `outputs/datasets/runtime/episode_*/`。`episode.json` 保存运行身份、任务、录制状态、参考相机和 `data_contract`；`episode.mcap` 保存反馈、实际下发指令和相机帧索引，RGB 保存在对应相机的视频或图像文件。导出时仍需复制完整 episode 目录。
 
 `data_contract` 描述关节名称与顺序、rad 单位、夹爪是否存在及米制范围。数据写入、对齐和导出按契约决定维度：七轴机械臂不截断，无夹爪机器人不补一维，未知夹爪上限不套用 ARX 标定。相机使用配置 ID，`--anchor-camera` 决定对齐参考。当前视觉训练导出要求 30 FPS 相机、有效因果时间匹配和明确的示范来源。历史数据仅允许 Quest/Phone；脚本示范必须通过下文的任务录制上下文声明 robot-api 来源并关联已完成任务。无相机诊断、未声明来源的 RPC 动作和失败录制仍不能导出训练。旧版六轴数据仍按其原始协议读取。

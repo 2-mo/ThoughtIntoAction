@@ -115,6 +115,7 @@ class ArxConsole:
     """One browser owner, at most one kernel lease, one command at a time."""
 
     collection_camera = None
+    client = None  # Read-only attach; a class default keeps partial test doubles working.
 
     def __init__(self, run: Path | None = None, token: str | None = None) -> None:
         self.run, self.token = run, token

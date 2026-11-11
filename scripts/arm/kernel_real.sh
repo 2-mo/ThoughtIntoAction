@@ -29,7 +29,10 @@ if ((YES == 0)); then
   [[ "$answer" == [yY] ]] || { echo "未启动。"; exit 0; }
 fi
 if [[ -z "$PROFILE" || "$PROFILE" == *quest* ]]; then
-  "$ROOT/run.sh" quest-transport prepare
+  # A missing headset must not block the kernel: policy runs and manual checks
+  # only need the robot side. VR can be connected later and the kernel restarted.
+  "$ROOT/run.sh" quest-transport prepare || \
+    printf '⚠️ 未连接头显：内核以无 VR 输入启动（armed 保持 false）。\n' >&2
 fi
 mkdir -p "$ROOT/outputs/logs/bench"
 CAN_LOG=$(mktemp "$ROOT/outputs/logs/bench/can-XXXXXXXX.log")
