@@ -11,6 +11,14 @@
     </div>
   </header>
 
+  <section class="model-band" aria-label="模型">
+    <div class="model-band-head">
+      <span>模型</span>
+      <small id="modelHint">选中卡片会填入 prompt 与服务端地址；挂载/卸载按登记表执行</small>
+    </div>
+    <div id="modelCards" class="model-cards"><p class="model-empty">正在读取模型登记表…</p></div>
+  </section>
+
   <section class="policy-grid">
     <section class="policy-card" aria-labelledby="policyFormTitle">
       <h2 id="policyFormTitle">任务设置</h2>
@@ -19,8 +27,8 @@
         <select id="policyPromptHistory">
           <option value="">自定义…</option>
           <option value="sweep the garbage on the table into the yellow dustpan and pour it into the trash bin">双臂 π0.5 · 扫垃圾倒进垃圾桶</option>
-          <option value="Fold the towel on the table.">双臂 π0.5 · 叠毛巾（server2）</option>
-          <option value="把桌子上的毛巾叠好">双臂 π0.5 · 叠毛巾（gpu2 全量微调）</option>
+          <option value="Fold the towel on the table.">叠毛巾 · 英文 prompt</option>
+          <option value="把桌子上的毛巾叠好">叠毛巾 · 中文 prompt</option>
           <option value="place the green book neatly on top of the book stack">单臂 π0.5 · 把绿书叠到书堆上</option>
         </select>
       </label>
@@ -32,13 +40,13 @@
         <label class="policy-field">
           <span>模式</span>
           <select id="policyMode">
-            <option value="remote" selected>远程 · 双臂 14 维</option>
-            <option value="local">本地 · 单臂</option>
+            <option value="remote" selected>模型服务 · 双臂 14 维</option>
+            <option value="local">本机 SFT · 单臂（旧）</option>
           </select>
         </label>
         <label class="policy-field" id="policyServerField">
           <span>服务端地址</span>
-          <input id="policyServer" value="ws://192.168.96.202:8000" spellcheck="false" list="policyServerPresets" />
+          <input id="policyServer" value="ws://192.168.96.202:8008" spellcheck="false" list="policyServerPresets" />
           <datalist id="policyServerPresets">
             <option value="ws://192.168.96.202:8000">GPU 直连 · gpu2:8000</option>
             <option value="ws://192.168.96.201:8000">GPU 直连 · server2:8000</option>
@@ -80,6 +88,7 @@
       </div>
       <div class="policy-actions">
         <button id="policyStart" type="button" class="primary">运行策略</button>
+        <span id="policyModelHint" class="policy-model-hint" hidden></span>
         <button id="policyStop" type="button">停止</button>
         <button id="policyReady" type="button" title="到演示数据的起始位姿（configs/control/ready_pose.json）">准备位</button>
         <button id="policyHome" type="button" title="回到参考位（内核 park）">回参考位</button>

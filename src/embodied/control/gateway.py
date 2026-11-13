@@ -225,9 +225,11 @@ class Gateway:
             return
         if action == 'cartesian':
             workspace.check_pose(target)
-        else:
-            with self.plan_lock:
-                workspace.check_path(self.planner.model.fk, [target])
+        # Streaming joint targets deliberately skip the table-plane path check:
+        # native teleoperation never runs one, and collection recorded the same
+        # commands pressing 0..-98 mm into the table. Joint limits, standstill
+        # and the per-tick step limit still apply here; planning commands
+        # (movej / movel / home) keep their table-plane check in the planner.
 
     def tick(self, state, now):
         self.engine.observe_feedback(state, now)

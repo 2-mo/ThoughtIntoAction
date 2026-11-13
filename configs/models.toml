@@ -1,0 +1,46 @@
+# 策略页「模型」卡片区登记表。
+# 页面只会发送模型 id；挂载/卸载执行的命令全部来自这里，前端无法传入命令。
+# {log} 会被替换成 outputs/logs/models/<id>.log。
+
+[[models]]
+id = "towel_v2_local"
+name = "叠毛巾 v2 · 本地 5070"
+prompt = "Fold the towel on the table."
+url = "ws://127.0.0.1:8008"
+vram = "约 7.2 GB 显存 · 首次启动含编译约 2–4 分钟"
+mount = [
+  "bash", "-lc",
+  "cd /home/arx/work/arx_pi05 && CUDA_VISIBLE_DEVICES=0 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 setsid /home/arx/work/openpi/.venv/bin/python /home/arx/work/serve_local.py checkpoints/pi05_arx_lora/towel_fold_v2_gemma_lora_expert_full/19999 --asset-id towel_fold_v2 --host 0.0.0.0 --port 8008 --num-steps 5 >> '{log}' 2>&1 < /dev/null &",
+]
+unmount = ["bash", "-lc", "pkill -f 'openpi/.venv/bin/python /home/arx/work/serve_local.py'"]
+
+[[models]]
+id = "towel_v2_gpu2"
+name = "叠毛巾 v2 · gpu2"
+prompt = "Fold the towel on the table."
+url = "ws://192.168.96.202:8008"
+vram = "gpu2 · CUDA_VISIBLE_DEVICES=5 · 显存占比 0.6"
+mount = [
+  "ssh", "-o", "BatchMode=yes", "qyj@192.168.96.202",
+  "cd /data1/qyj/arx_pi05 && CUDA_VISIBLE_DEVICES=5 XLA_PYTHON_CLIENT_MEM_FRACTION=0.6 setsid /home/qyj/openpi/.venv/bin/python /home/qyj/serve_compat_v2.py checkpoints/pi05_arx_lora/towel_fold_v2_gemma_lora_expert_full/19999 --asset-id towel_fold_v2 --host 0.0.0.0 --port 8008 --num-steps 5 > logs/serve_8008.log 2>&1 < /dev/null &",
+]
+unmount = [
+  "ssh", "-o", "BatchMode=yes", "qyj@192.168.96.202",
+  "pkill -f 'openpi/.venv/bin/python /home/qyj/serve_compat_v2.py'",
+]
+
+[[models]]
+id = "towel_v1_201"
+name = "叠毛巾 v1 · server2"
+prompt = "Fold the towel on the table."
+url = "ws://192.168.96.201:8000"
+vram = "server2 · CUDA_VISIBLE_DEVICES=0"
+note = "首次启动约 1–2 分钟（含 RTC 转换与预热）才在线"
+mount = [
+  "ssh", "-o", "BatchMode=yes", "cn1wf@192.168.96.201",
+  "cd /data1/wyf/de/arx_pi05 && CUDA_VISIBLE_DEVICES=0 setsid /data1/wyf/de/openpi/.venv/bin/python /home/cn1wf/serve_compat.py checkpoints/pi05_arx_lora/towel_fold_v1/9000 --asset-id towel_fold_v1 --host 0.0.0.0 --port 8000 --num-steps 5 > logs/serve_8000.log 2>&1 < /dev/null &",
+]
+unmount = [
+  "ssh", "-o", "BatchMode=yes", "cn1wf@192.168.96.201",
+  "pkill -f 'serve_compat[.]py'",
+]

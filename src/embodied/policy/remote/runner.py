@@ -230,7 +230,20 @@ def run(session, client, cameras, output, prompt, *, seconds, fps=FPS, chunk_ste
     step_period = 1.0 / fps
     initial = session.status()
     widths = initial.get("gripper_widths") or [initial.get("gripper_width") or 0.0] * 2
-    last_point = np.asarray([*initial["q"], *widths], dtype=np.float64)
+    def clip_point(point):
+        """Keep every interpolated target inside the kernel's own limits.
+
+        The measured start can already sit a hair outside them (the right
+        gripper reads 82.27 mm against an 82 mm limit), and a point between two
+        clipped ends is not clipped by itself; the kernel then rejects every
+        tick with its gripper_targets message.
+        """
+        clipped = np.array(point, dtype=np.float64, copy=True)
+        clipped[:12] = np.clip(clipped[:12], joint_min, joint_max)
+        clipped[12:] = np.clip(clipped[12:], 0.0, float(gripper_max))
+        return clipped
+
+    last_point = clip_point([*initial["q"], *widths])
     current = None            # action the interpolation is heading for
     step_started = time.monotonic()
     logged_index = None
@@ -295,7 +308,7 @@ def run(session, client, cameras, output, prompt, *, seconds, fps=FPS, chunk_ste
                                               "action": [round(float(value), 5) for value in current]}) + "\n")
                         log.flush()
                 alpha = min(max((now - step_started) / step_period, 0.0), 1.0)
-                point = last_point + (current - last_point) * alpha
+                point = clip_point(last_point + (current - last_point) * alpha)
                 if dry_run:
                     last_point = point
                 elif not rejected_action:
@@ -312,7 +325,11 @@ def run(session, client, cameras, output, prompt, *, seconds, fps=FPS, chunk_ste
                         rejected_action = True
                         consecutive += 1
                         print(json.dumps({"event": "rejected", "tick": tick,
-                                          "action_index": tick, "reason": str(exc)},
+                                          "action_index": tick,
+                                          "gripper_targets": [round(float(point[12]), 6),
+                                                              round(float(point[13]), 6)],
+                                          "gripper_max": round(float(gripper_max), 6),
+                                          "reason": str(exc)},
                                          ensure_ascii=False), flush=True)
                         if consecutive >= MAX_CONSECUTIVE_REJECTS:
                             raise

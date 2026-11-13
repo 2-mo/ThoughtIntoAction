@@ -15,6 +15,7 @@ const ui = Object.fromEntries(
     "policyConfirm", "policyConfirmStart", "policyCancel", "policyStart",
     "policyStop", "policyHome", "policyReady", "policyMessage", "policyRun", "policyRuntime", "policyOwner",
     "policyAge", "policyOps", "policyLog", "policyRefreshLog",
+    "modelCards", "modelHint", "policyModelHint",
   ].map((id) => [id, document.getElementById(id)]),
 );
 
@@ -225,6 +226,156 @@ async function stopPolicy() {
   await refreshLog();
 }
 
+
+// Models: registry cards, mount/unmount by id, health polled while the page is open.
+
+const MODELS_MS = 2000;
+let modelTimer = undefined;
+let modelList = [];
+let selectedModelId = null;
+let modelsPending = false;
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]
+  ));
+}
+
+const MODEL_STATE_LABEL = { online: "在线", starting: "启动中…", offline: "离线" };
+
+function selectedModel() {
+  return modelList.find((model) => model.id === selectedModelId) || null;
+}
+
+async function refreshModels() {
+  if (modelsPending) return;
+  modelsPending = true;
+  try {
+    const response = await fetch(withToken("/api/v1/policy/models"), { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    modelList = data.models || [];
+    renderModels();
+    updateModelHint();
+  } catch (error) {
+    if (ui.modelCards) {
+      ui.modelCards.innerHTML =
+        `<p class="model-empty">读取模型登记表失败：${escapeHtml(error instanceof Error ? error.message : error)}</p>`;
+    }
+  } finally {
+    modelsPending = false;
+  }
+}
+
+function renderModels() {
+  if (!ui.modelCards) return;
+  if (!modelList.length) {
+    ui.modelCards.innerHTML = '<p class="model-empty">未登记模型（configs/models.toml）</p>';
+    return;
+  }
+  ui.modelCards.innerHTML = modelList.map((model) => {
+    const state = model.state || "offline";
+    const selected = model.id === selectedModelId ? " selected" : "";
+    const mountable = model.mountable !== false && state === "offline";
+    return `<article class="model-card${selected}" data-model="${escapeHtml(model.id)}">
+      <div class="model-card-head">
+        <span class="model-dot" data-state="${escapeHtml(state)}"></span>
+        <strong>${escapeHtml(model.name)}</strong>
+        <em>${escapeHtml(MODEL_STATE_LABEL[state] || state)}</em>
+      </div>
+      <small class="model-url">${escapeHtml(model.url)}</small>
+      <small class="model-vram">${escapeHtml(model.vram || "")}</small>
+      <div class="model-actions">
+        <button type="button" data-action="mount" ${mountable ? "" : "disabled"}
+          title="${escapeHtml(model.note || "执行登记表里的挂载命令")}">挂载</button>
+        <button type="button" data-action="unmount" ${state === "offline" ? "disabled" : ""}>卸载</button>
+      </div>
+    </article>`;
+  }).join("");
+  for (const card of ui.modelCards.querySelectorAll(".model-card")) {
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("button")) return;
+      selectModel(card.dataset.model);
+    });
+  }
+  for (const button of ui.modelCards.querySelectorAll("button[data-action]")) {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const card = button.closest(".model-card");
+      if (!card) return;
+      if (button.dataset.action === "mount") void mountModel(card.dataset.model);
+      else void unmountModel(card.dataset.model);
+    });
+  }
+}
+
+function selectModel(modelId) {
+  const model = modelList.find((item) => item.id === modelId);
+  if (!model) return;
+  selectedModelId = modelId;
+  // A model is always a remote service: switching the mode first keeps the
+  // address field visible and stops the old local SFT path from running.
+  if (ui.policyMode && ui.policyMode.value !== "remote") {
+    ui.policyMode.value = "remote";
+    ui.policyMode.dispatchEvent(new Event("change"));
+  }
+  if (ui.policyPrompt && model.prompt) ui.policyPrompt.value = model.prompt;
+  if (ui.policyPromptHistory) {
+    const match = [...ui.policyPromptHistory.options].find((option) => option.value === model.prompt);
+    ui.policyPromptHistory.value = match ? model.prompt : "";
+  }
+  if (ui.policyServer) ui.policyServer.value = model.url;
+  if (ui.policyStart) {
+    // The button names the selected model; keep the original label in the dataset.
+    if (!ui.policyStart.dataset.idleText) {
+      ui.policyStart.dataset.idleText = ui.policyStart.textContent.trim() || "运行策略";
+    }
+    ui.policyStart.textContent = `${ui.policyStart.dataset.idleText} · ${model.name}`;
+  }
+  setMessage(`已选择 ${model.name}（${MODEL_STATE_LABEL[model.state] || model.state}）`,
+    model.state === "online" ? "info" : "warn");
+  updateModelHint();
+  renderModels();
+}
+
+/** Warn next to the run button when the chosen model cannot answer. */
+function updateModelHint() {
+  if (!ui.policyModelHint) return;
+  const model = selectedModel();
+  const offline = Boolean(model) && model.state !== "online";
+  ui.policyModelHint.hidden = !offline;
+  ui.policyModelHint.textContent = offline ? `${model.name} 当前离线，运行会连不上` : "";
+}
+
+async function mountModel(modelId) {
+  setMessage("正在挂载模型…");
+  try {
+    const response = await fetch(withToken(`/api/v1/policy/models/${encodeURIComponent(modelId)}/mount`),
+      { method: "POST" });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(data?.detail || `HTTP ${response.status}`);
+    setMessage(data.state === "online" ? "模型已在线" : "已发起挂载，启动中…（首次约 2–4 分钟）", "warn");
+    selectedModelId = modelId;
+    await refreshModels();
+  } catch (error) {
+    setMessage(`挂载失败：${error instanceof Error ? error.message : String(error)}`, "error");
+  }
+}
+
+async function unmountModel(modelId) {
+  setMessage("正在卸载模型…");
+  try {
+    const response = await fetch(withToken(`/api/v1/policy/models/${encodeURIComponent(modelId)}/unmount`),
+      { method: "POST" });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(data?.detail || `HTTP ${response.status}`);
+    setMessage("模型已卸载", "success");
+    await refreshModels();
+  } catch (error) {
+    setMessage(`卸载失败：${error instanceof Error ? error.message : String(error)}`, "error");
+  }
+}
+
 function start() {
   if (statusTimer !== undefined) return;
   void pollStatus();
@@ -232,6 +383,8 @@ function start() {
   void refreshLog();
   statusTimer = window.setInterval(pollStatus, STATUS_MS);
   operationsTimer = window.setInterval(refreshOperations, OPERATIONS_MS);
+  void refreshModels();
+  modelTimer = window.setInterval(refreshModels, MODELS_MS);
 }
 
 function stop() {
@@ -242,6 +395,10 @@ function stop() {
   if (operationsTimer !== undefined) {
     window.clearInterval(operationsTimer);
     operationsTimer = undefined;
+  }
+  if (modelTimer !== undefined) {
+    window.clearInterval(modelTimer);
+    modelTimer = undefined;
   }
 }
 

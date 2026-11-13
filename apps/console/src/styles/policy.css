@@ -22,8 +22,8 @@ body {
   margin: 0;
   padding: clamp(16px, 1.8vw, 28px);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: clamp(14px, 1.4vw, 22px);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: clamp(8px, .8vw, 12px);
   overflow: hidden;
 }
 
@@ -114,7 +114,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: clamp(16px, 1.5vw, 22px);
+  padding: clamp(12px, 1.15vw, 18px);
   border: 1px solid rgba(255, 255, 255, .08);
   border-radius: 18px;
   background: #0d0d0d;
@@ -358,3 +358,40 @@ body {
 
 /* Mode-specific fields: the class display rules would otherwise beat [hidden]. */
 .policy [hidden] { display: none !important; }
+
+
+/* 模型登记表：顶部一行卡片，状态每 2 秒刷新 */
+.model-band { display: grid; gap: 4px; }
+.model-band-head { display: flex; align-items: baseline; gap: 10px; }
+.model-band-head small { display: none; }
+.model-band-head span { font-size: .72rem; letter-spacing: .12em; color: var(--muted); }
+.model-band-head small { color: rgba(255, 255, 255, .38); font-size: .66rem; }
+.model-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; }
+.model-card {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto;
+  gap: 2px 8px; padding: 6px 9px; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px;
+  background: rgba(255, 255, 255, .03);
+}
+.model-card.selected { border-color: rgba(216, 188, 130, .75); background: rgba(216, 188, 130, .08); }
+.model-card-head { display: flex; align-items: center; gap: 6px; }
+.model-card-head strong { font-size: .74rem; font-weight: 600; color: #eef4f1; }
+.model-card-head em { margin-left: auto; font-style: normal; font-size: .62rem; color: var(--muted); }
+.model-dot { width: 8px; height: 8px; border-radius: 50%; background: #666; }
+.model-dot[data-state="online"] { background: #4ade80; box-shadow: 0 0 6px rgba(74, 222, 128, .7); }
+.model-dot[data-state="starting"] { background: #fbbf24; }
+.model-card small { color: rgba(255, 255, 255, .45); font-size: .6rem; font-family: ui-monospace, monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.model-card .model-vram { color: rgba(255, 255, 255, .32); }
+.model-actions { display: flex; gap: 4px; grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+.model-actions button {
+  padding: 3px 10px; font-size: .64rem; border-radius: 8px; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .16); background: rgba(255, 255, 255, .05); color: #e9e4d8;
+}
+.model-actions button:disabled { opacity: .35; cursor: default; }
+.model-empty { margin: 0; color: var(--muted); font-size: .7rem; }
+
+.policy-model-hint {
+  align-self: center; font-size: .64rem; color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, .35); border-radius: 999px; padding: 2px 8px;
+}
