@@ -16,8 +16,13 @@ from embodied.applications.workstation.pair_state import PAIR_STATE, active_pair
 from embodied.contracts.device_lease import DeviceLease
 
 
-def prepare(directory, *, backend='real', source='quest'):
-    """Resolve static deployments and input topics without opening devices."""
+def prepare(directory, *, backend='real', source='quest', profiles=None):
+    """Resolve deployments and input topics without opening devices.
+
+    `profiles` maps a side to a workbench profile path/name; the console passes
+    the ones generated from the saved setup. Missing sides fall back to the
+    checked-in templates.
+    """
     directory = Path(directory).resolve()
     prefix = 'robot-pair-'+uuid.uuid4().hex[:12]
     xr_config = None
@@ -39,7 +44,7 @@ def prepare(directory, *, backend='real', source='quest'):
         xr_config.write_text(text)
     deployments = {}
     for side in ('left','right'):
-        config, _ = profile('realman-'+side)
+        config, _ = profile((profiles or {}).get(side) or 'realman-'+side)
         if backend == 'sim':
             config['robot'] = 'realman.sim'
             config['config'] = 'configs/robots/realman/sim.json'
@@ -87,12 +92,17 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--backend', choices=('real','sim'), default='real')
     parser.add_argument('--source', choices=('quest','cli'), default='quest')
+    parser.add_argument('--left-profile', help='Left workbench profile; default realman-left')
+    parser.add_argument('--right-profile', help='Right workbench profile; default realman-right')
     args = parser.parse_args(argv)
+    profiles = {side: getattr(args, side + '_profile')
+                for side in ('left', 'right') if getattr(args, side + '_profile')}
     if active_pair() is not None:
         raise RuntimeError('双臂会话已运行；保留现有会话，不重复打开Quest或机械臂')
     directory = ROOT/'outputs/runtime/realman'/('pair-'+time.strftime('%Y%m%d-%H%M%S'))
     directory.mkdir(parents=True, exist_ok=False)
-    prefix, xr_config, deployments = prepare(directory, backend=args.backend, source=args.source)
+    prefix, xr_config, deployments = prepare(directory, backend=args.backend, source=args.source,
+                                             profiles=profiles)
     stopped = False
     def stop(*_):
         nonlocal stopped

@@ -225,6 +225,12 @@ function renderOperations() {
   for (const button of [ui.overviewKernelCollect, ui.overviewKernelPolicy]) {
     if (button) button.disabled = kernelLive || Boolean(ours);
   }
+  const ethernet = setupConnection() === "ethernet";
+  if (ui.overviewKernelSim) {
+    // The simulation profiles are ARX-only; an Ethernet rig starts real kernels.
+    ui.overviewKernelSim.disabled = ethernet;
+    if (ethernet) ui.overviewKernelSim.checked = false;
+  }
   // An externally started kernel is still the operator's to stop.
   if (ui.overviewKernelStop) ui.overviewKernelStop.disabled = !(ours || kernelLive);
 

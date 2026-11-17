@@ -37,10 +37,12 @@ VENDORS = {
         "implemented": True,
         # RM65 is reached over Ethernet (controller API), not CAN.
         "connection": "ethernet",
-        "models": {"rm65": {"label": "RM65-BI", "arm_counts": (1,)}},
-        "robot_profile": {1: "realman.hardware"},
+        "models": {"rm65": {"label": "RM65-BI", "arm_counts": (1, 2)}},
+        # Two arms run as two kernels with one shared XR owner (robot-pair).
+        "robot_profile": {1: "realman.hardware", 2: "realman.hardware"},
         "workbench_profile": {
             1: {"collect": "realman-left", "policy": "realman-manual"},
+            2: {"collect": "realman-left", "policy": "realman-manual"},
         },
     },
 }

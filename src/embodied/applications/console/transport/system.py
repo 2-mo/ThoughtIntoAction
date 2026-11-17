@@ -312,6 +312,61 @@ def _move_once(run: Path, kind: str, fields: dict[str, object], speed_percent: i
         raise TimeoutError(f"{label}超时，已取消")
 
 
+def pair_snapshot(pair: dict) -> tuple[dict, dict, list]:
+    """One robot view of a two-kernel pair: 12 joints, both grippers, one phase."""
+    sides = {}
+    for side, directory in pair["runs"].items():
+        client = ControlClient(directory)
+        sides[side] = (client.status(), client.describe().get("robot", {}))
+    left, right = sides["left"], sides["right"]
+    q = list(left[0]["q"]) + list(right[0]["q"])
+    dq = list(left[0]["dq"]) + list(right[0]["dq"])
+    natives = [(status.get("ingresses") or {}).get("native") or {} for status, _ in (left, right)]
+    teleop = teleop_status(Path(pair["runs"]["left"]))
+    teleop.update({
+        "ready": all(bool(item.get("ready")) for item in natives),
+        "armed": all(bool(item.get("armed")) for item in natives),
+        "permit": all(bool(item.get("permit")) for item in natives),
+        "reason": next((item.get("reason") for item in natives if item.get("reason")), None),
+        "pair": True,
+    })
+    owners = [status.get("owner") for status, _ in (left, right) if status.get("owner")]
+    owner = owners[0] if owners else None
+    robot = left[1]
+    payload = {
+        "connected": True,
+        "runtime_id": pair["runtime_id"],
+        "pair": True,
+        "model_id": left[0]["model_id"],
+        "phase": "teleop" if any(status["phase"] == "teleop" for status, _ in (left, right))
+                 else left[0]["phase"],
+        "stopped": any(status["stopped"] for status, _ in (left, right)),
+        "owner": None if owner is None else {"source": owner.get("source"), "purpose": owner.get("purpose")},
+        "lease_remaining_s": min(status["lease_remaining_s"] for status, _ in (left, right)),
+        "q": q,
+        "dq": dq,
+        "arms": arm_views(q, dq, [{"id": "arm1", "side": "left"}, {"id": "arm2", "side": "right"}]),
+        "pose": left[0]["pose"],
+        "gripper_width": left[0]["gripper_width"],
+        "gripper_widths": [left[0].get("gripper_width"), right[0].get("gripper_width")],
+        "gripper_effort": left[0]["gripper_effort"],
+        "feedback_age_ms": max((time.monotonic_ns() - status["feedback_monotonic_ns"]) / 1e6
+                               for status, _ in (left, right)),
+        "limits": {
+            "joint_min": robot.get("joint_min"),
+            "joint_max": robot.get("joint_max"),
+            "gripper_max_width": robot.get("gripper_max_width"),
+        },
+        "operations": [
+            {"operation_id": op["operation_id"], "status": op["status"]}
+            for op in left[0]["operations"] + right[0]["operations"]
+        ],
+    }
+    interfaces = [arm.get("can_interface") for arm in robot.get("arms") or ()
+                  if isinstance(arm, dict) and arm.get("can_interface")]
+    return payload, teleop, interfaces
+
+
 def read_kernel_status(run: Path | None) -> dict[str, object]:
     """Read-only kernel snapshot; never acquires, heartbeats, or releases a lease."""
     cameras = camera_inventory()
@@ -326,6 +381,18 @@ def read_kernel_status(run: Path | None) -> dict[str, object]:
         payload["teleop"] = teleop_status(None) if teleop is None else teleop
         return payload
 
+    if run is None:
+        try:
+            from embodied.applications.workstation.pair_state import active_pair
+            pair = active_pair()
+        except (OSError, ValueError, KeyError, TypeError):
+            pair = None
+        if pair is not None:
+            try:
+                payload, teleop, interfaces = pair_snapshot(pair)
+            except (OSError, EOFError, ValueError, KeyError, RuntimeError) as exc:
+                return with_capabilities({"connected": False, "reason": str(exc)})
+            return with_capabilities(payload, teleop, can_state(interfaces))
     try:
         if run is not None:
             directory = Path(run)

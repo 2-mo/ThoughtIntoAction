@@ -23,6 +23,52 @@ DISCOVERY_TTL_S = 5.0
 # --------------------------------------------------------------------------- compile
 
 
+def _compile_ethernet(vendor: str, spec: dict, arms: list[dict], profile: str) -> dict:
+    """Profiles and workbenches for an address-based vendor.
+
+    One arm is a single kernel that owns its XR input; two arms are the existing
+    `robot-pair` composition (two kernels, one shared input owner).
+    """
+    built = {}
+    for arm in arms:
+        path = GENERATED_DIR / f"{vendor}-{arm['id']}.json"
+        path.write_text(json.dumps(_ethernet_robot(vendor, arm, profile),
+                                   ensure_ascii=False, indent=2) + "\n")
+        built[arm["side"]] = path
+    if len(arms) == 1:
+        robot_path = next(iter(built.values()))
+        names = spec["workbench_profile"][1]
+        workbench = {}
+        for mode in ("collect", "policy"):
+            base = json.loads((PROJECT_ROOT / "configs/workbench" / f"{names[mode]}.json").read_text())
+            base["config"] = _portable(robot_path)
+            if base.get("source") == "quest":
+                vr = json.loads((PROJECT_ROOT / ETHERNET_VR.get(vendor, "configs/inputs/quest.json")).read_text())
+                # No external owner: this kernel publishes and consumes its own XR topics.
+                vr.setdefault("controller", "right")
+                vr.setdefault("input_prefix", None)
+                vr_path = GENERATED_DIR / f"{vendor}-{mode}-vr.json"
+                vr_path.write_text(json.dumps(vr, ensure_ascii=False, indent=2) + "\n")
+                base["vr_config"] = _portable(vr_path)
+                base["native"] = {"device": "quest.owned", "routing": "quest.owned",
+                                  "ingress": "quest.owned", "channel": "native"}
+            path = GENERATED_DIR / f"{names[mode]}.json"
+            path.write_text(json.dumps(base, ensure_ascii=False, indent=2) + "\n")
+            workbench[mode] = str(path)
+        return {"robot_profile": _portable(robot_path), "workbench": workbench,
+                "workbench_profile": _portable(Path(workbench["collect"])),
+                "workbench_name": workbench["collect"]}
+    workbench = {}
+    for side in ("left", "right"):
+        base = json.loads((PROJECT_ROOT / "configs/workbench" / f"{vendor}-{side}.json").read_text())
+        base["config"] = _portable(built[side])
+        path = GENERATED_DIR / f"{vendor}-{side}.json"
+        path.write_text(json.dumps(base, ensure_ascii=False, indent=2) + "\n")
+        workbench[side] = str(path)
+    return {"robot_profile": _portable(built["left"]), "pair": workbench,
+            "workbench": workbench, "workbench_name": workbench["left"]}
+
+
 def compile_setup(document: dict) -> dict:
     """Write the kernel-facing robot profile for the selected vendor and arms.
 
@@ -39,9 +85,8 @@ def compile_setup(document: dict) -> dict:
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
     arms = sorted(document["robots"], key=lambda arm: arm["side"] != "left")
     if spec.get("connection", "can") == "ethernet":
-        robot = _ethernet_robot(vendor, arms[0], profile)
-        robot_name = f"{vendor}-{arms[0]['id']}.json"
-    elif count == 1:
+        return _compile_ethernet(vendor, spec, arms, profile)
+    if count == 1:
         robot = {"profile": profile, "can_interface": arms[0]["can_interface"]}
         robot_name = f"{profile}.json"
     else:
@@ -57,17 +102,6 @@ def compile_setup(document: dict) -> dict:
     for mode in ("collect", "policy"):
         base = json.loads((PROJECT_ROOT / "configs/workbench" / f"{names[mode]}.json").read_text())
         base["config"] = _portable(robot_path)
-        # The VR profile carries vendor grip/yaw settings; ARX is the default.
-        if spec.get("connection", "can") == "ethernet" and base.get("source") == "quest":
-            vr = json.loads((PROJECT_ROOT / ETHERNET_VR.get(vendor, "configs/inputs/quest.json")).read_text())
-            # No external owner: this kernel publishes and consumes its own XR topics.
-            vr.setdefault("controller", "right")
-            vr.setdefault("input_prefix", None)
-            vr_path = GENERATED_DIR / f"{vendor}-{mode}-vr.json"
-            vr_path.write_text(json.dumps(vr, ensure_ascii=False, indent=2) + "\n")
-            base["vr_config"] = _portable(vr_path)
-            base["native"] = {"device": "quest.owned", "routing": "quest.owned",
-                              "ingress": "quest.owned", "channel": "native"}
         path = GENERATED_DIR / f"{names[mode]}.json"
         path.write_text(json.dumps(base, ensure_ascii=False, indent=2) + "\n")
         workbench[mode] = str(path)

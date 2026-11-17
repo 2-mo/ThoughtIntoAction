@@ -319,6 +319,11 @@ class OperationManager:
         if target["real"]:
             if payload.get("confirm") is not True:
                 raise OperationError("真机启动会使能电机，需要确认", 409)
+            if target.get("pair"):
+                return ["bash", str(RUN_SH), "robot-pair", "--backend", "real",
+                        "--source", target["source"],
+                        "--left-profile", target["pair"]["left"],
+                        "--right-profile", target["pair"]["right"]], None
             profile = target["profile"]
             if target["vendor"] == "arx":
                 profile = self._setup_profile(profile)
@@ -367,6 +372,9 @@ class OperationManager:
                 compiled = compile_setup(setup)
             except SetupError as exc:
                 raise OperationError(f"设备配置不可用：{exc}", 409) from exc
+            if arms == 2 and compiled.get("pair"):
+                return {"vendor": vendor, "pair": compiled["pair"], "real": True,
+                        "source": "quest" if mode == "collect" else "cli"}
             return {"vendor": vendor, "profile": compiled["workbench"][mode],
                     "input": input_mode, "real": True}
         suffix = "quest" if mode == "collect" else "manual"

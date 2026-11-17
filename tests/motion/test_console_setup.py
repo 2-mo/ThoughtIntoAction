@@ -16,7 +16,7 @@ def realman_document(**overrides):
         "version": 1,
         "robots": [{"id": "arm1", "vendor": "realman", "model": "rm65", "side": "single",
                     "host": "192.168.1.19"}],
-        "cameras": [{"id": "wrist_rgb", "serial": "1", "mount": "wrist"}],
+        "cameras": [{"id": "wrist_rgb", "serial": "1", "mount": "wrist", "arm": "arm1"}],
     }
     document.update(overrides)
     return document
@@ -103,17 +103,24 @@ class SetupValidationTests(unittest.TestCase):
         self.assertEqual(document["robots"][0]["host"], "192.168.1.19")
         self.assertIsNone(document["robots"][0]["can_interface"])
 
-    def test_realman_rejects_bad_hosts_and_dual_arms(self):
+    def test_realman_rejects_a_bad_host(self):
         with self.assertRaisesRegex(SetupError, "IP 不合法"):
             validate_setup(realman_document(robots=[
                 {"id": "arm1", "vendor": "realman", "model": "rm65", "side": "single", "host": "not-an-ip"},
             ]))
-        with self.assertRaises(SetupError) as raised:
+
+    def test_realman_dual_needs_two_distinct_hosts(self):
+        document = validate_setup(realman_document(robots=[
+            {"id": "arm1", "vendor": "realman", "model": "rm65", "side": "left", "host": "192.168.1.19"},
+            {"id": "arm2", "vendor": "realman", "model": "rm65", "side": "right", "host": "192.168.1.18"},
+        ]))
+        self.assertEqual([robot["host"] for robot in document["robots"]],
+                         ["192.168.1.19", "192.168.1.18"])
+        with self.assertRaisesRegex(SetupError, "IP 重复"):
             validate_setup(realman_document(robots=[
-                {"id": "arm1", "vendor": "realman", "model": "rm65", "side": "left", "host": "192.168.1.19"},
+                {"id": "arm1", "vendor": "realman", "model": "rm65", "side": "left", "host": "192.168.1.18"},
                 {"id": "arm2", "vendor": "realman", "model": "rm65", "side": "right", "host": "192.168.1.18"},
             ]))
-        self.assertEqual(raised.exception.status, 409)
 
 
 class SetupCompileTests(unittest.TestCase):
@@ -159,6 +166,27 @@ class SetupCompileTests(unittest.TestCase):
             self.assertIsNone(vr["input_prefix"])
             self.assertEqual(policy["source"], "cli")
             self.assertEqual(compiled["workbench"]["policy"], str(target / "realman-manual.json"))
+
+    def test_realman_dual_compiles_a_pair(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder)
+            with patch.object(devices, "GENERATED_DIR", target):
+                compiled = devices.compile_setup(validate_setup(realman_document(robots=[
+                    {"id": "arm1", "vendor": "realman", "model": "rm65", "side": "left",
+                     "host": "192.168.1.19"},
+                    {"id": "arm2", "vendor": "realman", "model": "rm65", "side": "right",
+                     "host": "192.168.1.18"},
+                ])))
+                left = json.loads((target / "realman-arm1-connection.json").read_text())
+                right = json.loads((target / "realman-arm2-connection.json").read_text())
+                left_bench = json.loads((target / "realman-left.json").read_text())
+                right_bench = json.loads((target / "realman-right.json").read_text())
+            self.assertEqual((left["host"], left["expected_tool"]), ("192.168.1.19", "Lq"))
+            self.assertEqual((right["host"], right["expected_tool"]), ("192.168.1.18", "work"))
+            self.assertEqual(left_bench["native"]["device"], "quest.shared")
+            self.assertTrue(left_bench["config"].endswith("realman-arm1.json"))
+            self.assertTrue(right_bench["config"].endswith("realman-arm2.json"))
+            self.assertEqual(set(compiled["pair"]), {"left", "right"})
 
     def test_each_arm_uses_its_own_tool_frame_template(self):
         with tempfile.TemporaryDirectory() as folder:
