@@ -150,7 +150,9 @@ def _realsense_devices() -> list[dict]:
                 "name": name,
                 "serial": device.get_info(rs.camera_info.serial_number),
                 "firmware": _firmware(device, rs),
-                "model": "D405" if "D405" in name else "D435i" if "D435" in name else name,
+                # Keep D435 and D435i apart: the driver refuses the wrong model.
+                "model": ("D405" if "D405" in name else "D435i" if "D435i" in name
+                          else "D435" if "D435" in name else name),
             })
     except Exception as exc:
         return [{"error": f"枚举 RealSense 失败：{exc}"}]
