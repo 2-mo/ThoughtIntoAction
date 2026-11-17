@@ -65,10 +65,10 @@
             <span class="wizard-index">3</span>
             <div class="wizard-body">
               <strong>控制内核</strong>
-              <small id="wizardKernelDetail">real-quest</small>
+              <small id="wizardKernelDetail">采集内核</small>
             </div>
             <span id="wizardKernelBadge" class="wizard-badge">未运行</span>
-            <button id="wizardKernelAction" type="button" hidden>启动 real-quest</button>
+            <button id="wizardKernelAction" type="button" hidden>启动采集内核</button>
           </li>
           <li class="wizard-step" id="wizardTeleop" data-state="waiting">
             <span class="wizard-index">4</span>
@@ -111,17 +111,40 @@
       <details class="overview-card overview-setup" id="setupCard">
         <summary>
           <h2 id="setupTitle">接入配置</h2>
-          <span id="setupSummary" class="op-hint">展开选择机械臂、相机与绑定</span>
+          <span id="setupSummary" class="op-hint">未选择配置</span>
         </summary>
-        <p class="op-hint">选择机械臂与相机，并指定每台相机装在哪个臂的腕部或作为固定外部相机。保存后按提示重启对应服务。</p>
-        <div id="setupRobots" class="setup-block"></div>
-        <div id="setupCameras" class="setup-block"></div>
-        <div class="op-actions setup-actions">
-          <button id="setupAddRobot" type="button">+ 机械臂</button>
-          <button id="setupAddCamera" type="button">+ 相机</button>
-          <button id="setupRefresh" type="button" title="重新枚举已连接设备">重新探测</button>
-          <button id="setupSave" type="button" class="primary">保存配置</button>
+        <p class="op-hint">选好机械臂和相机，命名保存；以后点一下就能整套载入。</p>
+
+        <div class="setup-library">
+          <div id="setupLibraryList" class="setup-library-list"></div>
+          <div class="setup-library-row">
+            <input id="setupName" type="text" maxlength="40" placeholder="配置名称，如 ARX 双臂 · 三相机">
+            <button id="setupSave" type="button" class="primary">保存</button>
+          </div>
         </div>
+
+        <div class="setup-block">
+          <div class="setup-row setup-arm-row">
+            <label><span>厂商</span><select id="setupVendor"></select></label>
+            <label><span>型号</span><select id="setupModel"></select></label>
+            <label><span>臂数</span><select id="setupArms">
+              <option value="1">单臂</option>
+              <option value="2">双臂</option>
+            </select></label>
+          </div>
+          <div id="setupCans" class="setup-cans"></div>
+        </div>
+
+        <div class="setup-block">
+          <div class="setup-block-head">
+            <strong>相机</strong>
+            <label class="setup-count"><span>数量</span><select id="setupCameraCount"></select></label>
+            <button id="setupRefresh" type="button" title="重新枚举已连接设备">重新探测</button>
+            <button id="setupPreview" type="button">刷新画面</button>
+          </div>
+          <div id="setupCameras" class="setup-cameras"></div>
+        </div>
+
         <p id="setupMessage" class="op-message" role="status"></p>
         <div id="setupRestarts" class="setup-restarts" hidden></div>
       </details>
@@ -142,19 +165,15 @@
             <span id="overviewKernelState" data-state="off">未运行</span>
           </div>
           <div class="op-actions">
-            <button id="overviewKernelStart" type="button" class="primary">启动</button>
             <button id="overviewKernelStop" type="button">停止</button>
           </div>
         </div>
-        <label class="op-field"><span>运行配置</span>
-          <select id="overviewKernelProfile">
-            <option value="sim-manual">仿真 · 无输入</option>
-            <option value="real-manual">真机 · 无 Quest（单臂）</option>
-            <option value="real-dual-manual">真机 · 无 Quest（双臂，策略用）</option>
-            <option value="real-quest">真机 · Quest（单臂）</option>
-            <option value="real-dual-quest" selected>真机 · 双臂 Quest</option>
-          </select>
-        </label>
+        <p class="op-hint">一个内核，两种接管方式：采集交给 Quest 遥操，推理交给策略。</p>
+        <div class="setup-modes">
+          <button id="overviewKernelCollect" type="button" class="primary">采集</button>
+          <button id="overviewKernelPolicy" type="button">推理</button>
+        </div>
+        <label class="setup-sim"><input id="overviewKernelSim" type="checkbox"> 仿真内核（不接触真机）</label>
         <div id="overviewKernelConfirm" class="op-confirm" hidden>
           <p>真机启动会使能电机并保持当前位置，请先扶好机械臂。</p>
           <div class="op-actions">

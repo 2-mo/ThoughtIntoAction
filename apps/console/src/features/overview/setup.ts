@@ -1,16 +1,18 @@
 // @ts-nocheck
-// Device setup: robots, cameras and how each camera is mounted.
-// The page owns no state beyond the document it edits; saving validates on the
-// backend and reports what has to restart.
+// 接入配置：一套机械臂 + 相机的组合，命名保存后一键载入。
+// The page edits one draft; saving stores it in the library, loading applies it
+// to the document the kernel and camera service already read.
 import { withToken } from "../../api/control-protocol";
 
-const ROBOT_ID = /^[a-z][a-z0-9_-]{0,31}$/;
-const CAMERA_ID = /^[a-z][a-z0-9_]*_rgb$/;
-
-let document_ = null;
+let library = [];
+let activeSlug = null;
+let draft = null;
 let discovery = { cameras: [], can_adapters: [], can_interfaces: [], vendors: {} };
-let running = { kernel: false, camera: false };
+let images = {};
+let previewErrors = {};
 let busy = false;
+
+const MAX_CAMERAS = 4;
 
 const el = (id) => document.getElementById(id);
 
@@ -42,6 +44,76 @@ function escape(value) {
   ));
 }
 
+// ------------------------------------------------------------------ draft ⇄ document
+
+function cameraId(role, index, cameras) {
+  if (role === "left") return "wrist_rgb";
+  if (role === "right") return "wrist_second_rgb";
+  const nth = cameras.slice(0, index).filter((camera) => camera.role === "exterior").length;
+  return nth === 0 ? "exterior_rgb" : `exterior_${nth + 1}_rgb`;
+}
+
+function defaultLabel(role, index, cameras) {
+  if (role === "left") return cameras.filter((camera) => camera.role !== "exterior").length > 1 ? "腕部相机" : "腕部相机";
+  if (role === "right") return "腕部相机 2";
+  const nth = cameras.slice(0, index).filter((camera) => camera.role === "exterior").length;
+  return nth === 0 ? "外部相机" : `外部相机 ${nth + 1}`;
+}
+
+function toDocument() {
+  const arms = Number(draft.arms);
+  const robots = arms === 2
+    ? [
+      { id: "arm1", vendor: draft.vendor, model: draft.model, side: "left", can_interface: draft.cans[0] || "can1" },
+      { id: "arm2", vendor: draft.vendor, model: draft.model, side: "right", can_interface: draft.cans[1] || "can0" },
+    ]
+    : [{ id: "arm1", vendor: draft.vendor, model: draft.model, side: "single", can_interface: draft.cans[0] || "can0" }];
+  const cameras = draft.cameras.map((camera, index) => {
+    const mount = camera.role === "exterior" ? "fixed" : "wrist";
+    return {
+      id: cameraId(camera.role, index, draft.cameras),
+      label: camera.label || defaultLabel(camera.role, index, draft.cameras),
+      enabled: true,
+      driver: "realsense",
+      model: camera.model || "D435i",
+      serial: camera.serial || "",
+      width: camera.width || 640,
+      height: camera.height || 480,
+      fps: camera.fps || 30,
+      mount,
+      arm: mount === "wrist" ? (camera.role === "right" ? "arm2" : "arm1") : null,
+    };
+  });
+  return { version: 1, robots, cameras };
+}
+
+function fromDocument(document) {
+  const robots = document.robots || [];
+  const arms = robots.length === 2 ? 2 : 1;
+  const cameras = (document.cameras || []).map((camera) => ({
+    serial: camera.serial || "",
+    role: camera.mount === "wrist"
+      ? (camera.arm === "arm2" || String(camera.id).includes("second") ? "right" : "left")
+      : "exterior",
+    model: camera.model,
+    label: camera.label,
+    width: camera.width,
+    height: camera.height,
+    fps: camera.fps,
+  }));
+  return {
+    vendor: robots[0]?.vendor || "arx",
+    model: robots[0]?.model || "x5",
+    arms,
+    cans: arms === 2
+      ? [robots[0]?.can_interface || "can1", robots[1]?.can_interface || "can0"]
+      : [robots[0]?.can_interface || "can0"],
+    cameras,
+  };
+}
+
+// ------------------------------------------------------------------ options
+
 function vendorOptions(selected) {
   return Object.entries(discovery.vendors || {}).map(([key, vendor]) => {
     const disabled = vendor.implemented ? "" : " disabled";
@@ -57,117 +129,139 @@ function modelOptions(vendor, selected) {
   ).join("");
 }
 
-function serialOptions(selected) {
-  const found = (discovery.cameras || []).filter((camera) => camera.serial);
-  return `<option value="">选择已探测相机…</option>` + found.map((camera) =>
-    `<option value="${escape(camera.serial)}"${camera.serial === selected ? " selected" : ""}>`
-    + `${escape(camera.model || camera.name)} · ${escape(camera.serial)}</option>`
-  ).join("");
-}
-
 function canOptions(selected) {
   const names = new Set((discovery.can_interfaces || []).map((item) => item.name));
   for (const adapter of discovery.can_adapters || []) if (adapter.interface) names.add(adapter.interface);
   if (selected) names.add(selected);
-  return [...names].sort().map((name) => {
+  const options = [...names].sort().map((name) => {
     const state = (discovery.can_interfaces || []).find((item) => item.name === name)?.state;
     return `<option value="${escape(name)}"${name === selected ? " selected" : ""}>${escape(name)}${state ? ` · ${state}` : ""}</option>`;
-  }).join("") || `<option value="${escape(selected || "can0")}" selected>${escape(selected || "can0")}</option>`;
+  }).join("");
+  return options || `<option value="${escape(selected || "can0")}" selected>${escape(selected || "can0")}</option>`;
 }
 
-function armOptions(selected) {
-  return (document_?.robots || []).map((robot) =>
-    `<option value="${escape(robot.id)}"${robot.id === selected ? " selected" : ""}>${escape(robot.id)}（${escape(robot.side)}）</option>`
+function serialOptions(selected) {
+  const found = (discovery.cameras || []).filter((camera) => camera.serial);
+  const known = found.some((camera) => camera.serial === selected);
+  const assigned = new Set(draft.cameras.map((camera) => camera.serial).filter(Boolean));
+  const options = found.map((camera) => {
+    const taken = assigned.has(camera.serial) && camera.serial !== selected;
+    return `<option value="${escape(camera.serial)}"${camera.serial === selected ? " selected" : ""}${taken ? " disabled" : ""}>`
+      + `${escape(camera.model || camera.name)} · ${escape(camera.serial)}${taken ? "（已用）" : ""}</option>`;
+  }).join("");
+  const extra = selected && !known
+    ? `<option value="${escape(selected)}" selected>${escape(selected)}（未探测到）</option>` : "";
+  return `<option value=""${selected ? "" : " selected"}>选择相机…</option>${extra}${options}`;
+}
+
+// ------------------------------------------------------------------ render
+
+function renderLibrary() {
+  const host = el("setupLibraryList");
+  if (!host) return;
+  if (!library.length) {
+    host.innerHTML = `<p class="op-hint">还没有保存的配置，先设好下面几项再保存。</p>`;
+    return;
+  }
+  host.innerHTML = library.map((entry) => `
+    <span class="setup-chip${entry.slug === activeSlug ? " active" : ""}">
+      <button type="button" class="setup-chip-load" data-load="${escape(entry.slug)}" title="载入这个配置">
+        <strong>${escape(entry.name)}</strong>
+        <small>${entry.robots === 2 ? "双臂" : "单臂"} · ${entry.cameras} 相机</small>
+      </button>
+      <button type="button" class="setup-chip-del" data-del="${escape(entry.slug)}" title="删除">×</button>
+    </span>`).join("");
+  host.querySelectorAll("[data-load]").forEach((button) => {
+    button.addEventListener("click", () => applyEntry(button.dataset.load));
+  });
+  host.querySelectorAll("[data-del]").forEach((button) => {
+    button.addEventListener("click", () => removeEntry(button.dataset.del));
+  });
+}
+
+function renderArm() {
+  const vendor = el("setupVendor");
+  const model = el("setupModel");
+  const arms = el("setupArms");
+  if (!vendor) return;
+  vendor.innerHTML = vendorOptions(draft.vendor);
+  model.innerHTML = modelOptions(draft.vendor, draft.model);
+  arms.value = String(draft.arms);
+  const host = el("setupCans");
+  host.innerHTML = Array.from({ length: draft.arms }, (_, index) => `
+    <label><span>${draft.arms === 1 ? "CAN" : index === 0 ? "左臂 CAN" : "右臂 CAN"}</span>
+      <select data-can="${index}">${canOptions(draft.cans[index])}</select>
+    </label>`).join("");
+  host.querySelectorAll("[data-can]").forEach((select) => {
+    select.addEventListener("change", () => {
+      draft.cans[Number(select.dataset.can)] = select.value;
+    });
+  });
+}
+
+function renderCameraCount() {
+  const select = el("setupCameraCount");
+  if (!select) return;
+  const total = Math.max(MAX_CAMERAS, draft.cameras.length);
+  select.innerHTML = Array.from({ length: total }, (_, index) =>
+    `<option value="${index + 1}"${index + 1 === draft.cameras.length ? " selected" : ""}>${index + 1}</option>`
   ).join("");
 }
 
-function renderRobots() {
-  const host = el("setupRobots");
-  if (!host) return;
-  host.innerHTML = (document_.robots || []).map((robot, index) => `
-    <div class="setup-row" data-robot="${index}">
-      <label><span>ID</span><input data-field="id" value="${escape(robot.id)}" ${document_.robots.length === 1 ? "readonly" : ""}></label>
-      <label><span>厂商</span><select data-field="vendor">${vendorOptions(robot.vendor)}</select></label>
-      <label><span>型号</span><select data-field="model">${modelOptions(robot.vendor, robot.model)}</select></label>
-      <label><span>臂侧</span><select data-field="side" ${document_.robots.length === 1 ? "disabled" : ""}>
-        <option value="left"${robot.side === "left" ? " selected" : ""}>left</option>
-        <option value="right"${robot.side === "right" ? " selected" : ""}>right</option>
-      </select></label>
-      <label><span>CAN</span><select data-field="can_interface">${canOptions(robot.can_interface)}</select></label>
-      <button type="button" class="setup-remove" data-remove-robot="${index}" title="移除这台机械臂">移除</button>
-    </div>`).join("");
-  host.querySelectorAll("[data-robot]").forEach((row) => {
-    const index = Number(row.dataset.robot);
-    row.querySelectorAll("[data-field]").forEach((input) => {
-      input.addEventListener("change", () => {
-        const robot = document_.robots[index];
-        if (!robot) return;
-        robot[input.dataset.field] = input.value;
-        if (input.dataset.field === "vendor") {
-          robot.model = Object.keys(discovery.vendors?.[robot.vendor]?.models || {})[0] || robot.model;
-          renderRobots();
-        }
-        if (input.dataset.field === "id") renderCameras();
-      });
-    });
-    row.querySelector("[data-remove-robot]")?.addEventListener("click", () => {
-      if (document_.robots.length <= 1) return message("至少保留一台机械臂", "warning");
-      document_.robots.splice(index, 1);
-      if (document_.robots.length === 1) document_.robots[0].side = "single";
-      renderRobots();
-      renderCameras();
-    });
-  });
+function shotFor(camera) {
+  const image = camera.serial ? images[camera.serial] : null;
+  if (image) return `<img src="data:image/jpeg;base64,${image}" alt="${escape(camera.serial)}">`;
+  const error = camera.serial ? previewErrors[camera.serial] : null;
+  const hint = !camera.serial ? "先选相机" : error ? "无画面" : "读取中…";
+  return `<span class="setup-shot-empty" title="${escape(error || "")}">${hint}</span>`;
 }
 
 function renderCameras() {
   const host = el("setupCameras");
   if (!host) return;
-  host.innerHTML = `<div class="setup-camera-head"><span>相机 ID</span><span>名称</span><span>已探测设备</span><span>型号</span><span>分辨率 / 帧率</span><span>安装</span><span>绑定</span><span></span></div>`
-    + (document_.cameras || []).map((camera, index) => `
-    <div class="setup-row setup-camera-row" data-camera="${index}">
-      <input data-field="id" value="${escape(camera.id)}" aria-label="相机 ID">
-      <input data-field="label" value="${escape(camera.label || "")}" aria-label="相机名称">
-      <select data-field="serial" aria-label="已探测设备">${serialOptions(camera.serial)}</select>
-      <select data-field="model" aria-label="型号">
-        <option value="D405"${camera.model === "D405" ? " selected" : ""}>D405</option>
-        <option value="D435i"${camera.model === "D435i" ? " selected" : ""}>D435i</option>
-        <option value=""${!camera.model ? " selected" : ""}>不限</option>
+  const roles = draft.arms === 2
+    ? [["left", "左腕"], ["right", "右腕"], ["exterior", "外部"]]
+    : [["left", "腕部"], ["exterior", "外部"]];
+  host.innerHTML = draft.cameras.map((camera, index) => `
+    <div class="setup-camera-card" data-camera="${index}" data-role="${camera.role}">
+      <div class="setup-shot">${shotFor(camera)}</div>
+      <select data-field="serial" aria-label="相机">${serialOptions(camera.serial)}</select>
+      <select data-field="role" aria-label="安装位置">
+        ${roles.map(([value, label]) =>
+          `<option value="${value}"${camera.role === value ? " selected" : ""}>${label}</option>`).join("")}
       </select>
-      <span class="setup-resolution">
-        <input data-field="width" type="number" min="1" value="${camera.width || 640}" aria-label="宽度">
-        ×
-        <input data-field="height" type="number" min="1" value="${camera.height || 480}" aria-label="高度">
-        @
-        <input data-field="fps" type="number" min="1" value="${camera.fps || 30}" aria-label="帧率">
-      </span>
-      <select data-field="mount" aria-label="安装位置">
-        <option value="wrist"${camera.mount === "wrist" ? " selected" : ""}>腕部</option>
-        <option value="fixed"${camera.mount === "fixed" ? " selected" : ""}>外部固定</option>
-      </select>
-      <select data-field="arm" aria-label="绑定机械臂" ${camera.mount === "wrist" ? "" : "disabled"}>${armOptions(camera.arm)}</select>
-      <button type="button" class="setup-remove" data-remove-camera="${index}" title="移除这台相机">移除</button>
     </div>`).join("");
-  host.querySelectorAll("[data-camera]").forEach((row) => {
-    const index = Number(row.dataset.camera);
-    row.querySelectorAll("[data-field]").forEach((input) => {
-      const apply = () => {
-        const camera = document_.cameras[index];
-        if (!camera) return;
-        const field = input.dataset.field;
-        camera[field] = ["width", "height", "fps"].includes(field) ? Number(input.value) : input.value;
-        if (field === "mount") {
-          camera.arm = camera.mount === "wrist" ? (document_.robots[0]?.id || "") : null;
-          renderCameras();
+  host.querySelectorAll("[data-camera]").forEach((card) => {
+    const index = Number(card.dataset.camera);
+    const camera = draft.cameras[index];
+    card.querySelectorAll("[data-field]").forEach((select) => {
+      select.addEventListener("change", () => {
+        if (select.dataset.field === "serial") {
+          camera.serial = select.value;
+          const found = (discovery.cameras || []).find((item) => item.serial === select.value);
+          if (found?.model) camera.model = found.model;
+          if (select.value && !images[select.value]) void loadPreviews([select.value]);
+        } else {
+          camera.role = select.value;
+          // One camera per wrist: give up the old owner of this role.
+          draft.cameras.forEach((other, otherIndex) => {
+            if (otherIndex !== index && other.role === camera.role && camera.role !== "exterior") {
+              other.role = "exterior";
+            }
+          });
         }
-      };
-      input.addEventListener("change", apply);
-    });
-    row.querySelector("[data-remove-camera]")?.addEventListener("click", () => {
-      document_.cameras.splice(index, 1);
-      renderCameras();
+        renderCameras();
+      });
     });
   });
+  renderCameraCount();
+}
+
+function renderSummary() {
+  const node = el("setupSummary");
+  if (!node) return;
+  const entry = library.find((item) => item.slug === activeSlug);
+  node.textContent = entry ? entry.name : "未保存的配置";
 }
 
 function renderRestarts(restarts = []) {
@@ -179,7 +273,7 @@ function renderRestarts(restarts = []) {
     return;
   }
   host.hidden = false;
-  host.innerHTML = `<p class="op-hint">配置已保存，以下服务需要重启后生效：</p>` + restarts.map((item) =>
+  host.innerHTML = `<p class="op-hint">配置已载入，以下服务需要重启后生效：</p>` + restarts.map((item) =>
     `<div class="op-row"><div class="op-info"><strong>${escape(item.label)}</strong><span>${escape(item.reason)}</span></div>`
     + `<div class="op-actions"><button type="button" data-restart="${escape(item.kind)}">重启${escape(item.label)}</button></div></div>`
   ).join("");
@@ -187,6 +281,15 @@ function renderRestarts(restarts = []) {
     button.addEventListener("click", () => restart(button.dataset.restart, button));
   });
 }
+
+function renderAll() {
+  renderLibrary();
+  renderArm();
+  renderCameras();
+  renderSummary();
+}
+
+// ------------------------------------------------------------------ actions
 
 async function restart(kind, button) {
   if (busy) return;
@@ -198,7 +301,7 @@ async function restart(kind, button) {
     const result = await api(`/api/v1/operations/${kind}/start`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(kind === "kernel" ? { profile: "real-dual-quest", confirm: true } : {}),
+      body: JSON.stringify(kind === "kernel" ? { mode: "collect", confirm: true } : {}),
     });
     message(`${kind === "kernel" ? "内核" : "相机服务"}已重启（${result.state || "running"}）`, "success");
   } catch (error) {
@@ -210,43 +313,37 @@ async function restart(kind, button) {
 }
 
 function validateLocal() {
-  const robots = document_.robots || [];
-  const ids = new Set();
-  for (const robot of robots) {
-    if (!ROBOT_ID.test(robot.id || "")) return `机械臂 ID 不合法：${robot.id || "空"}`;
-    if (ids.has(robot.id)) return `机械臂 ID 重复：${robot.id}`;
-    ids.add(robot.id);
+  if (!draft.vendor || !draft.model) return "先选择机械臂厂商与型号";
+  if (draft.arms === 2 && draft.cans[0] === draft.cans[1]) return "双臂的 CAN 接口不能相同";
+  const serials = new Set();
+  for (const camera of draft.cameras) {
+    if (!camera.serial) continue;
+    if (serials.has(camera.serial)) return `相机序列号重复：${camera.serial}`;
+    serials.add(camera.serial);
   }
-  if (robots.length === 2) {
-    const sides = new Set(robots.map((robot) => robot.side));
-    if (!sides.has("left") || !sides.has("right") || sides.size !== 2) return "双臂需要一台 left、一台 right";
-  }
-  const cameras = new Set();
-  for (const camera of document_.cameras || []) {
-    if (!CAMERA_ID.test(camera.id || "")) return `相机 ID 必须以 _rgb 结尾：${camera.id || "空"}`;
-    if (cameras.has(camera.id)) return `相机 ID 重复：${camera.id}`;
-    cameras.add(camera.id);
-    if (camera.mount === "wrist" && !ids.has(camera.arm)) return `${camera.id} 需要绑定到已配置的机械臂`;
-  }
+  const wrists = draft.cameras.filter((camera) => camera.role !== "exterior");
+  if (new Set(wrists.map((camera) => camera.role)).size !== wrists.length) return "每台臂只能有一台腕部相机";
   return null;
 }
 
 async function save() {
   const problem = validateLocal();
   if (problem) return message(problem, "error");
+  if (busy) return;
   busy = true;
   el("setupSave").disabled = true;
   try {
-    const result = await api("/api/v1/setup", {
-      method: "PUT",
+    const name = (el("setupName").value || "").trim() || "未命名配置";
+    // Same name overwrites that entry; a new name adds one beside it.
+    const existing = library.find((entry) => entry.name === name);
+    const saved = await api("/api/v1/setup/library", {
+      method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(document_),
+      body: JSON.stringify({ name, setup: toDocument(), ...(existing ? { slug: existing.slug } : {}) }),
     });
-    document_ = result.setup;
-    renderRobots();
-    renderCameras();
-    message("已保存。", "success");
-    renderRestarts(result.restarts || []);
+    message(`已保存「${saved.entry.name}」，正在载入…`, "success");
+    busy = false;
+    await applyEntry(saved.entry.slug);
   } catch (error) {
     message(`保存失败：${error.message || error}`, "error");
   } finally {
@@ -255,64 +352,139 @@ async function save() {
   }
 }
 
-async function refreshDiscovery() {
+async function applyEntry(slug) {
+  if (busy) return;
+  busy = true;
   try {
-    discovery = await api("/api/v1/setup/devices?refresh=1");
-  } catch {
-    // Discovery is best effort; keep the last result.
+    const result = await api(`/api/v1/setup/library/${encodeURIComponent(slug)}/apply`, { method: "POST" });
+    activeSlug = result.active || slug;
+    draft = fromDocument(result.setup);
+    await refreshLibrary();
+    el("setupName").value = result.name || "";
+    renderAll();
+    message(`已载入「${result.name || slug}」`, "success");
+    renderRestarts(result.restarts || []);
+    await loadPreviews();
+  } catch (error) {
+    message(`载入失败：${error.message || error}`, "error");
+  } finally {
+    busy = false;
   }
 }
+
+async function removeEntry(slug) {
+  if (busy) return;
+  busy = true;
+  try {
+    await api(`/api/v1/setup/library/${encodeURIComponent(slug)}`, { method: "DELETE" });
+    if (activeSlug === slug) activeSlug = null;
+    await refreshLibrary();
+    renderAll();
+    message("已删除。", "success");
+  } catch (error) {
+    message(`删除失败：${error.message || error}`, "error");
+  } finally {
+    busy = false;
+  }
+}
+
+async function refreshLibrary() {
+  try {
+    const result = await api("/api/v1/setup/library");
+    library = result.entries || [];
+    activeSlug = result.active || null;
+  } catch {
+    // Keep the last known list; the page still edits the draft.
+  }
+}
+
+async function loadPreviews(serials = null, refresh = false) {
+  const wanted = serials || [...new Set(draft.cameras.map((camera) => camera.serial).filter(Boolean))];
+  if (!wanted.length) return;
+  try {
+    const query = new URLSearchParams({ serials: wanted.join(",") });
+    if (refresh) query.set("refresh", "1");
+    const result = await api(`/api/v1/setup/previews?${query}`);
+    images = { ...images, ...(result.images || {}) };
+    previewErrors = { ...previewErrors, ...(result.errors || {}) };
+    for (const serial of wanted) if (!result.images?.[serial]) delete images[serial];
+    renderCameras();
+  } catch (error) {
+    previewErrors = Object.fromEntries(wanted.map((serial) => [serial, String(error.message || error)]));
+    renderCameras();
+  }
+}
+
+// ------------------------------------------------------------------ wiring
 
 export async function initSetup() {
   if (!el("setupCard")) return;
   el("setupSave")?.addEventListener("click", save);
   el("setupRefresh")?.addEventListener("click", async () => {
-    await refreshDiscovery();
-    renderRobots();
-    renderCameras();
-    message("已重新探测设备。");
-  });
-  el("setupAddRobot")?.addEventListener("click", () => {
-    if (document_.robots.length >= 2) return message("目前最多支持两台机械臂", "warning");
-    const used = new Set(document_.robots.map((robot) => robot.side));
-    document_.robots.push({
-      id: document_.robots.length ? "arm2" : "arm1",
-      vendor: "arx", model: "x5",
-      side: used.has("left") ? "right" : "left",
-      can_interface: (discovery.can_interfaces || [])[document_.robots.length]?.name || `can${document_.robots.length}`,
-    });
-    if (document_.robots.length === 2) {
-      document_.robots[0].side = used.has("left") ? "right" : "left";
-      document_.robots[1].side = document_.robots[0].side === "left" ? "right" : "left";
+    try {
+      discovery = await api("/api/v1/setup/devices?refresh=1");
+    } catch {
+      // Discovery is best effort; keep the last result.
     }
-    renderRobots();
-    renderCameras();
+    renderAll();
+    message("已重新探测设备。");
+    await loadPreviews(null, true);
   });
-  el("setupAddCamera")?.addEventListener("click", () => {
-    const free = (discovery.cameras || []).find((camera) =>
-      !document_.cameras.some((item) => item.serial === camera.serial));
-    const suffix = document_.cameras.length + 1;
-    document_.cameras.push({
-      id: `camera${suffix}_rgb`,
-      label: free?.model || "相机",
-      driver: "realsense",
-      model: free?.model || "D405",
-      serial: free?.serial || "",
-      width: 640, height: 480, fps: 30,
-      enabled: true, mount: "fixed", arm: null,
-    });
+  el("setupPreview")?.addEventListener("click", async () => {
+    message("正在取画面…");
+    await loadPreviews(null, true);
+    message("");
+  });
+  el("setupVendor")?.addEventListener("change", () => {
+    draft.vendor = el("setupVendor").value;
+    draft.model = Object.keys(discovery.vendors?.[draft.vendor]?.models || {})[0] || draft.model;
+    renderArm();
+  });
+  el("setupModel")?.addEventListener("change", () => {
+    draft.model = el("setupModel").value;
+  });
+  el("setupArms")?.addEventListener("change", () => {
+    draft.arms = Number(el("setupArms").value);
+    if (draft.arms === 2) {
+      draft.cans = [draft.cans[0] || "can1", draft.cans[1] || "can0"];
+      if (draft.cans[0] === draft.cans[1]) draft.cans[1] = draft.cans[0] === "can0" ? "can1" : "can0";
+    } else {
+      draft.cans = [draft.cans[0] || "can0"];
+      draft.cameras.forEach((camera) => { if (camera.role === "right") camera.role = "exterior"; });
+    }
+    renderAll();
+  });
+  el("setupCameraCount")?.addEventListener("change", () => {
+    const count = Number(el("setupCameraCount").value);
+    while (draft.cameras.length < count) {
+      const free = (discovery.cameras || []).find((camera) =>
+        camera.serial && !draft.cameras.some((item) => item.serial === camera.serial));
+      draft.cameras.push({
+        serial: free?.serial || "",
+        role: "exterior",
+        model: free?.model || "D435i",
+        width: 640, height: 480, fps: 30,
+      });
+    }
+    draft.cameras.length = count;
     renderCameras();
+    void loadPreviews();
   });
 
   try {
-    const [setup, devices] = await Promise.all([api("/api/v1/setup"), api("/api/v1/setup/devices")]);
-    document_ = setup.setup || setup.seed;
+    const [setup, devices] = await Promise.all([
+      api("/api/v1/setup"),
+      api("/api/v1/setup/devices"),
+      refreshLibrary(),
+    ]);
     discovery = devices;
-    running = setup.running || running;
-    renderRobots();
-    renderCameras();
+    draft = fromDocument(setup.setup || setup.seed);
+    renderAll();
     renderRestarts(setup.restarts || []);
-    message(setup.setup ? "已载入保存的配置。" : "尚未保存过配置，下面是根据当前环境生成的初始值。");
+    const active = library.find((entry) => entry.slug === activeSlug);
+    el("setupName").value = active ? active.name : (library.length ? "" : "当前配置");
+    message(setup.setup ? "已载入当前配置。" : "还没有保存过配置，下面是按现有环境生成的值，命名后保存。");
+    await loadPreviews();
   } catch (error) {
     message(`读取设备配置失败：${error.message || error}`, "error");
   }

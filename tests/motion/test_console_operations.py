@@ -12,6 +12,56 @@ from embodied.applications.console.core.settings import BackendSettings
 from embodied.applications.console.transport.operations import create_operations_router
 
 
+def setup_document(arms: int) -> dict:
+    robots = ([{"id": "arm1", "vendor": "arx", "model": "x5", "side": "single", "can_interface": "can0"}]
+              if arms == 1 else
+              [{"id": "arm1", "vendor": "arx", "model": "x5", "side": "left", "can_interface": "can1"},
+               {"id": "arm2", "vendor": "arx", "model": "x5", "side": "right", "can_interface": "can0"}])
+    return {"version": 1, "robots": robots,
+            "cameras": [{"id": "wrist_rgb", "serial": "1", "mount": "wrist"}]}
+
+
+class KernelModeTests(unittest.TestCase):
+    def setUp(self):
+        self.manager = operations.OperationManager()
+
+    def test_modes_follow_the_saved_setup(self):
+        from embodied.applications.console.core import devices
+
+        with patch.object(devices, "load_setup", return_value=setup_document(2)):
+            self.assertEqual(self.manager._mode_profile("collect"), "real-dual-quest")
+            self.assertEqual(self.manager._mode_profile("policy"), "real-dual-manual")
+        with patch.object(devices, "load_setup", return_value=setup_document(1)):
+            self.assertEqual(self.manager._mode_profile("collect"), "real-quest")
+            self.assertEqual(self.manager._mode_profile("policy"), "real-manual")
+
+    def test_sim_and_unknown_modes(self):
+        self.assertEqual(self.manager._mode_profile("sim"), "sim-manual")
+        with self.assertRaises(operations.OperationError):
+            self.manager._mode_profile("teleop")
+
+    def test_policy_mode_uses_the_generated_manual_workbench(self):
+        from embodied.applications.console.core import devices
+
+        compiled = {"workbench": {"collect": "/tmp/set/real-dual-quest.json",
+                                  "policy": "/tmp/set/real-dual-manual.json"}}
+        with patch.object(devices, "load_setup", return_value=setup_document(2)), \
+                patch.object(devices, "compile_setup", return_value=compiled), \
+                patch.object(operations, "live_runs", return_value=[]):
+            argv, _ = self.manager._kernel({"mode": "policy", "confirm": True})
+        self.assertIn("/tmp/set/real-dual-manual.json", argv)
+
+    def test_mode_refuses_a_setup_with_the_other_arm_count(self):
+        from embodied.applications.console.core import devices
+
+        with patch.object(devices, "load_setup", return_value=setup_document(1)), \
+                patch.object(devices, "compile_setup", return_value={
+                    "workbench": {"collect": "/tmp/single.json", "policy": "/tmp/single-manual.json"}}):
+            with self.assertRaises(operations.OperationError) as raised:
+                self.manager._setup_profile("real-dual-quest")
+        self.assertEqual(raised.exception.status, 409)
+
+
 class OperationValidationTests(unittest.TestCase):
     def setUp(self):
         self.manager = operations.OperationManager()
@@ -31,7 +81,10 @@ class OperationValidationTests(unittest.TestCase):
         self.assertEqual(raised.exception.status, 409)
 
     def test_real_kernel_with_confirmation_uses_can_setup_script(self):
-        with patch.object(operations, "live_runs", return_value=[]):
+        from embodied.applications.console.core import devices
+
+        with patch.object(operations, "live_runs", return_value=[]), \
+                patch.object(devices, "load_setup", return_value=None):
             argv, _ = self.manager._kernel({"profile": "real-manual", "confirm": True})
         self.assertIn("kernel_real.sh", argv[1])
         self.assertIn("--yes", argv)

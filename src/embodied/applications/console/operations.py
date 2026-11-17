@@ -279,7 +279,8 @@ class OperationManager:
         return self._policy(payload)
 
     def _kernel(self, payload: dict[str, object]) -> tuple[list[str], str | None]:
-        profile = str(payload.get("profile") or "sim-manual")
+        mode = payload.get("mode")
+        profile = self._mode_profile(mode) if mode is not None else str(payload.get("profile") or "sim-manual")
         if profile not in PROFILES:
             raise OperationError("不支持的运行配置")
         if live_runs(RUNS):
@@ -287,12 +288,30 @@ class OperationManager:
         if profile.startswith("real"):
             if payload.get("confirm") is not True:
                 raise OperationError("真机启动会使能电机，需要确认", 409)
-            profile = self._setup_profile(profile) if "quest" in profile else profile
+            profile = self._setup_profile(profile)
             argv = ["bash", str(PROJECT_ROOT / "scripts/arm/kernel_real.sh"),
                     "--profile", profile, "--yes"]
         else:
             argv = ["bash", str(RUN_SH), "kernel", "profiles", "start", "--profile", profile]
         return argv, None
+
+    @staticmethod
+    def _mode_profile(mode: object) -> str:
+        """One kernel, two ways to hand it over: collection (VR) or policy (no input).
+
+        Which arms and which camera the kernel has come from the saved setup, so
+        the page never asks for a robot profile name.
+        """
+        if mode == "sim":
+            return "sim-manual"
+        if mode not in ("collect", "policy"):
+            raise OperationError("不支持的启动方式")
+        from embodied.applications.console.core.devices import load_setup
+
+        arms = len((load_setup() or {}).get("robots") or ())
+        if arms == 2:
+            return "real-dual-quest" if mode == "collect" else "real-dual-manual"
+        return "real-quest" if mode == "collect" else "real-manual"
 
     @staticmethod
     def _setup_profile(profile: str) -> str:
@@ -308,10 +327,13 @@ class OperationManager:
         except SetupError as exc:
             raise OperationError(f"设备配置不可用：{exc}", 409) from exc
         arms = len(setup.get("robots") or ())
-        expected = "real-dual-quest" if arms == 2 else "real-quest"
+        mode = "collect" if "quest" in profile else "policy"
+        suffix = "quest" if mode == "collect" else "manual"
+        expected = ("real-dual-" if arms == 2 else "real-") + suffix
         if profile != expected:
-            raise OperationError(f"设备配置是 {'双臂' if arms == 2 else '单臂'}，请选择 {expected}", 409)
-        return compiled["workbench_name"]
+            label = "双臂" if arms == 2 else "单臂"
+            raise OperationError(f"设备配置是 {label}，请选择 {expected}", 409)
+        return compiled["workbench"][mode]
 
     def _camera(self) -> list[str]:
         number = port("camera_webrtc")

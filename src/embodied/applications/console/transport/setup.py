@@ -12,8 +12,10 @@ import json
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from embodied.applications.console.core import setup_library
 from embodied.applications.console.core.devices import (
-    SetupError, compile_setup, discover, load_setup, pending_restarts, save_setup, validate_setup,
+    SetupError, compile_setup, discover, load_setup, pending_restarts, previews, save_setup,
+    validate_setup,
 )
 from embodied.applications.console.core.settings import BackendSettings
 from embodied.contracts.runtime.control import live_runs
@@ -120,10 +122,7 @@ def create_setup_router(settings: BackendSettings) -> APIRouter:
     @router.put("")
     async def write(request: Request, token: str | None = Query(default=None)) -> dict[str, object]:
         authorize(token)
-        try:
-            payload = await request.json()
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            raise HTTPException(status_code=400, detail="请求体必须是 JSON") from None
+        payload = await _payload(request)
         try:
             document = await asyncio.to_thread(validate_setup, payload)
             compiled = await asyncio.to_thread(compile_setup, document)
@@ -138,4 +137,74 @@ def create_setup_router(settings: BackendSettings) -> APIRouter:
             "restarts": pending_restarts(saved, kernel_running=running["kernel"], camera_running=running["camera"]),
         }
 
+    @router.get("/library")
+    async def library(token: str | None = Query(default=None)) -> dict[str, object]:
+        authorize(token)
+        return {
+            "entries": await asyncio.to_thread(setup_library.entries),
+            "active": await asyncio.to_thread(setup_library.active),
+        }
+
+    @router.post("/library")
+    async def save_entry(request: Request, token: str | None = Query(default=None)) -> dict[str, object]:
+        authorize(token)
+        payload = await _payload(request)
+        try:
+            entry = await asyncio.to_thread(
+                setup_library.save, payload.get("name"),
+                payload.get("setup") or payload.get("document"), payload.get("slug"),
+            )
+        except SetupError as exc:
+            raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+        return {"entry": entry}
+
+    @router.post("/library/{slug}/apply")
+    async def apply_entry(slug: str, token: str | None = Query(default=None)) -> dict[str, object]:
+        authorize(token)
+        try:
+            entry = await asyncio.to_thread(setup_library.load, slug)
+            compiled = await asyncio.to_thread(compile_setup, entry["setup"])
+            saved = await asyncio.to_thread(save_setup, entry["setup"])
+            await asyncio.to_thread(setup_library.set_active, slug)
+        except SetupError as exc:
+            raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+        running = _running()
+        return {
+            "setup": saved,
+            "compiled": compiled,
+            "active": slug,
+            "name": entry["name"],
+            "running": running,
+            "restarts": pending_restarts(saved, kernel_running=running["kernel"], camera_running=running["camera"]),
+        }
+
+    @router.delete("/library/{slug}")
+    async def delete_entry(slug: str, token: str | None = Query(default=None)) -> dict[str, object]:
+        authorize(token)
+        try:
+            await asyncio.to_thread(setup_library.delete, slug)
+        except SetupError as exc:
+            raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+        return {"ok": True, "active": await asyncio.to_thread(setup_library.active)}
+
+    @router.get("/previews")
+    async def camera_previews(
+        serials: str = Query(default=""),
+        refresh: int = Query(default=0, ge=0, le=1),
+        token: str | None = Query(default=None),
+    ) -> dict[str, object]:
+        authorize(token)
+        wanted = [item.strip() for item in serials.split(",") if item.strip()]
+        return await asyncio.to_thread(previews, wanted, refresh=bool(refresh))
+
     return router
+
+
+async def _payload(request: Request) -> dict:
+    try:
+        payload = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise HTTPException(status_code=400, detail="请求体必须是 JSON") from None
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="请求体必须是 JSON 对象")
+    return payload

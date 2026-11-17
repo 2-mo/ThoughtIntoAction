@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-from embodied.applications.console.core import devices
+from embodied.applications.console.core import devices, setup_library
 from embodied.applications.console.core.devices import SetupError, validate_setup
 
 
@@ -110,6 +110,10 @@ class SetupCompileTests(unittest.TestCase):
             self.assertEqual(devices._portable(devices.PROJECT_ROOT / "outputs/runtime/setup/arx5-dual.json"),
                              "outputs/runtime/setup/arx5-dual.json")
             self.assertTrue(compiled["workbench_name"].endswith("real-dual-quest.json"))
+            policy = json.loads((target / "real-dual-manual.json").read_text())
+            self.assertEqual(policy["source"], "cli")
+            self.assertEqual(policy["config"], str(target / "arx5-dual.json"))
+            self.assertEqual(compiled["workbench"]["policy"], str(target / "real-dual-manual.json"))
 
     def test_single_arm_compiles_the_single_profile(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -139,6 +143,47 @@ class SetupStorageTests(unittest.TestCase):
         self.assertEqual(entries["wrist_rgb"]["arm"], "arm1")
         self.assertEqual(entries["exterior_rgb"]["driver"], "realsense")
         self.assertEqual(entries["exterior_rgb"]["width"], 640)
+
+
+class SetupLibraryTests(unittest.TestCase):
+    def setUp(self):
+        self.folder = tempfile.TemporaryDirectory()
+        self.root = Path(self.folder.name)
+        self.patches = [
+            patch.object(setup_library, "LIBRARY_DIR", self.root / "setups"),
+            patch.object(setup_library, "ACTIVE_PATH", self.root / "active.json"),
+        ]
+        for entry in self.patches:
+            entry.start()
+            self.addCleanup(entry.stop)
+        self.addCleanup(self.folder.cleanup)
+
+    def test_save_list_load_and_delete(self):
+        entry = setup_library.save("ARX 双臂 · 三相机", dual_document())
+        self.assertEqual(entry["name"], "ARX 双臂 · 三相机")
+        listed = setup_library.entries()
+        self.assertEqual([item["slug"] for item in listed], [entry["slug"]])
+        self.assertEqual(listed[0]["robots"], 2)
+        loaded = setup_library.load(entry["slug"])
+        self.assertEqual(loaded["setup"]["cameras"][0]["id"], "wrist_rgb")
+        setup_library.delete(entry["slug"])
+        self.assertEqual(setup_library.entries(), [])
+
+    def test_names_get_distinct_slugs_and_are_validated(self):
+        first = setup_library.save("双臂", dual_document())
+        second = setup_library.save("双臂", dual_document())
+        self.assertNotEqual(first["slug"], second["slug"])
+        with self.assertRaises(SetupError):
+            setup_library.save("", dual_document())
+        with self.assertRaises(SetupError):
+            setup_library.save("x", {"version": 1, "robots": [], "cameras": []})
+
+    def test_active_survives_and_is_cleared_with_its_entry(self):
+        entry = setup_library.save("当前配置", dual_document())
+        setup_library.set_active(entry["slug"])
+        self.assertEqual(setup_library.active(), entry["slug"])
+        setup_library.delete(entry["slug"])
+        self.assertIsNone(setup_library.active())
 
 
 if __name__ == "__main__":

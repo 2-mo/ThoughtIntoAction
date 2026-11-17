@@ -18,8 +18,9 @@ const ui = Object.fromEntries(
     "overviewConnection", "overviewAge", "overviewPhase", "overviewJoints",
     "overviewGripper", "overviewPose", "overviewRuntime", "overviewOwner",
     "overviewLease", "overviewOperations", "overviewMessage", "overviewTrend",
-    "overviewTrendHint", "overviewKernelState", "overviewKernelStart",
-    "overviewKernelStop", "overviewKernelProfile", "overviewKernelConfirm",
+    "overviewTrendHint", "overviewKernelState", "overviewKernelCollect",
+    "overviewKernelPolicy", "overviewKernelSim",
+    "overviewKernelStop", "overviewKernelConfirm",
     "overviewKernelConfirmStart", "overviewKernelCancel", "overviewKernelMessage",
     "overviewCameraState", "overviewCameraStart", "overviewCameraStop",
     "overviewCameraHint", "overviewCameraMessage",
@@ -221,7 +222,9 @@ function renderOperations() {
   } else {
     setBadge(ui.overviewKernelState, "off", "未运行");
   }
-  if (ui.overviewKernelStart) ui.overviewKernelStart.disabled = kernelLive || Boolean(ours);
+  for (const button of [ui.overviewKernelCollect, ui.overviewKernelPolicy]) {
+    if (button) button.disabled = kernelLive || Boolean(ours);
+  }
   if (ui.overviewKernelStop) ui.overviewKernelStop.disabled = !ours;
 
   const camera = operations.get("camera");
@@ -304,7 +307,7 @@ function renderWizard() {
   if (kernelOk) done += 1;
   renderStep("wizardKernel", "wizardKernelBadge", kernelOk ? "done" : (connected ? "warn" : "todo"),
     kernelOk ? "运行中" : (connected ? "无 VR 输入" : "未运行"),
-    connected ? `运行 ${data?.runtime_id || ""}`.trim() : "real-dual-quest · 先连接头显");
+    connected ? `运行 ${data?.runtime_id || ""}`.trim() : "采集内核 · 先连接头显");
   ui.wizardKernelAction.hidden = connected;
 
   const teleop = data?.teleop || {};
@@ -369,10 +372,7 @@ if (ui.wizardQuestAction) {
   ui.wizardQuestAction.addEventListener("click", () => manualAction("quest-prepare", "准备 ADB 转发"));
 }
 if (ui.wizardKernelAction) {
-  ui.wizardKernelAction.addEventListener("click", () => {
-    ui.overviewKernelProfile.value = "real-dual-quest";
-    ui.overviewKernelStart.click();
-  });
+  ui.wizardKernelAction.addEventListener("click", () => ui.overviewKernelCollect?.click());
 }
 if (ui.wizardCameraAction) {
   ui.wizardCameraAction.addEventListener("click", async () => {
@@ -440,12 +440,14 @@ function setMessage(node, text, tone = "") {
   node.dataset.tone = tone;
 }
 
-async function runKernel(confirm) {
-  const profile = ui.overviewKernelProfile?.value || "sim-manual";
-  setMessage(ui.overviewKernelMessage, confirm ? "正在启动真机内核…" : "正在启动内核…");
+let pendingMode = "collect";
+
+async function runKernel(mode) {
+  const sim = Boolean(ui.overviewKernelSim?.checked);
+  setMessage(ui.overviewKernelMessage, sim ? "正在启动仿真内核…" : "正在启动真机内核…");
   if (ui.overviewKernelConfirm) ui.overviewKernelConfirm.hidden = true;
   try {
-    await startOperation("kernel", confirm ? { profile, confirm: true } : { profile });
+    await startOperation("kernel", sim ? { mode: "sim" } : { mode, confirm: true });
     setMessage(ui.overviewKernelMessage, "已提交启动", "success");
   } catch (error) {
     setMessage(ui.overviewKernelMessage, error instanceof Error ? error.message : String(error), "error");
@@ -465,26 +467,26 @@ async function runStop(kind, node) {
 }
 
 function wireOperations() {
-  if (ui.overviewKernelStart) {
-    ui.overviewKernelStart.addEventListener("click", () => {
-      const profile = ui.overviewKernelProfile?.value || "sim-manual";
-      if (profile.startsWith("real")) {
-        if (ui.overviewKernelConfirm) ui.overviewKernelConfirm.hidden = false;
-        return;
-      }
-      void runKernel(false);
-    });
-  }
+  const requestKernel = (mode) => {
+    pendingMode = mode;
+    if (ui.overviewKernelSim?.checked) {
+      void runKernel(mode);
+      return;
+    }
+    if (ui.overviewKernelConfirm) ui.overviewKernelConfirm.hidden = false;
+  };
+  ui.overviewKernelCollect?.addEventListener("click", () => requestKernel("collect"));
+  ui.overviewKernelPolicy?.addEventListener("click", () => requestKernel("policy"));
   if (ui.overviewKernelConfirmStart) {
-    ui.overviewKernelConfirmStart.addEventListener("click", () => void runKernel(true));
+    ui.overviewKernelConfirmStart.addEventListener("click", () => void runKernel(pendingMode));
   }
   if (ui.overviewKernelCancel) {
     ui.overviewKernelCancel.addEventListener("click", () => {
       if (ui.overviewKernelConfirm) ui.overviewKernelConfirm.hidden = true;
     });
   }
-  if (ui.overviewKernelProfile) {
-    ui.overviewKernelProfile.addEventListener("change", () => {
+  if (ui.overviewKernelSim) {
+    ui.overviewKernelSim.addEventListener("change", () => {
       if (ui.overviewKernelConfirm) ui.overviewKernelConfirm.hidden = true;
     });
   }

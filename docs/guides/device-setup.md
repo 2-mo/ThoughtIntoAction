@@ -6,17 +6,21 @@
 
 | 文件 | 作用 | 是否入库 |
 |---|---|---|
-| `configs/devices.json` | 接入配置的唯一真源（机器人 + 相机 + 绑定） | 否（gitignore） |
-| `outputs/runtime/setup/*.json` | 保存时生成的内核 profile（机器人 profile + workbench profile） | 否 |
+| `configs/setups/<slug>.json` | 命名保存的配置库，一条一套机械臂 + 相机 | 否（gitignore） |
+| `configs/devices.json` | 当前生效的配置（点「载入」后写入） | 否（gitignore） |
+| `outputs/runtime/setup/*.json` | 载入时生成的内核 profile（机器人 profile + 两个 workbench profile） | 否 |
 | `configs/local.toml` | 其余本机覆盖（socket、host 等），相机仍可在这里留颜色/标定等键 | 否 |
 
 `load_config()` 会把 `devices.json` 合并进 `[cameras]`，所以相机服务、采集、标定、策略适配器读到的仍是原来的 `[cameras.<id>]` 结构，无需改动。**相机集合以 `devices.json` 为准**：在页面上删掉的相机不会再从 `local.toml` 里冒出来。
 
 ## 页面结构
 
-1. **机械臂**：每台一行——ID、厂商（ARX X5 可用，RealMan 显示「待接入」）、型号、臂侧（left/right）、CAN 接口（从已探测的适配器和现有接口里选）。
-2. **相机**：每台一行——ID（必须以 `_rgb` 结尾）、名称、从已探测设备里选序列号、型号、分辨率/帧率、安装位置（腕部/外部固定）、绑定的机械臂。
-3. **保存**：只在服务端校验通过后写入；保存不会自动重启任何服务，而是列出需要重启的项并给出按钮。
+1. **配置库**：已保存的配置显示为一行可点的卡片，当前生效的高亮。点一下即整套载入；名称相同的保存会覆盖原条目，换个名字则新增一条。
+2. **机械臂**：厂商、型号、单臂/双臂，以及每台臂的 CAN 接口（从已探测的适配器和现有接口里选）。
+3. **相机**：先选数量，再逐台从「已探测设备」里挑序列号；每格顶部是该相机的实时画面，下方选角色（左腕/右腕/外部）。相机 ID 由角色自动生成并沿用既有命名（`wrist_rgb`、`wrist_second_rgb`、`exterior_rgb`），所以数据格式不需要迁移。
+4. **保存/载入**：服务端校验通过后才写入；载入会生成内核 profile，并列出需要重启的服务和你确认，不会自己重启。
+
+画面来源：共享相机服务在跑时直接用它已编码的预览；未启动时临时打开该相机取一帧（3 秒缓存），相机被别的进程占用时格内显示原因。
 
 ### 校验规则（服务端）
 
@@ -26,6 +30,8 @@
 - 每台臂最多一台腕部相机；`fixed` 相机不绑定臂。
 
 ## 生效方式
+
+内核启动只有两个选择——**采集**（Quest 遥操接管）和**推理**（策略接管），另有一个「仿真内核」勾选框。单臂还是双臂、用哪套 CAN，都由当前生效的配置决定，页面不再让你选 profile 名。
 
 保存只写配置与生成的 profile，不会打断正在进行的遥操或采集：
 
@@ -43,8 +49,8 @@
 
 1. 驱动与 profile：`src/embodied/devices/robots/<vendor>/`（profile、plugin、运动学、real/sim 后端）。
 2. 注册表 `configs/plugins.json`：`robot_profile`、`robot`、`kinematics` 各加条目。
-3. 工作台 profile：`configs/workbench/` 下按臂数各一个（参考 `real-quest.json` / `real-dual-quest.json`）。
-4. 在 `VENDORS` 里填 `models`、`robot_profile{1,2}`、`workbench_profile{1,2}`，把 `implemented` 置为 `true`。
+3. 工作台 profile：`configs/workbench/` 下按「臂数 × 接管方式」各一个（采集 `real-quest` / `real-dual-quest`，推理 `real-manual` / `real-dual-manual`）。
+4. 在 `VENDORS` 里填 `models`、`robot_profile{1,2}`、`workbench_profile{1,2} = {"collect": ..., "policy": ...}`，把 `implemented` 置为 `true`。
 5. 如有独立的发现方式（以太网等），在 `core/devices.py` 的 `discover()` 里加一类设备；CAN 类厂商沿用现有的 USB2CAN 枚举。
 
 保存时 `compile_setup()` 用 `VENDORS[vendor]` 里的名字生成 `<vendor profile>.json` 和对应 workbench profile，内核启动时通过 `operations._setup_profile()` 使用生成的 workbench 路径——厂商名字与路径都来自注册表，不接受浏览器传入的任意路径。

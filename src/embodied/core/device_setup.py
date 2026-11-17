@@ -24,7 +24,12 @@ VENDORS = {
         "implemented": True,
         "models": {"x5": {"label": "X5", "arm_counts": (1, 2)}},
         "robot_profile": {1: "arx5", 2: "arx5-dual"},
-        "workbench_profile": {1: "real-quest", 2: "real-dual-quest"},
+        # One kernel, two ways to hand it over: collection drives it from VR,
+        # policy runs it without an input owner.
+        "workbench_profile": {
+            1: {"collect": "real-quest", "policy": "real-manual"},
+            2: {"collect": "real-dual-quest", "policy": "real-dual-manual"},
+        },
     },
     "realman": {
         "label": "RealMan",

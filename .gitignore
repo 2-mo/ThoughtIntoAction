@@ -240,6 +240,7 @@ __marimo__/
 
 # 控制台「接入配置」写入的本机设备清单
 /configs/devices.json
+/configs/setups/
 
 # 本机同步依赖时可能是符号链接，目录规则不匹配
 /apps/console/node_modules
