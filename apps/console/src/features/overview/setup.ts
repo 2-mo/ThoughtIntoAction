@@ -438,7 +438,7 @@ async function refreshLibrary() {
 
 async function loadPreviews(serials = null, refresh = false) {
   const wanted = serials || [...new Set(draft.cameras.map((camera) => camera.serial).filter(Boolean))];
-  if (!wanted.length) return;
+  if (!wanted.length) return true;
   try {
     const query = new URLSearchParams({ serials: wanted.join(",") });
     if (refresh) query.set("refresh", "1");
@@ -447,9 +447,11 @@ async function loadPreviews(serials = null, refresh = false) {
     previewErrors = { ...previewErrors, ...(result.errors || {}) };
     for (const serial of wanted) if (!result.images?.[serial]) delete images[serial];
     renderCameras();
+    return Object.keys(result.errors || {}).length === 0;
   } catch (error) {
     previewErrors = Object.fromEntries(wanted.map((serial) => [serial, String(error.message || error)]));
     renderCameras();
+    return false;
   }
 }
 
@@ -470,8 +472,9 @@ export async function initSetup() {
   });
   el("setupPreview")?.addEventListener("click", async () => {
     message("正在取画面…");
-    await loadPreviews(null, true);
-    message("");
+    const ok = await loadPreviews(null, true);
+    message(ok ? "" : "有相机取不到画面：鼠标停在格子上看原因；相机服务占用设备时先停掉它。",
+      ok ? "info" : "warning");
   });
   el("setupVendor")?.addEventListener("change", () => {
     draft.vendor = el("setupVendor").value;

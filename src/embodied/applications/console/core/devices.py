@@ -232,6 +232,12 @@ def _device_preview(serial: str) -> str:
 
     from embodied.contracts.device_lease import DeviceLease
 
+    # Resolving an unknown serial blocks inside the SDK, so refuse it up front:
+    # a stale placeholder in the config must not hang the request.
+    connected = {device.get_info(rs.camera_info.serial_number)
+                 for device in rs.context().query_devices()}
+    if serial not in connected:
+        raise RuntimeError("未检测到这台相机（序列号不在当前设备列表）")
     lease = DeviceLease("camera:" + serial)
     try:
         configuration = rs.config()
@@ -241,8 +247,8 @@ def _device_preview(serial: str) -> str:
         pipeline.start(configuration)
         try:
             color = None
-            for _ in range(30):
-                color = pipeline.wait_for_frames(5000).get_color_frame()
+            for _ in range(3):
+                color = pipeline.wait_for_frames(2000).get_color_frame()
                 if color:
                     break
             if not color:

@@ -68,13 +68,17 @@ def seed_setup() -> dict:
                 arm = robots[0]["id"]
             else:
                 arm = robots[1]["id"] if "second" in camera_id else robots[0]["id"]
+        serial = options.get("serial") or ""
+        if "REPLACE" in serial.upper():
+            # The example config ships a placeholder; treat it as unassigned.
+            serial = ""
         seeded.append({
             "id": camera_id,
             "label": options.get("label") or camera_id,
             "enabled": options.get("enabled", True) is not False,
             "driver": options.get("driver") or "realsense",
             "model": options.get("model") or "D435i",
-            "serial": options.get("serial") or "",
+            "serial": serial,
             "width": options.get("width") or 640,
             "height": options.get("height") or 480,
             "fps": options.get("fps") or 30,
@@ -195,7 +199,11 @@ def create_setup_router(settings: BackendSettings) -> APIRouter:
     ) -> dict[str, object]:
         authorize(token)
         wanted = [item.strip() for item in serials.split(",") if item.strip()]
-        return await asyncio.to_thread(previews, wanted, refresh=bool(refresh))
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(previews, wanted, refresh=bool(refresh)),
+                                          timeout=12)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="取画面超时：相机可能被其他程序占用") from None
 
     return router
 
