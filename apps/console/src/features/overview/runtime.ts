@@ -324,9 +324,15 @@ function renderWizard() {
   if (teleopOk) done += 1;
   let teleopBadge = "等待内核";
   let teleopState = "waiting";
-  if (connected && teleopOk) { teleopBadge = "遥操中"; teleopState = "done"; }
-  else if (connected && teleop.ready) { teleopBadge = "等待握持 Grip"; teleopState = "warn"; }
-  else if (connected) { teleopBadge = teleop.reason ? String(teleop.reason).slice(0, 22) : "未就绪"; teleopState = "todo"; }
+  if (connected && teleopOk) { teleopBadge = "遥操中 · 握 Grip 跟随"; teleopState = "done"; }
+  else if (connected && teleop.ready && !teleop.armed) {
+    // Arming is a mode button (A), not the Grip; Grip only gates following.
+    teleopBadge = teleop.pair ? "按 A 进入遥操（两侧各按）" : "按 A 进入遥操";
+    teleopState = "warn";
+  } else if (connected && teleop.armed) {
+    teleopBadge = teleop.permit ? "已进入 · 握 Grip 跟随" : "等待协调器许可";
+    teleopState = "warn";
+  } else if (connected) { teleopBadge = teleop.reason ? String(teleop.reason).slice(0, 22) : "未就绪"; teleopState = "todo"; }
   const marks = (side) => side
     ? `就绪${side.ready ? "✓" : "—"} 激活${side.armed ? "✓" : "—"} 许可${side.permit ? "✓" : "—"}`
     : "—";
