@@ -150,10 +150,23 @@ class SetupCompileTests(unittest.TestCase):
             self.assertTrue(robot["connection_path"].endswith("realman-arm1-connection.json"))
             self.assertEqual(connection["host"], "192.168.1.19")
             self.assertEqual(connection["port"], 8080)
+            self.assertEqual(connection["expected_tool"], "Lq")
             self.assertEqual(collect["config"], str(target / "realman-arm1.json"))
             self.assertEqual(collect["vr_config"], "configs/inputs/quest-realman.json")
             self.assertEqual(policy["source"], "cli")
             self.assertEqual(compiled["workbench"]["policy"], str(target / "realman-manual.json"))
+
+    def test_each_arm_uses_its_own_tool_frame_template(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder)
+            with patch.object(devices, "GENERATED_DIR", target):
+                devices.compile_setup(validate_setup(realman_document(robots=[
+                    {"id": "arm1", "vendor": "realman", "model": "rm65", "side": "single",
+                     "host": "192.168.1.18"},
+                ])))
+                connection = json.loads((target / "realman-arm1-connection.json").read_text())
+            self.assertEqual(connection["host"], "192.168.1.18")
+            self.assertEqual(connection["expected_tool"], "work")
 
     def test_single_arm_compiles_the_single_profile(self):
         with tempfile.TemporaryDirectory() as folder:

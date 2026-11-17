@@ -69,9 +69,14 @@ def compile_setup(document: dict) -> dict:
 
 
 ETHERNET_TEMPLATES = {
-    # The controller connection shape is vendor-specific; only the host is selected here.
-    "realman": PROJECT_ROOT / "configs/robots/realman/rm65-19.json",
+    # The controller connection shape is vendor-specific; the host picks the
+    # deployment, because the tool frame it expects differs per arm.
+    "realman": {
+        "192.168.1.18": PROJECT_ROOT / "configs/robots/realman/rm65-18.json",
+        "192.168.1.19": PROJECT_ROOT / "configs/robots/realman/rm65-19.json",
+    },
 }
+ETHERNET_DEFAULT_TEMPLATE = {"realman": PROJECT_ROOT / "configs/robots/realman/rm65-19.json"}
 ETHERNET_MODELS = {
     "realman": PROJECT_ROOT / "assets/robots/realman/runtime/rm65.xml",
 }
@@ -80,7 +85,9 @@ ETHERNET_VR = {"realman": "configs/inputs/quest-realman.json"}
 
 def _ethernet_robot(vendor: str, arm: dict, profile: str) -> dict:
     """An address-based arm: write its connection file and the profile that points at it."""
-    template = ETHERNET_TEMPLATES.get(vendor)
+    template = ETHERNET_TEMPLATES.get(vendor, {}).get(arm.get("host"))
+    if template is None:
+        template = ETHERNET_DEFAULT_TEMPLATE.get(vendor)
     model = ETHERNET_MODELS.get(vendor)
     if template is None or not template.is_file():
         raise SetupError(f"{VENDORS[vendor]['label']} 缺少控制器连接模板", 409)
