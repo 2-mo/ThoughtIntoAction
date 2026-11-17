@@ -5,6 +5,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import json
+import signal
+
 from fastapi import HTTPException
 
 from embodied.applications.console import operations
@@ -89,6 +92,34 @@ class KernelModeTests(unittest.TestCase):
             with self.assertRaises(operations.OperationError) as raised:
                 self.manager._setup_profile("real-dual-quest")
         self.assertEqual(raised.exception.status, 409)
+
+
+class ExternalKernelStopTests(unittest.TestCase):
+    def test_stop_signals_the_supervisor_of_a_kernel_this_console_did_not_start(self):
+        manager = operations.OperationManager()
+        calls = {"count": 0}
+
+        with tempfile.TemporaryDirectory() as folder:
+            run = Path(folder)
+            (run / "runtime.json").write_text(json.dumps({"supervisor_pid": 4242}))
+
+            def live(_root):
+                calls["count"] += 1
+                return [run] if calls["count"] == 1 else []
+
+            with patch.object(operations, "live_runs", side_effect=live), \
+                    patch.object(operations.os, "kill") as kill:
+                result = asyncio.run(manager.stop("kernel"))
+        kill.assert_called_once_with(4242, signal.SIGINT)
+        self.assertEqual(result["state"], "stopped")
+        self.assertTrue(result["external"])
+
+    def test_stop_without_any_kernel_is_not_found(self):
+        manager = operations.OperationManager()
+        with patch.object(operations, "live_runs", return_value=[]):
+            with self.assertRaises(operations.OperationError) as raised:
+                asyncio.run(manager.stop("kernel"))
+        self.assertEqual(raised.exception.status, 404)
 
 
 class OperationValidationTests(unittest.TestCase):

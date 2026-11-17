@@ -7,6 +7,7 @@ can be stopped here.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import signal
 import subprocess
@@ -204,6 +205,10 @@ class OperationManager:
         if operation is None or operation.process is None or operation.state not in (
             "starting", "running", "stopping"
         ):
+            if kind == "kernel":
+                # A kernel can outlive this console (started before a restart, or
+                # from a terminal). It is still the operator's to stop here.
+                return await self._stop_live_kernel()
             raise OperationError("该操作未在运行", 404)
         operation.state = "stopping"
         # Graceful stop: only the collector gets SIGINT, so it can close the
@@ -221,6 +226,34 @@ class OperationManager:
                 await operation.process.wait()
         operation.state = "stopped" if operation.exit_code in (None, 0) else "failed"
         return self._describe(operation)
+
+    async def _stop_live_kernel(self) -> dict[str, object]:
+        """Stop the live kernel through its supervisor, whoever started it."""
+        runs = live_runs(RUNS)
+        if not runs:
+            raise OperationError("没有运行中的内核", 404)
+        run = runs[-1]
+        try:
+            pid = int(json.loads((run / "runtime.json").read_text())["supervisor_pid"])
+        except (OSError, ValueError, KeyError, TypeError):
+            raise OperationError("读不到内核进程信息", 503) from None
+        try:
+            os.kill(pid, signal.SIGINT)
+        except ProcessLookupError:
+            raise OperationError("内核已经退出", 404) from None
+        except PermissionError:
+            raise OperationError("没有权限停止这个内核", 403) from None
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            if not live_runs(RUNS):
+                return {"kind": "kernel", "state": "stopped", "external": True,
+                        "run_id": run.name}
+            await asyncio.sleep(0.2)
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        raise OperationError("内核没有在 15 秒内退出，已发送终止信号", 504)
 
     async def shutdown(self) -> None:
         running = [

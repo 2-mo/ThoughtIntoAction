@@ -231,7 +231,8 @@ function renderOperations() {
   if (ui.overviewKernelPolicy) {
     ui.overviewKernelPolicy.disabled = kernelLive || Boolean(ours);
   }
-  if (ui.overviewKernelStop) ui.overviewKernelStop.disabled = !ours;
+  // An externally started kernel is still the operator's to stop.
+  if (ui.overviewKernelStop) ui.overviewKernelStop.disabled = !(ours || kernelLive);
 
   const camera = operations.get("camera");
   const cameraBusy = camera && ["starting", "running", "stopping"].includes(camera.state);
