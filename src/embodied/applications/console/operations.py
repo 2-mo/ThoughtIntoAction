@@ -136,6 +136,14 @@ def _resolve_run(value: object) -> Path:
         if RUNS.resolve() not in path.parents or not (path / "runtime.json").is_file():
             raise OperationError("运行目录必须是 outputs/runtime/control 下的有效内核")
         return path
+    # A pair runs two kernels; collection and policy act on the selected side
+    # rather than whichever directory happens to sort last.
+    from embodied.applications.workstation.pair_state import active_pair, selected_run
+
+    pair = active_pair()
+    if pair is not None:
+        _side, path = selected_run(pair)
+        return path
     runs = live_runs(RUNS)
     if not runs:
         raise OperationError("没有运行中的内核")
