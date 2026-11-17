@@ -29,7 +29,7 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
                          base_yaw_deg: float = 0., grip_threshold: float = .7,
                          position_scale=(1., 1., 1.), *, dual: bool = False, controller: str = 'right',
                          input_prefix: str | None = None, feedback_hz: float = 250.,
-                         cartesian_speed_limits=None) -> dict[str, Path]:
+                         cartesian_speed_limits=None, input_timeout_ms: int = 100) -> dict[str, Path]:
     """Write xrobot, coordinator, arm and gripper TOML files for one run.
 
     ``prefix`` must be unique per concurrent run and start with ``arx5-``.
@@ -42,6 +42,8 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
         raise ValueError('controller must be left or right')
     if not math.isfinite(feedback_hz) or feedback_hz <= 0:
         raise ValueError('feedback_hz must be finite and positive')
+    if type(input_timeout_ms) is not int or not 20 <= input_timeout_ms <= 1000:
+        raise ValueError('input_timeout_ms must be an integer in 20..1000')
     if input_prefix is not None:
         validate_prefix(input_prefix)
     motion = validate_native_router(json.loads(DEFAULT_PATH.read_text())['native_router'])
@@ -148,7 +150,7 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
         process_id=f"{prefix}.coordinator", group_id=group,
         mode_controller_input_topic=right_inp if dual else chosen_inp,
         episode_controller_input_topic=left_inp if dual else f"{prefix}/unused-recording-input",
-        permit_topic=permit, button_chord_ms=150.0, input_timeout_ms=100,
+        permit_topic=permit, button_chord_ms=150.0, input_timeout_ms=input_timeout_ms,
         # The vendor uses mode_ack_timeout as the initial-readiness window; a
         # dual-arm device takes longer to publish both controller streams.
         mode_ack_timeout_ms=8000 if dual else 1000, route_health_timeout_ms=500,

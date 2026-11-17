@@ -36,7 +36,10 @@ class Routing(NativeRouting):
             controller=vr.controller, input_prefix=vr.input_prefix or prefix,
             feedback_hz=settings.robot.control_hz,
             cartesian_speed_limits=(settings.robot.teleop_linear_speed_m_s,
-                                    settings.robot.teleop_angular_speed_rad_s))
+                                    settings.robot.teleop_angular_speed_rad_s),
+            # Two kernels and one XR owner share the bus here; a 100 ms window
+            # trips on a single dropped burst and drops the group to Disabled.
+            input_timeout_ms=300)
         # One mode owner per hand. The EG2 driver already handles absolute
         # opening targets; a second router/coordinator can retain an old
         # opening target or toggle out of phase with the arm.
