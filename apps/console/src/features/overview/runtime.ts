@@ -222,14 +222,8 @@ function renderOperations() {
   } else {
     setBadge(ui.overviewKernelState, "off", "未运行");
   }
-  const ethernet = setupConnection() === "ethernet";
-  if (ui.overviewKernelCollect) {
-    ui.overviewKernelCollect.disabled = kernelLive || Boolean(ours) || ethernet;
-    ui.overviewKernelCollect.title = ethernet
-      ? "RealMan 的 Quest 遥操要走 robot-pair，控制台的采集入口还没接入" : "";
-  }
-  if (ui.overviewKernelPolicy) {
-    ui.overviewKernelPolicy.disabled = kernelLive || Boolean(ours);
+  for (const button of [ui.overviewKernelCollect, ui.overviewKernelPolicy]) {
+    if (button) button.disabled = kernelLive || Boolean(ours);
   }
   // An externally started kernel is still the operator's to stop.
   if (ui.overviewKernelStop) ui.overviewKernelStop.disabled = !(ours || kernelLive);

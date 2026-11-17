@@ -59,7 +59,15 @@ def compile_setup(document: dict) -> dict:
         base["config"] = _portable(robot_path)
         # The VR profile carries vendor grip/yaw settings; ARX is the default.
         if spec.get("connection", "can") == "ethernet" and base.get("source") == "quest":
-            base.setdefault("vr_config", ETHERNET_VR.get(vendor, "configs/inputs/quest.json"))
+            vr = json.loads((PROJECT_ROOT / ETHERNET_VR.get(vendor, "configs/inputs/quest.json")).read_text())
+            # No external owner: this kernel publishes and consumes its own XR topics.
+            vr.setdefault("controller", "right")
+            vr.setdefault("input_prefix", None)
+            vr_path = GENERATED_DIR / f"{vendor}-{mode}-vr.json"
+            vr_path.write_text(json.dumps(vr, ensure_ascii=False, indent=2) + "\n")
+            base["vr_config"] = _portable(vr_path)
+            base["native"] = {"device": "quest.owned", "routing": "quest.owned",
+                              "ingress": "quest.owned", "channel": "native"}
         path = GENERATED_DIR / f"{names[mode]}.json"
         path.write_text(json.dumps(base, ensure_ascii=False, indent=2) + "\n")
         workbench[mode] = str(path)

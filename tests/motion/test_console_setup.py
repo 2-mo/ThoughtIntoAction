@@ -152,7 +152,11 @@ class SetupCompileTests(unittest.TestCase):
             self.assertEqual(connection["port"], 8080)
             self.assertEqual(connection["expected_tool"], "Lq")
             self.assertEqual(collect["config"], str(target / "realman-arm1.json"))
-            self.assertEqual(collect["vr_config"], "configs/inputs/quest-realman.json")
+            self.assertEqual(collect["vr_config"], str(target / "realman-collect-vr.json"))
+            self.assertEqual(collect["native"]["device"], "quest.owned")
+            vr = json.loads((target / "realman-collect-vr.json").read_text())
+            self.assertEqual(vr["controller"], "right")
+            self.assertIsNone(vr["input_prefix"])
             self.assertEqual(policy["source"], "cli")
             self.assertEqual(compiled["workbench"]["policy"], str(target / "realman-manual.json"))
 

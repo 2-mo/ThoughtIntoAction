@@ -11,6 +11,10 @@ class VRConfig:
     base_yaw_deg: float = 0.0
     grip_threshold: float = 0.7
     position_scale: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    # Shared-namespace input: which hand drives this kernel, and the prefix an
+    # external owner publishes on. None means this kernel owns its input.
+    controller: str = "right"
+    input_prefix: str | None = None
 
 
 def _read(path, schema):
@@ -36,6 +40,11 @@ def load_profile(path):
     if 'position_scale' in vr_values:
         vr_values['position_scale'] = tuple(vr_values['position_scale'])
     vr = VRConfig(**vr_values)
+    if vr.controller not in ('left', 'right'):
+        raise ValueError('controller must be left or right')
+    if vr.input_prefix is not None:
+        from embodied.control.ipc.services import validate_prefix
+        validate_prefix(vr.input_prefix)
     if not math.isfinite(vr.base_yaw_deg):
         raise ValueError('base_yaw_deg must be finite')
     if not math.isfinite(vr.grip_threshold) or not 0 < vr.grip_threshold <= 1:

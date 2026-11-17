@@ -61,16 +61,20 @@ class KernelModeTests(unittest.TestCase):
         self.assertIn("none", argv)
         self.assertFalse(any("can-up" in part for part in argv))
 
-    def test_realman_collect_needs_the_pair_supervisor(self):
+    def test_realman_collect_starts_the_quest_owned_workbench(self):
         from embodied.applications.console.core import devices
 
         setup = {"version": 1, "robots": [{"id": "arm1", "vendor": "realman", "model": "rm65",
                                            "side": "single", "host": "192.168.1.19"}],
                  "cameras": [{"id": "wrist_rgb", "serial": "1", "mount": "wrist"}]}
-        with patch.object(devices, "load_setup", return_value=setup):
-            with self.assertRaises(operations.OperationError) as raised:
-                self.manager._mode_target("collect")
-        self.assertEqual(raised.exception.status, 409)
+        compiled = {"workbench": {"collect": "/tmp/set/realman-left.json",
+                                  "policy": "/tmp/set/realman-manual.json"}}
+        with patch.object(devices, "load_setup", return_value=setup), \
+                patch.object(devices, "compile_setup", return_value=compiled), \
+                patch.object(operations, "live_runs", return_value=[]):
+            argv, _ = self.manager._kernel({"mode": "collect", "confirm": True})
+        self.assertIn("/tmp/set/realman-left.json", argv)
+        self.assertIn("quest", argv)
 
     def test_policy_mode_uses_the_generated_manual_workbench(self):
         from embodied.applications.console.core import devices

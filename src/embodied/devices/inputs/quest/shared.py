@@ -19,6 +19,14 @@ class SharedDevice(QuestDevice):
         return {}  # The workbench pair supervisor owns the single input process.
 
 
+class OwnedDevice(QuestDevice):
+    """One kernel owns its own XR input process (no pair supervisor around it)."""
+
+    @staticmethod
+    def commands(configs, prefix):
+        return QuestDevice.commands(configs, prefix)
+
+
 class Routing(NativeRouting):
     @staticmethod
     def configure(directory, prefix, settings):

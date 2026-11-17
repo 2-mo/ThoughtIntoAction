@@ -27,7 +27,9 @@ def _toml(data: dict, section: str = "") -> str:
 
 def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk_library: str,
                          base_yaw_deg: float = 0., grip_threshold: float = .7,
-                         position_scale=(1., 1., 1.), *, dual: bool = False) -> dict[str, Path]:
+                         position_scale=(1., 1., 1.), *, dual: bool = False, controller: str = 'right',
+                         input_prefix: str | None = None, feedback_hz: float = 250.,
+                         cartesian_speed_limits=None) -> dict[str, Path]:
     """Write xrobot, coordinator, arm and gripper TOML files for one run.
 
     ``prefix`` must be unique per concurrent run and start with ``arx5-``.
@@ -36,7 +38,19 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
     Native coordinator and routers retain the original input/control policy.
     """
     validate_prefix(prefix)
+    if controller not in ('left', 'right'):
+        raise ValueError('controller must be left or right')
+    if not math.isfinite(feedback_hz) or feedback_hz <= 0:
+        raise ValueError('feedback_hz must be finite and positive')
+    if input_prefix is not None:
+        validate_prefix(input_prefix)
     motion = validate_native_router(json.loads(DEFAULT_PATH.read_text())['native_router'])
+    if cartesian_speed_limits is not None:
+        for kind, value in zip(('linear', 'angular'), cartesian_speed_limits, strict=True):
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError('Cartesian speeds must be finite positive values')
+            key = 'max_' + kind + '_velocity'
+            motion['cartesian'][key] = min(motion['cartesian'][key], value)
     if not math.isfinite(gripper_width) or gripper_width < 0:
         raise ValueError("gripper_width must be nonnegative and finite")
     if not math.isfinite(base_yaw_deg):
@@ -50,36 +64,41 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
     # Rz(-base_yaw) @ the existing row-major XR-to-X5 basis.
     basis = [s, 0., -c, -c, 0., -s, 0., 1., 0.]
     basis = [0. if abs(value) < 1e-12 else value for value in basis]
-    xr_root, robot_root = f"{prefix}/xr", f"{prefix}/robot"
+    # A single arm follows the configured hand; a pair uses both controllers.
+    chosen = "right" if dual else controller
+    xr_root, robot_root = f"{input_prefix or prefix}/xr", f"{prefix}/robot"
     right_inp = f"{xr_root}/right_controller/states/input"
     # The coordinator disables the group on one invalid Episode sample; the
     # relay drops the invalid startup frame before it reaches that topic.
     left_inp = f"{xr_root}/left_controller/states/input_filtered"
+    chosen_inp = left_inp if chosen == "left" else right_inp
     group = f"{prefix}/group"
     permit = f"{group}/permit"
-    controller_channels = [dict(channel_type="right_controller", channel_label="PICO Right Controller",
-                                kind="robot", enabled=True, mode="free-drive", dof=6,
-                                control_frequency_hz=250.0, publish_states=["pose", "input"], recorded_states=[])]
-    if dual:
-        controller_channels.append(dict(channel_type="left_controller", channel_label="PICO Left Controller",
-                                        kind="robot", enabled=True, mode="free-drive", dof=6,
-                                        control_frequency_hz=250.0, publish_states=["pose", "input"],
-                                        recorded_states=[]))
+
+    def controller_channel(name):
+        return dict(channel_type=f"{name}_controller", channel_label=f"PICO {name.title()} Controller",
+                    kind="robot", enabled=True, mode="free-drive", dof=6,
+                    control_frequency_hz=float(feedback_hz),
+                    publish_states=["pose", "input"], recorded_states=[])
+
+    controller_channels = ([controller_channel("right"), controller_channel("left")]
+                           if dual else [controller_channel(chosen)])
     xrobot = dict(name="xrobot", driver="xrobot", id=prefix, bus_root=xr_root,
                   sdk_library=str(sdk_library), xr_basis=basis, channels=controller_channels)
 
     # Dual arms: left controller drives arm1 (can0), right controller drives arm2 (can1).
-    arm_specs = [("arm", "gripper", left_inp if dual else right_inp,
+    arm_specs = [("arm", "gripper", left_inp if dual else chosen_inp,
                   f"{xr_root}/left_controller/states/pose_filtered" if dual
-                  else f"{xr_root}/right_controller/states/pose")]
+                  else f"{xr_root}/{chosen}_controller/states/pose")]
     if dual:
         arm_specs.append(("arm2", "gripper2", right_inp, f"{xr_root}/right_controller/states/pose"))
 
     members = []
     routes = []
     common_base = dict(ruckig_smoothing_enabled=motion['smoothing_enabled'],
-                       control_rate_hz=250.0, control_group_id=group,
-                       relative_hold_timeout_ms=30, relative_fault_timeout_ms=100)
+                       control_rate_hz=float(feedback_hz), control_group_id=group,
+                       relative_hold_timeout_ms=max(30, 2000 / feedback_hz),
+                       relative_fault_timeout_ms=max(100, 3000 / feedback_hz))
     router_configs = {}
     for index, (arm_channel, grip_channel, input_topic, pose_topic) in enumerate(arm_specs):
         gate = f"{group}/{arm_channel}/gate"
@@ -100,7 +119,7 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
             dict(route_id=grip_channel, input_kind="trigger", controller_input_topic=input_topic,
                  trigger_max_width_m=float(gripper_width), parallel_topic=parallel, health_topic=grip_health),
         ])
-        leader = "xr.left_controller" if dual and index == 0 else "xr.right_controller"
+        leader = "xr.left_controller" if dual and index == 0 else f"xr.{chosen}_controller"
         router_configs[arm_channel] = dict(
             common_base, process_id=f"{prefix}.{arm_channel}", leader_channel_id=leader,
             follower_channel_id=f"robot.{arm_channel}", leader_state_kind="pose", leader_state_topic=pose_topic,
@@ -125,7 +144,7 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
 
     coordinator = dict(
         process_id=f"{prefix}.coordinator", group_id=group,
-        mode_controller_input_topic=right_inp,
+        mode_controller_input_topic=right_inp if dual else chosen_inp,
         episode_controller_input_topic=left_inp if dual else f"{prefix}/unused-recording-input",
         permit_topic=permit, button_chord_ms=150.0, input_timeout_ms=100,
         # The vendor uses mode_ack_timeout as the initial-readiness window; a
