@@ -53,6 +53,7 @@ MODULE_COMMANDS = {
     "examples": "examples",
     "collect": "embodied.data.capture.capture",
     "workbench": "embodied.applications.workstation.workbench",
+    "robot-pair": "embodied.applications.workstation.robot_pair",
     "realman": "embodied.devices.robots.realman.cli",
     "component-source": "embodied.applications.workstation.source",
     "phone": "embodied.devices.inputs.phone",
@@ -171,8 +172,8 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
         return [str(python), "-B", "-m", MODULE_COMMANDS[command], *arguments], env
 
     python = resolve_python(config)
-    if (command in {"examples", "collect", "runtime-data", "workbench", "phone", "motion",
-                    "component-source"}
+    if (command in {"examples", "collect", "runtime-data", "workbench", "robot-pair", "phone",
+                    "motion", "component-source"}
             or command == "handeye" and any(arg == '--runtime' or arg.startswith('--runtime=') for arg in arguments)):
         # Independent components use the gateway; they do not load legacy SDK extensions.
         env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
