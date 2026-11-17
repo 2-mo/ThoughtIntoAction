@@ -29,6 +29,15 @@
 - 相机 ID 必须匹配 `[a-z][a-z0-9_]*_rgb`，序列号不能重复（留空表示尚未分配）。
 - 每台臂最多一台腕部相机；`fixed` 相机不绑定臂。
 
+## RealMan（RM65-BI）
+
+- 连接方式是以太网，不是 CAN：选 RealMan → 型号 RM65-BI → 填控制器 IP（`.19` / `.18`）。
+- 保存/载入时生成 `outputs/runtime/setup/realman-arm1.json`（`realman.hardware`，50 Hz）和
+  `realman-arm1-connection.json`（端口 8080、工具偏置 140 mm，取自 `configs/robots/realman/rm65-19.json` 模板，只换 host）。
+- 采集用 Quest（`quest.shared`，VR 配置 `configs/inputs/quest-realman.json`），推理无输入。
+- 启动时 `scripts/arm/kernel_real.sh --vendor realman` 跳过 CAN 准备，只做 Quest 转发。
+- 目前只支持单臂：RM65 双臂是 `robot-pair`（两个 6 轴内核 + 一个输入所有者），尚未接入控制台的启动与状态合并。
+
 ## 生效方式
 
 内核启动只有两个选择——**采集**（Quest 遥操接管）和**推理**（策略接管），另有一个「仿真内核」勾选框。单臂还是双臂、用哪套 CAN，都由当前生效的配置决定，页面不再让你选 profile 名。

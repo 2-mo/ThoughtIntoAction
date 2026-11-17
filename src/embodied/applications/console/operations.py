@@ -279,39 +279,66 @@ class OperationManager:
         return self._policy(payload)
 
     def _kernel(self, payload: dict[str, object]) -> tuple[list[str], str | None]:
-        mode = payload.get("mode")
-        profile = self._mode_profile(mode) if mode is not None else str(payload.get("profile") or "sim-manual")
-        if profile not in PROFILES:
-            raise OperationError("不支持的运行配置")
+        target = (self._mode_target(payload.get("mode")) if payload.get("mode") is not None
+                  else self._named_target(payload.get("profile")))
         if live_runs(RUNS):
             raise OperationError("已有内核在运行，先停止它", 409)
-        if profile.startswith("real"):
+        if target["real"]:
             if payload.get("confirm") is not True:
                 raise OperationError("真机启动会使能电机，需要确认", 409)
-            profile = self._setup_profile(profile)
+            profile = target["profile"]
+            if target["vendor"] == "arx":
+                profile = self._setup_profile(profile)
             argv = ["bash", str(PROJECT_ROOT / "scripts/arm/kernel_real.sh"),
-                    "--profile", profile, "--yes"]
+                    "--profile", profile, "--vendor", target["vendor"]]
+            if target.get("input"):
+                argv += ["--input", target["input"]]
+            argv.append("--yes")
         else:
-            argv = ["bash", str(RUN_SH), "kernel", "profiles", "start", "--profile", profile]
+            argv = ["bash", str(RUN_SH), "kernel", "profiles", "start",
+                    "--profile", target["profile"]]
         return argv, None
 
     @staticmethod
-    def _mode_profile(mode: object) -> str:
+    def _named_target(profile: object) -> dict[str, object]:
+        """An explicit ARX profile name (CLI/back-compat); the page uses modes instead."""
+        name = str(profile or "sim-manual")
+        if name not in PROFILES:
+            raise OperationError("不支持的运行配置")
+        return {"vendor": "arx", "profile": name, "real": name.startswith("real")}
+
+    @staticmethod
+    def _mode_target(mode: object) -> dict[str, object]:
         """One kernel, two ways to hand it over: collection (VR) or policy (no input).
 
-        Which arms and which camera the kernel has come from the saved setup, so
-        the page never asks for a robot profile name.
+        Which vendor, arms and connection the kernel has all come from the saved
+        setup, so the page never asks for a robot profile name.
         """
         if mode == "sim":
-            return "sim-manual"
+            return {"vendor": "arx", "profile": "sim-manual", "real": False}
         if mode not in ("collect", "policy"):
             raise OperationError("不支持的启动方式")
-        from embodied.applications.console.core.devices import load_setup
+        from embodied.applications.console.core.devices import (
+            SetupError, compile_setup, load_setup,
+        )
 
-        arms = len((load_setup() or {}).get("robots") or ())
-        if arms == 2:
-            return "real-dual-quest" if mode == "collect" else "real-dual-manual"
-        return "real-quest" if mode == "collect" else "real-manual"
+        setup = load_setup()
+        if not setup:
+            name = "real-quest" if mode == "collect" else "real-manual"
+            return {"vendor": "arx", "profile": name, "real": True}
+        vendor = (setup.get("robots") or [{}])[0].get("vendor", "arx")
+        arms = len(setup.get("robots") or ())
+        input_mode = "quest" if mode == "collect" else "none"
+        if vendor != "arx":
+            try:
+                compiled = compile_setup(setup)
+            except SetupError as exc:
+                raise OperationError(f"设备配置不可用：{exc}", 409) from exc
+            return {"vendor": vendor, "profile": compiled["workbench"][mode],
+                    "input": input_mode, "real": True}
+        suffix = "quest" if mode == "collect" else "manual"
+        name = ("real-dual-" if arms == 2 else "real-") + suffix
+        return {"vendor": "arx", "profile": name, "input": input_mode, "real": True}
 
     @staticmethod
     def _setup_profile(profile: str) -> str:

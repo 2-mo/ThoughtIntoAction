@@ -60,14 +60,22 @@ function defaultLabel(role, index, cameras) {
   return nth === 0 ? "外部相机" : `外部相机 ${nth + 1}`;
 }
 
+function connectionKind() {
+  return discovery.vendors?.[draft.vendor]?.connection || "can";
+}
+
+function robotEntry(side, index) {
+  const base = { id: index === 0 ? "arm1" : "arm2", vendor: draft.vendor, model: draft.model, side };
+  return connectionKind() === "ethernet"
+    ? { ...base, host: draft.hosts[index] || "" }
+    : { ...base, can_interface: draft.cans[index] || (index === 0 ? "can1" : "can0") };
+}
+
 function toDocument() {
   const arms = Number(draft.arms);
   const robots = arms === 2
-    ? [
-      { id: "arm1", vendor: draft.vendor, model: draft.model, side: "left", can_interface: draft.cans[0] || "can1" },
-      { id: "arm2", vendor: draft.vendor, model: draft.model, side: "right", can_interface: draft.cans[1] || "can0" },
-    ]
-    : [{ id: "arm1", vendor: draft.vendor, model: draft.model, side: "single", can_interface: draft.cans[0] || "can0" }];
+    ? [robotEntry("left", 0), robotEntry("right", 1)]
+    : [robotEntry("single", 0)];
   const cameras = draft.cameras.map((camera, index) => {
     const mount = camera.role === "exterior" ? "fixed" : "wrist";
     return {
@@ -108,6 +116,7 @@ function fromDocument(document) {
     cans: arms === 2
       ? [robots[0]?.can_interface || "can1", robots[1]?.can_interface || "can0"]
       : [robots[0]?.can_interface || "can0"],
+    hosts: robots.map((robot) => robot.host || ""),
     cameras,
   };
 }
@@ -186,15 +195,36 @@ function renderArm() {
   if (!vendor) return;
   vendor.innerHTML = vendorOptions(draft.vendor);
   model.innerHTML = modelOptions(draft.vendor, draft.model);
-  arms.value = String(draft.arms);
+  const counts = discovery.vendors?.[draft.vendor]?.models?.[draft.model]?.arm_counts || [1, 2];
+  if (!counts.includes(Number(draft.arms))) {
+    draft.arms = counts[0];
+    // A single-arm rig has no right wrist; that camera becomes an exterior one.
+    if (Number(draft.arms) === 1) {
+      draft.cameras.forEach((camera) => { if (camera.role === "right") camera.role = "exterior"; });
+    }
+  }
+  arms.innerHTML = counts.map((count) =>
+    `<option value="${count}"${count === Number(draft.arms) ? " selected" : ""}>${count === 1 ? "单臂" : "双臂"}</option>`
+  ).join("");
+  const ethernet = connectionKind() === "ethernet";
   const host = el("setupCans");
-  host.innerHTML = Array.from({ length: draft.arms }, (_, index) => `
-    <label><span>${draft.arms === 1 ? "CAN" : index === 0 ? "左臂 CAN" : "右臂 CAN"}</span>
-      <select data-can="${index}">${canOptions(draft.cans[index])}</select>
-    </label>`).join("");
+  host.innerHTML = Array.from({ length: draft.arms }, (_, index) => {
+    const label = draft.arms === 1 ? "" : index === 0 ? "左臂 " : "右臂 ";
+    if (ethernet) {
+      return `<label><span>${label}IP</span>
+        <input data-host="${index}" value="${escape(draft.hosts[index] || "")}" placeholder="192.168.1.${index === 0 ? "19" : "18"}"></label>`;
+    }
+    return `<label><span>${label}CAN</span>
+      <select data-can="${index}">${canOptions(draft.cans[index])}</select></label>`;
+  }).join("");
   host.querySelectorAll("[data-can]").forEach((select) => {
     select.addEventListener("change", () => {
       draft.cans[Number(select.dataset.can)] = select.value;
+    });
+  });
+  host.querySelectorAll("[data-host]").forEach((input) => {
+    input.addEventListener("change", () => {
+      draft.hosts[Number(input.dataset.host)] = input.value.trim();
     });
   });
 }
@@ -314,7 +344,15 @@ async function restart(kind, button) {
 
 function validateLocal() {
   if (!draft.vendor || !draft.model) return "先选择机械臂厂商与型号";
-  if (draft.arms === 2 && draft.cans[0] === draft.cans[1]) return "双臂的 CAN 接口不能相同";
+  if (connectionKind() === "ethernet") {
+    const hosts = draft.hosts.slice(0, draft.arms);
+    for (const host of hosts) {
+      if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host || "")) return `机械臂 IP 不合法：${host || "空"}`;
+    }
+    if (new Set(hosts).size !== hosts.length) return "机械臂 IP 不能重复";
+  } else if (draft.arms === 2 && draft.cans[0] === draft.cans[1]) {
+    return "双臂的 CAN 接口不能相同";
+  }
   const serials = new Set();
   for (const camera of draft.cameras) {
     if (!camera.serial) continue;
@@ -438,7 +476,12 @@ export async function initSetup() {
   el("setupVendor")?.addEventListener("change", () => {
     draft.vendor = el("setupVendor").value;
     draft.model = Object.keys(discovery.vendors?.[draft.vendor]?.models || {})[0] || draft.model;
-    renderArm();
+    if (connectionKind() === "ethernet" && !draft.hosts.filter(Boolean).length) {
+      draft.hosts = ["192.168.1.19", "192.168.1.18"];
+    }
+    // A different vendor is a different setup: never save over the previous name.
+    el("setupName").value = "";
+    renderAll();
   });
   el("setupModel")?.addEventListener("change", () => {
     draft.model = el("setupModel").value;
@@ -448,8 +491,10 @@ export async function initSetup() {
     if (draft.arms === 2) {
       draft.cans = [draft.cans[0] || "can1", draft.cans[1] || "can0"];
       if (draft.cans[0] === draft.cans[1]) draft.cans[1] = draft.cans[0] === "can0" ? "can1" : "can0";
+      draft.hosts = [draft.hosts[0] || "192.168.1.19", draft.hosts[1] || "192.168.1.18"];
     } else {
       draft.cans = [draft.cans[0] || "can0"];
+      draft.hosts = [draft.hosts[0] || "192.168.1.19"];
       draft.cameras.forEach((camera) => { if (camera.role === "right") camera.role = "exterior"; });
     }
     renderAll();

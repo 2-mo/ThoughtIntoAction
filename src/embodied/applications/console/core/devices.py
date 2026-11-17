@@ -38,12 +38,17 @@ def compile_setup(document: dict) -> dict:
         raise SetupError(f"{spec['label']} 不支持 {count} 台机械臂", 409)
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
     arms = sorted(document["robots"], key=lambda arm: arm["side"] != "left")
-    if count == 1:
+    if spec.get("connection", "can") == "ethernet":
+        robot = _ethernet_robot(vendor, arms[0], profile)
+        robot_name = f"{vendor}-{arms[0]['id']}.json"
+    elif count == 1:
         robot = {"profile": profile, "can_interface": arms[0]["can_interface"]}
+        robot_name = f"{profile}.json"
     else:
         robot = {"profile": profile, "version": 1,
                  "arms": [{"id": arm["side"], "can_interface": arm["can_interface"]} for arm in arms]}
-    robot_path = GENERATED_DIR / f"{profile}.json"
+        robot_name = f"{profile}.json"
+    robot_path = GENERATED_DIR / robot_name
     robot_path.write_text(json.dumps(robot, ensure_ascii=False, indent=2) + "\n")
     names = spec["workbench_profile"].get(count)
     if not names:
@@ -52,12 +57,46 @@ def compile_setup(document: dict) -> dict:
     for mode in ("collect", "policy"):
         base = json.loads((PROJECT_ROOT / "configs/workbench" / f"{names[mode]}.json").read_text())
         base["config"] = _portable(robot_path)
+        # The VR profile carries vendor grip/yaw settings; ARX is the default.
+        if spec.get("connection", "can") == "ethernet" and base.get("source") == "quest":
+            base.setdefault("vr_config", ETHERNET_VR.get(vendor, "configs/inputs/quest.json"))
         path = GENERATED_DIR / f"{names[mode]}.json"
         path.write_text(json.dumps(base, ensure_ascii=False, indent=2) + "\n")
         workbench[mode] = str(path)
     return {"robot_profile": _portable(robot_path), "workbench": workbench,
             "workbench_profile": _portable(Path(workbench["collect"])),
             "workbench_name": workbench["collect"]}
+
+
+ETHERNET_TEMPLATES = {
+    # The controller connection shape is vendor-specific; only the host is selected here.
+    "realman": PROJECT_ROOT / "configs/robots/realman/rm65-19.json",
+}
+ETHERNET_MODELS = {
+    "realman": PROJECT_ROOT / "assets/robots/realman/runtime/rm65.xml",
+}
+ETHERNET_VR = {"realman": "configs/inputs/quest-realman.json"}
+
+
+def _ethernet_robot(vendor: str, arm: dict, profile: str) -> dict:
+    """An address-based arm: write its connection file and the profile that points at it."""
+    template = ETHERNET_TEMPLATES.get(vendor)
+    model = ETHERNET_MODELS.get(vendor)
+    if template is None or not template.is_file():
+        raise SetupError(f"{VENDORS[vendor]['label']} 缺少控制器连接模板", 409)
+    if model is None or not model.is_file():
+        raise SetupError(f"{VENDORS[vendor]['label']} 缺少机器人模型文件", 409)
+    connection = json.loads(template.read_text())
+    connection["host"] = arm["host"]
+    connection_path = GENERATED_DIR / f"{vendor}-{arm['id']}-connection.json"
+    connection_path.write_text(json.dumps(connection, ensure_ascii=False, indent=2) + "\n")
+    return {
+        "profile": profile,
+        "name": f"{VENDORS[vendor]['label']} {VENDORS[vendor]['models'][arm['model']]['label']} {arm['host']}",
+        "connection_path": str(connection_path),
+        "control_hz": connection["control_hz"],
+        "model_path": str(model),
+    }
 
 
 def _portable(path: Path) -> str:
@@ -230,6 +269,7 @@ def discover(force: bool = False) -> dict:
         "can_adapters": adapters,
         "can_interfaces": interfaces,
         "vendors": {name: {"label": spec["label"], "implemented": spec["implemented"],
+                           "connection": spec.get("connection", "can"),
                            "models": {model: {"label": model_spec["label"], "arm_counts": list(model_spec["arm_counts"])}
                                       for model, model_spec in spec["models"].items()}}
                     for name, spec in VENDORS.items()},

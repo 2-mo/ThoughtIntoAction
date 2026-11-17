@@ -22,6 +22,7 @@ VENDORS = {
     "arx": {
         "label": "ARX X5",
         "implemented": True,
+        "connection": "can",
         "models": {"x5": {"label": "X5", "arm_counts": (1, 2)}},
         "robot_profile": {1: "arx5", 2: "arx5-dual"},
         # One kernel, two ways to hand it over: collection drives it from VR,
@@ -33,11 +34,18 @@ VENDORS = {
     },
     "realman": {
         "label": "RealMan",
-        "implemented": False,
-        "models": {},
-        "note": "驱动与模型待接入：提供控制代码后在这里注册 profile 与 factory",
+        "implemented": True,
+        # RM65 is reached over Ethernet (controller API), not CAN.
+        "connection": "ethernet",
+        "models": {"rm65": {"label": "RM65-BI", "arm_counts": (1,)}},
+        "robot_profile": {1: "realman.hardware"},
+        "workbench_profile": {
+            1: {"collect": "realman-left", "policy": "realman-manual"},
+        },
     },
 }
+
+HOST = re.compile(r"[0-9]{1,3}(\.[0-9]{1,3}){3}")
 
 CAMERA_ID = re.compile(r"[a-z][a-z0-9_]*_rgb")
 ROBOT_ID = re.compile(r"[a-z][a-z0-9_-]{0,31}")
@@ -118,7 +126,7 @@ def validate_setup(document) -> dict:
     robots_in = document.get("robots")
     if not isinstance(robots_in, list) or not 1 <= len(robots_in) <= 2:
         raise SetupError("需要 1 台或 2 台机械臂")
-    robots, ids, sides, interfaces = [], set(), set(), set()
+    robots, ids, sides, interfaces, hosts = [], set(), set(), set(), set()
     for index, raw in enumerate(robots_in):
         if not isinstance(raw, dict):
             raise SetupError(f"第 {index + 1} 台机械臂配置格式错误")
@@ -145,26 +153,41 @@ def validate_setup(document) -> dict:
         if side in sides:
             raise SetupError(f"重复的臂侧：{side}")
         sides.add(side)
-        interface = _text(raw.get("can_interface", "can0"), f"robots[{index}].can_interface", limit=32)
-        if not re.fullmatch(r"can\d+", interface):
-            raise SetupError(f"CAN 接口名不合法：{interface}")
-        if interface in interfaces:
-            raise SetupError(f"CAN 接口重复：{interface}")
-        interfaces.add(interface)
+        interface = host = None
+        if spec.get("connection", "can") == "can":
+            interface = _text(raw.get("can_interface", "can0"), f"robots[{index}].can_interface", limit=32)
+            if not re.fullmatch(r"can\d+", interface):
+                raise SetupError(f"CAN 接口名不合法：{interface}")
+            if interface in interfaces:
+                raise SetupError(f"CAN 接口重复：{interface}")
+            interfaces.add(interface)
+        else:
+            host = _text(raw.get("host"), f"robots[{index}].host", limit=64)
+            if not HOST.fullmatch(host):
+                raise SetupError(f"机械臂 IP 不合法：{host}")
+            if host in hosts:
+                raise SetupError(f"机械臂 IP 重复：{host}")
+            hosts.add(host)
         robots.append({
             "id": identifier,
             "vendor": vendor,
             "model": model,
             "side": side,
             "can_interface": interface,
-            "can_device": raw.get("can_device"),
+            "host": host,
+            "can_device": raw.get("can_device") if interface else None,
         })
     if len({robot["vendor"] for robot in robots}) != 1:
         raise SetupError("同一套设备只能选择一个厂商")
+    model_spec = spec["models"][robots[0]["model"]]
+    if len(robots) not in model_spec["arm_counts"]:
+        raise SetupError(
+            f"{spec['label']} {model_spec['label']} 只支持 {len(model_spec['arm_counts'])} 种臂数："
+            f"{', '.join(str(count) for count in model_spec['arm_counts'])}", 409)
     if len(robots) == 2 and sides != {"left", "right"}:
         raise SetupError("双臂配置需要 left / right 各一台")
     if len(robots) == 2 and not spec["robot_profile"].get(2):
-        raise SetupError("该厂商不支持双臂")
+        raise SetupError("该厂商不支持双臂", 409)
 
     cameras_in = document.get("cameras")
     if not isinstance(cameras_in, list) or not cameras_in:

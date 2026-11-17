@@ -11,6 +11,17 @@ from embodied.applications.console.core import devices, setup_library
 from embodied.applications.console.core.devices import SetupError, validate_setup
 
 
+def realman_document(**overrides):
+    document = {
+        "version": 1,
+        "robots": [{"id": "arm1", "vendor": "realman", "model": "rm65", "side": "single",
+                    "host": "192.168.1.19"}],
+        "cameras": [{"id": "wrist_rgb", "serial": "1", "mount": "wrist"}],
+    }
+    document.update(overrides)
+    return document
+
+
 def dual_document(**overrides):
     document = {
         "version": 1,
@@ -87,10 +98,20 @@ class SetupValidationTests(unittest.TestCase):
                 {"id": "arm2", "vendor": "arx", "model": "x5", "side": "left", "can_interface": "can1"},
             ]))
 
-    def test_unimplemented_vendor_is_refused_with_a_conflict(self):
+    def test_realman_is_addressed_by_host_not_can(self):
+        document = validate_setup(realman_document())
+        self.assertEqual(document["robots"][0]["host"], "192.168.1.19")
+        self.assertIsNone(document["robots"][0]["can_interface"])
+
+    def test_realman_rejects_bad_hosts_and_dual_arms(self):
+        with self.assertRaisesRegex(SetupError, "IP 不合法"):
+            validate_setup(realman_document(robots=[
+                {"id": "arm1", "vendor": "realman", "model": "rm65", "side": "single", "host": "not-an-ip"},
+            ]))
         with self.assertRaises(SetupError) as raised:
-            validate_setup(dual_document(robots=[
-                {"id": "arm1", "vendor": "realman", "model": "rm65", "side": "left", "can_interface": "can0"},
+            validate_setup(realman_document(robots=[
+                {"id": "arm1", "vendor": "realman", "model": "rm65", "side": "left", "host": "192.168.1.19"},
+                {"id": "arm2", "vendor": "realman", "model": "rm65", "side": "right", "host": "192.168.1.18"},
             ]))
         self.assertEqual(raised.exception.status, 409)
 
@@ -114,6 +135,25 @@ class SetupCompileTests(unittest.TestCase):
             self.assertEqual(policy["source"], "cli")
             self.assertEqual(policy["config"], str(target / "arx5-dual.json"))
             self.assertEqual(compiled["workbench"]["policy"], str(target / "real-dual-manual.json"))
+
+    def test_realman_compiles_a_connection_and_both_workbenches(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder)
+            with patch.object(devices, "GENERATED_DIR", target):
+                compiled = devices.compile_setup(validate_setup(realman_document()))
+                robot = json.loads((target / "realman-arm1.json").read_text())
+                connection = json.loads((target / "realman-arm1-connection.json").read_text())
+                collect = json.loads((target / "realman-left.json").read_text())
+                policy = json.loads((target / "realman-manual.json").read_text())
+            self.assertEqual(robot["profile"], "realman.hardware")
+            self.assertEqual(robot["control_hz"], 50)
+            self.assertTrue(robot["connection_path"].endswith("realman-arm1-connection.json"))
+            self.assertEqual(connection["host"], "192.168.1.19")
+            self.assertEqual(connection["port"], 8080)
+            self.assertEqual(collect["config"], str(target / "realman-arm1.json"))
+            self.assertEqual(collect["vr_config"], "configs/inputs/quest-realman.json")
+            self.assertEqual(policy["source"], "cli")
+            self.assertEqual(compiled["workbench"]["policy"], str(target / "realman-manual.json"))
 
     def test_single_arm_compiles_the_single_profile(self):
         with tempfile.TemporaryDirectory() as folder:
