@@ -155,6 +155,11 @@ def validate_setup(document) -> dict:
         if side in sides:
             raise SetupError(f"重复的臂侧：{side}")
         sides.add(side)
+        # Which hand drives this arm. Defaults to its own side; a rig whose XR
+        # channels are crossed overrides it instead of relabelling the arms.
+        controller = raw.get("controller") or ("right" if side == "single" else side)
+        if controller not in ("left", "right"):
+            raise SetupError(f"手柄只能是 left 或 right：{controller}")
         interface = host = None
         if spec.get("connection", "can") == "can":
             interface = _text(raw.get("can_interface", "can0"), f"robots[{index}].can_interface", limit=32)
@@ -175,6 +180,7 @@ def validate_setup(document) -> dict:
             "vendor": vendor,
             "model": model,
             "side": side,
+            "controller": controller,
             "can_interface": interface,
             "host": host,
             "can_device": raw.get("can_device") if interface else None,

@@ -16,7 +16,7 @@ from embodied.applications.workstation.pair_state import PAIR_STATE, active_pair
 from embodied.contracts.device_lease import DeviceLease
 
 
-def prepare(directory, *, backend='real', source='quest', profiles=None):
+def prepare(directory, *, backend='real', source='quest', profiles=None, controllers=None):
     """Resolve deployments and input topics without opening devices.
 
     `profiles` maps a side to a workbench profile path/name; the console passes
@@ -51,7 +51,8 @@ def prepare(directory, *, backend='real', source='quest', profiles=None):
         config['pair'] = {'id': prefix, 'side': side, 'manifest': str(PAIR_STATE)}
         if source == 'quest':
             vp = directory/(side+'-quest.json')
-            vp.write_text(json.dumps({**raw, 'controller': side, 'input_prefix': prefix}))
+            controller = (controllers or {}).get(side, side)
+            vp.write_text(json.dumps({**raw, 'controller': controller, 'input_prefix': prefix}))
             config['vr_config'] = str(vp)
         else:
             config['source'] = source
@@ -94,15 +95,19 @@ def main(argv=None):
     parser.add_argument('--source', choices=('quest','cli'), default='quest')
     parser.add_argument('--left-profile', help='Left workbench profile; default realman-left')
     parser.add_argument('--right-profile', help='Right workbench profile; default realman-right')
+    parser.add_argument('--left-controller', choices=('left', 'right'))
+    parser.add_argument('--right-controller', choices=('left', 'right'))
     args = parser.parse_args(argv)
     profiles = {side: getattr(args, side + '_profile')
                 for side in ('left', 'right') if getattr(args, side + '_profile')}
+    controllers = {side: getattr(args, side + '_controller')
+                   for side in ('left', 'right') if getattr(args, side + '_controller')}
     if active_pair() is not None:
         raise RuntimeError('双臂会话已运行；保留现有会话，不重复打开Quest或机械臂')
     directory = ROOT/'outputs/runtime/realman'/('pair-'+time.strftime('%Y%m%d-%H%M%S'))
     directory.mkdir(parents=True, exist_ok=False)
     prefix, xr_config, deployments = prepare(directory, backend=args.backend, source=args.source,
-                                             profiles=profiles)
+                                             profiles=profiles, controllers=controllers)
     stopped = False
     def stop(*_):
         nonlocal stopped

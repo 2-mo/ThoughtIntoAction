@@ -69,6 +69,7 @@ class KernelModeTests(unittest.TestCase):
             {"id": "arm2", "vendor": "realman", "model": "rm65", "side": "right", "host": "192.168.1.18"},
         ], "cameras": [{"id": "wrist_rgb", "serial": "1", "mount": "wrist"}]}
         compiled = {"pair": {"left": "/tmp/set/realman-left.json", "right": "/tmp/set/realman-right.json"},
+                    "controllers": {"left": "right", "right": "left"},
                     "workbench": {"left": "/tmp/set/realman-left.json", "right": "/tmp/set/realman-right.json"}}
         with patch.object(devices, "load_setup", return_value=setup), \
                 patch.object(devices, "compile_setup", return_value=compiled), \
@@ -78,6 +79,8 @@ class KernelModeTests(unittest.TestCase):
         self.assertIn("quest", argv)
         self.assertIn("/tmp/set/realman-left.json", argv)
         self.assertIn("/tmp/set/realman-right.json", argv)
+        self.assertEqual(argv[argv.index("--left-controller") + 1], "right")
+        self.assertEqual(argv[argv.index("--right-controller") + 1], "left")
 
     def test_realman_dual_policy_uses_the_cli_source(self):
         from embodied.applications.console.core import devices

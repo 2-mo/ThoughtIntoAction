@@ -68,8 +68,15 @@ export function setupConnection() {
   return draft ? connectionKind() : "can";
 }
 
+function controllerFor(side) {
+  if (side === "single") return draft.swapHands ? "left" : "right";
+  if (!draft.swapHands) return side;
+  return side === "left" ? "right" : "left";
+}
+
 function robotEntry(side, index) {
-  const base = { id: index === 0 ? "arm1" : "arm2", vendor: draft.vendor, model: draft.model, side };
+  const base = { id: index === 0 ? "arm1" : "arm2", vendor: draft.vendor, model: draft.model, side,
+                 controller: controllerFor(side) };
   return connectionKind() === "ethernet"
     ? { ...base, host: draft.hosts[index] || "" }
     : { ...base, can_interface: draft.cans[index] || (index === 0 ? "can1" : "can0") };
@@ -121,6 +128,8 @@ function fromDocument(document) {
       ? [robots[0]?.can_interface || "can1", robots[1]?.can_interface || "can0"]
       : [robots[0]?.can_interface || "can0"],
     hosts: robots.map((robot) => robot.host || ""),
+    // A rig whose XR channels are crossed stores the opposite hand per arm.
+    swapHands: robots.length === 2 && robots.some((robot) => robot.controller && robot.controller !== robot.side),
     cameras,
   };
 }
@@ -240,6 +249,7 @@ function renderArm() {
       draft.hosts[Number(input.dataset.host)] = input.value.trim();
     });
   });
+  if (el("setupSwapHands")) el("setupSwapHands").checked = Boolean(draft.swapHands);
 }
 
 function renderCameraCount() {
@@ -501,6 +511,9 @@ export async function initSetup() {
   });
   el("setupModel")?.addEventListener("change", () => {
     draft.model = el("setupModel").value;
+  });
+  el("setupSwapHands")?.addEventListener("change", () => {
+    draft.swapHands = el("setupSwapHands").checked;
   });
   el("setupArms")?.addEventListener("change", () => {
     draft.arms = Number(el("setupArms").value);

@@ -45,7 +45,7 @@ def _compile_ethernet(vendor: str, spec: dict, arms: list[dict], profile: str) -
             if base.get("source") == "quest":
                 vr = json.loads((PROJECT_ROOT / ETHERNET_VR.get(vendor, "configs/inputs/quest.json")).read_text())
                 # No external owner: this kernel publishes and consumes its own XR topics.
-                vr.setdefault("controller", "right")
+                vr["controller"] = arms[0].get("controller") or "right"
                 vr.setdefault("input_prefix", None)
                 vr_path = GENERATED_DIR / f"{vendor}-{mode}-vr.json"
                 vr_path.write_text(json.dumps(vr, ensure_ascii=False, indent=2) + "\n")
@@ -65,7 +65,9 @@ def _compile_ethernet(vendor: str, spec: dict, arms: list[dict], profile: str) -
         path = GENERATED_DIR / f"{vendor}-{side}.json"
         path.write_text(json.dumps(base, ensure_ascii=False, indent=2) + "\n")
         workbench[side] = str(path)
+    controllers = {arm["side"]: arm.get("controller") or arm["side"] for arm in arms}
     return {"robot_profile": _portable(built["left"]), "pair": workbench,
+            "controllers": controllers,
             "workbench": workbench, "workbench_name": workbench["left"]}
 
 

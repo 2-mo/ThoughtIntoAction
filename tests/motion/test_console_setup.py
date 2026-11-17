@@ -173,9 +173,9 @@ class SetupCompileTests(unittest.TestCase):
             with patch.object(devices, "GENERATED_DIR", target):
                 compiled = devices.compile_setup(validate_setup(realman_document(robots=[
                     {"id": "arm1", "vendor": "realman", "model": "rm65", "side": "left",
-                     "host": "192.168.1.19"},
+                     "host": "192.168.1.19", "controller": "right"},
                     {"id": "arm2", "vendor": "realman", "model": "rm65", "side": "right",
-                     "host": "192.168.1.18"},
+                     "host": "192.168.1.18", "controller": "left"},
                 ])))
                 left = json.loads((target / "realman-arm1-connection.json").read_text())
                 right = json.loads((target / "realman-arm2-connection.json").read_text())
@@ -187,6 +187,7 @@ class SetupCompileTests(unittest.TestCase):
             self.assertTrue(left_bench["config"].endswith("realman-arm1.json"))
             self.assertTrue(right_bench["config"].endswith("realman-arm2.json"))
             self.assertEqual(set(compiled["pair"]), {"left", "right"})
+            self.assertEqual(compiled["controllers"], {"left": "right", "right": "left"})
 
     def test_each_arm_uses_its_own_tool_frame_template(self):
         with tempfile.TemporaryDirectory() as folder:
