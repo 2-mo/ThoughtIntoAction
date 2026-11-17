@@ -35,20 +35,6 @@
       </div>
     </section>
 
-      <section class="overview-card" aria-labelledby="setupTitle" id="setupCard">
-        <h2 id="setupTitle">接入配置</h2>
-        <p class="op-hint">选择机械臂与相机，并指定每台相机装在哪个臂的腕部或作为固定外部相机。保存后按提示重启对应服务。</p>
-        <div id="setupRobots" class="setup-block"></div>
-        <div id="setupCameras" class="setup-block"></div>
-        <div class="op-actions setup-actions">
-          <button id="setupAddRobot" type="button">+ 机械臂</button>
-          <button id="setupAddCamera" type="button">+ 相机</button>
-          <button id="setupRefresh" type="button" title="重新枚举已连接设备">重新探测</button>
-          <button id="setupSave" type="button" class="primary">保存配置</button>
-        </div>
-        <p id="setupMessage" class="op-message" role="status"></p>
-        <div id="setupRestarts" class="setup-restarts" hidden></div>
-      </section>
     </div>
     <aside class="overview-side">
       <section class="overview-card overview-wizard" aria-labelledby="overviewWizardTitle">
@@ -104,6 +90,41 @@
         </ol>
         <p id="wizardMessage" class="op-message" role="status"></p>
       </section>
+      <section class="overview-card" aria-labelledby="overviewDeviceTitle">
+        <h2 id="overviewDeviceTitle">设备</h2>
+        <div class="op-row">
+          <div class="op-info">
+            <strong>相机服务</strong>
+            <span id="overviewCameraState" data-state="off">未启动</span>
+          </div>
+          <div class="op-actions">
+            <button id="overviewCameraStart" type="button" class="primary">启动</button>
+            <button id="overviewCameraStop" type="button">停止</button>
+          </div>
+        </div>
+        <p class="op-hint" id="overviewCameraHint">腕部相机 · WebRTC</p>
+        <p class="op-message" id="overviewCameraMessage" role="status"></p>
+      </section>
+      <p id="overviewMessage" class="overview-message" role="status">正在读取内核状态…</p>
+    </aside>
+    <aside class="overview-extra">
+      <details class="overview-card overview-setup" id="setupCard">
+        <summary>
+          <h2 id="setupTitle">接入配置</h2>
+          <span id="setupSummary" class="op-hint">展开选择机械臂、相机与绑定</span>
+        </summary>
+        <p class="op-hint">选择机械臂与相机，并指定每台相机装在哪个臂的腕部或作为固定外部相机。保存后按提示重启对应服务。</p>
+        <div id="setupRobots" class="setup-block"></div>
+        <div id="setupCameras" class="setup-block"></div>
+        <div class="op-actions setup-actions">
+          <button id="setupAddRobot" type="button">+ 机械臂</button>
+          <button id="setupAddCamera" type="button">+ 相机</button>
+          <button id="setupRefresh" type="button" title="重新枚举已连接设备">重新探测</button>
+          <button id="setupSave" type="button" class="primary">保存配置</button>
+        </div>
+        <p id="setupMessage" class="op-message" role="status"></p>
+        <div id="setupRestarts" class="setup-restarts" hidden></div>
+      </details>
       <section class="overview-card" aria-labelledby="overviewRuntimeTitle">
         <h2 id="overviewRuntimeTitle">运行状态</h2>
         <dl class="overview-list">
@@ -143,22 +164,6 @@
         </div>
         <p class="op-message" id="overviewKernelMessage" role="status"></p>
       </section>
-
-      <section class="overview-card" aria-labelledby="overviewDeviceTitle">
-        <h2 id="overviewDeviceTitle">设备</h2>
-        <div class="op-row">
-          <div class="op-info">
-            <strong>相机服务</strong>
-            <span id="overviewCameraState" data-state="off">未启动</span>
-          </div>
-          <div class="op-actions">
-            <button id="overviewCameraStart" type="button" class="primary">启动</button>
-            <button id="overviewCameraStop" type="button">停止</button>
-          </div>
-        </div>
-        <p class="op-hint" id="overviewCameraHint">腕部相机 · WebRTC</p>
-        <p class="op-message" id="overviewCameraMessage" role="status"></p>
-      </section>
       <section class="overview-card" aria-labelledby="overviewEntryTitle">
         <h2 id="overviewEntryTitle">入口</h2>
         <div class="overview-links">
@@ -166,7 +171,7 @@
           <a href="/collection">数据采集 <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
         </div>
       </section>
-      <p id="overviewMessage" class="overview-message" role="status">正在读取内核状态…</p>
+
     </aside>
   </section>
 </main>
