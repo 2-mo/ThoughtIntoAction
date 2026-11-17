@@ -181,12 +181,15 @@ def build_command(command: str, arguments: list[str], config: dict) -> tuple[lis
         return [str(python), "-B", "-m", MODULE_COMMANDS[command], *arguments], env
     prefix = python.parent.parent
     # Device support is an owned package; references never enter the import path.
+    # Only the legacy ARX drivers import the vendored SDK; camera, viewer,
+    # dataset and platform commands must run on a machine without it.
     paths = [PROJECT_ROOT / "src"]
-    if sdk_path := config["environment"].get("arm_sdk_python"):
-        sdk_path = resolve_path(sdk_path)
-        if not list(sdk_path.glob("arx5_interface*.so")):
-            raise RuntimeError("Patched arm SDK missing; see docs/guides/gripper-startup.md")
-        paths.insert(0, sdk_path)
+    if command in HARDWARE_COMMANDS | {"control-arm", "teleop-official-x5", "teleop-presets-x5"}:
+        if sdk_path := config["environment"].get("arm_sdk_python"):
+            sdk_path = resolve_path(sdk_path)
+            if not list(sdk_path.glob("arx5_interface*.so")):
+                raise RuntimeError("Patched arm SDK missing; see docs/guides/gripper-startup.md")
+            paths.insert(0, sdk_path)
     env["PYTHONPATH"] = os.pathsep.join(map(str, paths))
     # rebuild-xr-sdk installs the native XR companion library into this environment.
     libs = [str(prefix / "lib")]
