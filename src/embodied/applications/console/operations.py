@@ -330,6 +330,12 @@ class OperationManager:
         arms = len(setup.get("robots") or ())
         input_mode = "quest" if mode == "collect" else "none"
         if vendor != "arx":
+            if mode == "collect":
+                # quest.shared is a shared-namespace input owned by robot-pair;
+                # a single kernel has no input owner of its own.
+                raise OperationError(
+                    "RealMan 的 Quest 遥操要走 robot-pair（共享输入所有者），控制台的采集入口还没接入；"
+                    "先用 ./run.sh realman quest 或 ./run.sh robot-pair，推理可以直接从页面启动", 409)
             try:
                 compiled = compile_setup(setup)
             except SetupError as exc:

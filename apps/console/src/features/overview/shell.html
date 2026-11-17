@@ -110,13 +110,15 @@
     <aside class="overview-extra">
       <details class="overview-card overview-setup" id="setupCard">
         <summary>
-          <h2 id="setupTitle">接入配置</h2>
-          <span id="setupSummary" class="op-hint">未选择配置</span>
+          <div class="setup-summary-head">
+            <h2 id="setupTitle">接入配置</h2>
+            <span id="setupSummary" class="op-hint">未选择配置</span>
+          </div>
+          <div id="setupLibraryList" class="setup-library-list"></div>
         </summary>
         <p class="op-hint">选好机械臂和相机，命名保存；以后点一下就能整套载入。</p>
 
         <div class="setup-library">
-          <div id="setupLibraryList" class="setup-library-list"></div>
           <div class="setup-library-row">
             <input id="setupName" type="text" maxlength="40" placeholder="配置名称，如 ARX 双臂 · 三相机">
             <button id="setupSave" type="button" class="primary">保存</button>

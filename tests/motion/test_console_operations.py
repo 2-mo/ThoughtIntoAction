@@ -41,7 +41,7 @@ class KernelModeTests(unittest.TestCase):
         with self.assertRaises(operations.OperationError):
             self.manager._mode_target("teleop")
 
-    def test_realman_mode_uses_the_generated_workbench_without_can(self):
+    def test_realman_policy_mode_uses_the_generated_workbench_without_can(self):
         from embodied.applications.console.core import devices
 
         setup = {"version": 1, "robots": [{"id": "arm1", "vendor": "realman", "model": "rm65",
@@ -52,11 +52,22 @@ class KernelModeTests(unittest.TestCase):
         with patch.object(devices, "load_setup", return_value=setup), \
                 patch.object(devices, "compile_setup", return_value=compiled), \
                 patch.object(operations, "live_runs", return_value=[]):
-            argv, _ = self.manager._kernel({"mode": "collect", "confirm": True})
-        self.assertIn("/tmp/set/realman-left.json", argv)
+            argv, _ = self.manager._kernel({"mode": "policy", "confirm": True})
+        self.assertIn("/tmp/set/realman-manual.json", argv)
         self.assertIn("realman", argv)
-        self.assertIn("quest", argv)
+        self.assertIn("none", argv)
         self.assertFalse(any("can-up" in part for part in argv))
+
+    def test_realman_collect_needs_the_pair_supervisor(self):
+        from embodied.applications.console.core import devices
+
+        setup = {"version": 1, "robots": [{"id": "arm1", "vendor": "realman", "model": "rm65",
+                                           "side": "single", "host": "192.168.1.19"}],
+                 "cameras": [{"id": "wrist_rgb", "serial": "1", "mount": "wrist"}]}
+        with patch.object(devices, "load_setup", return_value=setup):
+            with self.assertRaises(operations.OperationError) as raised:
+                self.manager._mode_target("collect")
+        self.assertEqual(raised.exception.status, 409)
 
     def test_policy_mode_uses_the_generated_manual_workbench(self):
         from embodied.applications.console.core import devices

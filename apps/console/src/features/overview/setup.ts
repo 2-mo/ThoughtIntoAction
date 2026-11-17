@@ -185,10 +185,19 @@ function renderLibrary() {
       <button type="button" class="setup-chip-del" data-del="${escape(entry.slug)}" title="删除">×</button>
     </span>`).join("");
   host.querySelectorAll("[data-load]").forEach((button) => {
-    button.addEventListener("click", () => applyEntry(button.dataset.load));
+    button.addEventListener("click", (event) => {
+      // The strip lives inside <summary>; a chip click loads, it does not toggle.
+      event.preventDefault();
+      event.stopPropagation();
+      applyEntry(button.dataset.load);
+    });
   });
   host.querySelectorAll("[data-del]").forEach((button) => {
-    button.addEventListener("click", () => removeEntry(button.dataset.del));
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      removeEntry(button.dataset.del);
+    });
   });
 }
 
