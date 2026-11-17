@@ -64,6 +64,10 @@ function connectionKind() {
   return discovery.vendors?.[draft.vendor]?.connection || "can";
 }
 
+export function setupConnection() {
+  return draft ? connectionKind() : "can";
+}
+
 function robotEntry(side, index) {
   const base = { id: index === 0 ? "arm1" : "arm2", vendor: draft.vendor, model: draft.model, side };
   return connectionKind() === "ethernet"

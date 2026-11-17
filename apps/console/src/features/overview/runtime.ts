@@ -3,7 +3,7 @@
 import { withToken } from "../../api/control-protocol";
 import { listOperations, startOperation, stopOperation } from "../../api/operations";
 import { questStatus, runAction } from "../../api/system";
-import { initSetup } from "./setup";
+import { initSetup, setupConnection } from "./setup";
 
 const POLL_MS = 200;
 const OPERATIONS_MS = 2000;
@@ -280,10 +280,12 @@ function renderWizard() {
   const data = lastStatus;
   let done = 0;
 
-  const canOk = Boolean(data?.can?.up);
+  const ethernet = setupConnection() === "ethernet";
+  const canOk = ethernet || Boolean(data?.can?.up);
   if (canOk) done += 1;
   renderStep("wizardCan", "wizardCanBadge", canOk ? "done" : "todo",
-    canOk ? "已建立" : "未建立", canOk ? "can0 UP" : "需要建立 can0");
+    ethernet ? "以太网" : canOk ? "已建立" : "未建立",
+    ethernet ? "以太网连接，无需 CAN" : canOk ? "can0 UP" : "需要建立 can0");
   ui.wizardCanAction.hidden = canOk;
 
   const q = quest || {};
