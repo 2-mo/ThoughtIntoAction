@@ -4798,3 +4798,14 @@ body[data-camera-set="wrist_rgb"] #cubeStackButton {
   background: rgba(53, 201, 154, .16);
   color: #a5f8dc;
 }
+
+/* 接入配置提示：非 ARX 机型只保留通用控制 */
+.control-setup-note {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 189, 107, .35);
+  border-radius: 8px;
+  background: rgba(255, 189, 107, .08);
+  color: #ffcf8a;
+  font-size: .74rem;
+}

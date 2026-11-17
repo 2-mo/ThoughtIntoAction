@@ -2708,3 +2708,35 @@ window.addEventListener("arx5-control-speed", () => {
 
 syncGripperInput(ui.gripperWidth.value);
 syncParkButton();
+
+// 接入配置决定这一页能用哪些工具：三维场景、标定与方块工具都建立在 ARX 模型上。
+(async () => {
+  const note = document.getElementById("controlSetupNote");
+  try {
+    const response = await fetch(withToken("/api/v1/setup"), { cache: "no-store" });
+    const payload = await response.json();
+    const setup = payload?.setup;
+    const robot = setup?.robots?.[0];
+    if (!robot || robot.vendor === "arx") return;
+    const label = robot.vendor === "realman" ? "RealMan RM65" : robot.vendor;
+    const arms = setup.robots.length === 2 ? "双臂" : "单臂";
+    if (note) {
+      note.hidden = false;
+      note.textContent = `当前接入配置：${label} ${arms} · 三维场景、桌面/相机标定与方块工具仅支持 ARX；`
+        + "关节与末端控制仍通过内核，可正常使用。";
+    }
+    for (const id of ["cubePickButton", "cubeMoveButton", "cubePlaceButton",
+                      "cubeHomeButton", "cubeStackButton", "tableCalibrationButton",
+                      "cameraCalibrationButton", "lightCalibrationButton"]) {
+      const button = document.getElementById(id);
+      if (button) {
+        button.disabled = true;
+        button.title = "仅 ARX 机型可用";
+      }
+    }
+    const modelText = document.getElementById("robotModelLoadingText");
+    if (modelText) modelText.textContent = "该机型暂不提供三维预览";
+  } catch {
+    // 读不到配置时保持原样，页面本身仍可工作。
+  }
+})();

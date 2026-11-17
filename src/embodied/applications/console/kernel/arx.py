@@ -349,6 +349,13 @@ class ArxConsole:
         if not runs:
             raise RuntimeError('没有运行中的内核：先运行 ./run.sh kernel sim 或 ./run.sh kernel real。')
         run = runs[-1]
+        if self.run is None:
+            # A pair runs two kernels; follow the side the operator selected
+            # instead of whichever directory sorts last.
+            from embodied.applications.workstation.pair_state import active_pair, selected_run
+            pair = active_pair()
+            if pair is not None:
+                _side, run = selected_run(pair)
         client = ControlClient(run)
         robot, limits = await self.read_description(client)
         self.client, self.robot, self.motion_limits = client, robot, limits
