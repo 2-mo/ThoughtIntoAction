@@ -84,8 +84,10 @@ class Ingress(NativeIngress):
                 self.home_released = True
                 self.home_blocked = False
             secondary = bool(inp.buttons_bitset & 8)
-            if (secondary and self.home_released and not self.home_blocked and
-                    not (inp.buttons_bitset & 4) and inp.trigger < .2 and inp.grip < .2):
+            # Same chord as the ARX profile: hold A+B together to return Home.
+            both = inp.buttons_bitset & 12 == 12
+            if (both and self.home_released and not self.home_blocked and
+                    inp.trigger < .2 and inp.grip < .2):
                 if self.home_since is None:
                     self.home_since = now
                 home = now-self.home_since >= 1.
