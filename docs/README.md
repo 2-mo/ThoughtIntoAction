@@ -20,6 +20,7 @@
 | [采集与监看](guides/recording.md) | 采集按键、episode、回放与校验 |
 | [控制台运行手册](guides/console-runbook.md) | 双臂 + 相机 + VR 的启动顺序、网页点击流程与排障 |
 | [接入配置](guides/device-setup.md) | 总览页配置机械臂/相机与绑定、厂商接入方式、重启语义 |
+| [RealMan RM65](realman/README.md) | 驱动与配置、真机接入、MuJoCo 仿真、复测清单 |
 | [VR 遥操采集运行手册](guides/vr-collection-runbook.md) | 数据流、启动前置条件、状态判定与故障对照 |
 | [双臂扩展接口](guides/dual-arm-extension.md) | 单臂/双臂切换的状态接口与接入清单 |
 | [双臂 VR 遥操链路](guides/dual-arm-vr-pipeline.md) | 拓扑、启动顺序、协议语义与故障对照 |
