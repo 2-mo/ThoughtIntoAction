@@ -118,6 +118,16 @@ def main(argv=None):
     try:
         lease = DeviceLease('realman-pair')
         with ExitStack() as resources:
+            # The XR owner publishes before the kernels seed their routers;
+            # otherwise a kernel whose controller is still quiet times out its
+            # initial readiness and stays Disabled (the ARX dual profile starts
+            # the device first for the same reason).
+            if xr_config is not None:
+                stream = resources.enter_context((directory/'quest.log').open('w'))
+                binary = ROOT/'src/embodied/devices/inputs/quest/native/bin/rollio-device-xrobot'
+                children['quest'] = subprocess.Popen([str(binary), 'run', '--config', str(xr_config)],
+                    cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
+                time.sleep(1.0)
             # Reuse normal workbench lifecycle, including the source lease and
             # runtime's gateway, observer, planner and target controller.
             for side, path in deployments.items():
@@ -127,7 +137,8 @@ def main(argv=None):
                     cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
             deadline = time.monotonic()+30
             while not stopped:
-                failed = [(side,p.returncode) for side,p in children.items() if p.poll() is not None]
+                failed = [(side,p.returncode) for side,p in children.items()
+                          if side != 'quest' and p.poll() is not None]
                 if failed:
                     raise RuntimeError(f'双臂内核退出：{failed}；日志：{directory}')
                 runs = find_runs(prefix)
@@ -139,10 +150,6 @@ def main(argv=None):
             if not stopped:
                 publish_manifest(prefix, runs)
                 if xr_config is not None:
-                    stream = resources.enter_context((directory/'quest.log').open('w'))
-                    binary = ROOT/'src/embodied/devices/inputs/quest/native/bin/rollio-device-xrobot'
-                    children['quest'] = subprocess.Popen([str(binary), 'run', '--config', str(xr_config)],
-                        cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
                     print('双臂已接入统一内核；原生Quest相对映射：左X / 右A按住150ms后松开切换跟随/保持，'
                           'Grip跟随，Trigger控制夹爪。启动不自动使能、回零或张开。', flush=True)
                 else:
@@ -153,7 +160,9 @@ def main(argv=None):
                     print(f'{side} run: {path}', flush=True)
                 print(f'日志：{directory}', flush=True)
                 while not stopped:
-                    failed = [(side,p.returncode) for side,p in children.items() if p.poll() is not None]
+                    # A missing headset must not take the arms down.
+                    failed = [(side,p.returncode) for side,p in children.items()
+                              if side != 'quest' and p.poll() is not None]
                     if failed:
                         raise RuntimeError(f'双臂组件退出：{failed}；停止两个内核。日志：{directory}')
                     time.sleep(.1)
