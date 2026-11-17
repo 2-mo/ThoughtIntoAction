@@ -50,8 +50,8 @@ class Routing(NativeRouting):
 
 
 class Ingress(NativeIngress):
-    def __init__(self, prefix, dependencies, gripper=True, settings=None):
-        super().__init__(prefix, dependencies, gripper=False)
+    def __init__(self, prefix, dependencies, gripper=True, *, dual=False, settings=None):
+        super().__init__(prefix, dependencies, gripper=False, dual=dual)
         from embodied.control.ipc.services import open_service, make_subscriber
         from embodied.control.ipc.types import XrControllerInput
         vr = settings.vr
