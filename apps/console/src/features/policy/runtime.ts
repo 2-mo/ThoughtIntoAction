@@ -342,9 +342,21 @@ function selectModel(modelId) {
 function updateModelHint() {
   if (!ui.policyModelHint) return;
   const model = selectedModel();
-  const offline = Boolean(model) && model.state !== "online";
-  ui.policyModelHint.hidden = !offline;
-  ui.policyModelHint.textContent = offline ? `${model.name} 当前离线，运行会连不上` : "";
+  if (!model) {
+    ui.policyModelHint.hidden = true;
+    ui.policyModelHint.textContent = "";
+    return;
+  }
+  if (model.occupied_by) {
+    ui.policyModelHint.hidden = false;
+    ui.policyModelHint.textContent = `${model.name} 的端口正被 ${model.occupied_by} 占用，先卸载它`;
+  } else if (model.state !== "online") {
+    ui.policyModelHint.hidden = false;
+    ui.policyModelHint.textContent = `${model.name} 当前离线，运行会连不上`;
+  } else {
+    ui.policyModelHint.hidden = true;
+    ui.policyModelHint.textContent = "";
+  }
 }
 
 async function mountModel(modelId) {

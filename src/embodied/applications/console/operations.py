@@ -337,7 +337,7 @@ class OperationManager:
 
         path = str(socket_path())
         try:
-            with open("/proc/net/unix", encoding="ascii") as handle:
+            with open("/proc/net/unix", encoding="utf-8", errors="replace") as handle:
                 if any(line.rstrip().endswith(path) for line in handle):
                     raise OperationError("共享相机服务已在运行", 409)
         except OSError:

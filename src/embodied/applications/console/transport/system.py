@@ -203,7 +203,7 @@ def shared_camera_listening() -> bool:
 
     path = str(socket_path())
     try:
-        with open("/proc/net/unix", encoding="ascii") as handle:
+        with open("/proc/net/unix", encoding="utf-8", errors="replace") as handle:
             return any(line.rstrip().endswith(path) for line in handle)
     except OSError:
         return False

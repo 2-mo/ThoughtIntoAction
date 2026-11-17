@@ -83,6 +83,39 @@ class RegistryTests(unittest.TestCase):
         with self.assertRaises(models.ModelError):
             models.mount("missing", entries)    # ids only, never commands
 
+    def test_local_model_online_only_when_its_own_pid_is_alive(self):
+        import os
+        entries = self.load()
+        me = os.getpid()
+        home = Path(self.folder.name) / "m"
+        home.mkdir()
+        entries[0]["local_dir"] = str(home)
+        (home / "serve.pid").write_text(f"{me}" + "\n")
+        with patch.object(models, "probe", return_value=True):
+            state = models.describe(entries)[0]
+        self.assertEqual(state["state"], "online")
+        self.assertIsNone(state["occupied_by"])
+        # Another model on the same port reports itself offline and names the owner.
+        other = dict(entries[0], id="b2", name="模型 B2", local_dir=str(Path(self.folder.name) / "other"))
+        with patch.object(models, "probe", return_value=True):
+            states = {entry["id"]: entry for entry in models.describe([entries[0], other])}
+        self.assertEqual(states["b2"]["state"], "offline")
+        self.assertEqual(states["b2"]["occupied_by"], "模型 A")
+
+    def test_mount_refuses_a_second_local_model_on_the_same_port(self):
+        import os
+        entries = self.load()
+        home = Path(self.folder.name) / "m"
+        home.mkdir()
+        entries[0]["local_dir"] = str(home)
+        (home / "serve.pid").write_text(f"{os.getpid()}\n")   # still loading: no health yet
+        second = dict(entries[0], id="b2", name="模型 B2", local_dir=str(Path(self.folder.name) / "other"),
+                      mount=["bash", "-lc", "true"], unmount=["bash", "-lc", "true"])
+        with patch.object(models, "probe", return_value=False), patch.object(models.subprocess, "Popen") as popen:
+            with self.assertRaisesRegex(models.ModelError, "先卸载 模型 A"):
+                models.mount("b2", [entries[0], second])
+        popen.assert_not_called()
+
     def test_unmount_runs_and_clears_the_mount_time(self):
         entries = self.load()
         models._mounted["a"] = models.time.monotonic()

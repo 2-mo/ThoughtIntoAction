@@ -7,12 +7,35 @@ id = "towel_v2_local"
 name = "叠毛巾 v2 · 本地 5070"
 prompt = "Fold the towel on the table."
 url = "ws://127.0.0.1:8008"
-vram = "约 7.2 GB 显存 · 首次启动含编译约 2–4 分钟"
+# 本地模型目录：serve.pid 决定「谁占着端口」，8008 同一时间只能跑一个模型。
+local_dir = "/home/arx/work/models/towel_v2"
+vram = "约 7.1 GB 显存"
+note = "首次启动约 2–4 分钟"
 mount = [
-  "bash", "-lc",
-  "cd /home/arx/work/arx_pi05 && CUDA_VISIBLE_DEVICES=0 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 setsid /home/arx/work/openpi/.venv/bin/python /home/arx/work/serve_local.py checkpoints/pi05_arx_lora/towel_fold_v2_gemma_lora_expert_full/19999 --asset-id towel_fold_v2 --host 0.0.0.0 --port 8008 --num-steps 5 >> '{log}' 2>&1 < /dev/null &",
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "serve", "towel_v2", "--port", "8008", "--gpu", "0", "--mem-fraction", "0.9",
 ]
-unmount = ["bash", "-lc", "pkill -f 'openpi/.venv/bin/python /home/arx/work/serve_local.py'"]
+unmount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "stop", "towel_v2",
+]
+
+[[models]]
+id = "cup_wipe_v1"
+name = "杯子 · 本地 5070"
+prompt = "扶起杯子并擦掉桌子上的污渍"
+url = "ws://127.0.0.1:8008"
+local_dir = "/home/arx/work/models/cup_wipe_v1"
+vram = "约 7.1 GB 显存 · SigLIP 全量（params 7.17 GB）"
+note = "首次启动约 2–4 分钟"
+mount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "serve", "cup_wipe_v1", "--port", "8008", "--gpu", "0", "--mem-fraction", "0.9",
+]
+unmount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "stop", "cup_wipe_v1",
+]
 
 [[models]]
 id = "towel_v2_gpu2"

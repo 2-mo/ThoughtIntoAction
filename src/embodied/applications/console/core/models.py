@@ -59,6 +59,9 @@ def load_models(path: Path | None = None) -> list[dict]:
             "url": url,
             "vram": str(entry.get("vram") or ""),
             "note": str(entry.get("note") or ""),
+            # Local models record their serving pid here; two of them cannot
+            # share one port, so the pid decides who owns it.
+            "local_dir": str(entry.get("local_dir") or "") or None,
             "mountable": bool(entry.get("mount_ready", True)),
             "mount": _argv(entry["mount"], "mount") if entry.get("mount") else None,
             "unmount": _argv(entry["unmount"], "unmount") if entry.get("unmount") else None,
@@ -88,6 +91,38 @@ def probe(url: str, timeout: float = PROBE_TIMEOUT_S) -> bool:
 _mounted: dict[str, float] = {}
 
 
+def _pid(entry: dict) -> int | None:
+    local_dir = entry.get("local_dir")
+    if not local_dir:
+        return None
+    try:
+        return int((Path(local_dir) / "serve.pid").read_text().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _alive(pid: int | None) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)          # signal 0 only asks whether the process exists
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+
+
+def _serving(entry: dict) -> bool:
+    """A local model is serving only when its own pid is alive."""
+    return bool(entry.get("local_dir")) and _alive(_pid(entry))
+
+
+def _owner_of(url: str, entries: list[dict], exclude: str | None = None) -> dict | None:
+    for entry in entries:
+        if entry["id"] != exclude and entry["url"] == url and _serving(entry):
+            return entry
+    return None
+
+
 def _command(argv: list[str], model_id: str) -> list[str]:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log = str(LOG_DIR / f"{model_id}.log")
@@ -95,12 +130,20 @@ def _command(argv: list[str], model_id: str) -> list[str]:
 
 
 def mount(model_id: str, models: list[dict] | None = None) -> dict:
-    entry = _find(model_id, models)
+    entries = load_models() if models is None else models
+    entry = _find(model_id, entries)
     if not entry["mount"]:
         raise ModelError(f"{model_id} 没有登记挂载命令")
     if not entry["mountable"]:
         raise ModelError(entry["note"] or f"{model_id} 的挂载命令尚未核对")
+    # One port, one local model: another local model already holding it must be
+    # unmounted first, whether it is answering yet or still loading.
+    owner = _owner_of(entry["url"], entries, exclude=model_id)
+    if owner is not None:
+        raise ModelError(f"先卸载 {owner['name']}，本地只能同时运行一个模型")
     if probe(entry["url"]):
+        if entry.get("local_dir") and not _serving(entry):
+            raise ModelError("端口已被其他进程占用，先停止它再挂载")
         _mounted[model_id] = time.monotonic()
         return {"id": model_id, "state": "online"}
     proc = subprocess.Popen(          # the command detaches itself; nothing to wait for
@@ -135,19 +178,31 @@ def _find(model_id: str, models: list[dict] | None = None) -> dict:
 
 
 def describe(models: list[dict] | None = None) -> list[dict]:
-    """Registry plus live state; the probe is the only source of truth for online."""
+    """Registry plus live state; the probe and the local pid decide online."""
     entries = load_models() if models is None else models
     now = time.monotonic()
+    healthy: dict[str, bool] = {}
     result = []
     for entry in entries:
-        online = probe(entry["url"])
+        url = entry["url"]
+        if url not in healthy:
+            healthy[url] = probe(url)
+        serving = _serving(entry)
+        # A local model that is not the one serving this port reports offline
+        # even though the port answers: the name on the card would be wrong.
+        online = healthy[url] and (serving or not entry.get("local_dir"))
+        occupied_by = None
+        if healthy[url] and entry.get("local_dir") and not serving:
+            owner = _owner_of(url, entries, exclude=entry["id"])
+            occupied_by = owner["name"] if owner else "另一个进程"
         started = _mounted.get(entry["id"])
         if online:
             state = "online"
-        elif started is not None and now - started < STARTING_S:
+        elif started is not None and now - started < STARTING_S and not occupied_by:
             state = "starting"
         else:
             state = "offline"
-        result.append({**{key: value for key, value in entry.items() if key not in ("mount", "unmount")},
-                       "state": state})
+        result.append({**{key: value for key, value in entry.items()
+                          if key not in ("mount", "unmount", "local_dir")},
+                       "state": state, "occupied_by": occupied_by})
     return result
