@@ -26,6 +26,8 @@ QUEST_ACTIONS = {
     # One USB2CAN adapter per arm: bring up can0/can1 in adapter order.
     "can-up": ["can-up", "--all"],
     "quest-prepare": ["quest-transport", "prepare"],
+    # Fake "worn" so the headset keeps the XR session and both controllers publishing.
+    "quest-wake": ["quest-wake", "start"],
 }
 _quest_cache: dict[str, object] = {"at": 0.0, "value": None}
 

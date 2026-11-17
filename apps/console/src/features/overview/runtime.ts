@@ -26,7 +26,7 @@ const ui = Object.fromEntries(
     "overviewCameraHint", "overviewCameraMessage",
     "wizardProgress", "wizardMessage", "wizardCan", "wizardCanBadge", "wizardCanDetail",
     "wizardCanAction", "wizardQuest", "wizardQuestBadge", "wizardQuestDetail",
-    "wizardQuestAction", "wizardKernel", "wizardKernelBadge", "wizardKernelDetail",
+    "wizardQuestAction", "wizardWakeAction", "wizardKernel", "wizardKernelBadge", "wizardKernelDetail",
     "wizardKernelAction", "wizardTeleop", "wizardTeleopBadge", "wizardTeleopDetail",
     "wizardCamera", "wizardCameraBadge", "wizardCameraDetail", "wizardCameraAction",
   ].map((id) => [id, document.getElementById(id)]),
@@ -390,6 +390,9 @@ if (ui.wizardCanAction) {
 }
 if (ui.wizardQuestAction) {
   ui.wizardQuestAction.addEventListener("click", () => manualAction("quest-prepare", "准备 ADB 转发"));
+}
+if (ui.wizardWakeAction) {
+  ui.wizardWakeAction.addEventListener("click", () => manualAction("quest-wake", "唤醒头显"));
 }
 if (ui.wizardKernelAction) {
   ui.wizardKernelAction.addEventListener("click", () => ui.overviewKernelCollect?.click());
