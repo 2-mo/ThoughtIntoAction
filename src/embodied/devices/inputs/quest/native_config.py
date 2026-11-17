@@ -97,8 +97,8 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
     routes = []
     common_base = dict(ruckig_smoothing_enabled=motion['smoothing_enabled'],
                        control_rate_hz=float(feedback_hz), control_group_id=group,
-                       relative_hold_timeout_ms=max(30, 2000 / feedback_hz),
-                       relative_fault_timeout_ms=max(100, 3000 / feedback_hz))
+                       relative_hold_timeout_ms=int(max(30, 2000 / feedback_hz)),
+                       relative_fault_timeout_ms=int(max(100, 3000 / feedback_hz)))
     router_configs = {}
     for index, (arm_channel, grip_channel, input_topic, pose_topic) in enumerate(arm_specs):
         gate = f"{group}/{arm_channel}/gate"
