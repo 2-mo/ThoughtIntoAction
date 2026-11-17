@@ -148,10 +148,7 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
 
     coordinator = dict(
         process_id=f"{prefix}.coordinator", group_id=group,
-        # A shared owner (pair) keeps one mode hand for the whole group, so A on
-        # that controller starts every arm. A kernel that owns its input reads
-        # the hand it follows.
-        mode_controller_input_topic=(right_inp if dual or input_prefix is not None else chosen_inp),
+        mode_controller_input_topic=(right_inp if dual else chosen_inp),
         episode_controller_input_topic=left_inp if dual else f"{prefix}/unused-recording-input",
         permit_topic=permit, button_chord_ms=150.0, input_timeout_ms=input_timeout_ms,
         # The vendor uses mode_ack_timeout as the initial-readiness window; a
