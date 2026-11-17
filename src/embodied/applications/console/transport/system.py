@@ -329,6 +329,11 @@ def pair_snapshot(pair: dict) -> tuple[dict, dict, list]:
         "permit": all(bool(item.get("permit")) for item in natives),
         "reason": next((item.get("reason") for item in natives if item.get("reason")), None),
         "pair": True,
+        "sides": {
+            side: {"ready": bool(item.get("ready")), "armed": bool(item.get("armed")),
+                   "permit": bool(item.get("permit")), "reason": item.get("reason")}
+            for side, item in zip(("left", "right"), natives)
+        },
     })
     owners = [status.get("owner") for status, _ in (left, right) if status.get("owner")]
     owner = owners[0] if owners else None

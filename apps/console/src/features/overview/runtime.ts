@@ -327,8 +327,13 @@ function renderWizard() {
   if (connected && teleopOk) { teleopBadge = "遥操中"; teleopState = "done"; }
   else if (connected && teleop.ready) { teleopBadge = "等待握持 Grip"; teleopState = "warn"; }
   else if (connected) { teleopBadge = teleop.reason ? String(teleop.reason).slice(0, 22) : "未就绪"; teleopState = "todo"; }
+  const marks = (side) => side
+    ? `就绪${side.ready ? "✓" : "—"} 激活${side.armed ? "✓" : "—"} 许可${side.permit ? "✓" : "—"}`
+    : "—";
   renderStep("wizardTeleop", "wizardTeleopBadge", teleopState, teleopBadge,
-    `ready ${teleop.ready ? "✓" : "—"} · armed ${teleop.armed ? "✓" : "—"} · permit ${teleop.permit ? "✓" : "—"}`);
+    teleop.pair && teleop.sides
+      ? `左 ${marks(teleop.sides.left)} · 右 ${marks(teleop.sides.right)}`
+      : `ready ${teleop.ready ? "✓" : "—"} · armed ${teleop.armed ? "✓" : "—"} · permit ${teleop.permit ? "✓" : "—"}`);
 
   const cameraOk = Boolean(data?.shared_camera);
   if (cameraOk) done += 1;

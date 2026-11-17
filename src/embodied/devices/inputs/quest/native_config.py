@@ -71,7 +71,9 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
     # The coordinator disables the group on one invalid Episode sample; the
     # relay drops the invalid startup frame before it reaches that topic.
     left_inp = f"{xr_root}/left_controller/states/input_filtered"
-    chosen_inp = left_inp if chosen == "left" else right_inp
+    # Only the ARX dual profile publishes a filtered left stream (a relay
+    # smooths that hand). A single-arm kernel on either hand reads the raw one.
+    chosen_inp = f"{xr_root}/{chosen}_controller/states/input"
     group = f"{prefix}/group"
     permit = f"{group}/permit"
 
