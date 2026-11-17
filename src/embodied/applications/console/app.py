@@ -15,6 +15,7 @@ from embodied.applications.console.transport.control import create_control_route
 from embodied.applications.console.transport.frontend import SPAStaticFiles, create_ca_router
 from embodied.applications.console.transport.operations import create_operations_router
 from embodied.applications.console.transport.policy_models import create_models_router
+from embodied.applications.console.transport.policy_remote import create_policy_remote_router
 from embodied.applications.console.transport.system import create_system_router
 
 
@@ -57,6 +58,7 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
     app.include_router(create_collection_router(resolved))
     app.include_router(create_setup_router(resolved))
     app.include_router(create_models_router(resolved))
+    app.include_router(create_policy_remote_router(operations, resolved))
     app.include_router(create_ca_router(resolved.ca_cert))
     if resolved.frontend_directory is not None:
         app.mount(

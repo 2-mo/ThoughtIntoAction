@@ -395,3 +395,16 @@ body {
   align-self: center; font-size: .64rem; color: #fbbf24;
   border: 1px solid rgba(251, 191, 36, .35); border-radius: 999px; padding: 2px 8px;
 }
+
+/* 远程控制卡片：外部调用方只需提供 prompt 与时长 */
+.policy-remote { margin-top: 10px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; background: rgba(255, 255, 255, .03); }
+.policy-remote > summary {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 8px 12px; cursor: pointer; list-style: none; font-size: .72rem; color: var(--muted);
+}
+.policy-remote > summary::-webkit-details-marker { display: none; }
+.policy-remote > summary small { color: rgba(255, 255, 255, .35); font-size: .62rem; }
+.policy-remote-body { display: grid; gap: 6px; padding: 0 12px 10px; }
+.policy-remote-api { margin: 0; font-size: .64rem; color: rgba(255, 255, 255, .45); }
+.policy-remote-api code { color: #e9e4d8; }
+.policy-remote-state { margin: 0; font-size: .64rem; color: var(--muted); }

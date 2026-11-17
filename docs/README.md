@@ -28,6 +28,7 @@
 | [网页与相机控制](guides/viewer-camera-controls.md) | 18081 监看页的相机与视图 |
 | [训练数据导出](guides/openpi-dataset.md) | LeRobot 导出与 π0.5 训练 |
 | [远程 π0.5 策略](guides/policy-remote.md) | GPU 服务端、websocket 协议、策略页与命令行用法 |
+| [远程调用策略接口](guides/policy-remote-api.md) | 本机作为服务端：对方只传 prompt 与时长，轮询执行反馈 |
 | [手眼标定](guides/calibration.md) | 腕部与固定相机手眼标定（经内核） |
 | [组件与环境](guides/consolidated-components.md) | 合并进来的算法、设备、标定、GR00T 组件及其环境 |
 | [Quest 发现广播](guides/quest-discovery.md) | 头显发现广播开关 |

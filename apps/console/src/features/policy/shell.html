@@ -126,6 +126,19 @@
         <div><dt>反馈延迟</dt><dd id="policyAge">—</dd></div>
         <div><dt>操作</dt><dd id="policyOps">—</dd></div>
       </dl>
+      <details class="policy-remote" id="policyRemoteCard">
+        <summary>
+          <span>远程控制（外部调用）</span>
+          <small id="policyRemoteHint">对方只需提供任务描述和时长</small>
+        </summary>
+        <div class="policy-remote-body">
+          <p class="policy-remote-api">POST <code>/api/v1/policy/remote</code> · GET <code>/api/v1/policy/remote</code></p>
+          <p class="policy-remote-state" id="policyRemoteState">尚未读取</p>
+          <div class="policy-actions">
+            <button id="policyRemoteSave" type="button" title="把上方选中的模型与 RTC 参数存为远程调用的默认值">保存当前设置为远程默认</button>
+          </div>
+        </div>
+      </details>
       <div class="policy-log-head">
         <span>运行日志</span>
         <button id="policyRefreshLog" type="button">刷新</button>

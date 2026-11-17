@@ -16,6 +16,7 @@ const ui = Object.fromEntries(
     "policyStop", "policyHome", "policyReady", "policyMessage", "policyRun", "policyRuntime", "policyOwner",
     "policyAge", "policyOps", "policyLog", "policyRefreshLog",
     "modelCards", "modelHint", "policyModelHint",
+    "policyRemoteCard", "policyRemoteState", "policyRemoteSave",
   ].map((id) => [id, document.getElementById(id)]),
 );
 
@@ -388,6 +389,58 @@ async function unmountModel(modelId) {
   }
 }
 
+
+// Remote control: another machine starts a run with only prompt + duration.
+
+async function refreshRemote() {
+  if (!ui.policyRemoteState) return;
+  try {
+    const response = await fetch(withToken("/api/v1/policy/remote"), { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const model = data.model ? data.model.name : "未选定模型";
+    const progress = data.progress || {};
+    const state = data.running ? "运行中" : (data.state === "idle" ? "空闲" : data.state);
+    ui.policyRemoteState.textContent =
+      `远程默认：${model} · ${state} · 已完成 ${progress.chunks || 0} 块`
+      + (progress.last_chunk_latency_ms ? ` · 上次推理 ${Math.round(progress.last_chunk_latency_ms)} ms` : "");
+  } catch (error) {
+    ui.policyRemoteState.textContent =
+      `读取远程状态失败：${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function saveRemoteDefaults() {
+  const model = selectedModel();
+  if (!model) {
+    setMessage("先在模型卡片里选一个模型，再保存为远程默认", "warn");
+    return;
+  }
+  const settings = rtcSettings();
+  const body = {
+    model_id: model.id,
+    rtc: Boolean(ui.policyRtc?.checked),
+    chunk_steps: settings.chunk_steps,
+    reinfer_remaining: settings.reinfer_remaining,
+    blend: settings.blend,
+    guidance: settings.guidance,
+    dry_run: Boolean(ui.policyDryRun?.checked),
+  };
+  try {
+    const response = await fetch(withToken("/api/v1/policy/remote/config"), {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(data?.detail || `HTTP ${response.status}`);
+    setMessage(`已保存远程默认：${model.name}`, "success");
+    await refreshRemote();
+  } catch (error) {
+    setMessage(`保存远程默认失败：${error instanceof Error ? error.message : String(error)}`, "error");
+  }
+}
+
 function start() {
   if (statusTimer !== undefined) return;
   void pollStatus();
@@ -397,6 +450,7 @@ function start() {
   operationsTimer = window.setInterval(refreshOperations, OPERATIONS_MS);
   void refreshModels();
   modelTimer = window.setInterval(refreshModels, MODELS_MS);
+  void refreshRemote();
 }
 
 function stop() {
@@ -436,6 +490,8 @@ try {
 ui.policyMode?.addEventListener("change", syncModeFields);
 ui.policyHome?.addEventListener("click", homeRobot);
 ui.policyReady?.addEventListener("click", readyRobot);
+ui.policyRemoteSave?.addEventListener("click", () => void saveRemoteDefaults());
+ui.policyRemoteCard?.addEventListener("toggle", () => { if (ui.policyRemoteCard.open) void refreshRemote(); });
 
 ui.policyPromptHistory?.addEventListener("change", () => {
   const value = ui.policyPromptHistory.value;
