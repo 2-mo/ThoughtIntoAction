@@ -58,12 +58,12 @@ class Ingress(NativeIngress):
         from embodied.control.ipc.services import open_service, make_subscriber
         from embodied.control.ipc.types import XrControllerInput
         vr = settings.vr
-        # With a shared owner (pair) every kernel watches the same mode hand, so
-        # A / A+B act on the whole group as they do in the ARX profiles. A
-        # kernel that owns its input watches the hand it follows.
-        mode_hand = "right" if vr.input_prefix else vr.controller
+        # Every kernel reads the hand it follows: A arms this side and its
+        # Trigger owns this side's gripper (the coordinator also keeps a
+        # per-side mode, so reading one hand for both would drive both arms
+        # and both grippers from a single controller).
         self.subscribers['input'] = make_subscriber(open_service(self.node,
-            f'{vr.input_prefix or prefix}/xr/{mode_hand}_controller/states/input', XrControllerInput))
+            f'{vr.input_prefix or prefix}/xr/{vr.controller}_controller/states/input', XrControllerInput))
         self.gripper_released = self.gripper_armed = False
         self.gripper_epoch = None
         self.gripper_max_width = settings.robot.gripper_max_width
