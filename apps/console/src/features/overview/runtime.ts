@@ -330,7 +330,9 @@ function renderWizard() {
     teleopBadge = "按 A 进入遥操";
     teleopState = "warn";
   } else if (connected && teleop.armed) {
-    teleopBadge = teleop.permit ? "已进入 · 握 Grip 跟随" : "等待协调器许可";
+    teleopBadge = teleop.permit
+      ? "已进入 · 握 Grip 跟随"
+      : "跟随已停用 · 按 A 重试（回位长按 B）";
     teleopState = "warn";
   } else if (connected) { teleopBadge = teleop.reason ? String(teleop.reason).slice(0, 22) : "未就绪"; teleopState = "todo"; }
   const marks = (side) => side
