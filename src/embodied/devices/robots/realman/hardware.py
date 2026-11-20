@@ -13,6 +13,7 @@ from embodied.contracts.control import Mode
 from .backend import Backend as Connection, load_config, vector
 from .gripper import status, require_ready, GripperNotReady, move
 from .kinematics import pose_error
+from .geometry import limited_rotation
 from .hardware_model import JointModel
 
 
@@ -84,6 +85,7 @@ class Backend:
         self.gripper_initialization_at = None
         self.gripper_notice = None
         self.stopped = False
+        self.pose_target = None
         # Coordinator mode acknowledgements are logical states. FreeDrive and
         # Disabled acknowledge a hold; neither enables a physical drag/Home mode.
         self.mode = self.gripper_mode = Mode.COMMAND_FOLLOWING
@@ -104,8 +106,8 @@ class Backend:
             self.angular_speed = min(config.teleop_angular_speed_rad_s, self.connection.config['angular_speed_rad_s'])
             self.connection.client.allow_gripper = True
             self._poll_gripper(time.monotonic(), startup=True)
-            # Reuse the existing target controller's hold, joint slew and IK
-            # cache. RM-specific mode conversion prevents ARX Home/damping.
+            # Reuse joint/hold handling; Cartesian streaming is resolved from
+            # measured feedback below. RM never uses ARX Home/damping.
             from embodied.devices.robots.arx5.kinematics import JointTargetController
             self.controller = JointTargetController(config, self.kinematics)
             self.controller.mode = self.controller.gripper_mode = Mode.COMMAND_FOLLOWING
@@ -207,7 +209,10 @@ class Backend:
             'data_contract': data_contract(self.config), 'controller': self.connection.info,
             'joint_velocity_limits_rad_s': self.velocity_limits.tolist(),
             'cartesian_velocity_limits': {'tcp_speed': self.linear_speed, 'angular_speed': self.angular_speed},
-            'streaming_cartesian_speed_limits': None,
+            'streaming_cartesian_speed_limits': {'tcp_speed': self.linear_speed, 'angular_speed': self.angular_speed},
+            'streaming_cartesian_policy': {
+                'reference': 'measured_joint_position', 'interpolation': 'translation_and_shortest_rotation_shared_fraction',
+                'invalid_step': 'stop_and_discard_target', 'partial_ik': 'rejected'},
             'velocity_feedback': 'finite_difference_of_encoder_positions',
             'gripper_startup_ready': self.gripper_ready,
             'gripper_width': {'source': 'manufacturer_nominal_stroke', 'raw_range': [0, 1000],
@@ -273,6 +278,18 @@ class Backend:
             step_limit = np.minimum(step_limit, np.broadcast_to(effective.joint_step_limit, (6,)))
         effective = replace(effective, joint_step_limit=step_limit)
         previous = (self.controller.q_target.copy() if self.controller.q_target is not None else state.q.copy())
+        if holding or command.joint_target is not None:
+            self.pose_target = None
+        elif command.pose_target is not None:
+            self.pose_target = vector(command.pose_target, 7).copy()
+        if not holding and self.pose_target is not None:
+            target = self._cartesian_step(state.q, previous, step_limit)
+            holding = target is None
+            effective = replace(effective, pose_target=None, joint_target=target,
+                hold=holding, reset_reference=holding)
+            # A streamed Cartesian step starts at the encoders, never the
+            # previous command that the physical arm may not have reached.
+            self.controller.q_target = state.q.copy()
         q = self.controller.update(effective, state.q, now)
         if self.controller.fault:
             raise ValueError(self.controller.fault)
@@ -324,9 +341,44 @@ class Backend:
             'gripper_stop_requested_at': self.gripper_stop_requested_at,
             'gripper_stop_samples': self.gripper_stop_samples}
 
+    def _cartesian_step(self, measured, previous, step_limit):
+        current = self.kinematics.fk(measured).copy()
+        distance, angle = pose_error(current, self.pose_target)
+        fraction = min(1., self.linear_speed/self.config.control_hz/max(distance, 1e-12),
+                       self.angular_speed/self.config.control_hz/max(angle, 1e-12))
+        deadline = time.monotonic() + .012
+        self.controller.ik_converged = False
+        for attempt in range(8):
+            if attempt and time.monotonic() >= deadline:
+                break
+            target = current.copy()
+            target[:3] += fraction*(self.pose_target[:3]-current[:3])
+            target[3:] = limited_rotation(self.pose_target[3:], current[3:], fraction*angle)
+            try:
+                solution, converged, residual = self.kinematics.solve_ik(target, measured, measured)
+                solution = vector(solution, 6)
+                self.controller.ik_residual = float(residual)
+                position_error, angle_error = pose_error(self.kinematics.fk(solution), target)
+                # A partial IK result or independent joint clipping must not
+                # replace the intended Cartesian step with a different path.
+                valid = (converged and np.all(solution >= self.kinematics.lower)
+                    and np.all(solution <= self.kinematics.upper)
+                    and np.all(np.abs(solution-measured) <= step_limit)
+                    and np.all(np.abs(solution-previous) <= step_limit)
+                    and position_error <= max(1e-6, fraction*distance*.05)
+                    and angle_error <= max(1e-5, fraction*angle*.05))
+                if valid:
+                    self.controller.ik_converged = True
+                    return solution
+            except (ValueError, np.linalg.LinAlgError):
+                self.controller.ik_residual = float('inf')
+            fraction *= .5
+        self.controller.ik_rejections += 1
+        self.pose_target = None
+        return None
+
     def _check_planned_tcp_speed(self, q, previous):
-        # Live targets use joint/controller transmission bounds only. Planned
-        # curves must still satisfy the Cartesian limits given to the planner.
+        # Planned curves must satisfy the Cartesian limits given to the planner.
         distance, angle = pose_error(self.kinematics.fk(q), self.kinematics.fk(previous))
         if (distance > self.linear_speed/self.config.control_hz*(1.+1e-9) or
                 angle > self.angular_speed/self.config.control_hz*(1.+1e-9)):
