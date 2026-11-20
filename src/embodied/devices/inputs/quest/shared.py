@@ -1,4 +1,6 @@
 """Reuse native Quest routing with a single input owner and per-arm namespaces."""
+import json
+from pathlib import Path
 from dataclasses import replace
 import time
 import numpy as np
@@ -11,6 +13,17 @@ from .composition import NativeRouting, QuestDevice
 from .native_config import write_native_configs, _toml
 from .sources import NativeIngress
 from embodied.contracts.control import Mode
+
+
+def _vendor_basis(settings):
+    """A vendor profile with its own XR-to-base rotation overrides the X5 basis."""
+    path = getattr(settings.robot, 'connection_path', None)
+    if not path:
+        return None
+    try:
+        return json.loads(Path(path).read_text())['xr_to_robot_basis']
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
 
 
 class SharedDevice(QuestDevice):
@@ -39,7 +52,7 @@ class Routing(NativeRouting):
                                     settings.robot.teleop_angular_speed_rad_s),
             # Two kernels and one XR owner share the bus here; a 100 ms window
             # trips on a single dropped burst and drops the group to Disabled.
-            input_timeout_ms=300)
+            input_timeout_ms=300, xr_basis=_vendor_basis(settings))
         # One mode owner per hand. The EG2 driver already handles absolute
         # opening targets; a second router/coordinator can retain an old
         # opening target or toggle out of phase with the arm.

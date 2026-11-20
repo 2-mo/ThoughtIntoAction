@@ -29,7 +29,8 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
                          base_yaw_deg: float = 0., grip_threshold: float = .7,
                          position_scale=(1., 1., 1.), *, dual: bool = False, controller: str = 'right',
                          input_prefix: str | None = None, feedback_hz: float = 250.,
-                         cartesian_speed_limits=None, input_timeout_ms: int = 100) -> dict[str, Path]:
+                         cartesian_speed_limits=None, input_timeout_ms: int = 100,
+                         xr_basis=None) -> dict[str, Path]:
     """Write xrobot, coordinator, arm and gripper TOML files for one run.
 
     ``prefix`` must be unique per concurrent run and start with ``arx5-``.
@@ -61,10 +62,19 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
         raise ValueError('grip_threshold must be in (0, 1]')
     if len(position_scale) != 3 or not all(math.isfinite(x) and x > 0 for x in position_scale):
         raise ValueError('position_scale must contain three finite positive values')
-    angle = math.radians(-base_yaw_deg)
-    c, s = math.cos(angle), math.sin(angle)
-    # Rz(-base_yaw) @ the existing row-major XR-to-X5 basis.
-    basis = [s, 0., -c, -c, 0., -s, 0., 1., 0.]
+    if xr_basis is None:
+        angle = math.radians(-base_yaw_deg)
+        c, s = math.cos(angle), math.sin(angle)
+        # Rz(-base_yaw) @ the existing row-major XR-to-X5 basis.
+        basis = [s, 0., -c, -c, 0., -s, 0., 1., 0.]
+    else:
+        # A vendor profile may carry its own XR-to-base rotation; use it as is.
+        values = []
+        for row in xr_basis:
+            values.extend(row if isinstance(row, (list, tuple)) else [row])
+        if len(values) != 9 or not all(math.isfinite(float(value)) for value in values):
+            raise ValueError('xr_basis must contain nine finite values')
+        basis = [float(value) for value in values]
     basis = [0. if abs(value) < 1e-12 else value for value in basis]
     # A single arm follows the configured hand; a pair uses both controllers.
     chosen = "right" if dual else controller
