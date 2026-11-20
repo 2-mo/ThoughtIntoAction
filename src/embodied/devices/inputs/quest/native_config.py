@@ -82,7 +82,7 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
     def controller_channel(name):
         return dict(channel_type=f"{name}_controller", channel_label=f"PICO {name.title()} Controller",
                     kind="robot", enabled=True, mode="free-drive", dof=6,
-                    control_frequency_hz=float(feedback_hz),
+                    control_frequency_hz=250.0,
                     publish_states=["pose", "input"], recorded_states=[])
 
     controller_channels = ([controller_channel("right"), controller_channel("left")]
@@ -100,7 +100,7 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
     members = []
     routes = []
     common_base = dict(ruckig_smoothing_enabled=motion['smoothing_enabled'],
-                       control_rate_hz=float(feedback_hz), control_group_id=group,
+                       control_rate_hz=250.0, control_group_id=group,
                        relative_hold_timeout_ms=int(max(30, 2000 / feedback_hz)),
                        relative_fault_timeout_ms=int(max(100, 3000 / feedback_hz)))
     router_configs = {}
