@@ -26,6 +26,9 @@ class Profile:
     gripper_velocity_max_m_s: float = .035
     pregrasp_q: tuple = (0., 0., math.pi/2, 0., math.pi/2, 0.)
     has_gripper: bool = True
+    # The controller forgets the EG2 enable after some reconnects; ask it to
+    # initialize (open once) at startup when the feedback is still all zero.
+    gripper_initialize_on_startup: bool = False
     tool_offset_m: float = .14
     teleop_linear_speed_m_s: float = .25
     teleop_angular_speed_rad_s: float = .30

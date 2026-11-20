@@ -147,6 +147,8 @@ def _ethernet_robot(vendor: str, arm: dict, profile: str) -> dict:
         "connection_path": str(connection_path),
         "control_hz": connection["control_hz"],
         "model_path": str(model),
+        # A reconnect leaves the EG2 disabled until it is opened once.
+        "gripper_initialize_on_startup": True,
     }
 
 

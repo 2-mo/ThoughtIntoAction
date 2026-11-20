@@ -104,6 +104,13 @@ class Backend:
             self.angular_speed = min(config.teleop_angular_speed_rad_s, self.connection.config['angular_speed_rad_s'])
             self.connection.client.allow_gripper = True
             self._poll_gripper(time.monotonic(), startup=True)
+            if (getattr(config, 'gripper_initialize_on_startup', False) and not self.gripper_ready
+                    and all(value == 0 for value in self.gripper.values())):
+                print(f'{config.name}: EG2 反馈全 0，按启动配置初始化张开一次。', flush=True)
+                try:
+                    move(self.connection.client, 'open', initialize_open=True)
+                except (GripperNotReady, RuntimeError, ValueError) as exc:
+                    print(f'{config.name}: EG2 初始化未完成：{exc}', flush=True)
             # Reuse the existing target controller's hold, joint slew and IK
             # cache. RM-specific mode conversion prevents ARX Home/damping.
             from embodied.devices.robots.arx5.kinematics import JointTargetController
