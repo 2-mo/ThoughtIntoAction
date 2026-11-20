@@ -164,7 +164,8 @@ def write_native_configs(directory: Path, prefix: str, gripper_width: float, sdk
         # The vendor uses mode_ack_timeout as the initial-readiness window; a
         # dual-arm device takes longer to publish both controller streams.
         # A shared owner covers a second controller that is still waking up.
-        mode_ack_timeout_ms=20000 if dual or input_prefix is not None else 1000,
+        mode_ack_timeout_ms=(8000 if dual else
+                             20000 if input_prefix is not None else 1000),
         route_health_timeout_ms=500,
         members=members, routes=routes)
     configs = dict(xrobot=xrobot, coordinator=coordinator, **router_configs)
