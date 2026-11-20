@@ -124,11 +124,12 @@ class HardwareTests(unittest.TestCase):
             np.testing.assert_allclose(b.velocity_limits, np.deg2rad([30.]*6))
             self.assertEqual((b.linear_speed, b.angular_speed), (.1, .2))
 
-    def test_pose_stream_skips_tcp_slowdown_but_planned_curves_keep_checks(self):
+    def test_pose_stream_preserves_cartesian_direction_and_tcp_budget(self):
         self.step(pose_target=np.array([.01, .01, .01, 0, 0, 0, 1.]))
         q = self.backend.controller.q_target.copy()
-        np.testing.assert_allclose(q[:3], self.backend.velocity_limits[:3]/25)
-        self.assertGreater(np.linalg.norm(self.kinematics.fk(q)[:3]), .25/25)
+        np.testing.assert_allclose(q[:3], q[0])
+        self.assertLessEqual(np.linalg.norm(self.kinematics.fk(q)[:3]), .25/25+1e-12)
+        self.assertTrue(np.all(q <= self.backend.velocity_limits/25))
         self.step(hold=True)
         count = len(self.motions())
         with self.assertRaisesRegex(ValueError, 'Planned curve exceeds'):
@@ -246,18 +247,97 @@ class HardwareTests(unittest.TestCase):
         self.assertFalse(any(x['command'].startswith(('move', 'set_gripper')) for x in messages))
         np.testing.assert_array_equal(self.backend.controller.q_target, self.connection.q)
 
-    def test_partial_ik_and_invalid_target_keep_continuous_cached_goal(self):
+    def test_partial_ik_and_invalid_target_stop_instead_of_replaying_old_goal(self):
         self.kinematics.solve_ik = lambda *args: (np.full(6, .1), False, .02)
         self.step(pose_target=np.array([.01, 0, 0, 0, 0, 0, 1.]))
-        self.assertTrue(self.motions())
-        self.assertEqual(self.backend.controller.ik_partial_solutions, 1)
-        goal = self.backend.controller._joint_goal.copy()
+        self.assertFalse(self.motions())
+        self.assertIsNone(self.backend.pose_target)
         self.kinematics.solve_ik = lambda *args: (np.full(6, np.nan), False, float('inf'))
         self.step(pose_target=np.array([.01, 0, 0, 0, 0, 0, 1.]))
-        np.testing.assert_array_equal(self.backend.controller._joint_goal, goal)
-        self.assertEqual(self.backend.controller.ik_rejections, 1)
-        self.step(hold=True)
         np.testing.assert_array_equal(self.backend.controller._joint_goal, self.connection.q)
+        self.assertEqual(self.backend.controller.ik_rejections, 2)
+        self.assertFalse(self.motions())
+
+    def test_pose_stream_does_not_run_ahead_when_feedback_stays_still(self):
+        self.step(pose_target=np.array([.1, .05, 0, 0, 0, 0, 1.]))
+        first = self.backend.controller.q_target.copy()
+        for _ in range(10):
+            self.step()
+            np.testing.assert_allclose(self.backend.controller.q_target, first)
+
+    def test_pose_reversal_discards_unreached_joint_command(self):
+        self.backend.controller.q_target = np.full(6, .5)
+        self.connection.active = True
+        target = np.array([-.001, .001, 0, 0, 0, 0, 1.])
+        self.step(pose_target=target)
+        self.assertFalse(self.motions())
+        self.assertEqual(self.connection.client.sent[-1]['command'], 'set_arm_stop')
+        np.testing.assert_array_equal(self.backend.controller.q_target, self.connection.q)
+        self.step(pose_target=target)
+        np.testing.assert_allclose(self.kinematics.fk(self.backend.controller.q_target), target)
+
+    def test_recorded_reversal_with_real_dh_keeps_correct_cartesian_direction(self):
+        from tests.test_realman_dls import INFO
+        from embodied.devices.robots.realman.hardware_model import JointModel
+        self.backend.close()
+        self.kinematics = JointModel(INFO)
+        self.connection = Connection(self.kinematics)
+        self.connection.q = np.deg2rad([3.007, .412, 95.037, -1.867, 82.69, -.428])
+        self.config = replace(self.config, control_hz=50)
+        self.backend = Backend(self.config, connection=self.connection, kinematics=self.kinematics)
+        self.backend.controller.q_target = np.deg2rad([22.3646, 8.4795, 101.8247, -1.8785, 59.7565, -2.2581])
+        target = np.array([-.217193, -.000536, .194584,
+            -.9994171413, -.0273005835, .011469511, .0169854685])
+        self.step(pose_target=target)
+        self.assertFalse(self.motions())
+        before = self.kinematics.fk(self.connection.q).copy()
+        self.step(pose_target=target)
+        self.assertTrue(self.motions())
+        sent = np.deg2rad(np.array(self.motions()[-1]['joint'])/1000)
+        after = self.kinematics.fk(sent)
+        desired, moved = target[:3]-before[:3], after[:3]-before[:3]
+        self.assertGreater(np.dot(desired, moved), 0.)
+        self.assertLess(np.linalg.norm(np.cross(desired, moved)) / (np.linalg.norm(desired)*np.linalg.norm(moved)), .06)
+        self.assertTrue(np.all(np.abs(sent-self.connection.q) <= self.backend.velocity_limits/50+2e-5))
+
+    def test_real_dh_stream_follows_translation_and_rotation_on_all_axes(self):
+        from tests.test_realman_dls import INFO
+        from embodied.devices.robots.realman.hardware_model import JointModel
+        from embodied.devices.robots.realman.geometry import rotation_vector
+        from scipy.spatial.transform import Rotation
+        self.backend.close()
+        self.kinematics = JointModel(INFO)
+        self.connection = Connection(self.kinematics)
+        self.connection.q = np.deg2rad([10, 20, 50, 15, 42, -10])
+        self.config = replace(self.config, control_hz=50)
+        self.backend = Backend(self.config, connection=self.connection, kinematics=self.kinematics)
+        reference = self.connection.q.copy()
+        for axis in range(6):
+            for sign in (-1, 1):
+                with self.subTest(axis=axis, sign=sign):
+                    self.connection.q = reference.copy()
+                    self.step(hold=True)
+                    before = self.kinematics.fk(reference).copy()
+                    target = before.copy()
+                    if axis < 3:
+                        target[axis] += sign*.003
+                    else:
+                        rotation = np.zeros(3); rotation[axis-3] = sign*.005
+                        target[3:] = (Rotation.from_rotvec(rotation)*Rotation.from_quat(before[3:])).as_quat()
+                    count = len(self.motions())
+                    self.step(pose_target=target)
+                    self.assertEqual(len(self.motions()), count+1)
+                    sent = np.deg2rad(np.array(self.motions()[-1]['joint'])/1000)
+                    after = self.kinematics.fk(sent).copy()
+                    delta = np.r_[after[:3]-before[:3], rotation_vector(after[3:], before[3:])]
+                    self.assertGreater(sign*delta[axis], 0.)
+                    for _ in range(20):
+                        self.connection.q = sent
+                        self.step()
+                        sent = np.deg2rad(np.array(self.motions()[-1]['joint'])/1000)
+                    after = self.kinematics.fk(sent).copy()
+                    self.assertLess(np.linalg.norm(after[:3]-target[:3]), .003*.05+1e-5)
+                    self.assertLess(np.linalg.norm(rotation_vector(after[3:], target[3:])), 1e-4)
 
     def test_mode_acknowledgements_hold_without_ARX_home_or_damping(self):
         for mode in (Mode.FREE_DRIVE, Mode.DISABLED, Mode.COMMAND_FOLLOWING):
