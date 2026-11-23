@@ -20,10 +20,15 @@ def main():
     p.add_argument('--stats',type=Path,required=True)
     p.add_argument("--backend",choices=("pytorch","jax"),default="pytorch")
     p.add_argument("--jax-horizon",type=int,default=15)
+    p.add_argument('--deployment', type=Path)
     args=p.parse_args()
+    deployment = json.loads(args.deployment.read_text()) if args.deployment else None
+    options = {} if deployment is None else {'adapter_spec': deployment['adapter_spec'], 'model_variants': deployment['model_variants']}
+    if deployment is not None and args.backend != 'jax':
+        raise ValueError('RM65 deployment requires JAX')
     if args.backend == 'jax':
         from embodied.policy.pi05_sft.backend_jax import load_backend
-        policy,spec,stats=load_backend(args.checkpoint,horizon=args.jax_horizon)
+        policy,spec,stats=load_backend(args.checkpoint,horizon=args.jax_horizon, **options)
         synchronize=lambda: None  # Policy.infer converts outputs to NumPy, synchronizing JAX.
         inference_context=nullcontext
     else:
@@ -38,16 +43,20 @@ def main():
         raise ValueError('Selected normalization differs from checkpoint assets')
     if args.backend == 'jax':
         print('JAX 首次编译预热，完成后才连接机械臂…',flush=True)
-        policy.infer({'state':np.asarray(stats['state'].mean,dtype=np.float32),
-                      'wrist_image':np.zeros((480,640,3),dtype=np.uint8),
-                      'wrist_valid':True,'prompt':'Pick up the blue cube.'})
+        warm = {'state': np.asarray(stats['state'].mean, dtype=np.float32),
+                'prompt': deployment['prompt'] if deployment else 'Pick up the blue cube.'}
+        keys = spec['adapter_spec']['camera_roles'].values() if deployment else ['wrist_image']
+        for key in keys:
+            warm[key] = np.zeros((480, 640, 3), dtype=np.uint8)
+            warm[key + '_valid' if deployment else 'wrist_valid'] = True
+        policy.infer(warm)
     emit({'ready':True,'stats_sha256':digest,'checkpoint':spec})
     for line in sys.stdin:
         request=json.loads(line)
         output=Path(request['output'])
         obs=json.loads((output/'observation.json').read_text())
         state=np.asarray(obs['state_physical'],dtype=np.float32)
-        image=cv2.imread(str(output/'wrist.png'))
+        image=cv2.imread(str(output/'wrist.png')) if deployment is None else True
         if image is None or state.shape!=(7,) or not np.isfinite(state).all():
             raise ValueError('Invalid live observation')
         if obs['robot']['joint_names'] != ['joint1','joint2','joint3','joint4','joint5','joint6'] or obs['robot']['joint_unit'] != 'rad' or obs['robot']['length_unit'] != 'm':
@@ -55,7 +64,18 @@ def main():
         synchronize()
         began=time.perf_counter()
         with inference_context():
-            result=policy.infer({'state':state,'wrist_image':image[...,::-1].copy(),'wrist_valid':True,'prompt':request['prompt']})
+            inputs = {'state': state, 'prompt': request['prompt']}
+            if deployment is None:
+                inputs.update(wrist_image=image[..., ::-1].copy(), wrist_valid=True)
+            else:
+                if obs['robot'].get('data_contract') != spec['adapter_spec']['data_contract']:
+                    raise ValueError('Live robot contract differs from checkpoint')
+                for key in spec['adapter_spec']['camera_roles'].values():
+                    rgb = cv2.imread(str(output / (key + '.png')))
+                    if rgb is None or rgb.shape != (480, 640, 3):
+                        raise ValueError('Missing or invalid deployment camera: ' + key)
+                    inputs[key], inputs[key + '_valid'] = rgb[..., ::-1].copy(), True
+            result=policy.infer(inputs)
         synchronize()
         elapsed=time.perf_counter()-began
         actions=np.asarray(result['actions'])
