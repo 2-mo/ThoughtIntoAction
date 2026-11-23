@@ -69,7 +69,7 @@ def inspect_checkpoint(path, *, adapter_spec=None):
 DEFAULT_JAX_CHECKPOINT = Path('/home/r2/work/checkpoints/blue_cube_jax_v1')
 
 
-def inspect_jax_checkpoint(path, horizon=15, *, adapter_spec=None):
+def inspect_jax_checkpoint(path, horizon=15, *, adapter_spec=None, model_variants=None):
     path = Path(path).expanduser().resolve()
     if not (path/'params').is_dir():
         steps = [p for p in path.iterdir() if p.name.isdigit() and (p/'params/_METADATA').is_file()]
@@ -91,10 +91,15 @@ def inspect_jax_checkpoint(path, horizon=15, *, adapter_spec=None):
                 raise ValueError('Normalization dimension disagrees with the checkpoint adapter')
     if not 1 <= horizon <= 50:
         raise ValueError('JAX horizon must be in 1..50')
+    variants = model_variants or {}
+    allowed = {'paligemma_variant': {'gemma_2b', 'gemma_2b_lora'},
+               'action_expert_variant': {'gemma_300m', 'gemma_300m_lora'}}
+    if set(variants) - set(allowed) or any(value not in allowed[key] for key, value in variants.items()):
+        raise ValueError('Unsupported JAX model variants')
     return {'checkpoint':str(path), 'step':int(path.name) if path.name.isdigit() else None,
             'config_name':'pi05_quest_x5', 'model':dict(pi05=True, action_dim=32,
                 action_horizon=horizon, max_token_len=200, discrete_state_input=True,
-                dtype='bfloat16', pytorch_compile_mode=None),
+                dtype='bfloat16', pytorch_compile_mode=None, **variants),
             'stats':str(files[0]), 'asset_id':str(files[0].parent.relative_to(path/'assets')),
             'openpi_revision':OPENPI_REVISION, 'cameras':list(adapter['camera_roles'].values()) if adapter else None,
             'adapter_spec':adapter,

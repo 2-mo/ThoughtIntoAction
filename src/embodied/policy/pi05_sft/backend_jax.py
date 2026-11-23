@@ -8,7 +8,7 @@ from embodied.policy.pi05_sft.checkpoint import ROOT, OPENPI, inspect_jax_checkp
 # OpenPI is installed in the selected policy environment by setup.sh/setup_jax.sh.
 
 
-def load_backend(checkpoint, horizon=15, *, adapter_spec=None):
+def load_backend(checkpoint, horizon=15, *, adapter_spec=None, model_variants=None):
     import numpy as np
     import jax
     import jax.numpy as jnp
@@ -19,7 +19,7 @@ def load_backend(checkpoint, horizon=15, *, adapter_spec=None):
     from openpi.shared.normalize import load as load_stats
     from openpi.models.tokenizer import PaligemmaTokenizer
     from embodied.policy.openpi.x5 import X5Inputs, X5Outputs
-    spec = inspect_jax_checkpoint(checkpoint, horizon=horizon, adapter_spec=adapter_spec)
+    spec = inspect_jax_checkpoint(checkpoint, horizon=horizon, adapter_spec=adapter_spec, model_variants=model_variants)
     if not any(d.platform == 'gpu' for d in jax.devices()):
         raise RuntimeError('JAX CUDA device unavailable')
     config = Pi0Config(**spec['model'])
