@@ -182,8 +182,8 @@ class RM65Tests(unittest.TestCase):
         )
 
         class Camera:
-            def __init__(self, *args, **kwargs):
-                pass
+            def __init__(self, *args, camera_id, **kwargs):
+                self.delay_ns = 25_000_000 if camera_id == deployment["camera_map"]["right_wrist_rgb"] else 0
 
             def __enter__(self):
                 return self
@@ -193,7 +193,7 @@ class RM65Tests(unittest.TestCase):
 
             def read(self):
                 return {"image": np.array([[[1, 2, 3]]], dtype=np.uint8),
-                        "host_received_monotonic_ns": time.monotonic_ns()}
+                        "host_received_monotonic_ns": time.monotonic_ns() - self.delay_ns}
 
         config = {"cameras": {role: {"serial": role, "width": 1, "height": 1, "fps": 30}
                               for role in deployment["camera_map"].values()}}
