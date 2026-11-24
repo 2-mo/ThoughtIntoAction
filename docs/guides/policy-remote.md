@@ -127,3 +127,31 @@ PYTHONPATH=src configs/environments/arx_motion/.venv/bin/python -m pytest tests/
 含：编解码往返、14 维状态构造、限位裁剪、对假服务端的握手与单次推理、错误动作形状拒绝。
 
 真机顺序建议：`--dry-run` 确认时延与形状 → 短时（10 s）真跑，人工扶臂 → 正常时长。切到真跑前确认周围安全、急停在手边。
+
+## 6. RM65 右臂远程部署
+
+模型由训练服务器提供，控制台登记地址为 `ws://10.16.106.51:8989`。
+在工作台选择控制器 `192.168.1.18` 对应的右侧内核，确认两路相机的画面和绑定序列号。
+部署默认将 `wrist_second_rgb` 映射为 `right_wrist_rgb`，固定外部相机使用 `exterior_rgb`。
+当前现场绑定若不同，CLI 用 `--cameras <右腕ID>,<外部ID>` 指定，控制台使用
+[RM65 策略配置](../../configs/policies/rm65_cube_pi05.json) 中的相机映射。
+
+在仓库根目录执行（将 `<RIGHT_RUN>` 替换成正在运行的右臂内核目录名）：
+
+```bash
+./run.sh policy remote --rm65 --run outputs/runtime/control/<RIGHT_RUN> \
+  --server ws://10.16.106.51:8989 --seconds 10 --dry-run
+```
+
+首条 WebSocket 消息需声明 `robot_type=rm65_hardware_eg2_4c2_nominal_width`、
+`action_dim=7`、`action_horizon=15`、`fps=30` 和非空 `asset_id`。
+确认服务方的资产标识后可加 `--asset-id <ID>` 校验具体值。
+请求使用两路 RGB 图像和有效标志、六关节弧度加夹爪名义开度（米），以及任务提示。
+默认提示为「把黑色方块放到白色盒子里」。返回值是 15×7 的绝对动作，按 30 Hz
+执行，RTC 关闭。
+
+控制台选择「RM65 右臂 · 黑色方块」时会关闭 RTC 并勾选只推理。保存为远程默认后，
+也可以通过现有 [HTTP 接口](policy-remote-api.md) 启动。只读试跑使用内核反馈，
+不申请控制权，`summary.json` 中的 `commands` 应为 0。
+`outputs/policy_remote/<时间戳>/` 还记录每块的状态、采样时间和完整预测动作。
+先检查画面、输出与时延，再从控制台取消只推理进行真机验收。

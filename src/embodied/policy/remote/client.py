@@ -31,9 +31,13 @@ class RemotePolicy:
 
         self._connection = connect(self.url, open_timeout=10, close_timeout=2,
                                    max_size=None, compression=None)
-        self.metadata = unpackb(self._connection.recv(timeout=self.timeout_s))
-        if not isinstance(self.metadata, dict):
-            raise PolicyError("模型服务返回的 metadata 不是字典")
+        try:
+            self.metadata = unpackb(self._connection.recv(timeout=self.timeout_s))
+            if not isinstance(self.metadata, dict):
+                raise PolicyError("模型服务返回的 metadata 不是字典")
+        except BaseException:
+            self.close()
+            raise
         return self
 
     def infer(self, observation: dict[str, Any]) -> dict[str, Any]:
