@@ -29,7 +29,7 @@ def observe(session, cameras, cycle, robot):
     return {"rgb_monotonic_ns": stamp, "state": vector, "frames": frames}
 
 
-def predict(policy, observation, cycle, prompt):
+def predict(policy, observation, cycle, prompt, gripper_range):
     request = {"state": observation["state"], "prompt": prompt}
     for role, frame in observation["frames"].items():
         request[role] = np.asarray(frame["image"], dtype=np.uint8)[..., ::-1].copy()
@@ -40,6 +40,8 @@ def predict(policy, observation, cycle, prompt):
     np.save(cycle / "actions.npy", actions, allow_pickle=False)
     print(json.dumps({"event": "chunk", "steps": len(actions),
                       "latency_ms": round(policy.last_latency_s * 1000, 1)}), flush=True)
+    actions = actions.astype(np.float64)
+    actions[:, 6] = np.clip(actions[:, 6], *gripper_range)
     return actions
 
 
@@ -81,5 +83,6 @@ def execute(args, output):
                            metadata={"policy": "remote", "server": args.server}))
         return run(session, None, cameras, output, prompt, seconds=args.seconds,
                    chunk_steps=args.chunk_steps, robot=robot, dry_run=args.dry_run, observer=observe,
-                   predict=lambda obs, cycle, prompt: predict(policy, obs, cycle, prompt),
+                   predict=lambda obs, cycle, prompt: predict(
+                       policy, obs, cycle, prompt, robot["data_contract"]["gripper"]["range"]),
                    model_metadata=policy.metadata)
