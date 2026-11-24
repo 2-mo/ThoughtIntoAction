@@ -50,9 +50,16 @@ let lastConnected = null;
 let settings = loadSettings();
 
 function loadSettings() {
-  const fallback = { task: "", mode: "fixed", seconds: 30, target: 50, rgb: "mp4", output: "outputs/datasets/runtime" };
+  const fallback = { task: "", mode: "fixed", seconds: 30, target: 50, rgb: "png", output: "outputs/datasets/runtime" };
   try {
-    return { ...fallback, ...JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}") };
+    const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}");
+    const merged = { ...fallback, ...saved };
+    // One-time move to lossless frames: dark, textured parts survive recording.
+    if (saved.rgbVersion !== 2) {
+      merged.rgb = "png";
+      merged.rgbVersion = 2;
+    }
+    return merged;
   } catch {
     return fallback;
   }
