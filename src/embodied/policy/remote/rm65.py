@@ -66,13 +66,9 @@ def execute(args, output):
         policy = stack.enter_context(RemotePolicy(args.server, timeout_s=1.5))
         expected = {"robot_type": robot["data_contract"]["robot_type"],
                     "action_dim": 7, "action_horizon": HORIZON, "fps": POLICY_FPS}
-        if args.asset_id:
-            expected["asset_id"] = args.asset_id
+        expected["asset_id"] = args.asset_id or deployment["asset_id"]
         if any(policy.metadata.get(key) != value for key, value in expected.items()):
             raise PolicyError(f"RM65 模型元数据不匹配，要求 {expected}，收到 {policy.metadata}")
-        asset_id = policy.metadata.get("asset_id")
-        if not isinstance(asset_id, str) or not asset_id.strip():
-            raise PolicyError("RM65 模型未报告 asset_id")
         print(json.dumps({"event": "connected", "server": args.server, "metadata": policy.metadata,
                           "camera_map": camera_map}, ensure_ascii=False), flush=True)
         cameras = {}

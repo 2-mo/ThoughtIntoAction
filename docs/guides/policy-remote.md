@@ -130,7 +130,7 @@ PYTHONPATH=src configs/environments/arx_motion/.venv/bin/python -m pytest tests/
 
 ## 6. RM65 右臂远程部署
 
-模型由训练服务器提供，控制台登记地址为 `ws://10.16.106.51:8989`。
+模型由训练服务器提供，控制台通过本机 SSH 隧道连接 `ws://127.0.0.1:18008`。
 在工作台选择控制器 `192.168.1.18` 对应的右侧内核，确认两路相机的画面和绑定序列号。
 部署默认将 `wrist_second_rgb` 映射为 `right_wrist_rgb`，固定外部相机使用 `exterior_rgb`。
 当前现场绑定若不同，CLI 用 `--cameras <右腕ID>,<外部ID>` 指定，控制台使用
@@ -140,12 +140,12 @@ PYTHONPATH=src configs/environments/arx_motion/.venv/bin/python -m pytest tests/
 
 ```bash
 ./run.sh policy remote --rm65 --run outputs/runtime/control/<RIGHT_RUN> \
-  --server ws://10.16.106.51:8989 --seconds 10 --dry-run
+  --server ws://127.0.0.1:18008 --seconds 10 --dry-run
 ```
 
 首条 WebSocket 消息需声明 `robot_type=rm65_hardware_eg2_4c2_nominal_width`、
-`action_dim=7`、`action_horizon=15`、`fps=30` 和非空 `asset_id`。
-确认服务方的资产标识后可加 `--asset-id <ID>` 校验具体值。
+`action_dim=7`、`action_horizon=15`、`fps=30` 和
+`asset_id=local/joint_contract_f0e2288668a25266`。
 请求使用两路 RGB 图像和有效标志、六关节弧度加夹爪名义开度（米），以及任务提示。
 默认提示为「把黑色方块放到白色盒子里」。返回值是 15×7 的绝对动作，按 30 Hz
 执行，RTC 关闭。
