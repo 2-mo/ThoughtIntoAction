@@ -390,6 +390,15 @@ def main(argv=None):
         parser.error("seconds 必须在 0..300")
     if not 1 <= args.fps <= 60:
         parser.error("fps 必须在 1..60")
+    from embodied.contracts.runtime.control import ControlClient, ControlSession
+
+    control = ControlClient(args.run)
+    hardware = control.parameters.get("effective_robot_config", {})
+    if hardware.get("hardware_plugin") == "realman.real":
+        args.rm65 = True
+    elif len(hardware.get("joint_min", ())) != 12 and not args.rm65:
+        parser.error("双臂远程策略需要 12 关节内核")
+
     horizon = CHUNK_HORIZON
     if args.rm65:
         from embodied.policy.remote.rm65 import HORIZON
@@ -410,7 +419,6 @@ def main(argv=None):
     if args.rtc and not 0 <= args.blend <= args.chunk_steps:
         parser.error("blend 必须在 0..chunk-steps")
 
-    from embodied.contracts.runtime.control import ControlSession
     from embodied.core.project import PROJECT_ROOT, load_config
     from embodied.devices.sensors.client import SharedCamera
     from embodied.policy.remote.client import RemotePolicy
