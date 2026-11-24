@@ -65,14 +65,15 @@ def sample_pair(session, cameras):
         exterior = cameras['exterior_rgb'].read()
         state = session.status()
         wrist = cameras['right_wrist_rgb'].read()
-        stamp = wrist['host_received_monotonic_ns']
         frames = {'right_wrist_rgb': wrist, 'exterior_rgb': exterior}
         stamps = {key: frame['host_received_monotonic_ns'] for key, frame in frames.items()}
         feedback = state['feedback_monotonic_ns']
-        if all(0 <= stamp - t <= 60_000_000 for t in (*stamps.values(), feedback)):
+        timestamps = (*stamps.values(), feedback)
+        stamp = max(stamps.values())
+        if max(timestamps) - min(timestamps) <= 60_000_000:
             break
     else:
-        raise ValueError('No causal camera and state match within 60 ms')
+        raise ValueError('No camera and state match within 60 ms')
     return state, frames, stamps, stamp
 
 
