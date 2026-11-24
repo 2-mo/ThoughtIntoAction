@@ -6,6 +6,7 @@ every gateway source, so this loop only paces action chunks and refuses stale or
 observations. Between chunks the streamed target expires and the kernel holds position.
 """
 import argparse
+from contextlib import ExitStack
 import json
 from pathlib import Path
 import signal
@@ -20,7 +21,7 @@ KERNEL_ASSET_ID = 'local/x5_kernel'  # scripts/training/openpi/run.py LAYOUTS: t
 JOINTS = {'joint_names': ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6'], 'joint_unit': 'rad', 'length_unit': 'm'}
 
 
-def validate_policy_robot(parameters, spec):
+def validate_policy_robot(parameters, spec, camera_ids=('wrist_rgb',)):
     """Bind model normalization/actions to the actual device before opening resources."""
     from embodied.data.episode.contract import validate_contract
     contract = validate_contract(parameters['data_contract'])
@@ -31,7 +32,7 @@ def validate_policy_robot(parameters, spec):
         return JOINTS
     if adapter['data_contract'] != contract:
         raise ValueError('Checkpoint robot/gripper contract differs from this runtime')
-    if set(adapter['camera_roles'].values()) != {'wrist_rgb'}:
+    if set(adapter['camera_roles'].values()) != set(camera_ids):
         raise ValueError('This runner provides wrist_rgb; checkpoint camera roles do not match')
     if len(contract['joint_names']) != 6 or contract['gripper'] is None:
         raise ValueError('This runner requires six joints and a position gripper')
@@ -59,34 +60,79 @@ def observe(session, camera, cycle, robot=JOINTS, max_skew_s=.06):
     return observation
 
 
-def run(session, worker, camera, output, prompt, *, seconds, chunk_steps, max_age_s=1.5, robot=JOINTS):
+def sample_pair(session, cameras):
+    for _ in range(5):
+        exterior = cameras['exterior_rgb'].read()
+        state = session.status()
+        wrist = cameras['right_wrist_rgb'].read()
+        stamp = wrist['host_received_monotonic_ns']
+        frames = {'right_wrist_rgb': wrist, 'exterior_rgb': exterior}
+        stamps = {key: frame['host_received_monotonic_ns'] for key, frame in frames.items()}
+        feedback = state['feedback_monotonic_ns']
+        if all(0 <= stamp - t <= 60_000_000 for t in (*stamps.values(), feedback)):
+            break
+    else:
+        raise ValueError('No causal camera and state match within 60 ms')
+    return state, frames, stamps, stamp
+
+
+def observe_pair(session, cameras, cycle, robot):
+    import cv2
+
+    state, frames, stamps, stamp = sample_pair(session, cameras)
+    feedback = state['feedback_monotonic_ns']
+    for key, frame in frames.items():
+        if not cv2.imwrite(str(cycle / (key + '.png')), frame['image']):
+            raise OSError('Cannot save ' + key)
+    observation = {'robot': robot, 'arm_service_id': session.identity['runtime_id'],
+                   'rgb_monotonic_ns': stamp, 'camera_timestamps_ns': stamps,
+                   'state_monotonic_ns': feedback,
+                   'state_physical': [*state['q'], state['gripper_width']]}
+    (cycle / 'observation.json').write_text(json.dumps(observation))
+    return observation
+
+
+def worker_actions(worker, observation, cycle, prompt):
+    prediction = worker.predict(cycle, prompt)
+    if (prediction['arm_service_id'] != observation['arm_service_id']
+            or prediction['rgb_monotonic_ns'] != observation['rgb_monotonic_ns']):
+        raise ValueError('Prediction belongs to another observation')
+    with np.load(cycle / 'prediction.npz', allow_pickle=False) as data:
+        key = 'actions' if 'actions' in data.files else 'actions_x5' if 'actions_x5' in data.files else 'actions_x5_experimental'
+        actions = data[key].copy()
+    return actions
+
+
+def run(session, worker, camera, output, prompt, *, seconds, chunk_steps, max_age_s=1.5, robot=JOINTS, dry_run=False, observer=observe, predict=None, model_metadata=None):
     """Observe, predict, stream `chunk_steps` actions at POLICY_FPS; repeat until `seconds` elapse."""
     summary = {'status': 'running', 'prompt': prompt, 'chunk_steps': chunk_steps, 'policy_fps': POLICY_FPS,
-               'kernel_runtime_id': session.identity['runtime_id'], 'cycles': 0, 'commands': 0}
+               'kernel_runtime_id': session.identity['runtime_id'], 'cycles': 0, 'commands': 0,
+               'chunks': 0, 'dry_ticks': 0, 'dry_run': dry_run, 'model_metadata': model_metadata}
     deadline = time.monotonic() + seconds
     try:
         with (output / 'commands.jsonl').open('x') as log:
             while time.monotonic() < deadline:
                 cycle = output / f'cycle_{summary["cycles"]:04d}'
                 cycle.mkdir()
-                observation = observe(session, camera, cycle, robot)
-                prediction = worker.predict(cycle, prompt)
-                if (prediction['arm_service_id'] != observation['arm_service_id']
-                        or prediction['rgb_monotonic_ns'] != observation['rgb_monotonic_ns']):
-                    raise ValueError('Prediction belongs to another observation')
-                with np.load(cycle / 'prediction.npz', allow_pickle=False) as data:
-                    key = 'actions' if 'actions' in data.files else 'actions_x5' if 'actions_x5' in data.files else 'actions_x5_experimental'
-                    actions = data[key].copy()
+                observation = observer(session, camera, cycle, robot)
+                actions = predict(observation, cycle, prompt) if predict else worker_actions(
+                    worker, observation, cycle, prompt)
                 if actions.ndim != 2 or actions.shape[1] != 7 or len(actions) < chunk_steps or not np.isfinite(actions).all():
                     raise ValueError('Invalid action chunk')
                 summary['cycles'] += 1
+                summary['chunks'] += 1
                 start = time.monotonic()
                 for index, action in enumerate(actions[:chunk_steps]):
                     if (time.monotonic_ns() - observation['rgb_monotonic_ns']) / 1e9 > max_age_s:
                         raise ValueError('Action chunk observation is stale')
-                    session.command('joint', q=[float(v) for v in action[:6]], gripper_width=float(action[6]),
-                                    ttl_ms=120, sent_monotonic_ns=time.monotonic_ns())
-                    summary['commands'] += 1
+                    if not dry_run:
+                        response = session.command('joint', q=[float(v) for v in action[:6]], gripper_width=float(action[6]),
+                                                   ttl_ms=120, sent_monotonic_ns=time.monotonic_ns())
+                        if isinstance(response, dict) and response.get('accepted') is False:
+                            raise RuntimeError('Kernel rejected policy target: ' + str(response))
+                        summary['commands'] += 1
+                    else:
+                        summary['dry_ticks'] += 1
                     log.write(json.dumps({'host_monotonic_ns': time.monotonic_ns(), 'cycle': summary['cycles'] - 1,
                                           'action_index': index, 'action': action.tolist()}) + '\n')
                     remaining = start + (index + 1) / POLICY_FPS - time.monotonic()
@@ -101,10 +147,11 @@ def run(session, worker, camera, output, prompt, *, seconds, chunk_steps, max_ag
         summary.update(status='failed', reason=f'{type(exc).__name__}: {exc}')
         raise
     finally:
-        try:
-            session.command('hold')
-        except Exception as exc:
-            summary['hold_error'] = str(exc)
+        if not dry_run:
+            try:
+                session.command('hold')
+            except Exception as exc:
+                summary['hold_error'] = str(exc)
         (output / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2) + '\n')
     return summary
 
@@ -121,7 +168,11 @@ def main(argv=None):
     parser.add_argument('--backend', choices=('pytorch', 'jax'), default='pytorch', help='sft model backend')
     parser.add_argument('--jax-horizon', type=int, default=15)
     parser.add_argument('--stats', type=Path, help='zeroshot: quantile statistics (default outputs/zero-shot-assets/x5_quantiles_h50.json)')
-    parser.add_argument('--prompt', required=True)
+    parser.add_argument('--prompt')
+    parser.add_argument('--deployment', type=Path)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--dry-run', action='store_true')
+    mode.add_argument('--actuate', action='store_true')
     parser.add_argument('--seconds', type=float, default=60)
     parser.add_argument('--chunk-steps', type=int, default=10)
     parser.add_argument('--output', type=Path)
@@ -133,7 +184,19 @@ def main(argv=None):
     if not 0 < args.seconds <= 300:
         parser.error('seconds must be within 0..300')
     output = args.output or ROOT / 'outputs/policy_kernel' / time.strftime('%Y%m%d-%H%M%S')
-    parameters = ControlClient(args.run).parameters
+    deployment = json.loads(args.deployment.read_text()) if args.deployment else None
+    client = ControlClient(args.run)
+    parameters = client.parameters
+    if deployment:
+        if args.policy != 'sft' or (not args.dry_run and not args.actuate):
+            parser.error('Deployment requires SFT and either --dry-run or --actuate')
+        if client.identity['backend'] != 'real' or parameters['effective_robot_config']['name'] != deployment['robot_name']:
+            parser.error('Select the live right RM65 runtime')
+        args.backend = 'jax'
+        args.checkpoint = ROOT / deployment['checkpoint']
+        args.prompt = args.prompt or deployment['prompt']
+    if not args.prompt:
+        parser.error('--prompt is required without a deployment')
     robot = JOINTS
     if args.policy == 'zeroshot':
         validate_policy_robot(parameters, {})
@@ -153,12 +216,14 @@ def main(argv=None):
     else:
         checkpoint = (args.checkpoint or (checkpoint_module.DEFAULT_JAX_CHECKPOINT if args.backend == 'jax'
                                           else checkpoint_module.DEFAULT_CHECKPOINT)).expanduser()
-        spec = (checkpoint_module.inspect_jax_checkpoint(checkpoint, horizon=args.jax_horizon) if args.backend == 'jax'
+        options = {} if not deployment else {
+            key: deployment[key] for key in ('adapter_spec', 'model_variants')}
+        spec = (checkpoint_module.inspect_jax_checkpoint(checkpoint, horizon=args.jax_horizon, **options) if args.backend == 'jax'
                 else checkpoint_module.inspect_checkpoint(checkpoint))
-        robot = validate_policy_robot(parameters, spec)
+        robot = validate_policy_robot(parameters, spec, deployment['camera_map'] if deployment else ('wrist_rgb',))
         if not 1 <= args.chunk_steps <= spec['model']['action_horizon']:
             parser.error('chunk-steps must be within the model horizon')
-        if spec['cameras'] not in (None, ['wrist_rgb']):
+        if not deployment and spec['cameras'] not in (None, ['wrist_rgb']):
             print(f'警告：模型训练相机为 {spec["cameras"]}，推理只打开腕部相机。', flush=True)
         if spec.get('adapter_spec') is None and spec['asset_id'] != KERNEL_ASSET_ID:
             print(f'警告：模型训练数据为 {spec["asset_id"]}（旧机械臂服务 240 Hz 请求位置），'
@@ -169,17 +234,27 @@ def main(argv=None):
                                      str(ROOT / 'outputs/envs' / ('pi05-jax' if args.backend == 'jax' else 'pi05-sft') / 'bin/python')))
         worker = PolicyWorker(output / 'norm_stats.json', python=python, module='embodied.policy.pi05_sft.worker',
                               extra_args=('--checkpoint', str(Path(spec['checkpoint']).resolve()), '--backend', args.backend,
-                                          '--jax-horizon', str(args.jax_horizon)),
+                                          '--jax-horizon', str(args.jax_horizon),
+                                          *(['--deployment', str(args.deployment.resolve())] if deployment else [])),
                               startup_timeout=600 if args.backend == 'jax' else 180)
     signal.signal(signal.SIGTERM, interrupt)
     from embodied.core.project import load_config
     from embodied.devices.sensors.client import SharedCamera
-    camera_config = load_config()['cameras']['wrist_rgb']
     try:
-        with SharedCamera(camera_config['serial'], camera_config['width'], camera_config['height'], camera_config['fps']) as camera, \
-                ControlSession(args.run, source='policy', purpose='operation', metadata={'policy': args.policy}) as session:
-            summary = run(session, worker, camera, output, args.prompt, seconds=args.seconds,
-                          chunk_steps=args.chunk_steps, robot=robot)
+        with ExitStack() as stack:
+            config = load_config()['cameras']
+            camera_map = deployment['camera_map'] if deployment else {'wrist_rgb': 'wrist_rgb'}
+            cameras = {}
+            for key, camera_id in camera_map.items():
+                settings = config[camera_id]
+                cameras[key] = stack.enter_context(SharedCamera(
+                    settings['serial'], settings['width'], settings['height'], settings['fps'],
+                    camera_id=camera_id if deployment else None))
+            session = client if args.dry_run else stack.enter_context(
+                ControlSession(args.run, source='policy', purpose='operation', metadata={'policy': args.policy}))
+            summary = run(session, worker, cameras if deployment else cameras['wrist_rgb'],
+                          output, args.prompt, seconds=args.seconds, chunk_steps=args.chunk_steps,
+                          robot=robot, dry_run=args.dry_run, observer=observe_pair if deployment else observe)
     finally:
         worker.close()
     print(json.dumps(summary, ensure_ascii=False, indent=2))

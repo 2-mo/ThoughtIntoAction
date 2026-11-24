@@ -480,10 +480,14 @@ class OperationManager:
         if mode == "local" and policy not in POLICY_KINDS:
             raise OperationError("不支持的策略类型")
         try:
-            owner = ControlClient(run).status().get("owner")
+            control = ControlClient(run)
+            owner = control.status().get("owner")
+            rm65 = mode == "remote" and (
+                control.parameters.get("data_contract", {}).get("robot_type") == "rm65_hardware_eg2_4c2_nominal_width"
+            )
         except (OSError, EOFError, ValueError, KeyError, RuntimeError) as exc:
             raise OperationError(f"读取内核状态失败：{exc}", 503) from exc
-        if owner:
+        if owner and not (rm65 and payload.get("dry_run") is True):
             source = owner.get("source") or "其他客户端"
             raise OperationError(f"内核控制权被 {source} 占用，先关闭控制台页面", 409)
         if mode == "remote":
@@ -494,7 +498,9 @@ class OperationManager:
                 "bash", str(RUN_SH), "policy", "remote", "--run", str(run),
                 "--server", server, "--prompt", prompt, "--seconds", str(seconds),
             ]
-            if payload.get("rtc"):
+            if rm65:
+                argv.append("--rm65")
+            elif payload.get("rtc"):
                 chunk = payload.get("chunk_steps", 50)
                 if isinstance(chunk, bool) or not isinstance(chunk, int) or not 1 <= chunk <= 50:
                     raise OperationError("块大小必须在 1..50", 400)

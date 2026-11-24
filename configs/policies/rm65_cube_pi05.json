@@ -1,0 +1,55 @@
+{
+  "checkpoint": "outputs/checkpoints/rm65_cube_lora_1gpu_v1/9999",
+  "adapter_spec": {
+    "schema": "embodied.openpi_adapter/1",
+    "data_contract": {
+      "schema": "embodied.joint_vectors/1",
+      "representation": "absolute_joint_position",
+      "joint_names": [
+        "joint1",
+        "joint2",
+        "joint3",
+        "joint4",
+        "joint5",
+        "joint6"
+      ],
+      "joint_unit": "rad",
+      "gripper": {
+        "name": "eg2_nominal_width_m",
+        "unit": "m",
+        "range": [
+          0.0,
+          0.07
+        ]
+      },
+      "robot_type": "rm65_hardware_eg2_4c2_nominal_width"
+    },
+    "camera_roles": {
+      "right_wrist_0_rgb": "right_wrist_rgb",
+      "base_0_rgb": "exterior_rgb"
+    },
+    "model_action_dim": 32,
+    "action_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "delta_joints": true,
+    "gripper_absolute": true
+  },
+  "model_variants": {
+    "paligemma_variant": "gemma_2b_lora",
+    "action_expert_variant": "gemma_300m_lora"
+  },
+  "camera_map": {
+    "right_wrist_rgb": "wrist_second_rgb",
+    "exterior_rgb": "exterior_rgb"
+  },
+  "robot_host": "192.168.1.18",
+  "robot_name": "RealMan RM65 right 18",
+  "prompt": "把黑色方块放到白色盒子里"
+}
