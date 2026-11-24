@@ -404,10 +404,14 @@ def main(argv=None):
         from embodied.policy.remote.rm65 import HORIZON
 
         horizon = HORIZON
+        if args.rtc:
+            # Older consoles send the dual-arm chunk size together with RTC.
+            args.rtc = False
+            args.chunk_steps = horizon
     if args.chunk_steps is None:
         args.chunk_steps = horizon
-    if args.rm65 and (args.rtc or args.fps != FPS):
-        parser.error("RM65 使用 30 Hz 分块推理，关闭 RTC")
+    if args.rm65 and args.fps != FPS:
+        parser.error("RM65 使用 30 Hz 分块推理")
     if not args.rm65 and not args.prompt:
         parser.error("双臂策略需要 --prompt")
     if args.rm65 and args.cameras and len(args.cameras.split(",")) != 2:
