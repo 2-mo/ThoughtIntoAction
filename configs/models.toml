@@ -67,3 +67,11 @@ unmount = [
   "ssh", "-o", "BatchMode=yes", "cn1wf@192.168.96.201",
   "pkill -f 'serve_compat[.]py'",
 ]
+
+[[models]]
+id = "rm65_cube_pi05"
+name = "RM65 右臂 · 黑色方块"
+prompt = "把黑色方块放到白色盒子里"
+url = "ws://10.16.106.51:8989"
+mount_ready = false
+note = "由训练服务器提供服务。选用右侧 RM65 内核，使用 15 步分块推理。"

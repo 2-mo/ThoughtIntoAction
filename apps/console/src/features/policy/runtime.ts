@@ -289,7 +289,7 @@ function renderModels() {
       <div class="model-actions">
         <button type="button" data-action="mount" ${mountable ? "" : "disabled"}
           title="${escapeHtml(model.note || "执行登记表里的挂载命令")}">挂载</button>
-        <button type="button" data-action="unmount" ${state === "offline" ? "disabled" : ""}>卸载</button>
+        <button type="button" data-action="unmount" ${state === "offline" || model.mountable === false ? "disabled" : ""}>卸载</button>
       </div>
     </article>`;
   }).join("");
@@ -326,6 +326,13 @@ function selectModel(modelId) {
     ui.policyPromptHistory.value = match ? model.prompt : "";
   }
   if (ui.policyServer) ui.policyServer.value = model.url;
+  if (model.id === "rm65_cube_pi05") {
+    if (ui.policyRtc) {
+      ui.policyRtc.checked = false;
+      ui.policyRtc.dispatchEvent(new Event("change"));
+    }
+    if (ui.policyDryRun) ui.policyDryRun.checked = true;
+  }
   if (ui.policyStart) {
     // The button names the selected model; keep the original label in the dataset.
     if (!ui.policyStart.dataset.idleText) {

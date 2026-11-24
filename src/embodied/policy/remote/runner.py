@@ -1,4 +1,4 @@
-"""Run a remote π0.5 policy against the dual-arm arx kernel.
+"""Run a remote π0.5 policy against the control kernel.
 
 Observe the kernel state (14 numbers) and three cameras at 30 Hz, ask the
 policy server for a 50-step chunk, and stream it back as kernel joint commands
@@ -371,11 +371,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--run", type=Path, required=True, help="运行中的内核目录 outputs/runtime/control/<RUN>")
     parser.add_argument("--server", required=True, help="策略服务地址，例如 ws://127.0.0.1:8000")
-    parser.add_argument("--prompt", required=True)
+    parser.add_argument("--prompt")
+    parser.add_argument("--rm65", action="store_true", help="使用 RM65 右臂 7 维策略")
+    parser.add_argument("--asset-id", help="要求 RM65 服务报告指定的 asset_id")
     parser.add_argument("--seconds", type=float, default=60)
     parser.add_argument("--fps", type=int, default=FPS)
-    parser.add_argument("--cameras", default=",".join(CAMERAS), help="逗号分隔的相机 ID，顺序固定")
-    parser.add_argument("--chunk-steps", type=int, default=CHUNK_HORIZON)
+    parser.add_argument("--cameras", help="逗号分隔的相机 ID，顺序固定")
+    parser.add_argument("--chunk-steps", type=int)
     parser.add_argument("--rtc", action="store_true", help="启用异步 RTC 引导采样")
     parser.add_argument("--reinfer-remaining", type=int, default=30, help="剩余多少步时请求新块")
     parser.add_argument("--blend", type=int, default=16, help="新块开头多少步与旧块混合")
@@ -388,11 +390,24 @@ def main(argv=None):
         parser.error("seconds 必须在 0..300")
     if not 1 <= args.fps <= 60:
         parser.error("fps 必须在 1..60")
-    if not 1 <= args.chunk_steps <= CHUNK_HORIZON:
-        parser.error(f"chunk-steps 必须在 1..{CHUNK_HORIZON}")
-    if not 0 <= args.reinfer_remaining < args.chunk_steps:
+    horizon = CHUNK_HORIZON
+    if args.rm65:
+        from embodied.policy.remote.rm65 import HORIZON
+
+        horizon = HORIZON
+    if args.chunk_steps is None:
+        args.chunk_steps = horizon
+    if args.rm65 and (args.rtc or args.fps != FPS):
+        parser.error("RM65 使用 30 Hz 分块推理，关闭 RTC")
+    if not args.rm65 and not args.prompt:
+        parser.error("双臂策略需要 --prompt")
+    if args.rm65 and args.cameras and len(args.cameras.split(",")) != 2:
+        parser.error("RM65 --cameras 需要两个 ID，顺序为右腕、外部")
+    if not 1 <= args.chunk_steps <= horizon:
+        parser.error(f"chunk-steps 必须在 1..{horizon}")
+    if args.rtc and not 0 <= args.reinfer_remaining < args.chunk_steps:
         parser.error("reinfer-remaining 必须在 0..chunk-steps-1")
-    if not 0 <= args.blend <= args.chunk_steps:
+    if args.rtc and not 0 <= args.blend <= args.chunk_steps:
         parser.error("blend 必须在 0..chunk-steps")
 
     from embodied.contracts.runtime.control import ControlSession
@@ -402,7 +417,14 @@ def main(argv=None):
 
     output = args.output or PROJECT_ROOT / "outputs/policy_remote" / time.strftime("%Y%m%d-%H%M%S")
     output.mkdir(parents=True, exist_ok=False)
-    camera_ids = [value.strip() for value in args.cameras.split(",") if value.strip()]
+    if args.rm65:
+        from embodied.policy.remote.rm65 import execute
+
+        signal.signal(signal.SIGTERM, interrupt)
+        summary = execute(args, output)
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 0 if summary["status"] in ("time_limit", "interrupted") else 1
+    camera_ids = [value.strip() for value in (args.cameras or ",".join(CAMERAS)).split(",") if value.strip()]
     config = load_config().get("cameras") or {}
     if any(camera_id not in config for camera_id in camera_ids):
         parser.error(f"未配置的相机：{[c for c in camera_ids if c not in config]}")

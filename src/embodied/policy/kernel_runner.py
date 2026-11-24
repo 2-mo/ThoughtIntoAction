@@ -60,9 +60,7 @@ def observe(session, camera, cycle, robot=JOINTS, max_skew_s=.06):
     return observation
 
 
-def observe_pair(session, cameras, cycle, robot):
-    import cv2
-
+def sample_pair(session, cameras):
     for _ in range(5):
         exterior = cameras['exterior_rgb'].read()
         state = session.status()
@@ -75,6 +73,14 @@ def observe_pair(session, cameras, cycle, robot):
             break
     else:
         raise ValueError('No causal camera and state match within 60 ms')
+    return state, frames, stamps, stamp
+
+
+def observe_pair(session, cameras, cycle, robot):
+    import cv2
+
+    state, frames, stamps, stamp = sample_pair(session, cameras)
+    feedback = state['feedback_monotonic_ns']
     for key, frame in frames.items():
         if not cv2.imwrite(str(cycle / (key + '.png')), frame['image']):
             raise OSError('Cannot save ' + key)
@@ -86,10 +92,22 @@ def observe_pair(session, cameras, cycle, robot):
     return observation
 
 
-def run(session, worker, camera, output, prompt, *, seconds, chunk_steps, max_age_s=1.5, robot=JOINTS, dry_run=False, observer=observe):
+def worker_actions(worker, observation, cycle, prompt):
+    prediction = worker.predict(cycle, prompt)
+    if (prediction['arm_service_id'] != observation['arm_service_id']
+            or prediction['rgb_monotonic_ns'] != observation['rgb_monotonic_ns']):
+        raise ValueError('Prediction belongs to another observation')
+    with np.load(cycle / 'prediction.npz', allow_pickle=False) as data:
+        key = 'actions' if 'actions' in data.files else 'actions_x5' if 'actions_x5' in data.files else 'actions_x5_experimental'
+        actions = data[key].copy()
+    return actions
+
+
+def run(session, worker, camera, output, prompt, *, seconds, chunk_steps, max_age_s=1.5, robot=JOINTS, dry_run=False, observer=observe, predict=None, model_metadata=None):
     """Observe, predict, stream `chunk_steps` actions at POLICY_FPS; repeat until `seconds` elapse."""
     summary = {'status': 'running', 'prompt': prompt, 'chunk_steps': chunk_steps, 'policy_fps': POLICY_FPS,
-               'kernel_runtime_id': session.identity['runtime_id'], 'cycles': 0, 'commands': 0}
+               'kernel_runtime_id': session.identity['runtime_id'], 'cycles': 0, 'commands': 0,
+               'chunks': 0, 'dry_ticks': 0, 'dry_run': dry_run, 'model_metadata': model_metadata}
     deadline = time.monotonic() + seconds
     try:
         with (output / 'commands.jsonl').open('x') as log:
@@ -97,16 +115,12 @@ def run(session, worker, camera, output, prompt, *, seconds, chunk_steps, max_ag
                 cycle = output / f'cycle_{summary["cycles"]:04d}'
                 cycle.mkdir()
                 observation = observer(session, camera, cycle, robot)
-                prediction = worker.predict(cycle, prompt)
-                if (prediction['arm_service_id'] != observation['arm_service_id']
-                        or prediction['rgb_monotonic_ns'] != observation['rgb_monotonic_ns']):
-                    raise ValueError('Prediction belongs to another observation')
-                with np.load(cycle / 'prediction.npz', allow_pickle=False) as data:
-                    key = 'actions' if 'actions' in data.files else 'actions_x5' if 'actions_x5' in data.files else 'actions_x5_experimental'
-                    actions = data[key].copy()
+                actions = predict(observation, cycle, prompt) if predict else worker_actions(
+                    worker, observation, cycle, prompt)
                 if actions.ndim != 2 or actions.shape[1] != 7 or len(actions) < chunk_steps or not np.isfinite(actions).all():
                     raise ValueError('Invalid action chunk')
                 summary['cycles'] += 1
+                summary['chunks'] += 1
                 start = time.monotonic()
                 for index, action in enumerate(actions[:chunk_steps]):
                     if (time.monotonic_ns() - observation['rgb_monotonic_ns']) / 1e9 > max_age_s:
@@ -117,6 +131,8 @@ def run(session, worker, camera, output, prompt, *, seconds, chunk_steps, max_ag
                         if isinstance(response, dict) and response.get('accepted') is False:
                             raise RuntimeError('Kernel rejected policy target: ' + str(response))
                         summary['commands'] += 1
+                    else:
+                        summary['dry_ticks'] += 1
                     log.write(json.dumps({'host_monotonic_ns': time.monotonic_ns(), 'cycle': summary['cycles'] - 1,
                                           'action_index': index, 'action': action.tolist()}) + '\n')
                     remaining = start + (index + 1) / POLICY_FPS - time.monotonic()

@@ -1,5 +1,11 @@
 """Remote π0.5 client: wire format, observation building and the websocket handshake."""
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import threading
+import time
+from types import SimpleNamespace
+from unittest.mock import patch
 import unittest
 
 import numpy as np
@@ -120,12 +126,13 @@ class BlendTests(unittest.TestCase):
 class _FakeServer:
     """Minimal openpi policy server: one metadata message, then one reply per request."""
 
-    def __init__(self, actions):
+    def __init__(self, actions, metadata=None):
         self.actions = actions
+        self.metadata = metadata or {}
         self.requests = []
 
     def serve(self, connection):
-        connection.send(packb({}))
+        connection.send(packb(self.metadata))
         for message in connection:
             self.requests.append(unpackb(message))
             connection.send(packb({"actions": self.actions}))
@@ -160,6 +167,64 @@ class ClientTests(unittest.TestCase):
             with RemotePolicy(server.url) as client:
                 with self.assertRaises(PolicyError):
                     client.infer({"state": np.zeros(14, dtype=np.float32)})
+
+
+class RM65Tests(unittest.TestCase):
+    def test_dry_run_sends_rgb_and_rejects_short_chunks_without_a_lease(self):
+        from embodied.policy.remote import rm65
+
+        deployment = json.loads(rm65.DEPLOYMENT.read_text())
+        contract = deployment["adapter_spec"]["data_contract"]
+        control = SimpleNamespace(
+            identity={"backend": "real", "runtime_id": "test"},
+            parameters={"effective_robot_config": {"hardware_plugin": "realman.real"}, "data_contract": contract},
+            status=lambda: {"q": [0.1] * 6, "gripper_width": 0.04, "feedback_monotonic_ns": time.monotonic_ns()},
+        )
+
+        class Camera:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                pass
+
+            def read(self):
+                return {"image": np.array([[[1, 2, 3]]], dtype=np.uint8),
+                        "host_received_monotonic_ns": time.monotonic_ns()}
+
+        config = {"cameras": {role: {"serial": role, "width": 1, "height": 1, "fps": 30}
+                              for role in deployment["camera_map"].values()}}
+        metadata = {"asset_id": "fixture", "robot_type": contract["robot_type"],
+                    "action_dim": 7, "action_horizon": 15, "fps": 30}
+        for steps in (15, 14):
+            with (self.subTest(steps=steps), TemporaryDirectory() as directory,
+                  _FakeServer(np.zeros((steps, 7), dtype=np.float32), metadata) as server,
+                  patch.object(rm65, "ControlClient", return_value=control),
+                  patch.object(rm65, "ControlSession") as lease,
+                  patch.object(rm65, "SharedCamera", Camera),
+                  patch.object(rm65, "load_config", return_value=config)):
+                connection = Path(directory) / "connection.json"
+                connection.write_text(json.dumps({"host": deployment["robot_host"]}))
+                control.parameters["effective_robot_config"]["connection_path"] = str(connection)
+                args = SimpleNamespace(run=Path(directory), prompt=None, cameras=None, server=server.url,
+                                       asset_id="fixture", dry_run=True, seconds=0.1, chunk_steps=15)
+                if steps == 15:
+                    summary = rm65.execute(args, Path(directory))
+                    self.assertEqual(summary["commands"], 0)
+                    self.assertGreater(summary["dry_ticks"], 0)
+                else:
+                    with self.assertRaisesRegex(PolicyError, "动作形状"):
+                        rm65.execute(args, Path(directory))
+                lease.assert_not_called()
+                request = server.requests[0]
+                np.testing.assert_allclose(request["state"], [0.1] * 6 + [0.04])
+                for role in ("right_wrist_rgb", "exterior_rgb"):
+                    np.testing.assert_array_equal(request[role], [[[3, 2, 1]]])
+                    self.assertTrue(request[f"{role}_valid"])
+                self.assertEqual(request["prompt"], deployment["prompt"])
 
 
 if __name__ == "__main__":
