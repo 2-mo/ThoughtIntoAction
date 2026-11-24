@@ -200,8 +200,10 @@ class RM65Tests(unittest.TestCase):
         metadata = {"asset_id": "fixture", "robot_type": contract["robot_type"],
                     "action_dim": 7, "action_horizon": 15, "fps": 30}
         for steps in (15, 14):
+            actions = np.zeros((steps, 7), dtype=np.float32)
+            actions[:, 6] = 0.0704
             with (self.subTest(steps=steps), TemporaryDirectory() as directory,
-                  _FakeServer(np.zeros((steps, 7), dtype=np.float32), metadata) as server,
+                  _FakeServer(actions, metadata) as server,
                   patch.object(rm65, "ControlClient", return_value=control),
                   patch.object(rm65, "ControlSession") as lease,
                   patch.object(rm65, "SharedCamera", Camera),
@@ -215,6 +217,9 @@ class RM65Tests(unittest.TestCase):
                     summary = rm65.execute(args, Path(directory))
                     self.assertEqual(summary["commands"], 0)
                     self.assertGreater(summary["dry_ticks"], 0)
+                    log = Path(directory) / "commands.jsonl"
+                    self.assertTrue(all(json.loads(row)["action"][6] == 0.07 for row in log.read_text().splitlines()))
+                    np.testing.assert_array_equal(np.load(Path(directory) / "cycle_0000/actions.npy"), actions)
                 else:
                     with self.assertRaisesRegex(PolicyError, "动作形状"):
                         rm65.execute(args, Path(directory))
