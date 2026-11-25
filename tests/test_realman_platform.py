@@ -210,7 +210,7 @@ def test_quest_wrist_chord_preserves_mode_switch_and_home(monkeypatch):
     ingress.mode_input = None
     ingress.mode_sequence = -1
     ingress.primary_down = ingress.wrist_chord = ingress.wrist_blocked = False
-    ingress.returning_home = False
+    ingress.home_chord_down = ingress.returning_home = False
     ingress.wrist_target = None
     ingress.wrist_limit = -6.28
     ingress.wrist_step = .007
@@ -244,9 +244,17 @@ def test_quest_wrist_chord_preserves_mode_switch_and_home(monkeypatch):
     poll()
     assert poll(8).hold
     assert poll(8).hold
-    home = poll(8)
+    assert poll(8).joint_target is None
+    poll()
+    assert poll(12).hold
+    assert poll(12).hold
+    home = poll(12)
     np.testing.assert_array_equal(home.joint_target, ingress.home_q)
-    assert poll().hold
+    partial_release = poll(4)
+    assert partial_release.hold and partial_release.reset_reference
+    assert forwarded[-1] == 0
+    assert poll(12).joint_target is None
+    assert poll(8).hold and forwarded[-1] == 0
     poll()
 
     poll(trigger=1.)
