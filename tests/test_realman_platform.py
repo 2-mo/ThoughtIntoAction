@@ -182,3 +182,52 @@ def test_gateway_description_exposes_realman_presets_to_existing_clients():
     robot = gateway.describe()['robot']
     assert robot['hardware_plugin'] == 'realman.real'
     assert pregrasp_joints(robot) == list(gateway.config.pregrasp_q)
+
+
+def test_quest_wrist_button_turns_only_j6_while_trigger_holds(monkeypatch):
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from embodied.contracts.control import ControlCommand, Mode
+    from embodied.devices.inputs.quest.ingress import Candidate
+    from embodied.devices.inputs.quest.shared import Ingress, NativeIngress
+
+    inp = SimpleNamespace(buttons_bitset=0, trigger=0., grip=0.)
+    state = SimpleNamespace(q=np.arange(6) / 10, gripper_width=.03)
+    ingress = Ingress.__new__(Ingress)
+    ingress.samples = {'input': SimpleNamespace(sample=inp, fresh=lambda _: True)}
+    ingress.status = {'ready': True, 'permit': True}
+    ingress.gripper_epoch = None
+    ingress.gripper_max_width = .07
+    ingress.wrist_ready = True
+    ingress.wrist_target = None
+    ingress.wrist_limit = -6.28
+    ingress.wrist_step = .007
+    monkeypatch.setattr(NativeIngress, 'poll', lambda *args: Candidate(
+        1, ControlCommand(Mode.COMMAND_FOLLOWING, hold=True)))
+
+    inp.buttons_bitset = 8
+    assert ingress.poll(state, 0., 1, True).command.hold
+    inp.buttons_bitset = 0
+    ingress.poll(state, 0., 1, True)
+    inp.buttons_bitset, inp.trigger = 8, 1.
+    turn = ingress.poll(state, 0., 1, True).command
+    np.testing.assert_array_equal(turn.joint_target[:5], state.q[:5])
+    assert turn.joint_target[5] == -6.28 and turn.joint_step_limit == .007
+    assert turn.engaged and not turn.hold and turn.gripper_target == 0.
+    assert state.q[5] == .5
+
+    inp.grip = 1.
+    stopped = ingress.poll(state, 0., 1, True).command
+    assert stopped.hold and stopped.reset_reference and stopped.joint_target is None
+    assert stopped.gripper_target == 0.
+    inp.grip = 0.
+    assert ingress.poll(state, 0., 1, True).command.hold
+    inp.buttons_bitset = 0
+    ingress.poll(state, 0., 1, True)
+    inp.buttons_bitset = 8
+    assert not ingress.poll(state, 0., 1, True).command.hold
+    inp.buttons_bitset = 0
+    released = ingress.poll(state, 0., 1, True).command
+    assert released.hold and released.reset_reference and released.gripper_target == 0.

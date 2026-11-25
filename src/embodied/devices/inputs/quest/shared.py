@@ -80,49 +80,43 @@ class Ingress(NativeIngress):
         self.gripper_released = self.gripper_armed = False
         self.gripper_epoch = None
         self.gripper_max_width = settings.robot.gripper_max_width
-        self.home_q = np.asarray(settings.robot.park_q, dtype=float)
-        self.home_released = self.returning_home = self.home_blocked = False
-        self.home_since = None
+        self.wrist_limit = settings.robot.joint_min[5]
+        self.wrist_step = .35 / settings.robot.control_hz
+        self.wrist_ready = False
+        self.wrist_target = None
 
     def poll(self, state, now, epoch, selected):
         candidate = super().poll(state, now, epoch, selected)
         now = time.monotonic()
         sample = self.samples['input']
         valid = selected and self.status['ready'] and sample.fresh(now) and not candidate.fault
-        was_returning = self.returning_home
+        was_turning = self.wrist_target is not None
         if epoch != self.gripper_epoch or not valid:
             self.gripper_epoch = epoch
             self.gripper_released = self.gripper_armed = False
-            self.home_released = self.returning_home = self.home_blocked = False
-            self.home_since = None
+            self.wrist_ready = False
+            self.wrist_target = None
         command = candidate.command
-        home = secondary = False
-        if valid:
-            inp = sample.sample
-            neutral = inp.trigger < .2 and inp.grip < .2 and not (inp.buttons_bitset & 12)
-            if neutral:
-                self.home_released = True
-                self.home_blocked = False
-            secondary = bool(inp.buttons_bitset & 8)
-            # B (right) / Y (left) is the vendor's Home button; A+B also works,
-            # which is the habit from the ARX profiles.
-            if (secondary and self.home_released and not self.home_blocked and
-                    inp.trigger < .2 and inp.grip < .2):
-                if self.home_since is None:
-                    self.home_since = now
-                home = now-self.home_since >= 1.
-            else:
-                if self.home_since is not None and not neutral:
-                    self.home_released = False
-                    self.home_blocked = True
-                self.home_since = None
-            if (state.gripper_width is None or secondary or self.home_blocked or was_returning
-                    or command.mode != Mode.COMMAND_FOLLOWING or not self.status['permit']):
-                self.gripper_released = self.gripper_armed = False
-            elif inp.trigger < .2:
-                self.gripper_released = True
-            elif self.gripper_released and inp.trigger > .2:
-                self.gripper_armed = True
+        permitted = valid and self.status['permit'] and command.mode == Mode.COMMAND_FOLLOWING
+        inp = sample.sample
+        secondary = valid and bool(inp.buttons_bitset & 8)
+        if not permitted:
+            self.wrist_ready = False
+        elif not secondary:
+            self.wrist_ready = True
+        elif not (inp.grip < .2) or inp.buttons_bitset & 4:
+            self.wrist_ready = False
+        if not secondary or not self.wrist_ready:
+            self.wrist_target = None
+        elif self.wrist_target is None:
+            self.wrist_target = state.q.copy()
+            self.wrist_target[5] = self.wrist_limit
+        if not permitted or state.gripper_width is None:
+            self.gripper_released = self.gripper_armed = False
+        elif inp.trigger < .2:
+            self.gripper_released = True
+        elif self.gripper_released and inp.trigger > .2:
+            self.gripper_armed = True
         # Same absolute mapping as the native coordinator's parallel_target.
         # Startup/recovery does not open a partly closed gripper: require a
         # neutral Trigger followed by a new press, then release opens normally.
@@ -132,17 +126,15 @@ class Ingress(NativeIngress):
                 raise ValueError('Invalid Quest trigger')
             width = self.gripper_max_width * (1. - inp.trigger)
         command = replace(command, gripper_target=width, gripper_mode=command.mode)
-        overriding = secondary or was_returning or self.home_blocked
+        turning = self.wrist_target is not None
+        overriding = secondary or was_turning
         if overriding:
-            # Use the existing bounded joint stream, not Disabled (ARX Home)
-            # or a scene reset. B/Y must stay held; release/conflict stops Home.
-            command = replace(command, mode=Mode.COMMAND_FOLLOWING, hold=not home,
-                reset_reference=was_returning != home, pose_target=None,
-                joint_target=self.home_q.copy() if home else None,
+            command = replace(command, hold=not turning, reset_reference=was_turning != turning,
+                pose_target=None, joint_target=self.wrist_target,
+                joint_step_limit=self.wrist_step if turning else None,
                 joint_velocity_target=None, joint_acceleration_target=None, planned=False,
-                engaged=False, gripper_target=None, gripper_initialize_open=False)
-        self.returning_home = home
+                engaged=turning, gripper_initialize_open=False)
         self.status.update(gripper_ready=state.gripper_width is not None,
-            gripper_armed=self.gripper_armed, returning_home=home)
+            gripper_armed=self.gripper_armed, turning_wrist=turning)
         return replace(candidate, command=command,
-                       phase='home' if home else 'hold' if overriding else candidate.phase)
+                       phase='teleop' if turning else 'hold' if overriding else candidate.phase)
