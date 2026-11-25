@@ -397,7 +397,11 @@ class CommandEngine:
                                for value in widths)):
                     raise ValueError(f'gripper_targets must hold {arms} widths in metres')
                 width = float(widths[0])
+            table_guard = self.owner['source'] == 'rm65-cube-policy'
+            if table_guard and action != 'joint':
+                raise ValueError('RM65 cube policy requires joint targets')
             self.command = ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=pose,
+                rm65_table_guard=table_guard,
                 joint_target=q, gripper_target=width,
                 gripper_targets=None if widths is None else tuple(float(value) for value in widths),
                 hold=action == 'gripper',

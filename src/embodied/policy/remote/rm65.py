@@ -56,6 +56,10 @@ def execute(args, output):
     connection = json.loads(Path(hardware["connection_path"]).read_text())
     if connection.get("host") != deployment["robot_host"]:
         raise PolicyError(f"请选择控制器 {deployment['robot_host']} 对应的右臂 RUN")
+    if not args.dry_run:
+        backend = json.loads((Path(args.run) / "backend-parameters.json").read_text())
+        if not backend.get("rm65_policy_table"):
+            raise PolicyError("RM65 桌面限位未标定或内核尚未加载标定，只能运行只推理")
     camera_map = deployment["camera_map"]
     if args.cameras:
         right_wrist, exterior = args.cameras.split(",")
@@ -79,7 +83,7 @@ def execute(args, output):
             cameras[role] = stack.enter_context(SharedCamera(
                 settings["serial"], settings["width"], settings["height"], settings["fps"], camera_id=camera_id))
         session = control if args.dry_run else stack.enter_context(
-            ControlSession(args.run, source="policy", purpose="operation",
+            ControlSession(args.run, source="rm65-cube-policy", purpose="operation",
                            metadata={"policy": "remote", "server": args.server}))
         return run(session, None, cameras, output, prompt, seconds=args.seconds,
                    chunk_steps=args.chunk_steps, robot=robot, dry_run=args.dry_run, observer=observe,
