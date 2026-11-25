@@ -23,7 +23,7 @@ def data_contract(config):
         'robot_type': 'rm65_hardware_eg2_4c2_nominal_width'}
 
 
-POLICY_MIN_TCP_Z_M = 0.005
+POLICY_MIN_TCP_Z_M = 0.010
 
 
 def check_policy_z(fk, measured, target):
@@ -230,7 +230,7 @@ class Backend:
             'streaming_cartesian_speed_limits': None,
             'velocity_feedback': 'finite_difference_of_encoder_positions',
             'gripper_startup_ready': self.gripper_ready,
-            'rm65_policy_minimum_tcp_z_m': 0.,
+            'rm65_policy_minimum_tcp_z_m': POLICY_MIN_TCP_Z_M,
             'gripper_width': {'source': 'manufacturer_nominal_stroke', 'raw_range': [0, 1000],
                 'endpoint_tolerance_raw': 10, 'stroke_m': .07, 'fingertip_calibrated': False,
                 'source_url': 'https://www.inspire-robots.com/dexterous%20hands/eg2-4c-series/'}}

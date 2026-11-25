@@ -33,11 +33,11 @@ class Kinematics:
 
 
 class PolicyTableGuardTest(unittest.TestCase):
-    def test_checks_five_mm_floor_and_allows_recovery(self):
+    def test_checks_ten_mm_floor_and_allows_recovery(self):
         fk = Kinematics().fk
         zero = np.zeros(6)
         below = np.array([0., 0., -.1, 0., 0., 0.])
-        floor = np.array([0., 0., .05, 0., 0., 0.])
+        floor = np.array([0., 0., .1, 0., 0., 0.])
         self.assertTrue(check_policy_z(fk, floor, floor)[0])
         self.assertFalse(check_policy_z(fk, floor, zero)[0])
         self.assertFalse(check_policy_z(fk, zero, zero)[0])
@@ -117,15 +117,15 @@ class HardwareTests(unittest.TestCase):
                   gripper_target=0.)
         self.assertGreater(self.motions()[-1]['joint'][2], 0)
 
-    def test_policy_table_limit_advances_to_five_mm_from_positive_height(self):
-        start = np.array([0., 0., .05, 0., 0., 0.])
+    def test_policy_table_limit_advances_to_ten_mm_from_positive_height(self):
+        start = np.array([0., 0., .15, 0., 0., 0.])
         self.connection.q = start
         self.backend.controller.q_target = start.copy()
         self.step(rm65_table_guard=True, joint_target=-start)
         sent = np.deg2rad(np.array(self.motions()[-1]['joint']) / 1000)
         height = self.kinematics.fk(sent)[2]
-        self.assertGreaterEqual(height, .005)
-        self.assertLess(height, .00502)
+        self.assertGreaterEqual(height, .010)
+        self.assertLess(height, .01002)
 
     def test_all_six_axes_use_joint_wire_and_speed_budgets(self):
         self.step(joint_target=np.full(6, .2))
