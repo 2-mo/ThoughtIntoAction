@@ -235,8 +235,10 @@ def test_quest_wrist_joystick_preserves_grip_and_home(monkeypatch):
     assert centered.hold and centered.reset_reference and centered.gripper_target == 0.
 
     assert not poll(trigger=1., axis=1.).hold
-    assert poll(trigger=1., axis=1., grip=1.).reset_reference
-    assert poll(trigger=1., axis=1.).hold
+    turning_with_grip = poll(trigger=1., axis=1., grip=1.)
+    assert not turning_with_grip.hold and turning_with_grip.gripper_target == 0.
+    assert poll(trigger=1., grip=1.).reset_reference
+    assert poll(8, trigger=1.).gripper_target == 0.
     poll()
     assert poll(8).hold
     assert poll(8).hold

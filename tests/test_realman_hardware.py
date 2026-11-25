@@ -323,6 +323,19 @@ class HardwareTests(unittest.TestCase):
             self.backend.step(ControlCommand(Mode.COMMAND_FOLLOWING), time.monotonic(), cancel_requested=lambda: True)
         self.assertFalse(self.motions())
 
+    def test_gripper_can_close_from_stale_contact_at_full_open(self):
+        b = self.backend
+        b.gripper.update(mode=6, actpos=1000, current_force=0)
+        b._gripper_target(0., 1.)
+        self.assertEqual(self.connection.client.sent[-1]['position'], 1)
+        count = len(self.connection.client.sent)
+        b._gripper_target(0., 1.1)
+        self.assertEqual(len(self.connection.client.sent), count)
+        b.gripper.update(actpos=950)
+        b._gripper_target(0., 1.2)
+        self.assertTrue(b.gripper_contact)
+        self.assertIsNone(b.pending_gripper)
+
     def test_gripper_absolute_goal_contact_and_timeout(self):
         b = self.backend
         b._gripper_target(0., 1.)

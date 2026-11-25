@@ -398,7 +398,10 @@ class Backend:
         position = int(np.clip(self.gripper['actpos'], 0, 1000))
         if self.gripper['mode'] not in (1, 2, 3, 4, 5, 6):
             raise RuntimeError(f'Unknown EG2 mode: {self.gripper}')
-        if self.gripper['mode'] == 6:
+        if position == 1000:
+            # EG2 can retain mode 6 even after reaching the fully open endpoint.
+            self.gripper_contact = False
+        elif self.gripper['mode'] == 6:
             self.gripper_contact = True
             # A contact report ends a closing segment. It may still be the
             # previous feedback after an opening ACK; do not resubmit that
