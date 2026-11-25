@@ -156,14 +156,4 @@ PYTHONPATH=src configs/environments/arx_motion/.venv/bin/python -m pytest tests/
 `outputs/policy_remote/<时间戳>/` 还记录每块的状态、采样时间和完整预测动作。
 ### RM65 桌面下降限位
 
-需要启用桌面限位时，在 `configs/control/rm65-policy-table.local.json` 保存当前工位的已确认标定。复用已有测量时，核对桌面、基座和夹爪安装是否与测量时一致。
-
-| JSON 字段 | 来源和单位 |
-|---|---|
-| `robot_host` | 右臂控制器 `192.168.1.18` |
-| `get_current_work_frame`、`get_current_tool_frame` | 当前内核 `backend-parameters.json` 的 `controller` 中对应对象的原始 `pose` 数组 |
-| `table_z_m` | 当前工作坐标系内水平桌面的实测 Z，单位为米 |
-| `table_clearance_m` | 现场确认的最小指尖间隙，单位为米 |
-| `fingertip_bounds_tcp_m` | 工具坐标系下包住两侧指尖完整开合范围的包围盒，格式为 `[[xmin,ymin,zmin],[xmax,ymax,zmax]]`，单位为米 |
-
-内核未载入匹配的标定时，策略沿用原有下发流程。启用限位时，保存标定后重启 RM65 控制内核。启动参数中的 `rm65_policy_table` 应显示载入的标定。先检查双路画面，再在现场低速验收下降限位、实际闭爪和抬升。限位触发会在内核 `backend.log` 记录 `rm65_table_limit`、候选路径最小余量和实际关节目标。下发前的检查沿关节路径采样，指尖包围盒覆盖整个开合范围。
+RM65 方块策略使用控制器工作坐标系的 TCP Z = 0 米作为下降下限。内核把模型输出的关节目标换算成 TCP 高度，沿下发路径采样。触发时保持关节目标并继续处理夹爪指令。如果当前 TCP 已低于零，只允许向上恢复。触发记录见内核日志的 `rm65_table_limit`，实际工位间隙取决于桌面与工具坐标的对应关系。
