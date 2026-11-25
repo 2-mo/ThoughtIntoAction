@@ -300,11 +300,28 @@ class Backend:
         if not holding and command.planned:
             self._check_planned_tcp_speed(q, previous)
         if command.rm65_table_guard and not holding:
-            allowed, lowest_z = check_policy_z(self.kinematics.fk, state.q, q)
+            wire_q = np.deg2rad(np.rint(np.rad2deg(q) * 1000) / 1000)
+            allowed, lowest_z = check_policy_z(self.kinematics.fk, state.q, wire_q)
             if not allowed:
-                # Reuse the last issued target only while its path is still safe.
-                previous_allowed, _ = check_policy_z(self.kinematics.fk, state.q, previous)
-                q = previous if previous_allowed else state.q.copy()
+                # Search within this tick's joint step and check the quantized CANFD target.
+                safe = state.q
+                safe_wire_q = None
+                unsafe = q
+                for _ in range(10):
+                    candidate = (safe + unsafe) / 2
+                    wire_q = np.deg2rad(np.rint(np.rad2deg(candidate) * 1000) / 1000)
+                    if (np.any(np.abs(wire_q - previous) > step_limit + 2e-5)
+                            or np.any(wire_q < self.kinematics.lower)
+                            or np.any(wire_q > self.kinematics.upper)
+                            or not check_policy_z(self.kinematics.fk, state.q, wire_q)[0]):
+                        unsafe = candidate
+                    else:
+                        safe = candidate
+                        safe_wire_q = wire_q
+                if safe_wire_q is None:
+                    safe_wire_q = np.deg2rad(np.rint(np.rad2deg(previous) * 1000) / 1000)
+                    holding = not check_policy_z(self.kinematics.fk, state.q, safe_wire_q)[0]
+                q = state.q.copy() if holding else safe_wire_q
                 self.controller.q_target = q.copy()
                 self.controller.dq_target[:] = 0.0
                 if not self.policy_table_limited:

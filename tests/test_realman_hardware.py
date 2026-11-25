@@ -114,6 +114,16 @@ class HardwareTests(unittest.TestCase):
                   gripper_target=0.)
         self.assertGreater(self.motions()[-1]['joint'][2], 0)
 
+    def test_policy_table_limit_advances_to_zero_from_positive_height(self):
+        start = np.array([0., 0., .05, 0., 0., 0.])
+        self.connection.q = start
+        self.backend.controller.q_target = start.copy()
+        self.step(rm65_table_guard=True, joint_target=-start)
+        sent = np.deg2rad(np.array(self.motions()[-1]['joint']) / 1000)
+        height = self.kinematics.fk(sent)[2]
+        self.assertGreaterEqual(height, 0.)
+        self.assertLess(height, .00002)
+
     def test_all_six_axes_use_joint_wire_and_speed_budgets(self):
         self.step(joint_target=np.full(6, .2))
         wire = self.motions()[-1]
