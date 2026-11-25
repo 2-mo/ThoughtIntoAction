@@ -63,4 +63,5 @@ class ControlCommand:
     # Dual-arm commands. None means a single arm; the scalar fields above apply to it.
     pose_targets: tuple[np.ndarray, ...] | None = None
     gripper_targets: tuple[float, ...] | None = None
+    rm65_table_guard: bool = False
     gripper_initialize_open: bool = False  # Explicit operator request; never inferred from missing feedback.

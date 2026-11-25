@@ -14,7 +14,7 @@ from unittest.mock import patch
 import numpy as np
 
 from embodied.contracts.control import ControlCommand, Mode, RobotState
-from embodied.devices.robots.realman.hardware import Backend
+from embodied.devices.robots.realman.hardware import Backend, PolicyTableGuard
 from embodied.devices.robots.realman.hardware_profile import Profile
 
 
@@ -30,6 +30,23 @@ class Kinematics:
         q = np.r_[np.asarray(target)[:3]*10, Rotation.from_quat(target[3:]).as_rotvec()]
         if self.reject: raise ValueError("invalid IK output")
         return q, True, 0.
+
+
+class PolicyTableGuardTest(unittest.TestCase):
+    def test_samples_fingertip_path_and_allows_recovery(self):
+        guard = PolicyTableGuard({
+            'table_z_m': 0., 'table_clearance_m': .005,
+            'fingertip_bounds_tcp_m': [[-.02, -.02, -.01], [.02, .02, 0.]],
+        })
+        fk = Kinematics().fk
+        above = np.array([0., 0., .2, 0., 0., 0.])
+        below = np.array([0., 0., .1, 0., 0., 0.])
+        tilted = np.array([0., 0., .2, 0., np.pi / 2, 0.])
+        self.assertTrue(guard.check(fk, above, above)[0])
+        self.assertFalse(guard.check(fk, above, below)[0])
+        self.assertFalse(guard.check(fk, above, tilted)[0])
+        self.assertFalse(guard.check(fk, below, below)[0])
+        self.assertTrue(guard.check(fk, below, above)[0])
 
 
 class Client:
@@ -93,6 +110,19 @@ class HardwareTests(unittest.TestCase):
         self.assertEqual(self.connection.client.sent, [])
         self.step(hold=True, gripper_target=0.)
         self.assertEqual(self.connection.client.sent[-1]['position'], 1)
+
+    def test_policy_table_limit_preserves_gripper_target(self):
+        self.backend.policy_table = PolicyTableGuard({
+            'table_z_m': 0., 'table_clearance_m': 0.,
+            'fingertip_bounds_tcp_m': [[0., 0., 0.], [0., 0., 0.]],
+        })
+        self.step(rm65_table_guard=True, joint_target=np.array([0, 0, -.1, 0, 0, 0]),
+                  gripper_target=0.)
+        self.assertEqual(self.motions()[-1]['joint'], [0] * 6)
+        self.assertEqual(self.connection.client.sent[-1]['position'], 1)
+        self.step(rm65_table_guard=True, joint_target=np.array([0, 0, .1, 0, 0, 0]),
+                  gripper_target=0.)
+        self.assertGreater(self.motions()[-1]['joint'][2], 0)
 
     def test_all_six_axes_use_joint_wire_and_speed_budgets(self):
         self.step(joint_target=np.full(6, .2))
