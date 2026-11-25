@@ -3,18 +3,13 @@
 No XR mapping, authority, planner or device activation lives in this module.
 """
 from dataclasses import replace
-from itertools import product
 import json
 from pathlib import Path
 import time
 
 import numpy as np
 
-from scipy.spatial.transform import Rotation
-
 from embodied.contracts.control import Mode
-from embodied.contracts.paths import CONTROL_CONFIG
-from embodied.control.workspace import Workspace
 from .backend import Backend as Connection, load_config, vector
 from .gripper import status, require_ready, GripperNotReady, move
 from .kinematics import pose_error
@@ -28,41 +23,11 @@ def data_contract(config):
         'robot_type': 'rm65_hardware_eg2_4c2_nominal_width'}
 
 
-TABLE_CALIBRATION = CONTROL_CONFIG / 'rm65-policy-table.local.json'
-
-
-class PolicyTableGuard:
-    def __init__(self, calibration):
-        self.calibration = calibration
-        self.workspace = Workspace(True, calibration['table_z_m'], calibration['table_clearance_m'])
-        bounds = np.asarray(calibration['fingertip_bounds_tcp_m'], dtype=float)
-        if bounds.shape != (2, 3) or not np.isfinite(bounds).all() or np.any(bounds[0] > bounds[1]):
-            raise ValueError('Invalid RM65 fingertip bounds')
-        self.corners = np.array(list(product(*bounds.T)))
-
-    @classmethod
-    def load(cls, connection):
-        if not TABLE_CALIBRATION.is_file():
-            return None
-        calibration = json.loads(TABLE_CALIBRATION.read_text())
-        if calibration['robot_host'] != connection.config['host']:
-            return None
-        for key in ('get_current_work_frame', 'get_current_tool_frame'):
-            if calibration[key] != connection.info[key]['pose']:
-                return None
-        return cls(calibration)
-
-    def clearance(self, fk, q):
-        pose = fk(q)
-        lowest = pose[2] + min(Rotation.from_quat(pose[3:]).apply(self.corners)[:, 2])
-        return lowest - self.workspace.minimum_tcp_z
-
-    def check(self, fk, measured, target):
-        start = self.clearance(fk, measured)
-        samples = [self.clearance(fk, q) for q in np.linspace(measured, target, 9)[1:]]
-        floor = min(0., start)
-        allowed = min(samples) >= floor and (start >= 0. or samples[-1] > start)
-        return allowed, min(samples)
+def check_policy_z(fk, measured, target):
+    start_z = fk(measured)[2]
+    heights = [fk(q)[2] for q in np.linspace(measured, target, 9)[1:]]
+    lowest_z = min(heights)
+    return lowest_z >= min(0., start_z) and (start_z >= 0. or heights[-1] > start_z), lowest_z
 
 
 class Hardware:
@@ -134,7 +99,6 @@ class Backend:
             for key in ('get_DH_data', 'get_joint_min_pos', 'get_joint_max_pos'):
                 self.connection.info[key] = self.connection.client.query(key)
             self.kinematics = kinematics or JointModel(self.connection.info)
-            self.policy_table = PolicyTableGuard.load(self.connection)
             self.policy_table_limited = False
             configured_low, configured_high = np.array(config.joint_min), np.array(config.joint_max)
             if (np.any(configured_low < self.kinematics.lower-1e-6) or
@@ -261,7 +225,7 @@ class Backend:
             'streaming_cartesian_speed_limits': None,
             'velocity_feedback': 'finite_difference_of_encoder_positions',
             'gripper_startup_ready': self.gripper_ready,
-            'rm65_policy_table': self.policy_table.calibration if self.policy_table else None,
+            'rm65_policy_minimum_tcp_z_m': 0.,
             'gripper_width': {'source': 'manufacturer_nominal_stroke', 'raw_range': [0, 1000],
                 'endpoint_tolerance_raw': 10, 'stroke_m': .07, 'fingertip_calibrated': False,
                 'source_url': 'https://www.inspire-robots.com/dexterous%20hands/eg2-4c-series/'}}
@@ -335,17 +299,17 @@ class Backend:
             raise ValueError('Joint command exceeds per-axis cycle speed budget')
         if not holding and command.planned:
             self._check_planned_tcp_speed(q, previous)
-        if command.rm65_table_guard and self.policy_table is not None and not holding:
-            allowed, clearance = self.policy_table.check(self.kinematics.fk, state.q, q)
+        if command.rm65_table_guard and not holding:
+            allowed, lowest_z = check_policy_z(self.kinematics.fk, state.q, q)
             if not allowed:
                 # Reuse the last issued target only while its path is still safe.
-                previous_allowed, _ = self.policy_table.check(self.kinematics.fk, state.q, previous)
+                previous_allowed, _ = check_policy_z(self.kinematics.fk, state.q, previous)
                 q = previous if previous_allowed else state.q.copy()
                 self.controller.q_target = q.copy()
                 self.controller.dq_target[:] = 0.0
                 if not self.policy_table_limited:
                     print(json.dumps({'event': 'rm65_table_limit', 'monotonic_ns': time.monotonic_ns(),
-                        'requested_clearance_m': clearance, 'sent_q': q.tolist(),
+                        'requested_minimum_tcp_z_m': lowest_z, 'sent_q': q.tolist(),
                         'gripper_target_m': effective.gripper_target}), flush=True)
             self.policy_table_limited = not allowed
         else:

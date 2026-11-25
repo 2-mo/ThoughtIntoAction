@@ -14,7 +14,7 @@ from unittest.mock import patch
 import numpy as np
 
 from embodied.contracts.control import ControlCommand, Mode, RobotState
-from embodied.devices.robots.realman.hardware import Backend, PolicyTableGuard
+from embodied.devices.robots.realman.hardware import Backend, check_policy_z
 from embodied.devices.robots.realman.hardware_profile import Profile
 
 
@@ -33,20 +33,14 @@ class Kinematics:
 
 
 class PolicyTableGuardTest(unittest.TestCase):
-    def test_samples_fingertip_path_and_allows_recovery(self):
-        guard = PolicyTableGuard({
-            'table_z_m': 0., 'table_clearance_m': .005,
-            'fingertip_bounds_tcp_m': [[-.02, -.02, -.01], [.02, .02, 0.]],
-        })
+    def test_checks_zero_and_allows_recovery(self):
         fk = Kinematics().fk
-        above = np.array([0., 0., .2, 0., 0., 0.])
-        below = np.array([0., 0., .1, 0., 0., 0.])
-        tilted = np.array([0., 0., .2, 0., np.pi / 2, 0.])
-        self.assertTrue(guard.check(fk, above, above)[0])
-        self.assertFalse(guard.check(fk, above, below)[0])
-        self.assertFalse(guard.check(fk, above, tilted)[0])
-        self.assertFalse(guard.check(fk, below, below)[0])
-        self.assertTrue(guard.check(fk, below, above)[0])
+        zero = np.zeros(6)
+        below = np.array([0., 0., -.1, 0., 0., 0.])
+        self.assertTrue(check_policy_z(fk, zero, zero)[0])
+        self.assertFalse(check_policy_z(fk, zero, below)[0])
+        self.assertFalse(check_policy_z(fk, below, below)[0])
+        self.assertTrue(check_policy_z(fk, below, zero)[0])
 
 
 class Client:
@@ -111,16 +105,7 @@ class HardwareTests(unittest.TestCase):
         self.step(hold=True, gripper_target=0.)
         self.assertEqual(self.connection.client.sent[-1]['position'], 1)
 
-    def test_policy_runs_without_optional_table_calibration(self):
-        self.backend.policy_table = None
-        self.step(rm65_table_guard=True, joint_target=np.array([0, 0, -.1, 0, 0, 0]))
-        self.assertLess(self.motions()[-1]['joint'][2], 0)
-
     def test_policy_table_limit_preserves_gripper_target(self):
-        self.backend.policy_table = PolicyTableGuard({
-            'table_z_m': 0., 'table_clearance_m': 0.,
-            'fingertip_bounds_tcp_m': [[0., 0., 0.], [0., 0., 0.]],
-        })
         self.step(rm65_table_guard=True, joint_target=np.array([0, 0, -.1, 0, 0, 0]),
                   gripper_target=0.)
         self.assertEqual(self.motions()[-1]['joint'], [0] * 6)

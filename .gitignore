@@ -227,7 +227,6 @@ __marimo__/
 # Machine configuration and local data: outputs includes datasets, calibrations,
 # recovery archives, generated output and locally installed dependencies.
 /configs/local.toml
-/configs/control/rm65-policy-table.local.json
 /outputs/
 /runtime/
 
