@@ -130,7 +130,7 @@ PYTHONPATH=src configs/environments/arx_motion/.venv/bin/python -m pytest tests/
 
 ## 6. RM65 右臂远程部署
 
-模型由训练服务器提供，控制台通过本机 SSH 隧道连接 `ws://127.0.0.1:18008`。
+训练服务器在 `127.0.0.1:8008` 提供 checkpoint `9999`，控制台通过本机 SSH 隧道连接 `ws://127.0.0.1:18008`。
 在工作台选择控制器 `192.168.1.18` 对应的右侧内核，确认两路相机的画面和绑定序列号。
 部署默认将 `wrist_second_rgb` 映射为 `right_wrist_rgb`，固定外部相机使用 `exterior_rgb`。
 当前现场绑定若不同，CLI 用 `--cameras <右腕ID>,<外部ID>` 指定，控制台使用
@@ -145,12 +145,12 @@ PYTHONPATH=src configs/environments/arx_motion/.venv/bin/python -m pytest tests/
 
 首条 WebSocket 消息需声明 `robot_type=rm65_hardware_eg2_4c2_nominal_width`、
 `action_dim=7`、`action_horizon=15`、`fps=30` 和
-`asset_id=local/joint_contract_f0e2288668a25266`。
+`asset_id=local/lerobot-20261124-200236`。
 请求使用两路 RGB 图像和有效标志、六关节弧度加夹爪名义开度（米），以及任务提示。
 默认提示为「把黑色方块放到白色盒子里」。返回值是 15×7 的绝对动作，按 30 Hz
 执行，RTC 关闭。
 
-控制台选择「RM65 右臂 · 黑色方块」时会关闭 RTC 并勾选只推理。保存为远程默认后，
+控制台选择「RM65 右臂 · 黑色方块 · π₀.₅ 9999」时会关闭 RTC 并勾选只推理。保存为远程默认后，
 也可以通过现有 [HTTP 接口](policy-remote-api.md) 启动。只读试跑使用内核反馈，
 不申请控制权，`summary.json` 中的 `commands` 应为 0。
 `outputs/policy_remote/<时间戳>/` 还记录每块的状态、采样时间和完整预测动作。
