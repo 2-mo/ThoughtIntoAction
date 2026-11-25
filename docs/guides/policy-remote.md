@@ -156,7 +156,7 @@ PYTHONPATH=src configs/environments/arx_motion/.venv/bin/python -m pytest tests/
 `outputs/policy_remote/<时间戳>/` 还记录每块的状态、采样时间和完整预测动作。
 ### RM65 桌面下降限位
 
-真机下发前，在 `configs/control/rm65-policy-table.local.json` 保存当前工位的已确认标定。复用已有测量时，核对桌面、基座和夹爪安装是否与测量时一致。
+需要启用桌面限位时，在 `configs/control/rm65-policy-table.local.json` 保存当前工位的已确认标定。复用已有测量时，核对桌面、基座和夹爪安装是否与测量时一致。
 
 | JSON 字段 | 来源和单位 |
 |---|---|
@@ -166,4 +166,4 @@ PYTHONPATH=src configs/environments/arx_motion/.venv/bin/python -m pytest tests/
 | `table_clearance_m` | 现场确认的最小指尖间隙，单位为米 |
 | `fingertip_bounds_tcp_m` | 工具坐标系下包住两侧指尖完整开合范围的包围盒，格式为 `[[xmin,ymin,zmin],[xmax,ymax,zmax]]`，单位为米 |
 
-保存后重启 RM65 控制内核。启动参数中的 `rm65_policy_table` 应显示载入的标定。先检查双路画面，再在现场低速验收下降限位、实际闭爪和抬升。限位触发会在内核 `backend.log` 记录 `rm65_table_limit`、候选路径最小余量和实际关节目标。下发前的检查沿关节路径采样，指尖包围盒覆盖整个开合范围。
+内核未载入匹配的标定时，策略沿用原有下发流程。启用限位时，保存标定后重启 RM65 控制内核。启动参数中的 `rm65_policy_table` 应显示载入的标定。先检查双路画面，再在现场低速验收下降限位、实际闭爪和抬升。限位触发会在内核 `backend.log` 记录 `rm65_table_limit`、候选路径最小余量和实际关节目标。下发前的检查沿关节路径采样，指尖包围盒覆盖整个开合范围。

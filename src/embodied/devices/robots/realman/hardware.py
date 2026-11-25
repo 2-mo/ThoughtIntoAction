@@ -335,9 +335,7 @@ class Backend:
             raise ValueError('Joint command exceeds per-axis cycle speed budget')
         if not holding and command.planned:
             self._check_planned_tcp_speed(q, previous)
-        if command.rm65_table_guard and not holding:
-            if self.policy_table is None:
-                raise ValueError('RM65 policy requires matching table calibration')
+        if command.rm65_table_guard and self.policy_table is not None and not holding:
             allowed, clearance = self.policy_table.check(self.kinematics.fk, state.q, q)
             if not allowed:
                 # Reuse the last issued target only while its path is still safe.

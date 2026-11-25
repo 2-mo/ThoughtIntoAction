@@ -111,6 +111,11 @@ class HardwareTests(unittest.TestCase):
         self.step(hold=True, gripper_target=0.)
         self.assertEqual(self.connection.client.sent[-1]['position'], 1)
 
+    def test_policy_runs_without_optional_table_calibration(self):
+        self.backend.policy_table = None
+        self.step(rm65_table_guard=True, joint_target=np.array([0, 0, -.1, 0, 0, 0]))
+        self.assertLess(self.motions()[-1]['joint'][2], 0)
+
     def test_policy_table_limit_preserves_gripper_target(self):
         self.backend.policy_table = PolicyTableGuard({
             'table_z_m': 0., 'table_clearance_m': 0.,
