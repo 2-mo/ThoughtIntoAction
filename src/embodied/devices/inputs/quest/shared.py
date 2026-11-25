@@ -91,7 +91,6 @@ class Ingress(NativeIngress):
             f'{prefix}/group/mode_input', XrControllerInput))
         self.mode_sequence = -1
         self.primary_down = self.wrist_chord = self.wrist_blocked = False
-        self.home_chord_down = False
         self.wrist_target = None
         self.wrist_limit = settings.robot.joint_min[5]
         self.wrist_step = .35 / settings.robot.control_hz
@@ -106,13 +105,7 @@ class Ingress(NativeIngress):
         self.primary_down = primary
         if not primary:
             self.wrist_chord = self.wrist_blocked = False
-        buttons = inp.buttons_bitset & 12
-        if buttons == 12 or buttons == 0:
-            self.home_chord_down = buttons == 12
         forwarded = copy(inp)
-        # Preserve the native chord, and consume the remaining key until both are up.
-        if self.home_chord_down and buttons != 12:
-            forwarded.buttons_bitset &= ~12
         # Reserve the entire press, even if Trigger is released first. Preserve A+B / X+Y.
         if self.wrist_chord and not (inp.buttons_bitset & 8):
             forwarded.buttons_bitset &= ~4
@@ -138,15 +131,17 @@ class Ingress(NativeIngress):
             self.home_released = self.returning_home = self.home_blocked = False
             self.home_since = None
         command = candidate.command
-        home = chord = False
+        home = secondary = False
         if valid:
             inp = sample.sample
             neutral = inp.trigger < .2 and inp.grip < .2 and not (inp.buttons_bitset & 12)
             if neutral:
                 self.home_released = True
                 self.home_blocked = False
-            chord = (inp.buttons_bitset & 12) == 12
-            if (chord and self.home_released and not self.home_blocked and
+            secondary = bool(inp.buttons_bitset & 8)
+            # B (right) / Y (left) is the vendor's Home button; A+B also works,
+            # which is the habit from the ARX profiles.
+            if (secondary and self.home_released and not self.home_blocked and
                     inp.trigger < .2 and inp.grip < .2):
                 if self.home_since is None:
                     self.home_since = now
@@ -156,7 +151,7 @@ class Ingress(NativeIngress):
                     self.home_released = False
                     self.home_blocked = True
                 self.home_since = None
-            if (state.gripper_width is None or self.home_chord_down or self.home_blocked or was_returning
+            if (state.gripper_width is None or secondary or self.home_blocked or was_returning
                     or command.mode != Mode.COMMAND_FOLLOWING or not self.status['permit']):
                 self.gripper_released = self.gripper_armed = False
             elif inp.trigger < .2:
@@ -167,7 +162,7 @@ class Ingress(NativeIngress):
         # Startup/recovery does not open a partly closed gripper: require a
         # neutral Trigger followed by a new press, then release opens normally.
         wrist_input = (valid and self.wrist_chord and inp.trigger > .2 and inp.grip < .2
-                       and not self.home_chord_down and self.gripper_armed and self.status['permit']
+                       and not secondary and self.gripper_armed and self.status['permit']
                        and command.mode == Mode.COMMAND_FOLLOWING)
         if self.wrist_chord and (not wrist_input or new_epoch):
             self.wrist_blocked = True
@@ -183,10 +178,10 @@ class Ingress(NativeIngress):
                 raise ValueError('Invalid Quest trigger')
             width = self.gripper_max_width * (1. - inp.trigger)
         command = replace(command, gripper_target=width, gripper_mode=command.mode)
-        overriding = self.home_chord_down or was_returning or self.home_blocked
+        overriding = secondary or was_returning or self.home_blocked
         if overriding:
             # Use the existing bounded joint stream, not Disabled (ARX Home)
-            # or a scene reset. Both buttons must stay held; release/conflict stops Home.
+            # or a scene reset. B/Y must stay held; release/conflict stops Home.
             command = replace(command, mode=Mode.COMMAND_FOLLOWING, hold=not home,
                 reset_reference=was_returning != home, pose_target=None,
                 joint_target=self.home_q.copy() if home else None,
