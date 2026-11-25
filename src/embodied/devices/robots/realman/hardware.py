@@ -23,11 +23,16 @@ def data_contract(config):
         'robot_type': 'rm65_hardware_eg2_4c2_nominal_width'}
 
 
+POLICY_MIN_TCP_Z_M = 0.005
+
+
 def check_policy_z(fk, measured, target):
     start_z = fk(measured)[2]
     heights = [fk(q)[2] for q in np.linspace(measured, target, 9)[1:]]
     lowest_z = min(heights)
-    return lowest_z >= min(0., start_z) and (start_z >= 0. or heights[-1] > start_z), lowest_z
+    recovering = start_z < POLICY_MIN_TCP_Z_M
+    allowed = lowest_z >= min(POLICY_MIN_TCP_Z_M, start_z) and (not recovering or heights[-1] > start_z)
+    return allowed, lowest_z
 
 
 class Hardware:
