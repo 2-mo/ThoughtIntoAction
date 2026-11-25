@@ -1,4 +1,5 @@
 """Reuse native Quest routing with a single input owner and per-arm namespaces."""
+from copy import copy
 import json
 from pathlib import Path
 from dataclasses import replace
@@ -12,6 +13,8 @@ except ModuleNotFoundError:
 from .composition import NativeRouting, QuestDevice
 from .native_config import write_native_configs, _toml
 from .sources import NativeIngress
+from embodied.control.ipc.services import make_publisher, make_subscriber, open_service, send
+from embodied.control.ipc.types import XrControllerInput
 from embodied.contracts.control import Mode
 
 
@@ -56,20 +59,21 @@ class Routing(NativeRouting):
         # One mode owner per hand. The EG2 driver already handles absolute
         # opening targets; a second router/coordinator can retain an old
         # opening target or toggle out of phase with the arm.
+        coordinator = tomllib.loads(paths['coordinator'].read_text())
         if 'gripper' in paths:
-            coordinator = tomllib.loads(paths['coordinator'].read_text())
             coordinator['members'] = coordinator['members'][:1]
             coordinator['routes'] = coordinator['routes'][:1]
-            paths['coordinator'].write_text(_toml(coordinator))
             paths.pop('gripper').unlink()
+        topic = f'{prefix}/group/mode_input'
+        coordinator['mode_controller_input_topic'] = topic
+        coordinator['routes'][0]['controller_input_topic'] = topic
+        paths['coordinator'].write_text(_toml(coordinator))
         return paths
 
 
 class Ingress(NativeIngress):
     def __init__(self, prefix, dependencies, gripper=True, *, dual=False, settings=None):
         super().__init__(prefix, dependencies, gripper=False, dual=dual)
-        from embodied.control.ipc.services import open_service, make_subscriber
-        from embodied.control.ipc.types import XrControllerInput
         vr = settings.vr
         # Every kernel reads the hand it follows: A arms this side and its
         # Trigger owns this side's gripper (the coordinator also keeps a
@@ -80,61 +84,115 @@ class Ingress(NativeIngress):
         self.gripper_released = self.gripper_armed = False
         self.gripper_epoch = None
         self.gripper_max_width = settings.robot.gripper_max_width
+        self.home_q = np.asarray(settings.robot.park_q, dtype=float)
+        self.home_released = self.returning_home = self.home_blocked = False
+        self.home_since = None
+        self.mode_input = make_publisher(open_service(self.node,
+            f'{prefix}/group/mode_input', XrControllerInput))
+        self.mode_sequence = -1
+        self.primary_down = self.wrist_chord = self.wrist_blocked = False
+        self.wrist_target = None
         self.wrist_limit = settings.robot.joint_min[5]
         self.wrist_step = .35 / settings.robot.control_hz
-        self.wrist_ready = False
-        self.wrist_target = None
+
+    def _forward_mode_input(self, sample, now):
+        if not sample.fresh(now) or sample.sequence == self.mode_sequence:
+            return
+        inp = sample.sample
+        primary = bool(inp.buttons_bitset & 4)
+        if primary and not self.primary_down:
+            self.wrist_chord = inp.trigger > .2 and inp.grip < .2 and not (inp.buttons_bitset & 8)
+        self.primary_down = primary
+        if not primary:
+            self.wrist_chord = self.wrist_blocked = False
+        forwarded = copy(inp)
+        # Reserve the entire press, even if Trigger is released first. Preserve A+B / X+Y.
+        if self.wrist_chord and not (inp.buttons_bitset & 8):
+            forwarded.buttons_bitset &= ~4
+        send(self.mode_input, forwarded)
+        self.mode_sequence = sample.sequence
+
+    def close(self):
+        self.mode_input = None
+        super().close()
 
     def poll(self, state, now, epoch, selected):
         candidate = super().poll(state, now, epoch, selected)
         now = time.monotonic()
         sample = self.samples['input']
-        valid = selected and self.status['ready'] and sample.fresh(now) and not candidate.fault
+        self._forward_mode_input(sample, now)
         was_turning = self.wrist_target is not None
-        if epoch != self.gripper_epoch or not valid:
+        valid = selected and self.status['ready'] and sample.fresh(now) and not candidate.fault
+        was_returning = self.returning_home
+        new_epoch = epoch != self.gripper_epoch
+        if new_epoch or not valid:
             self.gripper_epoch = epoch
             self.gripper_released = self.gripper_armed = False
-            self.wrist_ready = False
-            self.wrist_target = None
+            self.home_released = self.returning_home = self.home_blocked = False
+            self.home_since = None
         command = candidate.command
-        permitted = valid and self.status['permit'] and command.mode == Mode.COMMAND_FOLLOWING
-        inp = sample.sample
-        secondary = valid and bool(inp.buttons_bitset & 8)
-        if not permitted:
-            self.wrist_ready = False
-        elif not secondary:
-            self.wrist_ready = True
-        elif not (inp.grip < .2) or inp.buttons_bitset & 4:
-            self.wrist_ready = False
-        if not secondary or not self.wrist_ready:
-            self.wrist_target = None
-        elif self.wrist_target is None:
-            self.wrist_target = state.q.copy()
-            self.wrist_target[5] = self.wrist_limit
-        if not permitted or state.gripper_width is None:
-            self.gripper_released = self.gripper_armed = False
-        elif inp.trigger < .2:
-            self.gripper_released = True
-        elif self.gripper_released and inp.trigger > .2:
-            self.gripper_armed = True
+        home = secondary = False
+        if valid:
+            inp = sample.sample
+            neutral = inp.trigger < .2 and inp.grip < .2 and not (inp.buttons_bitset & 12)
+            if neutral:
+                self.home_released = True
+                self.home_blocked = False
+            secondary = bool(inp.buttons_bitset & 8)
+            # B (right) / Y (left) is the vendor's Home button; A+B also works,
+            # which is the habit from the ARX profiles.
+            if (secondary and self.home_released and not self.home_blocked and
+                    inp.trigger < .2 and inp.grip < .2):
+                if self.home_since is None:
+                    self.home_since = now
+                home = now-self.home_since >= 1.
+            else:
+                if self.home_since is not None and not neutral:
+                    self.home_released = False
+                    self.home_blocked = True
+                self.home_since = None
+            if (state.gripper_width is None or secondary or self.home_blocked or was_returning
+                    or command.mode != Mode.COMMAND_FOLLOWING or not self.status['permit']):
+                self.gripper_released = self.gripper_armed = False
+            elif inp.trigger < .2:
+                self.gripper_released = True
+            elif self.gripper_released and inp.trigger > .2:
+                self.gripper_armed = True
         # Same absolute mapping as the native coordinator's parallel_target.
         # Startup/recovery does not open a partly closed gripper: require a
         # neutral Trigger followed by a new press, then release opens normally.
+        wrist_input = (valid and self.wrist_chord and inp.trigger > .2 and inp.grip < .2
+                       and not secondary and self.gripper_armed and self.status['permit']
+                       and command.mode == Mode.COMMAND_FOLLOWING)
+        if self.wrist_chord and (not wrist_input or new_epoch):
+            self.wrist_blocked = True
+        if not wrist_input or self.wrist_blocked:
+            self.wrist_target = None
+        elif not was_turning:
+            self.wrist_target = state.q.copy()
+            self.wrist_target[5] = self.wrist_limit
+        turning = self.wrist_target is not None
         width = None
         if valid and self.gripper_armed:
             if not np.isfinite(inp.trigger) or not 0 <= inp.trigger <= 1:
                 raise ValueError('Invalid Quest trigger')
             width = self.gripper_max_width * (1. - inp.trigger)
         command = replace(command, gripper_target=width, gripper_mode=command.mode)
-        turning = self.wrist_target is not None
-        overriding = secondary or was_turning
+        overriding = secondary or was_returning or self.home_blocked
         if overriding:
+            # Use the existing bounded joint stream, not Disabled (ARX Home)
+            # or a scene reset. B/Y must stay held; release/conflict stops Home.
+            command = replace(command, mode=Mode.COMMAND_FOLLOWING, hold=not home,
+                reset_reference=was_returning != home, pose_target=None,
+                joint_target=self.home_q.copy() if home else None,
+                joint_velocity_target=None, joint_acceleration_target=None, planned=False,
+                engaged=False, gripper_target=None, gripper_initialize_open=False)
+        if turning or (was_turning and not overriding):
             command = replace(command, hold=not turning, reset_reference=was_turning != turning,
                 pose_target=None, joint_target=self.wrist_target,
-                joint_step_limit=self.wrist_step if turning else None,
-                joint_velocity_target=None, joint_acceleration_target=None, planned=False,
-                engaged=turning, gripper_initialize_open=False)
+                joint_step_limit=self.wrist_step if turning else None, engaged=turning)
+        self.returning_home = home
         self.status.update(gripper_ready=state.gripper_width is not None,
-            gripper_armed=self.gripper_armed, turning_wrist=turning)
+            gripper_armed=self.gripper_armed, returning_home=home, turning_wrist=turning)
         return replace(candidate, command=command,
-                       phase='teleop' if turning else 'hold' if overriding else candidate.phase)
+                       phase='home' if home else 'teleop' if turning else 'hold' if overriding or was_turning else candidate.phase)
