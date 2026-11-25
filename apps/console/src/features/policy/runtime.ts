@@ -4,6 +4,7 @@ import { withToken } from "../../api/control-protocol";
 import { listOperations, operationLog, startOperation, stopOperation } from "../../api/operations";
 import { rtcSettings, setMeasuredDelay } from "./rtc";
 
+const RM65_MODEL = "rm65_cube_pi05";
 const STATUS_MS = 500;
 const OPERATIONS_MS = 2000;
 
@@ -11,7 +12,7 @@ const ui = Object.fromEntries(
   [
     "policyKernel", "policyState", "policyPrompt", "policyPromptHistory", "policyKind", "policySeconds",
     "policyMode", "policyServer", "policyServerField", "policyLocalKindField", "policyRtcPanel",
-    "policyRtcRow", "policyRtc", "policyDryRun",
+    "policyRtcRow", "policyRtc", "policyDryRun", "policyRemoteMode", "policyLegacyHelp",
     "policyConfirm", "policyConfirmStart", "policyCancel", "policyStart",
     "policyStop", "policyHome", "policyReady", "policyMessage", "policyRun", "policyRuntime", "policyOwner",
     "policyAge", "policyOps", "policyLog", "policyRefreshLog",
@@ -121,7 +122,15 @@ function syncModeFields() {
   if (ui.policyServerField) ui.policyServerField.hidden = !remote;
   if (ui.policyLocalKindField) ui.policyLocalKindField.hidden = remote;
   if (ui.policyRtcRow) ui.policyRtcRow.hidden = !remote;
-  if (ui.policyRtcPanel) ui.policyRtcPanel.hidden = !remote;
+  const rm65 = remote && selectedModelId === RM65_MODEL;
+  if (ui.policyRtcPanel) ui.policyRtcPanel.hidden = !remote || rm65;
+  if (ui.policyRtc) ui.policyRtc.closest("label").hidden = rm65;
+  if (ui.policyLegacyHelp) ui.policyLegacyHelp.hidden = rm65;
+  if (ui.policyReady) ui.policyReady.hidden = rm65;
+  if (ui.policyHome) ui.policyHome.hidden = rm65;
+  if (ui.policyRemoteMode) ui.policyRemoteMode.textContent = rm65
+    ? "RealMan RM65 单臂 · 7 维 · 15 步 · 30 Hz"
+    : "模型服务 · 双臂 14 维";
 }
 
 function showConfirm(show) {
@@ -134,7 +143,8 @@ async function runPolicy(confirm) {
     setMessage("先填写任务描述", "error");
     return;
   }
-  if (!confirm) {
+  const rm65 = ui.policyMode?.value === "remote" && selectedModelId === RM65_MODEL;
+  if (!confirm && !(rm65 && ui.policyDryRun?.checked)) {
     showConfirm(true);
     return;
   }
@@ -156,8 +166,7 @@ async function runPolicy(confirm) {
           prompt,
           server: (ui.policyServer?.value || "").trim(),
           seconds,
-          rtc: Boolean(ui.policyRtc?.checked),
-          ...rtcSettings(),
+          ...(rm65 ? { model_id: RM65_MODEL, rtc: false } : { rtc: Boolean(ui.policyRtc?.checked), ...rtcSettings() }),
           dry_run: Boolean(ui.policyDryRun?.checked),
           confirm: true,
         }
@@ -167,7 +176,10 @@ async function runPolicy(confirm) {
     await refreshOperations();
     await refreshLog();
   } catch (error) {
-    setMessage(error instanceof Error ? error.message : String(error), "error");
+    const message = error instanceof Error ? error.message : String(error);
+    setMessage(rm65 && message.includes("没有运行中的内核")
+      ? "RM65 控制内核未运行。请在控制台为 192.168.1.18 启动策略内核后重试。"
+      : message, "error");
   }
 }
 
@@ -256,7 +268,8 @@ async function refreshModels() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     modelList = data.models || [];
-    renderModels();
+    if (!selectedModelId && modelList.some((model) => model.id === RM65_MODEL)) selectModel(RM65_MODEL);
+    else renderModels();
     updateModelHint();
   } catch (error) {
     if (ui.modelCards) {
@@ -326,13 +339,14 @@ function selectModel(modelId) {
     ui.policyPromptHistory.value = match ? model.prompt : "";
   }
   if (ui.policyServer) ui.policyServer.value = model.url;
-  if (model.id === "rm65_cube_pi05") {
+  if (model.id === RM65_MODEL) {
     if (ui.policyRtc) {
       ui.policyRtc.checked = false;
       ui.policyRtc.dispatchEvent(new Event("change"));
     }
     if (ui.policyDryRun) ui.policyDryRun.checked = true;
   }
+  syncModeFields();
   if (ui.policyStart) {
     // The button names the selected model; keep the original label in the dataset.
     if (!ui.policyStart.dataset.idleText) {
@@ -427,9 +441,9 @@ async function saveRemoteDefaults() {
   const body = {
     model_id: model.id,
     rtc: Boolean(ui.policyRtc?.checked),
-    chunk_steps: settings.chunk_steps,
-    reinfer_remaining: settings.reinfer_remaining,
-    blend: settings.blend,
+    chunk_steps: model.id === RM65_MODEL ? 15 : settings.chunk_steps,
+    reinfer_remaining: model.id === RM65_MODEL ? 0 : settings.reinfer_remaining,
+    blend: model.id === RM65_MODEL ? 0 : settings.blend,
     guidance: settings.guidance,
     dry_run: Boolean(ui.policyDryRun?.checked),
   };

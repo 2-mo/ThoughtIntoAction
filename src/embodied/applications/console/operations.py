@@ -487,6 +487,8 @@ class OperationManager:
             )
         except (OSError, EOFError, ValueError, KeyError, RuntimeError) as exc:
             raise OperationError(f"读取内核状态失败：{exc}", 503) from exc
+        if payload.get("model_id") == "rm65_cube_pi05" and not rm65:
+            raise OperationError("当前内核不是 RM65 单臂，请在控制台选择 192.168.1.18 对应的策略内核", 409)
         if owner and not (rm65 and payload.get("dry_run") is True):
             source = owner.get("source") or "其他客户端"
             raise OperationError(f"内核控制权被 {source} 占用，先关闭控制台页面", 409)

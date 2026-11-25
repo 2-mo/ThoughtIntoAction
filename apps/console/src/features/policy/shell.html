@@ -40,7 +40,7 @@
         <label class="policy-field">
           <span>模式</span>
           <select id="policyMode">
-            <option value="remote" selected>模型服务 · 双臂 14 维</option>
+            <option id="policyRemoteMode" value="remote" selected>模型服务 · 双臂 14 维</option>
             <option value="local">本机 SFT · 单臂（旧）</option>
           </select>
         </label>
@@ -58,7 +58,7 @@
         <label class="policy-field policy-check"><span>RTC 引导</span><input id="policyRtc" type="checkbox" /></label>
         <label class="policy-field policy-check"><span>只推理不下发</span><input id="policyDryRun" type="checkbox" /></label>
       </div>
-      <details class="policy-help">
+      <details id="policyLegacyHelp" class="policy-help">
         <summary>服务端启动命令（GPU 机器）</summary>
         <pre>cd /home/qyj/openpi &amp;&amp; CUDA_VISIBLE_DEVICES=5 setsid /home/qyj/openpi/.venv/bin/python \
   /home/qyj/serve_sweep_dual.py &gt; /home/qyj/logs/serve_sweep_dual.log 2&gt;&amp;1 &lt; /dev/null &amp;
