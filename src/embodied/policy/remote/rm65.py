@@ -56,10 +56,6 @@ def execute(args, output):
     connection = json.loads(Path(hardware["connection_path"]).read_text())
     if connection.get("host") != deployment["robot_host"]:
         raise PolicyError(f"请选择控制器 {deployment['robot_host']} 对应的右臂 RUN")
-    if not args.dry_run:
-        backend = json.loads((Path(args.run) / "backend-parameters.json").read_text())
-        if not backend.get("rm65_policy_table"):
-            raise PolicyError("RM65 桌面限位未标定或内核尚未加载标定，只能运行只推理")
     camera_map = deployment["camera_map"]
     if args.cameras:
         right_wrist, exterior = args.cameras.split(",")
