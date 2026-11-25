@@ -122,7 +122,7 @@ class Ingress(NativeIngress):
                     self.home_released = False
                     self.home_blocked = True
                 self.home_since = None
-            if (state.gripper_width is None or secondary or self.home_blocked or was_returning
+            if (state.gripper_width is None or home
                     or command.mode != Mode.COMMAND_FOLLOWING or not self.status['permit']):
                 self.gripper_released = self.gripper_armed = False
             elif inp.trigger < .2:
@@ -133,7 +133,7 @@ class Ingress(NativeIngress):
         # Startup/recovery does not open a partly closed gripper: require a
         # neutral Trigger followed by a new press, then release opens normally.
         axis = inp.joystick_x if valid else 0.
-        wrist_permitted = (valid and inp.grip < .2 and not (inp.buttons_bitset & 12)
+        wrist_permitted = (valid and not (inp.buttons_bitset & 12)
                            and self.status['permit'] and command.mode == Mode.COMMAND_FOLLOWING
                            and not self.home_blocked and not was_returning)
         if not wrist_permitted or new_epoch or not np.isfinite(axis) or abs(axis) > 1.:
@@ -161,7 +161,7 @@ class Ingress(NativeIngress):
                 reset_reference=was_returning != home, pose_target=None,
                 joint_target=self.home_q.copy() if home else None,
                 joint_velocity_target=None, joint_acceleration_target=None, planned=False,
-                engaged=False, gripper_target=None, gripper_initialize_open=False)
+                engaged=False, gripper_initialize_open=False)
         if turning or (was_turning and not overriding):
             command = replace(command, hold=not turning, reset_reference=was_turning != turning,
                 pose_target=None, joint_target=self.wrist_target.copy() if turning else None,
