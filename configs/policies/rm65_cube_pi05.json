@@ -46,7 +46,7 @@
     "action_expert_variant": "gemma_300m_lora"
   },
   "camera_map": {
-    "right_wrist_rgb": "wrist_second_rgb",
+    "right_wrist_rgb": "wrist_rgb",
     "exterior_rgb": "exterior_rgb"
   },
   "asset_id": "local/lerobot-20261124-200236",

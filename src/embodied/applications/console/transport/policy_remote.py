@@ -153,7 +153,7 @@ def create_policy_remote_router(manager: OperationManager, settings: BackendSett
             if not model["url"].startswith(("ws://", "wss://")):
                 raise RemoteError("登记的模型地址无效")
             operation_payload = {
-                "confirm": True, "mode": "remote", "server": model["url"],
+                "confirm": True, "mode": "remote", "server": model["url"], "model_id": model["id"],
                 "prompt": fields["prompt"], "seconds": fields["seconds"],
                 "rtc": config["rtc"], "chunk_steps": config["chunk_steps"],
                 "reinfer_remaining": config["reinfer_remaining"], "blend": config["blend"],

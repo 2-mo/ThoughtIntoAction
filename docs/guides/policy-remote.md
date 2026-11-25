@@ -131,8 +131,8 @@ PYTHONPATH=src configs/environments/arx_motion/.venv/bin/python -m pytest tests/
 ## 6. RM65 右臂远程部署
 
 训练服务器在 `127.0.0.1:8008` 提供 checkpoint `9999`，控制台通过本机 SSH 隧道连接 `ws://127.0.0.1:18008`。
-在工作台选择控制器 `192.168.1.18` 对应的右侧内核，确认两路相机的画面和绑定序列号。
-部署默认将 `wrist_second_rgb` 映射为 `right_wrist_rgb`，固定外部相机使用 `exterior_rgb`。
+在控制台确认单臂设备为 `192.168.1.18`，启动策略内核后再运行模型。只推理也通过内核读取六关节和夹爪的实时反馈。确认两路相机的画面和绑定序列号。
+部署默认将 `wrist_rgb` 映射为 `right_wrist_rgb`，固定外部相机使用 `exterior_rgb`。
 当前现场绑定若不同，CLI 用 `--cameras <右腕ID>,<外部ID>` 指定，控制台使用
 [RM65 策略配置](../../configs/policies/rm65_cube_pi05.json) 中的相机映射。
 

@@ -289,6 +289,17 @@ class OperationValidationTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--blend") + 1], "16")
         self.assertIn("12.5", argv)
 
+    def test_rm65_model_rejects_other_kernels(self):
+        with patch.object(operations, "_resolve_run", return_value=Path("/tmp/run")), \
+             patch.object(operations, "ControlClient") as client:
+            client.return_value.parameters = {"data_contract": {"robot_type": "arx"}}
+            client.return_value.status.return_value = {"owner": None}
+            with self.assertRaisesRegex(operations.OperationError, "当前内核不是 RM65 单臂"):
+                self.manager._policy({
+                    "mode": "remote", "model_id": "rm65_cube_pi05", "confirm": True,
+                    "prompt": "把黑色方块放到白色盒子里", "dry_run": True,
+                })
+
     def test_remote_policy_rejects_bad_server_and_bounds(self):
         with patch.object(operations, "_resolve_run", return_value=Path("/tmp/run")), \
              patch.object(operations, "ControlClient") as client:
