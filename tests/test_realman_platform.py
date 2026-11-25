@@ -42,7 +42,10 @@ def test_dual_realman_profiles_use_matching_50_hz_low_follow_rates():
 def test_single_quest_routing_uses_robot_rate_and_own_input_namespace(tmp_path):
     settings = load_settings('configs/robots/realman/sim.json')
     paths = Routing.configure(tmp_path, 'robot-test', settings)
-    assert 'robot-test/xr/right_controller' in paths['coordinator'].read_text()
+    from embodied.devices.inputs.quest.shared import tomllib
+    coordinator = tomllib.loads(paths['coordinator'].read_text())
+    assert coordinator['mode_controller_input_topic'] == 'robot-test/group/mode_input'
+    assert coordinator['routes'][0]['controller_input_topic'] == 'robot-test/group/mode_input'
     assert set(Routing.commands(paths, 'robot-test')) == {'arm', 'coordinator'}
     assert 'gripper' not in paths and 'gripper-coordinator' not in paths
 
@@ -184,50 +187,71 @@ def test_gateway_description_exposes_realman_presets_to_existing_clients():
     assert pregrasp_joints(robot) == list(gateway.config.pregrasp_q)
 
 
-def test_quest_wrist_button_turns_only_j6_while_trigger_holds(monkeypatch):
+def test_quest_wrist_chord_preserves_mode_switch_and_home(monkeypatch):
     from types import SimpleNamespace
 
     import numpy as np
 
     from embodied.contracts.control import ControlCommand, Mode
+    from embodied.control.ipc.types import XrControllerInput
+    from embodied.devices.inputs.quest import shared
     from embodied.devices.inputs.quest.ingress import Candidate
-    from embodied.devices.inputs.quest.shared import Ingress, NativeIngress
 
-    inp = SimpleNamespace(buttons_bitset=0, trigger=0., grip=0.)
     state = SimpleNamespace(q=np.arange(6) / 10, gripper_width=.03)
-    ingress = Ingress.__new__(Ingress)
-    ingress.samples = {'input': SimpleNamespace(sample=inp, fresh=lambda _: True)}
+    ingress = shared.Ingress.__new__(shared.Ingress)
+    now = 0.
+    forwarded = []
+    sample = SimpleNamespace(fresh=lambda _: True)
+    ingress.samples = {'input': sample}
     ingress.status = {'ready': True, 'permit': True}
     ingress.gripper_epoch = None
     ingress.gripper_max_width = .07
-    ingress.wrist_ready = True
+    ingress.home_q = np.zeros(6)
+    ingress.mode_input = None
+    ingress.mode_sequence = -1
+    ingress.primary_down = ingress.wrist_chord = ingress.wrist_blocked = False
+    ingress.returning_home = False
     ingress.wrist_target = None
     ingress.wrist_limit = -6.28
     ingress.wrist_step = .007
-    monkeypatch.setattr(NativeIngress, 'poll', lambda *args: Candidate(
+    monkeypatch.setattr(shared.time, 'monotonic', lambda: now)
+    monkeypatch.setattr(shared, 'send', lambda _, payload: forwarded.append(payload.buttons_bitset))
+    monkeypatch.setattr(shared.NativeIngress, 'poll', lambda *args: Candidate(
         1, ControlCommand(Mode.COMMAND_FOLLOWING, hold=True)))
 
-    inp.buttons_bitset = 8
-    assert ingress.poll(state, 0., 1, True).command.hold
-    inp.buttons_bitset = 0
-    ingress.poll(state, 0., 1, True)
-    inp.buttons_bitset, inp.trigger = 8, 1.
-    turn = ingress.poll(state, 0., 1, True).command
+    def poll(buttons=0, trigger=0., grip=0., selected=True, epoch=1):
+        nonlocal now
+        now += .6
+        sample.sequence = len(forwarded)
+        sample.sample = XrControllerInput(buttons_bitset=buttons, trigger=trigger, grip=grip)
+        return ingress.poll(state, now, epoch, selected).command
+
+    poll()
+    assert poll(4).hold and forwarded[-1] == 4
+    assert poll(4, trigger=1.).hold and forwarded[-1] == 4
+    poll(trigger=1.)
+    turn = poll(4, trigger=1.)
+    assert forwarded[-1] == 0
     np.testing.assert_array_equal(turn.joint_target[:5], state.q[:5])
     assert turn.joint_target[5] == -6.28 and turn.joint_step_limit == .007
     assert turn.engaged and not turn.hold and turn.gripper_target == 0.
-    assert state.q[5] == .5
 
-    inp.grip = 1.
-    stopped = ingress.poll(state, 0., 1, True).command
-    assert stopped.hold and stopped.reset_reference and stopped.joint_target is None
-    assert stopped.gripper_target == 0.
-    inp.grip = 0.
-    assert ingress.poll(state, 0., 1, True).command.hold
-    inp.buttons_bitset = 0
-    ingress.poll(state, 0., 1, True)
-    inp.buttons_bitset = 8
-    assert not ingress.poll(state, 0., 1, True).command.hold
-    inp.buttons_bitset = 0
-    released = ingress.poll(state, 0., 1, True).command
-    assert released.hold and released.reset_reference and released.gripper_target == 0.
+    stopped = poll(4, trigger=1., grip=1.)
+    assert stopped.hold and stopped.reset_reference and stopped.gripper_target == 0.
+    assert poll(4, trigger=1.).hold and forwarded[-1] == 0
+    assert poll(4).hold and forwarded[-1] == 0
+    assert poll(12).hold and forwarded[-1] == 12
+    poll()
+    assert poll(8).hold
+    assert poll(8).hold
+    home = poll(8)
+    np.testing.assert_array_equal(home.joint_target, ingress.home_q)
+    assert poll().hold
+    poll()
+
+    poll(trigger=1.)
+    assert not poll(4, trigger=1.).hold
+    assert poll(trigger=1.).reset_reference
+    assert not poll(4, trigger=1.).hold
+    assert poll(4, trigger=1., selected=False).hold
+    assert poll(4, trigger=1., epoch=2).hold
