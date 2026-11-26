@@ -315,6 +315,7 @@ def run(session, client, cameras, output, prompt, *, seconds, fps=FPS, chunk_ste
                     stamp = time.monotonic_ns()
                     try:
                         session.command("joint", q=[float(value) for value in point[:12]],
+                                        gripper_width=float(point[12]),
                                         gripper_targets=[float(point[12]), float(point[13])],
                                         ttl_ms=150, sent_monotonic_ns=stamp)
                     except RuntimeError as exc:
