@@ -75,6 +75,8 @@ prompt = "把黑色方块放到白色盒子里"
 url = "ws://10.16.106.51:8989"
 mount_ready = false
 note = "由训练服务器提供服务。选用右侧 RM65 内核，使用 15 步分块推理。"
+
+[[models]]
 id = "multitask_v1"
 name = "多任务 · 毛巾+杯子 · 本地 5070"
 # 两个任务共用一个模型（multitask_v1，198 条）；prompt 决定做哪件事。
