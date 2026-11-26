@@ -7,6 +7,8 @@ import time
 
 from embodied.control.ipc.services import create_node, make_publisher, make_subscriber, send, validate_prefix
 
+from embodied.contracts.runtime import HOME_PHASE
+
 VERSION = 4
 MAX_JOINTS = 15
 MAX_ARMS = 2  # Telemetry carries one gripper width/target per arm.
@@ -148,7 +150,7 @@ class TickPublisher:
                 packet.source_sequence = context.get('source_sequence', -1)
                 packet.operation_id = context.get('operation_id', '').encode()[:71]
                 if phase == 'control' and context.get('phase') != 'teleop':
-                    packet.phase = 4  # Owned operation/hold, excluded from ordinary teleop training.
+                    packet.phase = HOME_PHASE if context.get('phase') == 'home' else 4
             packet.tick_ns = int(tick * 1_000_000_000)
             packet.feedback_read_ns = read_ns
             packet.feedback_received_ns = max(0, int(state.received_at * 1_000_000_000))

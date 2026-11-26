@@ -202,7 +202,7 @@ class RuntimeEpisodeWriter:
             except (OSError, ValueError) as exc:
                 error = error or f'Source metadata could not be preserved: {exc}'
         self.error = error or self.error
-        if reason not in ('duration', 'operator-stop', 'runtime-terminal', 'context-exit'):
+        if reason not in ('duration', 'operator-stop', 'operator-home', 'runtime-terminal', 'context-exit'):
             self.error = self.error or 'Recording ended without an explicit complete boundary'
         if reason == 'runtime-terminal' and not self.terminal:
             self.error = self.error or 'Runtime terminal was not received'
