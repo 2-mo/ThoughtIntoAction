@@ -51,6 +51,8 @@ def run():
     parser.add_argument('--gripper', action='store_true', help='Hold A (right) / X (left) to open, corresponding Trigger to close; works while following with Grip')
     parser.add_argument('--gripper-speed', type=int, metavar='1..1000',
                         help=f'Speed for explicit full open/close or startup open only (default {DEFAULT_SPEED}, 50 percent); position segments inherit controller speed')
+    parser.add_argument('--gripper-force', type=int, metavar='50..1000',
+                        help='Unitless force threshold for gripper-close (default 50)')
     parser.add_argument('--gripper-step', type=int, metavar='5..100',
                         help=f'Raw opening units per segment (default {DEFAULT_STEP}); larger segments continue farther after release')
     parser.add_argument('--gripper-initialize-open', action='store_true',
@@ -70,6 +72,11 @@ def run():
         parser.error('Gripper movement requires --execute')
     if args.gripper and (not quest_action or not args.execute):
         parser.error('--gripper requires quest/quest-dual --execute')
+    if args.gripper_force is not None:
+        if args.action != 'gripper-close':
+            parser.error('--gripper-force requires gripper-close')
+        if not 50 <= args.gripper_force <= 1000:
+            parser.error('--gripper-force must be in 50..1000')
     if args.gripper_step is not None:
         if not args.gripper:
             parser.error('--gripper-step requires quest/quest-dual --execute --gripper')
@@ -119,7 +126,8 @@ def run():
             if backend.state.fault:
                 raise RuntimeError(backend.state.fault)
             print(json.dumps(gripper_move(backend.client, args.action.removeprefix('gripper-'),
-                speed=gripper_speed, initialize_open=args.gripper_initialize_open)), flush=True)
+                speed=gripper_speed, force=args.gripper_force if args.gripper_force is not None else 50,
+                initialize_open=args.gripper_initialize_open)), flush=True)
             return
         if args.action == 'gripper-status':
             raw = gripper_status(backend.client)

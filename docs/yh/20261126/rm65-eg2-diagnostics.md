@@ -20,7 +20,7 @@
 | EG2 状态 | `get_gripper_state` | 读取 `enable/status/error/mode/current_force/temperature/actpos`。模式 4/5 为运动，6 对应力控停止。 |
 | EG2 位置 | `set_gripper_position` | 参数 `position` 为原始值 1–1000，`block` 选择阻塞方式。当前遥操常规接口。 |
 | EG2 张开 | `set_gripper_release` | 参数 `speed` 为 1–1000，项目维护命令可测试整程张开。 |
-| EG2 单次力控 | `set_gripper_pick` | 参数 `speed/force/block`。适合对比位置闭合与显式力阈值。项目已有入口，力参数固定使用默认 50。 |
+| EG2 单次力控 | `set_gripper_pick` | 参数 `speed/force/block`。适合对比位置闭合与显式力阈值。项目已有入口，默认力参数为 50，可通过 `--gripper-force` 显式指定。 |
 | EG2 持续力控 | `set_gripper_pick_on` | 压力回落时继续夹取。厂家文档提供，当前项目驱动未接入。采用前需在本机固件上验证释放和停止行为。 |
 | EG2 行程配置 | `set_gripper_route` | 写入行程端点。现有驱动未接入，诊断先核实指尖间隙和示教器中的行程设置。 |
 
@@ -42,7 +42,7 @@ cd /home/guest/workspace/ThoughtIntoAction
 ```bash
 ./run.sh realman gripper-open --execute
 ./run.sh realman gripper-status
-./run.sh realman gripper-close --execute
+./run.sh realman gripper-close --execute --gripper-force 50
 ./run.sh realman gripper-status
 ```
 
