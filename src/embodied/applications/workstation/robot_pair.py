@@ -89,6 +89,14 @@ def find_runs(prefix):
     return runs
 
 
+def set_quest_wearing(action):
+    try:
+        subprocess.run(['bash', str(ROOT/'scripts/quest/simulate_wearing.sh'), action],
+                       cwd=ROOT, check=True, timeout=8)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f'Quest 模拟佩戴操作 {action} 失败：{exc}', file=sys.stderr, flush=True)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--backend', choices=('real','sim'), default='real')
@@ -115,6 +123,7 @@ def main(argv=None):
     previous = {sig:signal.signal(sig,stop) for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
     children = {}
     lease = None
+    simulate_wearing = False
     try:
         lease = DeviceLease('realman-pair')
         with ExitStack() as resources:
@@ -123,6 +132,9 @@ def main(argv=None):
             # initial readiness and stays Disabled (the ARX dual profile starts
             # the device first for the same reason).
             if xr_config is not None:
+                if args.backend == 'real':
+                    simulate_wearing = True
+                    set_quest_wearing('wear')
                 stream = resources.enter_context((directory/'quest.log').open('w'))
                 binary = ROOT/'src/embodied/devices/inputs/quest/native/bin/rollio-device-xrobot'
                 children['quest'] = subprocess.Popen([str(binary), 'run', '--config', str(xr_config)],
@@ -183,6 +195,8 @@ def main(argv=None):
                 PAIR_STATE.unlink()
         except (OSError, ValueError):
             pass
+        if simulate_wearing:
+            set_quest_wearing('unwear')
         for sig,handler in previous.items():
             signal.signal(sig,handler)
         if lease is not None:
