@@ -126,7 +126,6 @@ class Ingress(NativeIngress):
                 self.gripper_released = True
             elif self.gripper_released and inp.trigger > .2:
                 self.gripper_armed = True
-        # Same absolute mapping as the native coordinator's parallel_target.
         # Startup/recovery does not open a partly closed gripper: require a
         # neutral Trigger followed by a new press, then release opens normally.
         axis = inp.joystick_x if valid else 0.
@@ -148,7 +147,8 @@ class Ingress(NativeIngress):
         if valid and self.gripper_armed:
             if not np.isfinite(inp.trigger) or not 0 <= inp.trigger <= 1:
                 raise ValueError('Invalid Quest trigger')
-            width = self.gripper_max_width * (1. - inp.trigger)
+            # Treat the final 2% of Trigger travel as fully pressed.
+            width = 0. if inp.trigger >= .98 else self.gripper_max_width * (1. - inp.trigger)
         command = replace(command, gripper_target=width, gripper_mode=command.mode)
         overriding = secondary or was_returning or self.home_blocked
         if overriding:
