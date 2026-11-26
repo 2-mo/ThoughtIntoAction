@@ -260,7 +260,7 @@ function renderTeleop() {
   } else if (teleop.armed && !teleop.permit) {
     setBadge(ui.teleopBadge, "bad", "协调器未开启");
   } else if (teleop.ready) {
-    setBadge(ui.teleopBadge, "waiting", "等待握持 Grip");
+    setBadge(ui.teleopBadge, "waiting", teleop.pair && !teleop.armed ? "等待各侧激活" : "等待握持 Grip");
   } else {
     setBadge(ui.teleopBadge, "waiting", String(teleop.reason || "未就绪").slice(0, 18));
   }
@@ -273,7 +273,9 @@ function renderTeleop() {
         ? "遥操中：Grip 跟随，Trigger 控制夹爪；采集时页面只负责录制与计数。"
         : teleop.armed && !teleop.permit
           ? "已激活但协调器处于停用状态：按 A 会被当成 A+B 关闭跟随，需要重启内核恢复。"
-          : "握住右手柄 Grip 接入遥操；接入后 就绪 / 激活 / 许可 三项会同时变为 ✓。",
+          : teleop.pair
+            ? "左手 X 启动左臂，右手 A 启动右臂。握对应手柄的 Grip 开始跟随。"
+            : "握住右手柄 Grip 接入遥操；接入后 就绪 / 激活 / 许可 三项会同时变为 ✓。",
   );
 }
 
