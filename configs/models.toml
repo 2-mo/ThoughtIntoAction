@@ -67,3 +67,105 @@ unmount = [
   "ssh", "-o", "BatchMode=yes", "cn1wf@192.168.96.201",
   "pkill -f 'serve_compat[.]py'",
 ]
+
+[[models]]
+id = "multitask_v1"
+name = "多任务 · 毛巾+杯子 · 本地 5070"
+# 两个任务共用一个模型（multitask_v1，198 条）；prompt 决定做哪件事。
+prompt = "把桌子上的毛巾叠好"
+url = "ws://127.0.0.1:8008"
+local_dir = "/home/arx/work/models/multitask_v1"
+vram = "约 7.1 GB 显存 · horizon 50（联合契约训练）"
+note = "首次启动约 3–5 分钟；prompt 换成「扶起杯子并擦掉桌子上的污渍」即做杯子任务"
+mount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "serve", "multitask_v1", "--port", "8008", "--gpu", "0", "--mem-fraction", "0.9",
+]
+unmount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "stop", "multitask_v1",
+]
+
+[[models]]
+id = "smolvla_towel"
+name = "SmolVLA 叠毛巾 · 本地 5070"
+prompt = "把桌子上的毛巾叠好"
+url = "ws://127.0.0.1:8008"
+local_dir = "/home/arx/work/models/smolvla_towel"
+vram = "约 1.6 GB 显存（450M 全量微调）"
+note = "首次启动约 5–8 分钟；n_action_steps=50，服务端已做 5 点平滑"
+mount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "serve", "smolvla_towel", "--port", "8008", "--gpu", "0", "--mem-fraction", "0.9",
+]
+unmount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "stop", "smolvla_towel",
+]
+
+[[models]]
+id = "fold_towels_1120_v2_29999"
+name = "叠毛巾 1120 v2 (29999) · 本地 5070"
+prompt = "Fold the messy rags on the table in half and set them aside."
+url = "ws://127.0.0.1:8008"
+local_dir = "/home/arx/work/models/fold_towels_1120_v2_29999"
+vram = "约 7.1 GB 显存 · SigLIP 全量（params 7.17 GB）"
+note = "首次启动约 2–4 分钟"
+mount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "serve", "fold_towels_1120_v2_29999", "--port", "8008", "--gpu", "0", "--mem-fraction", "0.9",
+]
+unmount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "stop", "fold_towels_1120_v2_29999",
+]
+
+[[models]]
+id = "fold_towels_1120_v2_20000"
+name = "叠毛巾 1120 v2 (20000) · 本地 5070"
+prompt = "Fold the messy rags on the table in half and set them aside."
+url = "ws://127.0.0.1:8008"
+local_dir = "/home/arx/work/models/fold_towels_1120_v2_20000"
+vram = "约 7.1 GB 显存 · SigLIP 全量（params 7.17 GB）"
+note = "首次启动约 2–4 分钟"
+mount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "serve", "fold_towels_1120_v2_20000", "--port", "8008", "--gpu", "0", "--mem-fraction", "0.9",
+]
+unmount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "stop", "fold_towels_1120_v2_20000",
+]
+
+[[models]]
+id = "fold_towels_1120_v2_25000"
+name = "叠毛巾 1120 v2 (25000) · 本地 5070"
+prompt = "Fold the messy rags on the table in half and set them aside."
+url = "ws://127.0.0.1:8008"
+local_dir = "/home/arx/work/models/fold_towels_1120_v2_25000"
+vram = "约 7.1 GB 显存 · SigLIP 全量（params 7.17 GB）"
+note = "首次启动约 2–4 分钟"
+mount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "serve", "fold_towels_1120_v2_25000", "--port", "8008", "--gpu", "0", "--mem-fraction", "0.9",
+]
+unmount = [
+  "/home/arx/work/openpi/.venv/bin/python", "/home/arx/work/deploy_model.py",
+  "stop", "fold_towels_1120_v2_25000",
+]
+
+[[models]]
+id = "fold_towels_1120_v2_201"
+name = "叠毛巾 1120 v2 · 远程 .201"
+prompt = "Fold the messy rags on the table in half and set them aside."
+url = "ws://192.168.96.201:8015"
+vram = "192.168.96.201 · RTX A6000 · 默认 GPU 0 / 显存比例 0.35"
+note = "挂载默认启动 15000；测试 20000 或 25000 请在 .201 用 switch_fold_towels_v2.sh 切换，地址保持不变"
+mount = [
+  "ssh", "-o", "BatchMode=yes", "cn1wf@192.168.96.201",
+  "/home/cn1wf/switch_fold_towels_v2.sh 15000",
+]
+unmount = [
+  "ssh", "-o", "BatchMode=yes", "cn1wf@192.168.96.201",
+  "/home/cn1wf/switch_fold_towels_v2.sh stop",
+]
