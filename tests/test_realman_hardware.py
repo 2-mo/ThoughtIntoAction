@@ -491,6 +491,19 @@ class HardwareTests(unittest.TestCase):
         self.step(gripper_target=.07)
         self.assertEqual(b.pending_gripper[0], 1000)
 
+    def test_arm_hold_keeps_live_trigger_release_target_after_stop_feedback(self):
+        b = self.backend
+        self.step(gripper_target=0.)
+        self.connection.client.gripper.update(mode=4, actpos=500)
+        b.last_gripper_poll = float('-inf')
+        self.step(hold=True, gripper_target=.07)
+        self.assertEqual(b.pending_gripper[0], 1)
+        self.connection.client.gripper.update(mode=3, actpos=500)
+        b.last_gripper_poll = float('-inf')
+        self.step(hold=True, gripper_target=.07)
+        self.assertFalse(b.gripper_needs_release)
+        self.assertEqual(b.pending_gripper[0], 1000)
+
     def test_arm_stop_can_cancel_before_gripper_motion_starts_without_mode_three(self):
         b = self.backend
         for mode, position, width in ((1, 1000, 0.), (2, 0, .07), (6, 430, .07)):
