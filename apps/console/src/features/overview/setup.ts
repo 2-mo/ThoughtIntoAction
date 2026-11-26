@@ -54,8 +54,8 @@ function cameraId(role, index, cameras) {
 }
 
 function defaultLabel(role, index, cameras) {
-  if (role === "left") return cameras.filter((camera) => camera.role !== "exterior").length > 1 ? "腕部相机" : "腕部相机";
-  if (role === "right") return "腕部相机 2";
+  if (role === "left") return draft.arms === 2 ? "左腕相机" : "腕部相机";
+  if (role === "right") return "右腕相机";
   const nth = cameras.slice(0, index).filter((camera) => camera.role === "exterior").length;
   return nth === 0 ? "外部相机" : `外部相机 ${nth + 1}`;
 }
@@ -91,7 +91,7 @@ function toDocument() {
     const mount = camera.role === "exterior" ? "fixed" : "wrist";
     return {
       id: cameraId(camera.role, index, draft.cameras),
-      label: camera.label || defaultLabel(camera.role, index, draft.cameras),
+      label: defaultLabel(camera.role, index, draft.cameras),
       enabled: true,
       driver: "realsense",
       model: camera.model || "D435i",
@@ -109,13 +109,13 @@ function toDocument() {
 function fromDocument(document) {
   const robots = document.robots || [];
   const arms = robots.length === 2 ? 2 : 1;
+  const sides = new Map(robots.map((robot) => [robot.id, robot.side]));
   const cameras = (document.cameras || []).map((camera) => ({
     serial: camera.serial || "",
     role: camera.mount === "wrist"
-      ? (camera.arm === "arm2" || String(camera.id).includes("second") ? "right" : "left")
+      ? (sides.get(camera.arm) === "right" ? "right" : "left")
       : "exterior",
     model: camera.model,
-    label: camera.label,
     width: camera.width,
     height: camera.height,
     fps: camera.fps,

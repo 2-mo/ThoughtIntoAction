@@ -133,17 +133,28 @@ def arm_views(q, dq, described=None) -> list[dict[str, object]]:
 
 def camera_inventory() -> list[dict[str, object]]:
     """Configured cameras, regardless of whether the camera service is running."""
-    cameras = load_config().get("cameras", {})
-    return [
-        {
+    config = load_config()
+    sides = {robot["id"]: robot.get("side") for robot in
+             (config.get("setup") or {}).get("robots", [])}
+    wrist_labels = {"left": "左腕相机", "right": "右腕相机"}
+    fixed_count = 0
+    inventory = []
+    for camera_id, settings in config.get("cameras", {}).items():
+        if not isinstance(settings, dict):
+            continue
+        label = settings.get("label") or camera_id
+        if settings.get("mount") == "fixed":
+            fixed_count += 1
+            label = "外部相机" if fixed_count == 1 else f"外部相机 {fixed_count}"
+        elif settings.get("mount") == "wrist":
+            label = wrist_labels.get(sides.get(settings.get("arm")), "腕部相机")
+        inventory.append({
             "id": camera_id,
-            "label": settings.get("label") or camera_id,
+            "label": label,
             "model": settings.get("model"),
             "enabled": settings.get("enabled", True) is not False,
-        }
-        for camera_id, settings in cameras.items()
-        if isinstance(settings, dict)
-    ]
+        })
+    return inventory
 
 
 def port_listening(number: int) -> bool:
