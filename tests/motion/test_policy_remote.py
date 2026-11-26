@@ -7,9 +7,13 @@ import time
 from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import numpy as np
 
+from embodied.control.commands import CommandEngine
+from embodied.policy.remote import runner
 from embodied.policy.remote.client import PolicyError, RemotePolicy
 from embodied.policy.remote.runner import ChunkQueue, blend_into, build_state, clip_actions
 from embodied.policy.remote.wire import packb, unpackb
@@ -65,6 +69,53 @@ class StateTests(unittest.TestCase):
         self.assertTrue(np.all(clipped[0, :12] == 1.0))
         self.assertAlmostEqual(float(clipped[0, 12]), 0.082, places=6)
         self.assertAlmostEqual(float(clipped[0, 13]), 0.0, places=6)
+
+
+def test_runner_sends_clipped_gripper_width_when_feedback_exceeds_limit(tmp_path, monkeypatch):
+    robot = {"joint_min": [-1.0] * 12, "joint_max": [1.0] * 12, "gripper_max_width": 0.082}
+    q = [0.0] * 12
+    config = SimpleNamespace(**robot, park_q=q, joint_velocity_max=[1.0] * 12,
+                             control_hz=250, arms=("left", "right"))
+    kernel = CommandEngine("test", config, "test")
+    kernel.owner = {"token": "test", "ingress": "rpc", "purpose": "operation"}
+    kernel.expires = 2.0
+    feedback = {"q": q, "gripper_width": 0.0821, "gripper_widths": [0.0821, 0.02]}
+    state = SimpleNamespace(**feedback)
+    session = Mock(identity={"runtime_id": "test"})
+    session.describe.return_value = {"robot": robot}
+    session.status.return_value = feedback
+
+    now_ns = 1_000_000_000
+
+    def advance(seconds):
+        nonlocal now_ns
+        now_ns += round(seconds * 1e9)
+
+    def monotonic():
+        return now_ns / 1e9
+
+    monkeypatch.setattr(runner, "time", SimpleNamespace(
+        monotonic=monotonic, monotonic_ns=lambda: now_ns, sleep=advance))
+
+    def command(action, **fields):
+        request = {"version": 1, "runtime_id": "test", "token": "test", "epoch": kernel.epoch,
+                   "sequence": session.command.call_count, "action": action, **fields}
+        try:
+            return kernel.request(request, state, monotonic())
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc  # Match the control client's RPC error.
+
+    session.command.side_effect = command
+    actions = np.array([q + [0.09, 0.02]], dtype=np.float32)
+    client = SimpleNamespace(metadata={}, last_latency_s=None, infer=lambda _: {"actions": actions})
+
+    summary = runner.run(session, client, {}, tmp_path, "task", seconds=0.01)
+
+    assert summary.get("rejected", 0) == 0
+    sends = [call.kwargs for call in session.command.call_args_list if call.args == ("joint",)]
+    assert summary["commands"] == len(sends) > 0
+    for fields in sends:
+        assert fields["gripper_width"] == fields["gripper_targets"][0] == 0.082
 
 
 class ObservationTests(unittest.TestCase):
