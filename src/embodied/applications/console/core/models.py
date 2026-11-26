@@ -80,7 +80,8 @@ def health_url(url: str) -> str:
 
 def probe(url: str, timeout: float = PROBE_TIMEOUT_S) -> bool:
     try:
-        with urllib.request.urlopen(health_url(url), timeout=timeout) as reply:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(health_url(url), timeout=timeout) as reply:
             return 200 <= reply.status < 300
     except (OSError, ValueError):
         return False

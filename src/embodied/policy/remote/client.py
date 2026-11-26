@@ -30,7 +30,7 @@ class RemotePolicy:
         from websockets.sync.client import connect
 
         self._connection = connect(self.url, open_timeout=10, close_timeout=2,
-                                   max_size=None, compression=None)
+                                   max_size=None, compression=None, proxy=None)
         self.metadata = unpackb(self._connection.recv(timeout=self.timeout_s))
         if not isinstance(self.metadata, dict):
             raise PolicyError("模型服务返回的 metadata 不是字典")
