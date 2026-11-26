@@ -66,6 +66,9 @@ def test_pair_sim_uses_standard_realman_profiles(tmp_path):
         assert config['pair']['side'] == side
         settings = load_settings(config['config'], config['vr_config'])
         routing = Routing.configure(tmp_path/side, 'robot-test-'+side, settings)
+        coordinator = tomllib.loads(routing['coordinator'].read_text())
+        assert coordinator['mode_controller_input_topic'] == f'{prefix}/xr/right_controller/states/input'
+        assert coordinator['routes'][0]['controller_input_topic'] == f'{prefix}/xr/{side}_controller/states/input'
         arm = tomllib.loads(routing['arm'].read_text())
         assert arm['cartesian_relative'] and arm['cartesian_orientation_frame'] == 'base'
         assert arm['cartesian_position_scales'] == [1., 1., 1.]
