@@ -86,6 +86,7 @@ class Backend:
         self.last_gripper_poll = float('-inf')
         self.pending_gripper = None
         self.gripper_stop_requested_at = None
+        self.gripper_stop_has_target = False
         self.gripper_stop_samples = 0
         self.gripper_contact = False
         self.gripper_ready = False
@@ -184,12 +185,12 @@ class Backend:
             self.gripper_stop_samples = (self.gripper_stop_samples + 1
                 if self.gripper['mode'] in (1, 2, 6) else 0)
             if self.gripper['mode'] == 3 or self.gripper_stop_samples >= 2:
+                self.gripper_needs_release |= not self.gripper_stop_has_target
                 print(f'{self.config.name}: EG2停止反馈已确认；撤销目标={self.pending_gripper}，'
-                      f'反馈={self.gripper}；等待松开控制后重新操作。', flush=True)
+                      f'反馈={self.gripper}；需重新操作={self.gripper_needs_release}。', flush=True)
                 self.pending_gripper = None
                 self.gripper_stop_requested_at = None
                 self.gripper_stop_samples = 0
-                self.gripper_needs_release = True
         notice = ('ready' if self.gripper_ready else 'unavailable')
         if notice != self.gripper_notice:
             print(f'{self.config.name}: EG2 {notice}; feedback={self.gripper}. '
@@ -341,6 +342,10 @@ class Backend:
             self.connection.stop()
             if stopping_gripper:
                 self.gripper_stop_requested_at = time.monotonic()
+                # A live Trigger target can continue after stopping the arm.
+                # A measured-width hold can also come from loss of ownership.
+                self.gripper_stop_has_target = (effective.gripper_target is not None
+                    and effective.gripper_target != state.gripper_width)
                 self.gripper_stop_samples = 0
         else:
             if (self.stopped or (cancel_requested and cancel_requested()) or
@@ -392,6 +397,9 @@ class Backend:
             if width is None:
                 self.gripper_needs_release = False
             return  # Never replay a target that was held across an outage.
+        if self.gripper_stop_requested_at is not None:
+            self.gripper_stop_has_target &= width is not None and width != self.width()
+            return  # Wait for fresh stop feedback before replacing the segment.
         if width is not None and (not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width):
             raise ValueError('Invalid EG2 nominal width target')
         raw = None if width is None else round(width/self.config.gripper_max_width*1000)
