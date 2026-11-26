@@ -55,18 +55,15 @@ class Routing(NativeRouting):
             # Two kernels and one XR owner share the bus here; a 100 ms window
             # trips on a single dropped burst and drops the group to Disabled.
             input_timeout_ms=300, xr_basis=_vendor_basis(settings))
-        coordinator = tomllib.loads(paths['coordinator'].read_text())
-        if vr.input_prefix:
-            # The right hand selects the mode for both arms. Each arm's
-            # motion route still uses its own hand for pose and Grip.
-            coordinator['mode_controller_input_topic'] = (
-                f'{vr.input_prefix}/xr/right_controller/states/input')
-        # The EG2 driver handles absolute opening targets in the ingress.
+        # One mode owner per hand. The EG2 driver already handles absolute
+        # opening targets; a second router/coordinator can retain an old
+        # opening target or toggle out of phase with the arm.
         if 'gripper' in paths:
+            coordinator = tomllib.loads(paths['coordinator'].read_text())
             coordinator['members'] = coordinator['members'][:1]
             coordinator['routes'] = coordinator['routes'][:1]
             paths.pop('gripper').unlink()
-        paths['coordinator'].write_text(_toml(coordinator))
+            paths['coordinator'].write_text(_toml(coordinator))
         return paths
 
 
@@ -74,7 +71,7 @@ class Ingress(NativeIngress):
     def __init__(self, prefix, dependencies, gripper=True, *, dual=False, settings=None):
         super().__init__(prefix, dependencies, gripper=False, dual=dual)
         vr = settings.vr
-        # Each kernel reads its own hand for local arming and Trigger.
+        # The primary button (left X or right A) and Trigger belong to this hand.
         self.subscribers['input'] = make_subscriber(open_service(self.node,
             f'{vr.input_prefix or prefix}/xr/{vr.controller}_controller/states/input', XrControllerInput))
         self.gripper_released = self.gripper_armed = False

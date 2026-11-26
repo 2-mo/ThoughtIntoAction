@@ -327,12 +327,12 @@ function renderWizard() {
   if (connected && teleopOk) { teleopBadge = "遥操中 · 握 Grip 跟随"; teleopState = "done"; }
   else if (connected && teleop.ready && !teleop.armed) {
     // Arming is a mode button (A), not the Grip; Grip only gates following.
-    teleopBadge = "按 A 进入遥操";
+    teleopBadge = teleop.pair ? "左手 X / 右手 A 启动各自遥操" : "按 A 进入遥操";
     teleopState = "warn";
   } else if (connected && teleop.armed) {
     teleopBadge = teleop.permit
       ? "已进入 · 握 Grip 跟随"
-      : "跟随已停用 · 按 A 重试（回位长按 B）";
+      : teleop.pair ? "跟随未许可 · 查看各侧状态" : "跟随已停用 · 按 A 重试（回位长按 B）";
     teleopState = "warn";
   } else if (connected) { teleopBadge = teleop.reason ? String(teleop.reason).slice(0, 22) : "未就绪"; teleopState = "todo"; }
   const marks = (side) => side
