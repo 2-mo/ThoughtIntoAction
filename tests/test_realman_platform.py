@@ -228,6 +228,10 @@ def test_quest_wrist_joystick_preserves_grip_and_home(monkeypatch):
 
     assert poll(axis=1.).hold
     poll()
+    assert poll(trigger=.5).gripper_target == pytest.approx(.035)
+    assert poll(trigger=.97).gripper_target == pytest.approx(.0021)
+    assert poll(trigger=.98).gripper_target == 0.
+    assert poll().gripper_target == pytest.approx(.07)
     turn = poll(trigger=1., axis=-1.)
     np.testing.assert_array_equal(turn.joint_target[:5], state.q[:5])
     assert turn.joint_target[5] == -6.28 and turn.joint_step_limit == .007
