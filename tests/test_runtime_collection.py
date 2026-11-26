@@ -5,6 +5,9 @@ from pathlib import Path
 import tempfile
 import time
 import unittest
+from types import SimpleNamespace
+
+from embodied.contracts.runtime import HOME_PHASE
 
 import numpy as np
 
@@ -39,6 +42,18 @@ class RuntimeCollectionTests(unittest.TestCase):
     def frame(self, stamp, number=1, **changes):
         return {'image': np.zeros((4, 4, 3), np.uint8), 'host_received_monotonic_ns': stamp,
                 'frame_number': number, 'stream_id': 'camera-one', **changes}
+
+    def test_home_finalizes_before_recording_the_reset_command(self):
+        home = tick(1, self.stamp + 4_000_000)
+        home['phase'] = HOME_PHASE
+        home['command']['gripper_width'] = None
+        rows = iter([tick(0, self.stamp), home])
+        reader = SimpleNamespace(mode='full', descriptor={'runtime_id': 'test'},
+                                 terminal=False, read=lambda: next(rows))
+        _, manifest = capture(reader, self.temp.name, 'test capture', 0)
+        self.assertEqual(manifest['lifecycle'], 'complete')
+        self.assertEqual(manifest['stop_reason'], 'operator-home')
+        self.assertEqual(manifest['counts']['command'], 1)
 
     def test_roundtrip_preserves_independent_timestamps_and_raw_ticks(self):
         writer = self.writer(self.camera)

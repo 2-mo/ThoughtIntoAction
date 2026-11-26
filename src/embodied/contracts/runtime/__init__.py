@@ -2,4 +2,6 @@
 
 from embodied.contracts.runtime.client import RuntimeReader
 
-__all__ = ["RuntimeReader"]
+HOME_PHASE = 5
+
+__all__ = ["RuntimeReader", "HOME_PHASE"]

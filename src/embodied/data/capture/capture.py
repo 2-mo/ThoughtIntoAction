@@ -9,7 +9,7 @@ import threading
 import time
 
 from embodied.data.episode.runtime_episode import RuntimeEpisodeWriter
-from embodied.contracts.runtime import RuntimeReader
+from embodied.contracts.runtime import HOME_PHASE, RuntimeReader
 
 
 # How long one camera may stay silent before the recording is considered broken.
@@ -88,6 +88,11 @@ def capture(reader, root, task, duration, camera=None, *, cameras=None, video=Fa
                 reason = 'context-exit'
                 break
             tick = reader.read()
+            if (stop_event is None and tick.get('phase') == HOME_PHASE
+                    and not tick['error'] and not tick['terminal']):
+                end_ns = tick['timing']['completed_ns']
+                reason = 'operator-home'
+                break
             writer.add_tick(tick)
             while not frames.empty():
                 camera_id, frame = frames.get_nowait()
@@ -111,7 +116,8 @@ def capture(reader, root, task, duration, camera=None, *, cameras=None, video=Fa
     except Exception as exc:
         reason, error = 'stream-error', f'{type(exc).__name__}: {exc}'
     finally:
-        end_ns = time.monotonic_ns()
+        if end_ns is None:
+            end_ns = time.monotonic_ns()
         heartbeat.state = 'finalizing'
         heartbeat.error, heartbeat.reason = error, reason
         stop.set()
