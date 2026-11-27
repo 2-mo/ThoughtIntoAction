@@ -76,6 +76,7 @@ class Ingress(NativeIngress):
             f'{vr.input_prefix or prefix}/xr/{vr.controller}_controller/states/input', XrControllerInput))
         self.gripper_released = self.gripper_armed = False
         self.gripper_epoch = None
+        self.trigger_pressed_at = None
         self.gripper_max_width = settings.robot.gripper_max_width
         self.home_q = np.asarray(settings.robot.park_q, dtype=float)
         self.home_released = self.returning_home = self.home_blocked = False
@@ -95,6 +96,7 @@ class Ingress(NativeIngress):
         new_epoch = epoch != self.gripper_epoch
         if new_epoch or not valid:
             self.gripper_epoch = epoch
+            self.trigger_pressed_at = None
             self.gripper_released = self.gripper_armed = False
             self.home_released = self.returning_home = self.home_blocked = False
             self.home_since = None
@@ -122,10 +124,14 @@ class Ingress(NativeIngress):
             if (state.gripper_width is None or home
                     or command.mode != Mode.COMMAND_FOLLOWING or not self.status['permit']):
                 self.gripper_released = self.gripper_armed = False
+                self.trigger_pressed_at = None
             elif inp.trigger < .2:
                 self.gripper_released = True
+                self.trigger_pressed_at = None
             elif self.gripper_released and inp.trigger > .2:
                 self.gripper_armed = True
+                if self.trigger_pressed_at is None:
+                    self.trigger_pressed_at = now
         # Startup/recovery does not open a partly closed gripper: require a
         # neutral Trigger followed by a new press, then release opens normally.
         axis = inp.joystick_x if valid else 0.
@@ -147,8 +153,12 @@ class Ingress(NativeIngress):
         if valid and self.gripper_armed:
             if not np.isfinite(inp.trigger) or not 0 <= inp.trigger <= 1:
                 raise ValueError('Invalid Quest trigger')
-            # Treat the final 2% of Trigger travel as fully pressed.
-            width = 0. if inp.trigger >= .98 else self.gripper_max_width * (1. - inp.trigger)
+            # Give quick squeezes time to reach full closure before sending
+            # a partial target that the EG2 must finish before closing further.
+            if inp.trigger >= .98:
+                width = 0.
+            elif self.trigger_pressed_at is None or now - self.trigger_pressed_at >= .12:
+                width = self.gripper_max_width * (1. - inp.trigger)
         command = replace(command, gripper_target=width, gripper_mode=command.mode)
         overriding = secondary or was_returning or self.home_blocked
         if overriding:

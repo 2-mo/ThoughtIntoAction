@@ -219,16 +219,20 @@ def test_quest_wrist_joystick_preserves_grip_and_home(monkeypatch):
     monkeypatch.setattr(shared.NativeIngress, 'poll', lambda *args: Candidate(
         1, ControlCommand(Mode.COMMAND_FOLLOWING, hold=True)))
 
-    def poll(buttons=0, trigger=0., grip=0., axis=0., selected=True, epoch=1):
+    def poll(buttons=0, trigger=0., grip=0., axis=0., selected=True, epoch=1, elapsed=.6):
         nonlocal now
-        now += .6
+        now += elapsed
         sample.sample = XrControllerInput(buttons_bitset=buttons, trigger=trigger,
                                           grip=grip, joystick_x=axis)
         return ingress.poll(state, now, epoch, selected).command
 
     assert poll(axis=1.).hold
     poll()
-    assert poll(trigger=.5).gripper_target == pytest.approx(.035)
+    assert poll(trigger=.3).gripper_target is None
+    assert poll(trigger=.98, elapsed=.04).gripper_target == 0.
+    assert poll().gripper_target == pytest.approx(.07)
+    assert poll(trigger=.5).gripper_target is None
+    assert poll(trigger=.5, elapsed=.13).gripper_target == pytest.approx(.035)
     assert poll(trigger=.97).gripper_target == pytest.approx(.0021)
     assert poll(trigger=.98).gripper_target == 0.
     assert poll().gripper_target == pytest.approx(.07)
