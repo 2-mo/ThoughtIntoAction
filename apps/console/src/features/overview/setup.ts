@@ -69,7 +69,7 @@ export function setupConnection() {
 }
 
 function controllerFor(side) {
-  if (side === "single") return draft.swapHands ? "left" : "right";
+  if (side === "single") return draft.singleHand;
   if (!draft.swapHands) return side;
   return side === "left" ? "right" : "left";
 }
@@ -128,6 +128,7 @@ function fromDocument(document) {
       ? [robots[0]?.can_interface || "can1", robots[1]?.can_interface || "can0"]
       : [robots[0]?.can_interface || "can0"],
     hosts: robots.map((robot) => robot.host || ""),
+    singleHand: arms === 1 ? (robots[0]?.controller || "right") : "right",
     // A rig whose XR channels are crossed stores the opposite hand per arm.
     swapHands: robots.length === 2 && robots.some((robot) => robot.controller && robot.controller !== robot.side),
     cameras,
@@ -249,7 +250,10 @@ function renderArm() {
       draft.hosts[Number(input.dataset.host)] = input.value.trim();
     });
   });
-  if (el("setupSwapHands")) el("setupSwapHands").checked = Boolean(draft.swapHands);
+  el("setupSingleHandRow").hidden = draft.arms !== 1;
+  el("setupSingleHand").value = draft.singleHand;
+  el("setupSwapHandsRow").hidden = draft.arms !== 2;
+  el("setupSwapHands").checked = draft.swapHands;
 }
 
 function renderCameraCount() {
@@ -511,6 +515,9 @@ export async function initSetup() {
   });
   el("setupModel")?.addEventListener("change", () => {
     draft.model = el("setupModel").value;
+  });
+  el("setupSingleHand")?.addEventListener("change", () => {
+    draft.singleHand = el("setupSingleHand").value;
   });
   el("setupSwapHands")?.addEventListener("change", () => {
     draft.swapHands = el("setupSwapHands").checked;
