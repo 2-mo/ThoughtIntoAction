@@ -167,6 +167,16 @@ class SetupCompileTests(unittest.TestCase):
             self.assertEqual(policy["source"], "cli")
             self.assertEqual(compiled["workbench"]["policy"], str(target / "realman-manual.json"))
 
+    def test_realman_single_compiles_explicit_left_controller(self):
+        document = realman_document()
+        document["robots"][0]["controller"] = "left"
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder)
+            with patch.object(devices, "GENERATED_DIR", target):
+                devices.compile_setup(validate_setup(document))
+            vr = json.loads((target / "realman-collect-vr.json").read_text())
+        self.assertEqual(vr["controller"], "left")
+
     def test_realman_dual_compiles_a_pair(self):
         with tempfile.TemporaryDirectory() as folder:
             target = Path(folder)

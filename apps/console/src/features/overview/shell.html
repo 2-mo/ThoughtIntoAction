@@ -136,7 +136,14 @@
             </select></label>
           </div>
           <div id="setupCans" class="setup-cans"></div>
-          <label class="setup-swap">
+          <label class="setup-count" id="setupSingleHandRow" hidden>
+            <span>Quest 手柄</span>
+            <select id="setupSingleHand">
+              <option value="left">左手柄</option>
+              <option value="right">右手柄</option>
+            </select>
+          </label>
+          <label class="setup-swap" id="setupSwapHandsRow" hidden>
             <input id="setupSwapHands" type="checkbox">
             <span>手柄左右互换（左手柄带右臂，右手柄带左臂）</span>
           </label>
