@@ -355,17 +355,6 @@ class Backend:
                 feedback_validator(state)
             if time.monotonic()-state.received_at >= .1:
                 raise RuntimeError('RealMan feedback expired during target calculation')
-            if not command.planned and not command.rm65_table_guard:
-                # Pace live targets against measured motion while preserving the command step bound.
-                following_limit = np.maximum(step_limit, np.deg2rad(5.0))
-                paced_q = np.clip(q, state.q - following_limit, state.q + following_limit)
-                if np.any(np.abs(paced_q - previous) > step_limit + 2e-5):
-                    self.request_stop()
-                    raise RuntimeError('RM65 following error cannot be recovered within the joint step limit')
-                if np.any(paced_q != q):
-                    q = paced_q
-                    self.controller.q_target = q.copy()
-                    self.controller.dq_target[:] = 0.0
             wire = np.rint(np.rad2deg(q)*1000).astype(int).tolist()
             with self.connection.lock:
                 self.connection.active = True
