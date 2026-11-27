@@ -356,6 +356,17 @@ class Backend:
             if time.monotonic()-state.received_at >= .1:
                 raise RuntimeError('RealMan feedback expired during target calculation')
             wire = np.rint(np.rad2deg(q)*1000).astype(int).tolist()
+            if not command.planned and not command.rm65_table_guard:
+                # Bound lead over measured feedback as well as the step from the last command.
+                following_limit = np.maximum(step_limit, np.deg2rad(5.0))
+                following_error = np.abs(np.deg2rad(np.asarray(wire) / 1000) - state.q)
+                if np.any(following_error > following_limit + 2e-5):
+                    axis = int(np.argmax(following_error - following_limit))
+                    self.request_stop()
+                    raise RuntimeError(
+                        f'RM65 joint {axis + 1} following error: '
+                        f'{np.rad2deg(following_error[axis]):.2f} deg exceeds '
+                        f'{np.rad2deg(following_limit[axis]):.2f} deg')
             with self.connection.lock:
                 self.connection.active = True
                 self.connection.client.send({'command': 'movej_canfd', 'joint': wire, 'follow': False})
