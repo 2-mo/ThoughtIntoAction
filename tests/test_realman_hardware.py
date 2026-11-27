@@ -137,18 +137,27 @@ class HardwareTests(unittest.TestCase):
         np.testing.assert_allclose(q, self.backend.velocity_limits/25, atol=2e-5)
         self.assertFalse(any(x['command'] == 'movep_canfd' for x in self.connection.client.sent))
 
-    def test_stalled_feedback_stops_before_sending_another_target(self):
+    def test_stalled_feedback_caps_targets_then_advances_with_feedback(self):
         pose = self.kinematics.fk(np.array([.4, 0, 0, 0, 0, 0]))
         self.step(pose_target=pose)
-        self.assertEqual(len(self.motions()), 1)
-        # Even with no new pose, the joint controller still has a cached goal.
-        with self.assertRaisesRegex(RuntimeError, 'joint 1 following error'):
+        for _ in range(20):
             self.step()
+        self.assertEqual(max(motion['joint'][0] for motion in self.motions()), 5000)
+        self.assertEqual(self.motions()[-1]['joint'][0], 5000)
+        self.connection.q[0] = np.deg2rad(2.)
+        self.step(pose_target=pose)
+        self.assertEqual(self.motions()[-1]['joint'][0], 7000)
+
+    def test_following_error_stops_if_no_target_satisfies_both_limits(self):
+        pose = self.kinematics.fk(np.array([.4, 0, 0, 0, 0, 0]))
+        self.step(pose_target=pose)
+        self.connection.q[0] = np.deg2rad(-20.)
+        with self.assertRaisesRegex(RuntimeError, 'following error'):
+            self.step(pose_target=pose)
         self.assertEqual(len(self.motions()), 1)
         self.assertEqual(self.connection.client.sent[-1], {'command': 'set_arm_stop'})
         with self.assertRaises(InterruptedError):
             self.step(pose_target=pose)
-        self.assertEqual(len(self.motions()), 1)
 
     def test_tracking_feedback_allows_consecutive_targets(self):
         pose = self.kinematics.fk(np.array([.4, 0, 0, 0, 0, 0]))
