@@ -361,6 +361,7 @@ class Backend:
                 self.connection.client.send({'command': 'movej_canfd', 'joint': wire, 'follow': False})
                 self.connection.last_command = time.monotonic()
                 self.connection.last_joint_target = np.rad2deg(q)
+        gripper_decision, gripper_ack_ms = 'initialize', None
         if initialize:
             if (self.stopped or (cancel_requested and cancel_requested()) or
                     (self.cancel_requested and self.cancel_requested())):
@@ -370,13 +371,15 @@ class Backend:
             # Reuse the target controller's finite/range handling, as for the
             # arm. No fresh gripper command must stay None, not replay cache.
             width = self.controller.gripper_target if effective.gripper_target is not None else None
-            self._gripper_target(width, now)
+            gripper_decision, gripper_ack_ms = self._gripper_target(width, now)
         self._telemetry = {'sent_q': q.tolist(), 'sent_dq': self.controller.dq_target.tolist(),
             'applied_kp': [0.]*6, 'applied_kd': [0.]*6, 'user_feedforward_torque': [0.]*6,
             'gripper_target': self.controller.gripper_target if self.gripper_ready and not self.gripper_needs_release else None,
             'gripper_applied_kp': 0., 'gripper_applied_kd': 0.,
             'command_started_ns': started, 'command_submitted_ns': time.monotonic_ns(),
             'feedback_velocity_source': 'encoder_finite_difference', 'gripper_raw': dict(self.gripper),
+            'gripper_decision': gripper_decision, 'gripper_ack_ms': gripper_ack_ms,
+            'gripper_feedback_age_ms': (time.monotonic() - self.last_gripper_poll) * 1000,
             'gripper_ready': self.gripper_ready, 'gripper_needs_release': self.gripper_needs_release,
             'gripper_contact_latched': self.gripper_contact, 'gripper_pending': self.pending_gripper,
             'gripper_stop_requested_at': self.gripper_stop_requested_at,
@@ -392,14 +395,14 @@ class Backend:
 
     def _gripper_target(self, width, now):
         if not self.gripper_ready:
-            return
+            return 'unavailable', None
         if self.gripper_needs_release:
             if width is None:
                 self.gripper_needs_release = False
-            return  # Never replay a target that was held across an outage.
+            return 'awaiting_release', None  # Never replay a target that was held across an outage.
         if self.gripper_stop_requested_at is not None:
             self.gripper_stop_has_target &= width is not None and width != self.width()
-            return  # Wait for fresh stop feedback before replacing the segment.
+            return 'awaiting_stop_feedback', None  # Wait for fresh stop feedback before replacing the segment.
         if width is not None and (not np.isfinite(width) or not 0 <= width <= self.config.gripper_max_width):
             raise ValueError('Invalid EG2 nominal width target')
         raw = None if width is None else round(width/self.config.gripper_max_width*1000)
@@ -423,7 +426,7 @@ class Backend:
         if self.gripper['mode'] in (4, 5):
             if self.pending_gripper is not None and now-self.pending_gripper[1] > 5.:
                 raise RuntimeError('EG2 segment still moving after 5 s')
-            return  # No queue: only the current owner target can schedule another segment.
+            return 'moving', None  # No queue: only the current owner target can schedule another segment.
         if self.pending_gripper is not None:
             target, sent, origin = self.pending_gripper
             # Idle feedback can settle beyond the commanded position. A
@@ -432,7 +435,7 @@ class Backend:
             if abs(position-target) > 5 and not crossed:
                 if now-sent > 5.:
                     raise RuntimeError('EG2 position feedback did not reach the accepted segment')
-                return
+                return 'awaiting_position', None
             # A completed opening releases old contact even if Trigger was
             # pressed again while its previous mode-6 feedback was cached.
             if target > origin:
@@ -441,19 +444,21 @@ class Backend:
             self.gripper_stop_requested_at = None
             self.gripper_stop_samples = 0
         if raw is None:
-            return  # Feedback still completes/checks the accepted segment without new input.
+            return 'no_target', None  # Feedback still completes/checks the accepted segment without new input.
         if self.gripper_contact and raw < self.gripper['actpos']:
-            return
+            return 'contact', None
         if abs(raw-position) <= 5:
-            return
+            return 'within_position_tolerance', None
         # Send the requested opening once; 100-unit subgoals made the EG2
         # brake and wait for a feedback round trip every 7 mm.
         target = max(1, min(1000, raw))
+        sent_at = time.monotonic()
         reply = self.connection.client.exchange({'command': 'set_gripper_position',
             'position': target, 'block': False}, 'set_gripper')
         if reply.get('state') is not True:
             raise RuntimeError(f'EG2 position rejected: {reply}')
         self.pending_gripper = target, now, position
+        return 'accepted', (time.monotonic() - sent_at) * 1000
 
     def telemetry(self):
         return dict(self._telemetry)
