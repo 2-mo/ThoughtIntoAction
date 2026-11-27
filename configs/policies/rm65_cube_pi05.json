@@ -49,7 +49,7 @@
     "right_wrist_rgb": "wrist_rgb",
     "exterior_rgb": "exterior_rgb"
   },
-  "asset_id": "local/lerobot-20261124-200236",
+  "asset_id": "local/lerobot-20261126-merged",
   "robot_host": "192.168.1.18",
   "robot_name": "RealMan RM65 right 18",
   "prompt": "把黑色方块放到白色盒子里"
