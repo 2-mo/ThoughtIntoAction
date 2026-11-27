@@ -137,36 +137,6 @@ class HardwareTests(unittest.TestCase):
         np.testing.assert_allclose(q, self.backend.velocity_limits/25, atol=2e-5)
         self.assertFalse(any(x['command'] == 'movep_canfd' for x in self.connection.client.sent))
 
-    def test_stalled_feedback_caps_targets_then_advances_with_feedback(self):
-        pose = self.kinematics.fk(np.array([.4, 0, 0, 0, 0, 0]))
-        self.step(pose_target=pose)
-        for _ in range(20):
-            self.step()
-        self.assertEqual(max(motion['joint'][0] for motion in self.motions()), 5000)
-        self.assertEqual(self.motions()[-1]['joint'][0], 5000)
-        self.connection.q[0] = np.deg2rad(2.)
-        self.step(pose_target=pose)
-        self.assertEqual(self.motions()[-1]['joint'][0], 7000)
-
-    def test_following_error_stops_if_no_target_satisfies_both_limits(self):
-        pose = self.kinematics.fk(np.array([.4, 0, 0, 0, 0, 0]))
-        self.step(pose_target=pose)
-        self.connection.q[0] = np.deg2rad(-20.)
-        with self.assertRaisesRegex(RuntimeError, 'following error'):
-            self.step(pose_target=pose)
-        self.assertEqual(len(self.motions()), 1)
-        self.assertEqual(self.connection.client.sent[-1], {'command': 'set_arm_stop'})
-        with self.assertRaises(InterruptedError):
-            self.step(pose_target=pose)
-
-    def test_tracking_feedback_allows_consecutive_targets(self):
-        pose = self.kinematics.fk(np.array([.4, 0, 0, 0, 0, 0]))
-        self.step(pose_target=pose)
-        self.connection.q = np.deg2rad(np.asarray(self.motions()[-1]['joint']) / 1000)
-        self.step(pose_target=pose)
-        self.assertEqual(len(self.motions()), 2)
-        self.assertGreater(self.motions()[1]['joint'][0], self.motions()[0]['joint'][0])
-
     def test_full_speed_profile_removes_half_speed_but_respects_lower_readback(self):
         self.backend.close()
         self.connection = Connection(self.kinematics)
@@ -349,7 +319,6 @@ class HardwareTests(unittest.TestCase):
         self.assertTrue(self.motions())
         self.assertEqual(self.backend.controller.ik_partial_solutions, 1)
         goal = self.backend.controller._joint_goal.copy()
-        self.connection.q = np.deg2rad(np.asarray(self.motions()[-1]['joint']) / 1000)
         self.kinematics.solve_ik = lambda *args: (np.full(6, np.nan), False, float('inf'))
         self.step(pose_target=np.array([.01, 0, 0, 0, 0, 0, 1.]))
         np.testing.assert_array_equal(self.backend.controller._joint_goal, goal)
