@@ -120,12 +120,17 @@ def tcp_metrics(model, qs, times):
     jerk = np.gradient(acceleration, times, axis=0, edge_order=edge)
     rotations = Rotation.from_quat(poses[:, 3:])
     increments = (rotations[1:] * rotations[:-1].inv()).as_rotvec()
-    angular = increments / np.diff(times)[:, None]
-    angular = np.vstack([angular[0], (angular[:-1] + angular[1:]) / 2, angular[-1]])
+    # The driver checks each adjacent target, so retain segment velocity
+    # peaks before averaging samples to estimate acceleration and jerk.
+    segment_velocity = np.diff(xyz, axis=0) / np.diff(times)[:, None]
+    segment_angular = increments / np.diff(times)[:, None]
+    angular = np.vstack([segment_angular[0], (segment_angular[:-1] + segment_angular[1:]) / 2, segment_angular[-1]])
     angular_acceleration = np.gradient(angular, times, axis=0, edge_order=edge)
     angular_jerk = np.gradient(angular_acceleration, times, axis=0, edge_order=edge)
     peaks = [float(np.max(np.linalg.norm(v, axis=1)))
              for v in (velocity, acceleration, jerk, angular, angular_acceleration, angular_jerk)]
+    peaks[0] = max(peaks[0], float(np.max(np.linalg.norm(segment_velocity, axis=1))))
+    peaks[3] = max(peaks[3], float(np.max(np.linalg.norm(segment_angular, axis=1))))
     return {**dict(zip(METRICS.values(), peaks)),
             'path_length_m': float(np.linalg.norm(np.diff(xyz, axis=0), axis=1).sum()),
             'rotation_length_rad': float(np.linalg.norm(increments, axis=1).sum()),
@@ -150,9 +155,33 @@ def apply_tcp_limits(model, trajectory, times, qs, velocity, acceleration, jerk,
     largest = max(factors.values())
     scale = max(1., largest * 1.02) if largest > 1. else 1.
     limiting = [name for name, value in factors.items() if value >= max(1., largest) * .99]
-    if scale > 1:
-        trajectory = TimeScaledTrajectory(trajectory, scale)
+    # The execution clock samples the scaled curve at fixed control periods,
+    # which need not coincide with the original planning sample grid.
+    speed_names = ('tcp_speed', 'angular_speed')
+    for _ in range(4):
+        scaled = TimeScaledTrajectory(trajectory, scale) if scale > 1 else trajectory
+        if not any(name in requested for name in speed_names):
+            break
+        if scaled.duration > 60:
+            raise ValueError('Plan exceeds 60 s; split the move or increase speed')
+        ticks = np.minimum(np.arange(math.ceil(scaled.duration * control_hz) + 1) / control_hz,
+                           scaled.duration)
+        poses = np.asarray([model.fk(scaled.sample(t)[0]) for t in ticks])
+        rotations = Rotation.from_quat(poses[:, 3:])
+        linear = np.linalg.norm(np.diff(poses[:, :3], axis=0), axis=1)
+        angular = (rotations[1:] * rotations[:-1].inv()).magnitude()
+        cycle_peaks = dict(zip(speed_names, (float(linear.max() * control_hz),
+                                             float(angular.max() * control_hz))))
+        ratio = max(cycle_peaks[name] / requested[name] for name in speed_names if name in requested)
+        if ratio <= 1:
+            break
+        scale *= ratio * 1.02
+    else:
+        raise ValueError('Planned curve exceeds TCP speed at control-cycle samples')
     for name, metric in METRICS.items():
         metrics[metric] /= scale**orders[name]
-    return (trajectory, times * scale, qs, velocity / scale, acceleration / scale**2, jerk / scale**3,
+    for name in speed_names:
+        if name in requested:
+            metrics[METRICS[name]] = max(metrics[METRICS[name]], cycle_peaks[name])
+    return (scaled, times * scale, qs, velocity / scale, acceleration / scale**2, jerk / scale**3,
             metrics, limiting)

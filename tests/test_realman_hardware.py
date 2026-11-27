@@ -249,6 +249,40 @@ class HardwareTests(unittest.TestCase):
                     self.connection.q = previous = q.copy()
                 np.testing.assert_allclose(q, [.2] * 6, atol=1e-12)
 
+    def test_home_from_recorded_pose_respects_tcp_speed_on_execution_grid(self):
+        from pathlib import Path
+        from types import SimpleNamespace
+        from embodied.control.commands import MotionPlanner
+        from embodied.control.motion_limits import MotionLimits
+        from embodied.devices.robots.realman.model import Model
+        from embodied.devices.robots.realman.kinematics import pose_error
+
+        config = replace(self.config, control_hz=50, model_path=str(
+            Path(__file__).resolve().parents[1] / 'assets/robots/realman/runtime/rm65.xml'))
+        model = Model(SimpleNamespace(model_id='fixture', model_path=config.model_path,
+            joint_min=config.joint_min, joint_max=config.joint_max))
+        limits = MotionLimits.load(config, capabilities={
+            'joint_velocity_limits_rad_s': [np.pi] * 6,
+            'cartesian_velocity_limits': {'tcp_speed': .25, 'angular_speed': .3},
+            'source': {'kind': 'test'}})
+        with patch('embodied.contracts.registry.Registry.create', return_value=model):
+            planner = MotionPlanner(config, 'fixture', motion_limits=limits)
+        # Posture recorded immediately before the 2026-11-27 10:58 home failure.
+        start = [.33428291163447393, .7744549489874438, 1.1300308774962484,
+                 -.07764969842122772, 1.044963529754045, .04785692808968452]
+        plan = planner.plan({'kind': 'home', 'speed_scale': .25},
+            {'q': start, 'gripper_width': .07, 'epoch': 0, 'owner': None}, 1.)
+        curve = plan['_trajectory']
+        previous = model.fk(start)
+        for tick in range(1, int(np.ceil(curve.duration * 50)) + 1):
+            q, _ = curve.sample(min(tick / 50, curve.duration))
+            pose = model.fk(q)
+            distance, angle = pose_error(pose, previous)
+            self.assertLessEqual(distance * 50, .25)
+            self.assertLessEqual(angle * 50, .3)
+            previous = pose
+        np.testing.assert_allclose(q, config.park_q, atol=1e-12)
+
     def test_gripper_single_sweep_and_linear_intermediate_opening(self):
         b = self.backend
         b.gripper.update(actpos=1000)
