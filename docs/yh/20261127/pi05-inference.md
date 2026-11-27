@@ -117,3 +117,17 @@ TimeoutError: timed out in 1.5s
 5. 若远端持续计算慢，优先从 GPU 资源占用、模型推理后端、编译、预处理及传输链路降低时延。若观察到 `Action chunk observation is stale`，说明动作开始或执行期间的观测已超过时效限制，需要降低推理延迟并检查执行步数，而不是简单延长动作有效时间。
 
 本次超时的服务端根因及恢复结果尚待服务端日志和只推理验证确认。
+
+## 问题三：推理后回参考位失败，内核需要重启
+
+### 场景与实际日志
+
+2026-11-27 点击网页的「回参考位」后，出现 `[Errno 2] No such file or directory`、`BrokenPipeError` 或「没有运行中的内核」。10:58:32 的网页异常发生于回位执行中的状态查询，找不到内核的 Unix socket `commands.sock`。
+
+对应内核记录 `outputs/runtime/control/20261127-105821-robot-34b89975a741/` 的 report.json 显示驱动错误 `Planned curve exceeds controller TCP speed capability`，shutdown_completed=true，socket 已删除。tuning.jsonl 最后一条记录显示回位的第 519 个内核周期触发该异常。此前还有多个内核出现同样错误，包括仅由 console 获取控制权的运行。
+
+### 原因与处理
+
+回位是由控制台发起的规划动作，执行时 RM65 驱动会检查相邻关节目标对应的 TCP 平移及旋转速度。规划曲线在执行过程中超过驱动的 TCP 周期速度限制，引发内核退出，控制台的状态查询于是失去通信连接。速度检查位于 [RealMan hardware.py](../../../src/embodied/devices/robots/realman/hardware.py) 的 `_check_planned_tcp_speed`。该检查可追溯至 2026-11-11 的提交 `3f821896`。
+
+同一内核曾连续完成多次只推理和实际推理，推理本身支持复用内核。修复方向是核对规划轨迹的时间缩放与驱动逐周期末端速度检查，使用故障记录离线复现并验证回位轨迹符合实际控制器约束。保留速度保护，避免反复重启后直接重试同一失败轨迹。本次仅完成故障定位，控制代码尚未修复。
