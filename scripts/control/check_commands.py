@@ -776,6 +776,25 @@ class NativeGateTests(unittest.TestCase):
         self.source.bridge.poll_commands.return_value = self.command
         self.now, self.sequence = 10., 0
 
+    def test_route_target_age_controls_hold(self):
+        from embodied.control.ipc import RobotBridge
+        from embodied.control.ipc.types import Pose7
+
+        with patch('embodied.control.ipc.create_node'), patch('embodied.control.ipc.open_service'), patch('embodied.control.ipc.make_subscriber'):
+            bridge = RobotBridge('robot-test', feedback=False, pose_max_age_us=100_000)
+        bridge._modes['arm'] = Mode.COMMAND_FOLLOWING
+        for age_us, stale in ((15_000, False), (99_999, False), (100_000, True), (-1, True)):
+            with self.subTest(age_us=age_us):
+                pose = Pose7.from_values(1_000_000 - age_us, [0., 0., 0., 0., 0., 0., 1.])
+                with patch('embodied.control.ipc.time.time_ns', return_value=1_000_000_000), patch(
+                    'embodied.control.ipc.drain_latest', side_effect=[None, None, pose, None]
+                ):
+                    command = bridge.poll_commands(1.)
+                self.assertEqual(command.hold, stale)
+                self.assertEqual(command.engaged, not stale)
+                self.assertEqual(command.pose_target is None, stale)
+                self.assertEqual(bool(command.reason), stale)
+
     def frame(self, grip, valid=True, epoch=1, selected=True, mask=0, buttons=0, **overrides):
         from embodied.devices.inputs.quest.native_health import DependencyHealth, TeleopGate, TeleopRouteHealth
         self.sequence += 1

@@ -38,7 +38,8 @@ class FreshSample:
 class NativeIngress:
     def __init__(self, prefix, dependencies, gripper=True, *, dual=False):
         self.dual = bool(dual)
-        self.bridge = RobotBridge(prefix, feedback=False, arms=2 if self.dual else 1)
+        self.bridge = RobotBridge(prefix, feedback=False, arms=2 if self.dual else 1,
+                                  pose_max_age_us=100_000)
         self.node = create_node()
         topics = {
             'input': (f'{prefix}/xr/right_controller/states/input', XrControllerInput, .1),
@@ -146,10 +147,10 @@ class NativeIngress:
                         mode=command.mode,
                         pose_targets=(command.pose_target, second.pose_target),
                         gripper_targets=(command.gripper_target, second.gripper_target),
-                        hold=command.hold,
+                        hold=command.hold or second.hold,
                         engaged=command.engaged and second.engaged,
                         gripper_mode=command.gripper_mode,
-                        reason=command.reason)
+                        reason=command.reason or second.reason)
         phase = 'teleop' if command.mode == Mode.COMMAND_FOLLOWING and not command.hold else 'hold'
         return Candidate(epoch, command, min(t.expires_at for t in self.samples.values()),
                          inp.sequence, phase, fatal)

@@ -17,10 +17,11 @@ _TO_WIRE = {mode: wire for wire, mode in _FROM_WIRE.items()}
 class RobotBridge:
     """Consume native commands and publish backend feedback at the caller's rate."""
 
-    def __init__(self, prefix: str, *, commands=True, feedback=True, arms: int = 1):
+    def __init__(self, prefix: str, *, commands=True, feedback=True, arms: int = 1, pose_max_age_us: int | None = None):
         self.commands_enabled, self.feedback_enabled = commands, feedback
         self.prefix = validate_prefix(prefix)
         self.arms = max(1, int(arms))
+        self.pose_max_age_us = pose_max_age_us
         # Channel names stay "arm"/"gripper" for the first arm so single-arm
         # topics are unchanged; further arms use arm2/gripper2.
         self._names = [("arm" if index == 0 else f"arm{index + 1}",
@@ -71,7 +72,9 @@ class RobotBridge:
             # feedback-anchored tick. The gripper has no corresponding entry
             # flush, so its independent command must remain available.
             pose = None
-        target = np.array(pose.values, dtype=float) if pose is not None else None
+        stale_pose = (pose is not None and self.pose_max_age_us is not None
+                      and not 0 <= time.time_ns() // 1000 - pose.timestamp_us < self.pose_max_age_us)
+        target = np.array(pose.values, dtype=float) if pose is not None and not stale_pose else None
         width = float(grip.position[0]) if grip is not None and grip.len == 1 else None
         if target is not None and (not np.isfinite(target).all() or np.linalg.norm(target[3:]) < 1e-8):
             target = None
@@ -79,7 +82,8 @@ class RobotBridge:
             width = None
         return ControlCommand(mode=self._modes[arm_name], pose_target=target,
                               gripper_target=width, gripper_mode=self._modes[grip_name],
-                              engaged=target is not None)
+                              engaged=target is not None, hold=stale_pose,
+                              reason="stale Quest route target" if stale_pose else "")
 
     def modes_seen(self, arm: int = 0) -> bool:
         """True once the coordinator has actually commanded this arm's mode."""
