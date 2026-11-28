@@ -388,6 +388,16 @@ class HardwareTests(unittest.TestCase):
         b.gripper['mode'] = 4
         with self.assertRaisesRegex(RuntimeError, '5 s'): b._gripper_target(.07, 11.)
 
+    def test_slow_gripper_progress_can_finish_after_five_seconds(self):
+        b = self.backend
+        b._gripper_target(0., 1.)
+        for now, position in ((3., 630), (5., 260), (6.1, 135)):
+            b.gripper.update(mode=4, actpos=position)
+            self.assertEqual(b._gripper_target(.07, now)[0], 'moving')
+        b.gripper.update(mode=2, actpos=1)
+        self.assertEqual(b._gripper_target(.07, 7.)[0], 'accepted')
+        self.assertEqual(b.pending_gripper[0], 1000)
+
     def test_settled_segment_four_units_short_can_reverse_and_open(self):
         b = self.backend
         b.gripper.update(mode=1, actpos=486)

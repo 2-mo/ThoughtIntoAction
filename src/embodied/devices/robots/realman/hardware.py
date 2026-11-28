@@ -85,6 +85,7 @@ class Backend:
         self.previous_feedback = None
         self.last_gripper_poll = float('-inf')
         self.pending_gripper = None
+        self.gripper_progress = None
         self.gripper_stop_requested_at = None
         self.gripper_stop_has_target = False
         self.gripper_stop_samples = 0
@@ -430,10 +431,21 @@ class Backend:
                 self.gripper_stop_samples = 0
         if raw is not None and raw > self.gripper['actpos']+3:
             self.gripper_contact = False
-        if self.gripper['mode'] in (4, 5):
-            if self.pending_gripper is not None and now-self.pending_gripper[1] > 5.:
-                raise RuntimeError('EG2 segment still moving after 5 s')
-            return 'moving', None  # No queue: only the current owner target can schedule another segment.
+        if self.pending_gripper is not None:
+            target, sent, origin = self.pending_gripper
+            best_remaining, progressed_at = self.gripper_progress
+            remaining = abs(target - position)
+            if remaining < best_remaining:
+                best_remaining, progressed_at = remaining, now
+                self.gripper_progress = best_remaining, progressed_at
+            if self.gripper['mode'] in (4, 5):
+                if now - progressed_at > 5.:
+                    raise RuntimeError('EG2 segment made no progress for 5 s')
+                if now - sent > 10.:
+                    raise RuntimeError('EG2 segment still moving after 10 s')
+                return 'moving', None
+        elif self.gripper['mode'] in (4, 5):
+            return 'moving', None
         if self.pending_gripper is not None:
             target, sent, origin = self.pending_gripper
             # Idle feedback can settle beyond the commanded position. A
@@ -465,6 +477,7 @@ class Backend:
         if reply.get('state') is not True:
             raise RuntimeError(f'EG2 position rejected: {reply}')
         self.pending_gripper = target, now, position
+        self.gripper_progress = abs(target - position), now
         return 'accepted', (time.monotonic() - sent_at) * 1000
 
     def telemetry(self):
