@@ -207,6 +207,7 @@ def test_quest_wrist_joystick_preserves_grip_and_home(monkeypatch):
     sample = SimpleNamespace(fresh=lambda _: True)
     ingress.samples = {'input': sample}
     ingress.status = {'ready': True, 'permit': True}
+    ingress.grip_threshold = .7
     ingress.gripper_epoch = None
     ingress.gripper_max_width = .07
     ingress.home_q = np.zeros(6)
@@ -227,6 +228,14 @@ def test_quest_wrist_joystick_preserves_grip_and_home(monkeypatch):
         return ingress.poll(state, now, epoch, selected).command
 
     assert poll(axis=1.).hold
+    pose = np.array([.2, 0., .3, 0., 0., 0., 1.])
+    with monkeypatch.context() as context:
+        context.setattr(shared.NativeIngress, 'poll', lambda *args: Candidate(
+            1, ControlCommand(Mode.COMMAND_FOLLOWING, pose_target=pose, engaged=True)))
+        assert poll(grip=.8).pose_target is pose
+        released = poll(grip=0.)
+        assert released.hold and not released.engaged and released.pose_target is None
+        assert poll(grip=.8).pose_target is pose
     poll()
     assert poll(trigger=.3).gripper_target is None
     assert poll(trigger=.98, elapsed=.04).gripper_target == 0.
