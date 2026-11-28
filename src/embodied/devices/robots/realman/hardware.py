@@ -295,7 +295,10 @@ class Backend:
             step_limit = np.minimum(step_limit, np.broadcast_to(effective.joint_step_limit, (6,)))
         effective = replace(effective, joint_step_limit=step_limit)
         previous = (self.controller.q_target.copy() if self.controller.q_target is not None else state.q.copy())
+        target_started_ns = time.monotonic_ns()
         q = self.controller.update(effective, state.q, now)
+        target_completed_ns = time.monotonic_ns()
+        joint_send_started_ns = joint_send_completed_ns = None
         if self.controller.fault:
             raise ValueError(self.controller.fault)
         q = vector(q, 6)
@@ -358,7 +361,9 @@ class Backend:
             wire = np.rint(np.rad2deg(q)*1000).astype(int).tolist()
             with self.connection.lock:
                 self.connection.active = True
+                joint_send_started_ns = time.monotonic_ns()
                 self.connection.client.send({'command': 'movej_canfd', 'joint': wire, 'follow': False})
+                joint_send_completed_ns = time.monotonic_ns()
                 self.connection.last_command = time.monotonic()
                 self.connection.last_joint_target = np.rad2deg(q)
         gripper_decision, gripper_ack_ms = 'initialize', None
@@ -376,6 +381,8 @@ class Backend:
             'applied_kp': [0.]*6, 'applied_kd': [0.]*6, 'user_feedforward_torque': [0.]*6,
             'gripper_target': self.controller.gripper_target if self.gripper_ready and not self.gripper_needs_release else None,
             'gripper_applied_kp': 0., 'gripper_applied_kd': 0.,
+            'target_started_ns': target_started_ns, 'target_completed_ns': target_completed_ns,
+            'joint_send_started_ns': joint_send_started_ns, 'joint_send_completed_ns': joint_send_completed_ns,
             'command_started_ns': started, 'command_submitted_ns': time.monotonic_ns(),
             'feedback_velocity_source': 'encoder_finite_difference', 'gripper_raw': dict(self.gripper),
             'gripper_decision': gripper_decision, 'gripper_ack_ms': gripper_ack_ms,
