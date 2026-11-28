@@ -27,7 +27,12 @@ def attempts(path, since):
             if attempt is None:
                 attempt = dict(start=stamp, minimum=None, modes=set(), pending=set(),
                                blocked=False, errors=set(), decisions={}, close_ack=None, first_closed=None, position=None, force=None)
+                attempt.update(sent_at=None, samples={}, last_feedback=None, max_query_ms=0.)
             attempt['duration'] = stamp - attempt['start']
+            request = row.get('gripper_position_request')
+            if request and request['position'] == 1 and attempt['sent_at'] is None:
+                attempt['sent_at'] = request['sent_monotonic_s']
+                attempt['origin'] = request['origin_actpos']
             pending = row.get('gripper_pending')
             if pending:
                 attempt['pending'].add(pending[0])
@@ -44,6 +49,15 @@ def attempts(path, since):
             if feedback.get('enable') != 1 or feedback.get('status') != 1 or feedback.get('error') != 0:
                 continue
             position = feedback['actpos']
+            received = row.get('gripper_feedback_received_monotonic_s')
+            sent_at = attempt['sent_at']
+            if (sent_at is not None and received is not None and received >= sent_at
+                    and received != attempt['last_feedback']):
+                attempt['last_feedback'] = received
+                elapsed = received - sent_at
+                attempt['samples'].setdefault(int(elapsed),
+                    (elapsed, position, feedback['mode'], feedback.get('current_force')))
+                attempt['max_query_ms'] = max(attempt['max_query_ms'], row['gripper_query_ms'])
             attempt['position'] = position
             attempt['force'] = feedback.get('current_force')
             minimum = attempt['minimum']
@@ -57,13 +71,15 @@ def attempts(path, since):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--pair', type=Path, default=ROOT / 'outputs/runtime/realman/pair.json')
+    inputs = parser.add_mutually_exclusive_group()
+    inputs.add_argument('--pair', type=Path, default=ROOT / 'outputs/runtime/realman/pair.json')
+    inputs.add_argument('--run', type=Path, help='单臂运行目录，包含 tuning.jsonl')
     parser.add_argument('--since', type=float, default=0, help='只分析此主机单调时间之后的记录')
     args = parser.parse_args()
     try:
-        runs = json.loads(args.pair.read_text())['runs']
-        for side in ('left', 'right'):
-            path = Path(runs[side]) / 'tuning.jsonl'
+        runs = ({args.run.name: args.run} if args.run else json.loads(args.pair.read_text())['runs'])
+        for side, directory in sorted(runs.items()):
+            path = Path(directory) / 'tuning.jsonl'
             print(f'\n{side}: {path}')
             recent = deque(attempts(path, args.since), maxlen=5)
             if not recent:
@@ -81,6 +97,10 @@ def main():
                 if item['close_ack'] is not None:
                     elapsed, latency = item['close_ack']
                     print(f'  位置 1 获确认: 全闭目标后 {elapsed:.2f}s，TCP 应答 {latency:.1f}ms')
+                if item['samples']:
+                    print(f"  下发时 actpos={item['origin']}，反馈查询最长 {item['max_query_ms']:.1f}ms")
+                    for elapsed, position, mode, force in item['samples'].values():
+                        print(f'  +{elapsed:.2f}s actpos={position} mode={mode} current_force={force}')
     except (OSError, ValueError, KeyError) as exc:
         parser.exit(1, f'读取夹爪日志失败：{exc}\n')
 

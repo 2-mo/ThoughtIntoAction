@@ -84,6 +84,9 @@ class Backend:
             allow_motion=True, defer_motion_check=True)
         self.previous_feedback = None
         self.last_gripper_poll = float('-inf')
+        self.gripper_feedback_received_at = None
+        self.gripper_query_ms = None
+        self.gripper_position_request = None
         self.pending_gripper = None
         self.gripper_progress = None
         self.gripper_stop_requested_at = None
@@ -153,7 +156,10 @@ class Backend:
         return float(np.clip(pos, 0, 1000)/1000*self.config.gripper_max_width)
 
     def _poll_gripper(self, now, *, startup=False):
+        query_started = time.monotonic()
         self.gripper = status(self.connection.client)
+        self.gripper_feedback_received_at = time.monotonic()
+        self.gripper_query_ms = (self.gripper_feedback_received_at - query_started) * 1000
         self.last_gripper_poll = now
         try:
             require_ready(self.gripper)
@@ -367,6 +373,7 @@ class Backend:
                 joint_send_completed_ns = time.monotonic_ns()
                 self.connection.last_command = time.monotonic()
                 self.connection.last_joint_target = np.rad2deg(q)
+        self.gripper_position_request = None
         gripper_decision, gripper_ack_ms = 'initialize', None
         if initialize:
             if (self.stopped or (cancel_requested and cancel_requested()) or
@@ -387,6 +394,9 @@ class Backend:
             'command_started_ns': started, 'command_submitted_ns': time.monotonic_ns(),
             'feedback_velocity_source': 'encoder_finite_difference', 'gripper_raw': dict(self.gripper),
             'gripper_decision': gripper_decision, 'gripper_ack_ms': gripper_ack_ms,
+            'gripper_position_request': self.gripper_position_request,
+            'gripper_feedback_received_monotonic_s': self.gripper_feedback_received_at,
+            'gripper_query_ms': self.gripper_query_ms,
             'gripper_feedback_age_ms': (time.monotonic() - self.last_gripper_poll) * 1000,
             'gripper_ready': self.gripper_ready, 'gripper_needs_release': self.gripper_needs_release,
             'gripper_contact_latched': self.gripper_contact, 'gripper_pending': self.pending_gripper,
@@ -472,13 +482,17 @@ class Backend:
         # brake and wait for a feedback round trip every 7 mm.
         target = max(1, min(1000, raw))
         sent_at = time.monotonic()
-        reply = self.connection.client.exchange({'command': 'set_gripper_position',
-            'position': target, 'block': False}, 'set_gripper')
+        request = {'command': 'set_gripper_position', 'position': target, 'block': False}
+        reply = self.connection.client.exchange(request, 'set_gripper')
         if reply.get('state') is not True:
             raise RuntimeError(f'EG2 position rejected: {reply}')
+        self.gripper_position_request = {
+            **request, 'sent_monotonic_s': sent_at, 'ack_monotonic_s': time.monotonic(),
+            'origin_actpos': self.gripper['actpos'],
+        }
         self.pending_gripper = target, now, position
         self.gripper_progress = abs(target - position), now
-        return 'accepted', (time.monotonic() - sent_at) * 1000
+        return 'accepted', (self.gripper_position_request['ack_monotonic_s'] - sent_at) * 1000
 
     def telemetry(self):
         return dict(self._telemetry)
