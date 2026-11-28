@@ -71,6 +71,7 @@ class Ingress(NativeIngress):
     def __init__(self, prefix, dependencies, gripper=True, *, dual=False, settings=None):
         super().__init__(prefix, dependencies, gripper=False, dual=dual)
         vr = settings.vr
+        self.grip_threshold = vr.grip_threshold
         # The primary button (left X or right A) and Trigger belong to this hand.
         self.subscribers['input'] = make_subscriber(open_service(self.node,
             f'{vr.input_prefix or prefix}/xr/{vr.controller}_controller/states/input', XrControllerInput))
@@ -101,6 +102,11 @@ class Ingress(NativeIngress):
             self.home_released = self.returning_home = self.home_blocked = False
             self.home_since = None
         command = candidate.command
+        grip_released = (valid and command.mode == Mode.COMMAND_FOLLOWING
+                         and sample.sample.grip < self.grip_threshold)
+        if grip_released:
+            command = replace(command, pose_target=None, hold=True, engaged=False,
+                              reason="Quest Grip released")
         home = secondary = False
         if valid:
             inp = sample.sample
@@ -177,4 +183,4 @@ class Ingress(NativeIngress):
         self.status.update(gripper_ready=state.gripper_width is not None,
             gripper_armed=self.gripper_armed, returning_home=home, turning_wrist=turning)
         return replace(candidate, command=command,
-                       phase='home' if home else 'teleop' if turning else 'hold' if overriding or was_turning else candidate.phase)
+                       phase='home' if home else 'teleop' if turning else 'hold' if overriding or was_turning or grip_released else candidate.phase)
